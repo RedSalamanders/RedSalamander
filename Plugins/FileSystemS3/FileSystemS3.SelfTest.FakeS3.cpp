@@ -1782,6 +1782,116 @@ void RunS3ZeroTimestampReplaceSelfTests(unsigned int& passed, unsigned int& fail
     }
 }
 
+// R0f-S3 directory-marker transfer: a prefix that carries an explicit directory marker (a
+// zero-byte object whose key ends in '/', which CreateDirectory writes) must copy and move like
+// any other prefix. The earlier fixtures seeded prefixes without a marker, so a plan that listed
+// the marker object was never transferred; a marker's server-side copy and its zero-byte relay
+// fallback are exercised here.
+void RunS3DirectoryMarkerTransferSelfTests(unsigned int& passed, unsigned int& failed) noexcept
+{
+    WSADATA winsockData{};
+    if (! DebugCheck(WSAStartup(MAKEWORD(2, 2), &winsockData) == 0, L"WSAStartup should initialize the S3 marker-transfer proof", passed, failed))
+    {
+        return;
+    }
+    auto cleanupWinsock = wil::scope_exit([]() noexcept { WSACleanup(); });
+
+    try
+    {
+        constexpr std::string_view kBucket = "r0f-bucket";
+        FakeS3Endpoint endpoint;
+        endpoint.SeedBucket(std::string(kBucket));
+        // The source prefix carries its own directory marker plus four leaves of distinct sizes.
+        endpoint.SeedObject(kBucket, "x/src/tree/", {});
+        endpoint.SeedObject(kBucket, "x/src/tree/a.bin", std::vector<uint8_t>(4u, 0xA1u));
+        endpoint.SeedObject(kBucket, "x/src/tree/b.bin", std::vector<uint8_t>(8u, 0xB2u));
+        endpoint.SeedObject(kBucket, "x/src/tree/nested/", {});
+        endpoint.SeedObject(kBucket, "x/src/tree/nested/c.bin", std::vector<uint8_t>(16u, 0xC3u));
+        if (! DebugCheck(SUCCEEDED(endpoint.Start()), L"S3 marker-transfer fixture should start", passed, failed))
+        {
+            return;
+        }
+        auto stopEndpoint = wil::scope_exit([&]() noexcept { endpoint.Stop(); });
+
+        wil::com_ptr<FileSystemS3> fileSystem;
+        fileSystem.attach(new (std::nothrow) FileSystemS3(FileSystemS3Mode::S3, nullptr));
+        if (! DebugCheck(static_cast<bool>(fileSystem) && SUCCEEDED(fileSystem->InitializationStatus()),
+                         L"S3 marker-transfer proof should create an S3 instance",
+                         passed,
+                         failed))
+        {
+            return;
+        }
+        HRESULT hr = fileSystem->SetConfiguration(FixtureConfiguration(endpoint.Port(), 2'000u, 2'000u).c_str());
+        if (! DebugCheck(SUCCEEDED(hr), L"S3 marker-transfer instance should accept the fixture configuration", passed, failed))
+        {
+            return;
+        }
+
+        FileSystemOptions options{};
+        options.sizeBytes  = sizeof(options);
+        options.linkPolicy = FILESYSTEM_LINK_PRESERVE;
+        constexpr FileSystemFlags kFlags =
+            static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY);
+
+        const auto dumpLog = [&](std::wstring_view label, HRESULT observed) noexcept
+        {
+            std::fwprintf(stderr,
+                          L"[S3] %ls returned 0x%08lX; recent requests:%ls\n",
+                          std::wstring(label).c_str(),
+                          static_cast<unsigned long>(observed),
+                          endpoint.RequestLog(24u).c_str());
+        };
+        const auto destinationComplete = [&](std::string_view prefix) noexcept
+        {
+            return endpoint.HasObject(kBucket, std::format("{}/", prefix)) && endpoint.HasObject(kBucket, std::format("{}/a.bin", prefix)) &&
+                   endpoint.HasObject(kBucket, std::format("{}/b.bin", prefix)) && endpoint.HasObject(kBucket, std::format("{}/nested/", prefix)) &&
+                   endpoint.HasObject(kBucket, std::format("{}/nested/c.bin", prefix));
+        };
+
+        // 1) CopyItem of the marked prefix.
+        hr = fileSystem->CopyItem(L"/r0f-bucket/x/src/tree", L"/r0f-bucket/x/copy-dst/tree", kFlags, &options, nullptr, nullptr);
+        if (FAILED(hr))
+        {
+            dumpLog(L"CopyItem(marked prefix)", hr);
+        }
+        DebugCheck(SUCCEEDED(hr), L"S3 CopyItem must transfer a prefix that carries a directory marker", passed, failed);
+        DebugCheck(destinationComplete("x/copy-dst/tree"), L"S3 CopyItem must publish the marker and every leaf of the marked prefix", passed, failed);
+
+        // 2) CopyItems of the marked prefix into a destination folder.
+        const wchar_t* bulkSources[] = {L"/r0f-bucket/x/src/tree"};
+        hr                           = fileSystem->CopyItems(bulkSources, 1u, L"/r0f-bucket/x/copy-bulk-dst", kFlags, &options, nullptr, nullptr);
+        if (FAILED(hr))
+        {
+            dumpLog(L"CopyItems(marked prefix)", hr);
+        }
+        DebugCheck(SUCCEEDED(hr), L"S3 CopyItems must transfer a prefix that carries a directory marker", passed, failed);
+        DebugCheck(destinationComplete("x/copy-bulk-dst/tree"), L"S3 CopyItems must publish the marker and every leaf of the marked prefix", passed, failed);
+
+        // 3) MoveItem of the marked prefix: destination gains every object, source loses them.
+        hr = fileSystem->MoveItem(L"/r0f-bucket/x/src/tree", L"/r0f-bucket/x/move-dst/tree", kFlags, &options, nullptr, nullptr);
+        if (FAILED(hr))
+        {
+            dumpLog(L"MoveItem(marked prefix)", hr);
+        }
+        DebugCheck(SUCCEEDED(hr), L"S3 MoveItem must transfer a prefix that carries a directory marker", passed, failed);
+        DebugCheck(destinationComplete("x/move-dst/tree"), L"S3 MoveItem must publish the marker and every leaf of the marked prefix", passed, failed);
+        DebugCheck(! endpoint.HasObject(kBucket, "x/src/tree/") && ! endpoint.HasObject(kBucket, "x/src/tree/a.bin"),
+                   L"S3 MoveItem must remove the marked source prefix once every object is published",
+                   passed,
+                   failed);
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        Debug::Error(L"FileSystemS3 directory-marker transfer selftest failed after std::exception.");
+        DebugCheck(false, L"S3 marker-transfer proof should not throw std::exception", passed, failed);
+    }
+}
+
 } // namespace FileSystemS3Internal
 
 #else

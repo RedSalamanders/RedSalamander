@@ -20,8 +20,8 @@
 #include <vector>
 
 #include "AppTheme.h"
-#include "DxUi/DxUi.PointerInput.h"
 #include "PlugInterfaces/NavigationMenu.h"
+#include <DxUi/PointerInput.h>
 
 #define WIN32_LEAN_AND_MEAN
 #define NOMINMAX
@@ -233,7 +233,10 @@ public:
     [[nodiscard]] bool DebugGetSnapshot(NavigationViewDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugFocusRegion(FocusRegion region) noexcept;
     [[nodiscard]] bool DebugPostCurrentEditSuggestResultForSelfTest();
-    void DebugSetFullPathPopupDestroyProbe(std::function<void()> probe) { _debugFullPathPopupDestroyProbe = std::move(probe); }
+    void DebugSetFullPathPopupDestroyProbe(std::function<void()> probe)
+    {
+        _debugFullPathPopupDestroyProbe = std::move(probe);
+    }
 #endif
 
 private:
@@ -287,7 +290,7 @@ private:
 
     static LRESULT CALLBACK WndProcThunk(HWND hWindow, UINT msg, WPARAM wp, LPARAM lp);
     LRESULT WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
-    [[nodiscard]] bool ShouldAcceptPointerEvent(const RedSalamander::DxUi::PointerInputEvent& event) const noexcept;
+    [[nodiscard]] bool ShouldAcceptPointerEvent(const DxUi::PointerInputEvent& event) const noexcept;
     static ATOM RegisterDxHostWndClass(HINSTANCE instance);
     static LRESULT CALLBACK DxHostWndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp);
 
@@ -311,9 +314,9 @@ private:
     void OnSize(UINT width, UINT height);
     void OnCommand(UINT id, HWND hwndCtl, UINT codeNotify);
     LRESULT OnCtlColorEdit(HDC hdc, HWND hwndControl);
-    void OnLButtonDown(const RedSalamander::DxUi::PointerInputEvent& event);
-    void OnLButtonDblClk(const RedSalamander::DxUi::PointerInputEvent& event);
-    void OnMouseMove(const RedSalamander::DxUi::PointerInputEvent& event);
+    void OnLButtonDown(const DxUi::PointerInputEvent& event);
+    void OnLButtonDblClk(const DxUi::PointerInputEvent& event);
+    void OnMouseMove(const DxUi::PointerInputEvent& event);
     void OnLButtonDown(POINT pt);
     void OnLButtonDblClk(POINT pt);
     void OnMouseMove(POINT pt);
@@ -564,7 +567,7 @@ private:
     std::optional<EditSuggestQuery> _editSuggestPendingQuery;
     std::jthread _editSuggestThread;
     std::atomic<uint64_t> _editSuggestRequestId = 0;
-    uint64_t _editSuggestEditSessionId           = 0;
+    uint64_t _editSuggestEditSessionId          = 0;
 
     struct SiblingPrefetchQuery
     {
@@ -854,7 +857,7 @@ private:
 
         ID_SIBLING_BASE   = 600, // 600-698 for the bounded sibling list
         ID_SIBLING_SEARCH = 699,
-        ID_HISTORY_BASE = 700, // 700-799 for history dropdown entries
-        ID_HISTORY_MAX  = 799,
+        ID_HISTORY_BASE   = 700, // 700-799 for history dropdown entries
+        ID_HISTORY_MAX    = 799,
     };
 };

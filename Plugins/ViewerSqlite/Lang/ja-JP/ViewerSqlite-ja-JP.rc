@@ -77,3 +77,13 @@ BEGIN
     IDS_VIEWERSQLITE_ERROR_IDENTIFIER_TOO_LONG "データベースに、安全に表示できる長さを超えたテーブル名またはビュー名があります。"
     IDS_VIEWERSQLITE_ERROR_ROW_OFFSET "指定されたページ オフセットはサポート範囲外です。"
 END
+
+STRINGTABLE
+BEGIN
+    IDS_DXUI_NO_MATCHES "一致する項目がありません"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_DXUI_NO_DATA "データがありません"
+END

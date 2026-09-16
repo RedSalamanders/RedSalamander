@@ -54,6 +54,11 @@ bool DebugSelectPreferencesCategory(const PrefCategory category) noexcept
     return PreferencesDialog::DebugSelectCategory(category);
 }
 
+bool DebugGetPreferencesCategoryClientRect(const PrefCategory category, RECT& outRect) noexcept
+{
+    return PreferencesDialog::DebugGetCategoryClientRect(category, outRect);
+}
+
 bool DebugSelectPreferencesPluginsTreeChild(const size_t childIndex) noexcept
 {
     return PreferencesDialog::DebugSelectPluginsTreeChild(childIndex);
@@ -164,13 +169,11 @@ bool DebugGetPreferencesKeyboardVisibleRowChordByCommandId(std::wstring_view com
     return PreferencesDialog::DebugGetKeyboardVisibleRowChordByCommandId(commandId, outChordText);
 }
 
-bool DebugGetPreferencesKeyboardVisibleRowPresentationByCommandId(
-    std::wstring_view commandId,
-    std::wstring& outScopeText,
-    std::wstring& outTooltipText) noexcept
+bool DebugGetPreferencesKeyboardVisibleRowPresentationByCommandId(std::wstring_view commandId,
+                                                                  std::wstring& outScopeText,
+                                                                  std::wstring& outTooltipText) noexcept
 {
-    return PreferencesDialog::DebugGetKeyboardVisibleRowPresentationByCommandId(
-        commandId, outScopeText, outTooltipText);
+    return PreferencesDialog::DebugGetKeyboardVisibleRowPresentationByCommandId(commandId, outScopeText, outTooltipText);
 }
 
 bool DebugGetPreferencesKeyboardListRowClientRect(const size_t rowIndex, RECT& outRect) noexcept

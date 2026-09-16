@@ -1,6 +1,6 @@
 #include "NavigationViewInternal.h"
 
-#include "DxUi/DxUi.Typography.h"
+#include <DxUi/Typography.h>
 #include <windowsx.h>
 
 #include "ConnectionSecrets.h"
@@ -105,8 +105,7 @@ void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, const wch
 
     const float textSizeDip = static_cast<float>(MulDiv(13, static_cast<int>(std::max<UINT>(USER_DEFAULT_SCREEN_DPI, dpi)), USER_DEFAULT_SCREEN_DPI));
     wil::com_ptr<IDWriteTextFormat> format;
-    const HRESULT hr =
-        RedSalamander::DxUi::Typography::CreateTextFormat(dwriteFactory, RedSalamander::DxUi::Typography::MakeUiTextSpec(textSizeDip), format.put(), L"");
+    const HRESULT hr = DxUi::Typography::CreateTextFormat(dwriteFactory, DxUi::Typography::MakeUiTextSpec(textSizeDip), format.put(), L"");
     if (FAILED(hr) || ! format)
     {
         return {};
@@ -132,15 +131,14 @@ void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, const wch
 
     const float iconSizeDip =
         static_cast<float>(MulDiv(kValidationPopupIconSizeDip, static_cast<int>(std::max<UINT>(USER_DEFAULT_SCREEN_DPI, dpi)), USER_DEFAULT_SCREEN_DPI));
-    usesFluentIcon = RedSalamander::DxUi::Typography::IsFontFamilyAvailable(dwriteFactory, RedSalamander::DxUi::Typography::kSegoeFluentIconsFamily);
+    usesFluentIcon = DxUi::Typography::IsFontFamilyAvailable(dwriteFactory, DxUi::Typography::kSegoeFluentIconsFamily);
     iconGlyph      = usesFluentIcon ? FluentIcons::kWarning : FluentIcons::kFallbackWarning;
 
     wil::com_ptr<IDWriteTextFormat> format;
-    const HRESULT hr = RedSalamander::DxUi::Typography::CreateTextFormat(
+    const HRESULT hr = DxUi::Typography::CreateTextFormat(
         dwriteFactory,
-        usesFluentIcon
-            ? RedSalamander::DxUi::Typography::MakeUiIconSpec(iconSizeDip)
-            : RedSalamander::DxUi::Typography::TypographySpec{.familyName = L"Segoe UI Symbol", .weight = DWRITE_FONT_WEIGHT_NORMAL, .sizeDip = iconSizeDip},
+        usesFluentIcon ? DxUi::Typography::MakeUiIconSpec(iconSizeDip)
+                       : DxUi::Typography::TypographySpec{.familyName = L"Segoe UI Symbol", .weight = DWRITE_FONT_WEIGHT_NORMAL, .sizeDip = iconSizeDip},
         format.put(),
         L"");
     if (FAILED(hr) || ! format)
@@ -635,10 +633,10 @@ void NavigationView::EnterEditMode()
         }
 
         hostState->hwnd.reset(hwnd);
-        hostState->host.SetTextInputBackend(RedSalamander::DxUi::TextInputBackend::Native);
+        hostState->host.SetTextInputBackend(DxUi::TextInputBackend::Native);
         hostState->host.SetTheme(MakeNavigationDxEditPalette(_appTheme, _theme));
 
-        auto field       = std::make_unique<RedSalamander::DxUi::TextField>();
+        auto field       = std::make_unique<DxUi::TextField>();
         hostState->field = field.get();
         hostState->field->SetMultiline(false);
         hostState->field->SetClearButtonEnabled(false);
@@ -678,7 +676,7 @@ void NavigationView::EnterEditMode()
             _requestFolderViewFocusCallback();
         }
     });
-    _pathEdit->field->SetOnPreviewKeyDown([this](RedSalamander::DxUi::WindowHost& /*host*/, UINT virtualKey, UINT modifiers) -> bool
+    _pathEdit->field->SetOnPreviewKeyDown([this](DxUi::WindowHost& /*host*/, UINT virtualKey, UINT modifiers) -> bool
     {
         if ((virtualKey != VK_DOWN && virtualKey != VK_UP) || (modifiers & (MK_CONTROL | MK_SHIFT | kDxUiModifierAlt)) != 0u || ! _editSuggestPopup ||
             _editSuggestItems.empty())
@@ -1760,10 +1758,11 @@ void NavigationView::EnsureEditSuggestPopupD2DResources()
         }
         if (! _editSuggestPopupHoverBrush)
         {
-            const COLORREF surface    = _appTheme.systemHighContrast ? GetSysColor(COLOR_WINDOW) : _appTheme.menu.background;
-            const int highlightWeight = _appTheme.dark ? 30 : 18;
-            const COLORREF highlightColor =
-                _appTheme.systemHighContrast ? GetSysColor(COLOR_HIGHLIGHT) : UiMetrics::BlendColorRefWeightedTruncate(surface, _appTheme.menu.text, highlightWeight, 255);
+            const COLORREF surface        = _appTheme.systemHighContrast ? GetSysColor(COLOR_WINDOW) : _appTheme.menu.background;
+            const int highlightWeight     = _appTheme.dark ? 30 : 18;
+            const COLORREF highlightColor = _appTheme.systemHighContrast
+                                                ? GetSysColor(COLOR_HIGHLIGHT)
+                                                : UiMetrics::BlendColorRefWeightedTruncate(surface, _appTheme.menu.text, highlightWeight, 255);
             _editSuggestPopupTarget->CreateSolidColorBrush(ColorFromCOLORREF(highlightColor), _editSuggestPopupHoverBrush.addressof());
         }
         if (! _editSuggestPopupBorderBrush)

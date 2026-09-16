@@ -2,22 +2,22 @@
 
 #include "CompareDirectoriesWindow.Internal.h"
 #include "D2DHdcPaint.h"
-#include "DxUi/DxUi.Typography.h"
 #include "DxUiThemePalette.h"
 #include "SettingsHotReload.h"
+#include <DxUi/Typography.h>
 
 namespace CompareDirectoriesWindowInternal
 {
 namespace
 {
-using RedSalamander::DxUi::CardPanel;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::TextField;
-using RedSalamander::DxUi::ThemePalette;
-using RedSalamander::DxUi::Toggle;
-using RedSalamander::DxUi::WindowHost;
+using DxUi::CardPanel;
+using DxUi::FontRole;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::TextField;
+using DxUi::ThemePalette;
+using DxUi::Toggle;
+using DxUi::WindowHost;
 constexpr wchar_t kSettingsAppId[]                               = L"RedSalamander";
 constexpr wchar_t kCompareOptionsHostOriginalWndProcProp[]       = L"RS.CompareOptionsHostOriginalWndProc";
 constexpr wchar_t kCompareOptionsHostStateProp[]                 = L"RS.CompareOptionsHostState";
@@ -174,7 +174,7 @@ void ConfigureCompareOptionsTextFormat(IDWriteTextFormat* format, DWRITE_WORD_WR
 }
 
 [[nodiscard]] bool CreateCompareOptionsTextFormat(IDWriteFactory* factory,
-                                                  const RedSalamander::DxUi::Typography::TypographySpec& spec,
+                                                  const DxUi::Typography::TypographySpec& spec,
                                                   DWRITE_FONT_STYLE style,
                                                   DWRITE_WORD_WRAPPING wrapping,
                                                   IDWriteTextFormat** outFormat) noexcept
@@ -184,14 +184,13 @@ void ConfigureCompareOptionsTextFormat(IDWriteTextFormat* format, DWRITE_WORD_WR
         return false;
     }
 
-    wchar_t preferredFamilyBuffer[RedSalamander::DxUi::Typography::kMaxDWriteFamilyNameLength + 1u]{};
-    if (! RedSalamander::DxUi::Typography::CopyNullTerminated(spec.familyName, preferredFamilyBuffer))
+    wchar_t preferredFamilyBuffer[DxUi::Typography::kMaxDWriteFamilyNameLength + 1u]{};
+    if (! DxUi::Typography::CopyNullTerminated(spec.familyName, preferredFamilyBuffer))
     {
         return false;
     }
 
-    const HRESULT hr =
-        RedSalamander::DxUi::Typography::CreateTextFormatWithStyle(factory, preferredFamilyBuffer, spec.weight, style, spec.sizeDip, outFormat, L"");
+    const HRESULT hr = DxUi::Typography::CreateTextFormatWithStyle(factory, preferredFamilyBuffer, spec.weight, style, spec.sizeDip, outFormat, L"");
     if (FAILED(hr) || ! *outFormat)
     {
         return false;
@@ -204,16 +203,16 @@ void ConfigureCompareOptionsTextFormat(IDWriteTextFormat* format, DWRITE_WORD_WR
 [[nodiscard]] CompareOptionsTypographyFormats CreateCompareOptionsTypographyFormats(HWND referenceWindow) noexcept
 {
     CompareOptionsTypographyFormats formats{};
-    formats.dpi           = RedSalamander::DxUi::Typography::GetEffectiveDpi(referenceWindow);
-    formats.dwriteFactory = RedSalamander::DxUi::Typography::GetSharedMeasurementFactory();
+    formats.dpi           = DxUi::Typography::GetEffectiveDpi(referenceWindow);
+    formats.dwriteFactory = DxUi::Typography::GetSharedMeasurementFactory();
     if (! formats.dwriteFactory)
     {
         return formats;
     }
 
-    const auto bodySpec   = RedSalamander::DxUi::Typography::MakeUiTextSpec(13.0f);
-    const auto headerSpec = RedSalamander::DxUi::Typography::MakeUiTextSpec(13.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD);
-    const auto infoSpec   = RedSalamander::DxUi::Typography::MakeUiTextSpec(13.0f);
+    const auto bodySpec   = DxUi::Typography::MakeUiTextSpec(13.0f);
+    const auto headerSpec = DxUi::Typography::MakeUiTextSpec(13.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD);
+    const auto infoSpec   = DxUi::Typography::MakeUiTextSpec(13.0f);
 
     static_cast<void>(
         CreateCompareOptionsTextFormat(formats.dwriteFactory, bodySpec, DWRITE_FONT_STYLE_NORMAL, DWRITE_WORD_WRAPPING_NO_WRAP, formats.bodyFormat.put()));
@@ -227,7 +226,7 @@ void ConfigureCompareOptionsTextFormat(IDWriteTextFormat* format, DWRITE_WORD_WR
 
 [[nodiscard]] int MeasureCompareOptionsTextWidth(const CompareOptionsTypographyFormats& formats, IDWriteTextFormat* format, std::wstring_view text) noexcept
 {
-    return RedSalamander::DxUi::Typography::MeasureSingleLineTextMetrics(formats.dwriteFactory, format, formats.dpi, text).widthPx;
+    return DxUi::Typography::MeasureSingleLineTextMetrics(formats.dwriteFactory, format, formats.dpi, text).widthPx;
 }
 
 [[nodiscard]] int MeasureCompareOptionsWrappedTextHeight(const CompareOptionsTypographyFormats& formats,
@@ -255,7 +254,7 @@ void ConfigureCompareOptionsTextFormat(IDWriteTextFormat* format, DWRITE_WORD_WR
     }
 
     const int paddingY = UiMetrics::ScaleDip(formats.dpi, 6);
-    return RedSalamander::DxUi::Typography::DipExtentToPixels(metrics.height, formats.dpi) + std::max(1, paddingY);
+    return DxUi::Typography::DipExtentToPixels(metrics.height, formats.dpi) + std::max(1, paddingY);
 }
 
 [[nodiscard]] bool MoveDialogTabFocusFromHost(HWND hostHwnd, bool reverse) noexcept
@@ -639,8 +638,7 @@ bool CompareDirectoriesWindow::EnsureOptionsDxStaticHosts() noexcept
         }
         return focusButtonHost(_optionsPanel.dxUi->okButton);
     });
-    dxState->body.host.SetOnFocusChanged([this](RedSalamander::DxUi::Control* control) noexcept
-    { static_cast<void>(EnsureOptionsDxBodyControlVisible(control)); });
+    dxState->body.host.SetOnFocusChanged([this](DxUi::Control* control) noexcept { static_cast<void>(EnsureOptionsDxBodyControlVisible(control)); });
     dxState->body.hostHwnd       = std::move(hwnd);
     dxState->usesDxUiStatics     = true;
     dxState->usesDxUiToggles     = true;
@@ -721,7 +719,7 @@ bool CompareDirectoriesWindow::EnsureOptionsDxButtonHosts() noexcept
         }
 
         auto root   = std::make_unique<Panel>();
-        slot.button = root->AddChild<RedSalamander::DxUi::Button>();
+        slot.button = root->AddChild<DxUi::Button>();
         slot.button->SetPrimary(primary);
         slot.button->SetOnClick([this, legacyButton, commandId]() noexcept
         {
@@ -753,7 +751,7 @@ bool CompareDirectoriesWindow::EnsureOptionsDxButtonHosts() noexcept
                 return target.host.GetFocusControl() == target.button;
             };
 
-            const auto focusBodyHost = [this](RedSalamander::DxUi::Control* preferredTarget) noexcept
+            const auto focusBodyHost = [this](DxUi::Control* preferredTarget) noexcept
             {
                 if (! _optionsPanel.dxUi || ! _optionsPanel.dxUi->body.hostHwnd || IsWindow(_optionsPanel.dxUi->body.hostHwnd.get()) == FALSE)
                 {
@@ -1063,7 +1061,7 @@ bool CompareDirectoriesWindow::HandleOptionsDxMnemonic(const wchar_t mnemonic) n
         return false;
     }
 
-    const auto focusBodyControl = [&](RedSalamander::DxUi::Control* control) noexcept
+    const auto focusBodyControl = [&](DxUi::Control* control) noexcept
     {
         if (! control || ! control->IsVisible() || ! control->IsEnabled())
         {
@@ -1086,15 +1084,15 @@ bool CompareDirectoriesWindow::HandleOptionsDxMnemonic(const wchar_t mnemonic) n
         case L'f':
         {
             auto* const target = _optionsPanel.dxUi->body.ignoreFiles.edit && _optionsPanel.dxUi->body.ignoreFiles.edit->IsVisible()
-                                     ? static_cast<RedSalamander::DxUi::Control*>(_optionsPanel.dxUi->body.ignoreFiles.edit)
-                                     : static_cast<RedSalamander::DxUi::Control*>(_optionsPanel.dxUi->body.ignoreFiles.toggle);
+                                     ? static_cast<DxUi::Control*>(_optionsPanel.dxUi->body.ignoreFiles.edit)
+                                     : static_cast<DxUi::Control*>(_optionsPanel.dxUi->body.ignoreFiles.toggle);
             return focusBodyControl(target);
         }
         case L'd':
         {
             auto* const target = _optionsPanel.dxUi->body.ignoreDirectories.edit && _optionsPanel.dxUi->body.ignoreDirectories.edit->IsVisible()
-                                     ? static_cast<RedSalamander::DxUi::Control*>(_optionsPanel.dxUi->body.ignoreDirectories.edit)
-                                     : static_cast<RedSalamander::DxUi::Control*>(_optionsPanel.dxUi->body.ignoreDirectories.toggle);
+                                     ? static_cast<DxUi::Control*>(_optionsPanel.dxUi->body.ignoreDirectories.edit)
+                                     : static_cast<DxUi::Control*>(_optionsPanel.dxUi->body.ignoreDirectories.toggle);
             return focusBodyControl(target);
         }
         default: break;
@@ -1106,7 +1104,7 @@ bool CompareDirectoriesWindow::HandleOptionsDxMnemonic(const wchar_t mnemonic) n
     return tryHost(_optionsPanel.dxUi->body) || tryHost(_optionsPanel.dxUi->okButton) || tryHost(_optionsPanel.dxUi->cancelButton);
 }
 
-bool CompareDirectoriesWindow::EnsureOptionsDxBodyControlVisible(RedSalamander::DxUi::Control* control) noexcept
+bool CompareDirectoriesWindow::EnsureOptionsDxBodyControlVisible(DxUi::Control* control) noexcept
 {
     if (! _optionsPanel.dxUi || ! _optionsPanel.dxUi->body.hostHwnd || ! _optionsPanel.ui.host || ! control || ! control->IsVisible())
     {
@@ -1181,7 +1179,7 @@ LRESULT CompareDirectoriesWindow::HandleOptionsDxHostMessage(HWND hwnd, UINT msg
         {
             if (wp == VK_RETURN)
             {
-                if (dynamic_cast<RedSalamander::DxUi::TextField*>(_optionsPanel.dxUi->body.host.GetFocusControl()) != nullptr)
+                if (dynamic_cast<DxUi::TextField*>(_optionsPanel.dxUi->body.host.GetFocusControl()) != nullptr)
                 {
                     handled = true;
                     PostMessageW(
@@ -2387,8 +2385,7 @@ void CompareDirectoriesWindow::LayoutOptionsControls() noexcept
             card.card->SetBounds(
                 D2D1::RectF(pxToDip(placement.x), pxToDip(cardTop), pxToDip(placement.x + placement.width), pxToDip(cardTop + placement.height)));
             card.title->SetText(titleText);
-            card.title->SetMnemonicTarget(showEdit ? static_cast<RedSalamander::DxUi::Control*>(card.edit)
-                                                   : static_cast<RedSalamander::DxUi::Control*>(card.toggle));
+            card.title->SetMnemonicTarget(showEdit ? static_cast<DxUi::Control*>(card.edit) : static_cast<DxUi::Control*>(card.toggle));
             card.title->SetBounds(D2D1::RectF(pxToDip(textX), pxToDip(textY), pxToDip(textX + placement.textWidth), pxToDip(textY + titleHeight)));
             card.description->SetText(descText);
             card.description->SetBounds(D2D1::RectF(pxToDip(textX),
@@ -2666,7 +2663,7 @@ bool CompareDirectoriesWindow::DebugGetOptionsSnapshot(::CompareDirectoriesOptio
         }
     };
 
-    const auto countDxControlIfVisible = [](const RedSalamander::DxUi::Control* control, size_t& count) noexcept
+    const auto countDxControlIfVisible = [](const DxUi::Control* control, size_t& count) noexcept
     {
         if (! control || ! control->IsVisible())
         {
@@ -2822,8 +2819,8 @@ bool CompareDirectoriesWindow::DebugFocusOptionsTarget(const ::CompareDirectorie
         return false;
     }
 
-    RedSalamander::DxUi::Control* focusControl = nullptr;
-    const auto& body                           = _optionsPanel.dxUi->body;
+    DxUi::Control* focusControl = nullptr;
+    const auto& body            = _optionsPanel.dxUi->body;
     switch (target)
     {
         case CompareDirectoriesOptionsDebugFocusTarget::CompareSubdirectoriesToggle: focusControl = body.compareSubdirectories.toggle; break;
@@ -2967,7 +2964,7 @@ bool CompareDirectoriesWindow::DebugGetOptionsTargetHostAndClientRect(const ::Co
         return false;
     }
 
-    const auto assignBodyRect = [&](RedSalamander::DxUi::Control* control) noexcept
+    const auto assignBodyRect = [&](DxUi::Control* control) noexcept
     {
         if (! control || ! _optionsPanel.dxUi->body.hostHwnd || IsWindow(_optionsPanel.dxUi->body.hostHwnd.get()) == FALSE || ! control->IsVisible())
         {

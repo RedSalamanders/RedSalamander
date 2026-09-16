@@ -1,5 +1,12 @@
 # RedConfigure UI Specification
 
+RedConfigure consumes the exact pinned standalone `DxUi.lib` through the common consumer imports.
+The application owns UI strings: every combo box receives `IDS_REDCONFIGURE_NO_MATCHES` from
+the selected product resource module. The shared library never loads numeric resource IDs from
+the host. `RedConfigureTests` creates the full control tree with the Japanese product satellite
+and verifies all twelve combo-box no-match labels, including both TagPicker inputs, alongside page switching and existing workflows.
+The wider RedSalamander migration remains tracked in I19.
+
 ## Shape
 
 RedConfigure uses task modes rather than implementation pages:
@@ -126,9 +133,12 @@ accepts direct sources only and requires an existing palette target. All ten rec
 candidate theme before the preview is shown. Theme numeric grammar is locale-invariant: `.` is the only decimal
 separator, input must be finite and fully consumed, and comma-decimal forms are rejected under every process locale.
 
-The deterministic Debug contract keeps the 6-owner/1,500-row/10-theme scan below 500 ms, validation below 250 ms,
-a single theme edit below 16 ms, and a validated 512-token explicit mass preview below 100 ms. Curated Track 19
-evidence is archived under `Specs/TestRuns/4cb089111a23/RedConfigure/2026-07-17_1548_observatory_track19/`.
+The deterministic Debug and Release contract keeps the 6-owner/1,500-row/10-theme scan below 500 ms, validation
+below 250 ms, a single theme edit below 16 ms, and a validated 512-token explicit mass preview below 100 ms.
+ASan Debug executes the same fixture and correctness assertions, records the same timings with an explicit
+`diagnostic-ASan` budget marker, and exercises sanitizer checks. Its instrumented timings do not qualify these
+uninstrumented performance budgets. Curated Track 19 evidence is archived under
+`Specs/TestRuns/4cb089111a23/RedConfigure/2026-07-17_1548_observatory_track19/`.
 
 When Themes is inactive, its preview detaches from the model so an inactive page does not retain an active heavy preview surface. Returning to Themes reconnects the model and repaints current state.
 

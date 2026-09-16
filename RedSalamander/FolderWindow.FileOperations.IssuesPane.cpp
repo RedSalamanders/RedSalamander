@@ -1,11 +1,11 @@
 #include "FolderWindow.FileOperations.IssuesPane.h"
 
-#include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "Helpers.h"
 #include "WindowMaximizeBehavior.h"
 #include "WindowSizing.h"
+#include <DxUi/DxUi.h>
 
 #include <algorithm>
 #include <format>
@@ -15,18 +15,18 @@
 
 namespace
 {
-using RedSalamander::DxUi::Grid;
-using RedSalamander::DxUi::GridCellData;
-using RedSalamander::DxUi::GridColumnDesc;
-using RedSalamander::DxUi::GridRowStyle;
-using RedSalamander::DxUi::GridRowTone;
-using RedSalamander::DxUi::GridSortSpec;
-using RedSalamander::DxUi::IDxGridDelegate;
-using RedSalamander::DxUi::IDxGridModel;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::SortDirection;
-using RedSalamander::DxUi::ThemePalette;
-using RedSalamander::DxUi::WindowHost;
+using DxUi::Grid;
+using DxUi::GridCellData;
+using DxUi::GridColumnDesc;
+using DxUi::GridRowStyle;
+using DxUi::GridRowTone;
+using DxUi::GridSortSpec;
+using DxUi::IDxGridDelegate;
+using DxUi::IDxGridModel;
+using DxUi::Panel;
+using DxUi::SortDirection;
+using DxUi::ThemePalette;
+using DxUi::WindowHost;
 
 constexpr wchar_t kFileOperationsIssuesPaneClassName[] = L"RedSalamander.FileOperationsIssuesPane";
 constexpr UINT_PTR kRefreshTimerId                     = 1;
@@ -101,29 +101,22 @@ struct IssuesRow
     return true;
 }
 
-
 class IssuesGridModel final : public IDxGridModel
 {
 public:
     explicit IssuesGridModel(const AppTheme& theme) : _theme(&theme)
     {
         _columns = {
-            {L"time", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_TIME), 170.0f, 120.0f, RedSalamander::DxUi::GridColumnKind::Text, true, false},
-            {L"task", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_TASK), 70.0f, 56.0f, RedSalamander::DxUi::GridColumnKind::Text, true, false},
-            {L"operation", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_OPERATION), 90.0f, 80.0f, RedSalamander::DxUi::GridColumnKind::Text, true, false},
-            {L"severity", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_SEVERITY), 86.0f, 72.0f, RedSalamander::DxUi::GridColumnKind::Text, true, false},
-            {L"hresult", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_HRESULT), 104.0f, 100.0f, RedSalamander::DxUi::GridColumnKind::Text, true, false},
-            {L"status", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_STATUS_TEXT), 220.0f, 120.0f, RedSalamander::DxUi::GridColumnKind::Text, true, true},
-            {L"category", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_CATEGORY), 140.0f, 100.0f, RedSalamander::DxUi::GridColumnKind::Text, true, true},
-            {L"message", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_MESSAGE), 300.0f, 140.0f, RedSalamander::DxUi::GridColumnKind::Text, true, true},
-            {L"source", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_SOURCE), 300.0f, 160.0f, RedSalamander::DxUi::GridColumnKind::Text, true, true},
-            {L"destination",
-             LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_DESTINATION),
-             300.0f,
-             160.0f,
-             RedSalamander::DxUi::GridColumnKind::Text,
-             true,
-             true},
+            {L"time", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_TIME), 170.0f, 120.0f, DxUi::GridColumnKind::Text, true, false},
+            {L"task", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_TASK), 70.0f, 56.0f, DxUi::GridColumnKind::Text, true, false},
+            {L"operation", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_OPERATION), 90.0f, 80.0f, DxUi::GridColumnKind::Text, true, false},
+            {L"severity", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_SEVERITY), 86.0f, 72.0f, DxUi::GridColumnKind::Text, true, false},
+            {L"hresult", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_HRESULT), 104.0f, 100.0f, DxUi::GridColumnKind::Text, true, false},
+            {L"status", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_STATUS_TEXT), 220.0f, 120.0f, DxUi::GridColumnKind::Text, true, true},
+            {L"category", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_CATEGORY), 140.0f, 100.0f, DxUi::GridColumnKind::Text, true, true},
+            {L"message", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_MESSAGE), 300.0f, 140.0f, DxUi::GridColumnKind::Text, true, true},
+            {L"source", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_SOURCE), 300.0f, 160.0f, DxUi::GridColumnKind::Text, true, true},
+            {L"destination", LoadStringResource(nullptr, IDS_FILEOPS_ISSUES_COL_DESTINATION), 300.0f, 160.0f, DxUi::GridColumnKind::Text, true, true},
         };
     }
 
@@ -446,7 +439,7 @@ void FileOperationsIssuesPaneState::ApplySavedViewState() noexcept
 
     if (! savedGridLayout.empty())
     {
-        std::vector<RedSalamander::DxUi::GridColumnLayoutEntry> layout;
+        std::vector<DxUi::GridColumnLayoutEntry> layout;
         layout.reserve(savedGridLayout.size());
         for (const auto& entry : savedGridLayout)
         {
@@ -455,7 +448,7 @@ void FileOperationsIssuesPaneState::ApplySavedViewState() noexcept
                 continue;
             }
 
-            layout.push_back(RedSalamander::DxUi::GridColumnLayoutEntry{
+            layout.push_back(DxUi::GridColumnLayoutEntry{
                 .columnId     = entry.columnId,
                 .displayIndex = static_cast<size_t>(entry.displayIndex),
                 .widthDip     = entry.widthDip,
@@ -593,7 +586,7 @@ void FileOperationsIssuesPaneState::FillSelfTestSnapshot(FileOperationsIssuesPan
     outSnapshot                      = {};
     outSnapshot.rowCount             = _rows.size();
     outSnapshot.refreshGeneration    = _refreshGeneration;
-    outSnapshot.visibleWork          = _grid ? _grid->GetVisibleWorkMetrics() : RedSalamander::DxUi::GridVisibleWorkMetrics{};
+    outSnapshot.visibleWork          = _grid ? _grid->GetVisibleWorkMetrics() : DxUi::GridVisibleWorkMetrics{};
     outSnapshot.themeDark            = _theme.dark;
     outSnapshot.themeHighContrast    = _theme.highContrast;
     outSnapshot.themeRainbow         = _theme.menu.rainbowMode;
@@ -632,7 +625,7 @@ void FileOperationsIssuesPaneState::FillSelfTestSnapshot(FileOperationsIssuesPan
     }
 
     outSnapshot.primarySelectedTaskId = _rows[rowIndex.value()].taskId;
-    RedSalamander::DxUi::GridDebugRowVisualState rowVisualState{};
+    DxUi::GridDebugRowVisualState rowVisualState{};
     if (_grid->DebugGetRowVisualState(_dxHost.GetTheme(), rowIndex.value(), rowVisualState))
     {
         outSnapshot.selectedIssueRowFillArgb    = rowVisualState.fillArgb;
@@ -650,7 +643,7 @@ bool FileOperationsIssuesPaneState::SelfTestHitTestGridPoint(D2D1_POINT_2F point
     }
 
     Grid::GridDebugHitInfo hit{};
-    if (! _grid->DebugHitTestPoint(RedSalamander::DxUi::MakePointDip(pointDip), hit))
+    if (! _grid->DebugHitTestPoint(DxUi::MakePointDip(pointDip), hit))
     {
         return false;
     }
@@ -762,6 +755,10 @@ LRESULT FileOperationsIssuesPaneState::OnCreate(HWND hwnd) noexcept
     _rootStorage = std::make_unique<Panel>();
     _root        = _rootStorage.get();
     _grid        = _root->AddChild<Grid>();
+    if (_grid)
+    {
+        _grid->SetEmptyStateText(LoadStringResource(nullptr, IDS_DXUI_NO_DATA));
+    }
     _grid->SetDelegate(this);
     _grid->SetModel(&_model);
     _grid->SetHeaderHeightDip(30.0f);

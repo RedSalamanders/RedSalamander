@@ -1,19 +1,19 @@
 #include "ChangeCase.h"
 #include "ConnectionManagerWindow.h"
 #include "ConnectionSecrets.h"
-#include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "FileActionLauncher.h"
 #include "FileActionResolver.h"
-#include "FolderWindowInternal.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindow.FileSystem.Private.h"
+#include "FolderWindowInternal.h"
 #include "Helpers.h"
-#include "LocalFileTransaction.h"
-#include "PathUtils.h"
 #include "HostServices.h"
+#include "LocalFileTransaction.h"
 #include "MaskSyntax.h"
 #include "NavigationLocation.h"
+#include "PathUtils.h"
+#include <DxUi/DxUi.h>
 
 #include "SettingsStore.h"
 #include "ViewerPluginManager.h"
@@ -795,8 +795,8 @@ std::wstring g_folderViewPaneFilterPromptDebugText;
 
 template <typename OnSelected>
 void TryShowPromptHistoryMenu(HWND ownerWindow,
-                              RedSalamander::DxUi::WindowHost& host,
-                              const RedSalamander::DxUi::ThemePalette& palette,
+                              DxUi::WindowHost& host,
+                              const DxUi::ThemePalette& palette,
                               const D2D1_RECT_F& anchorBounds,
                               const std::vector<std::wstring>& history,
                               std::wstring_view currentText,
@@ -813,11 +813,11 @@ void TryShowPromptHistoryMenu(HWND ownerWindow,
         return;
     }
 
-    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    std::vector<DxUi::MenuFlyoutItem> items;
     items.reserve(entries.size());
     for (size_t index = 0; index < entries.size(); ++index)
     {
-        RedSalamander::DxUi::MenuFlyoutItem item{};
+        DxUi::MenuFlyoutItem item{};
         item.text      = entries[index];
         item.checked   = entries[index] == currentText;
         item.commandId = static_cast<int>(index) + 1;
@@ -825,7 +825,7 @@ void TryShowPromptHistoryMenu(HWND ownerWindow,
     }
 
     const POINT screenPoint = host.DipPointToScreenPoint(D2D1::Point2F(anchorBounds.left, anchorBounds.bottom));
-    const auto result       = RedSalamander::DxUi::ContextMenu::Show(ownerWindow, screenPoint, items, palette);
+    const auto result       = DxUi::ContextMenu::Show(ownerWindow, screenPoint, items, palette);
     if (! result.has_value() || result.value() <= 0)
     {
         return;
@@ -1082,7 +1082,7 @@ private:
             return;
         }
 
-        using namespace RedSalamander::DxUi;
+        using namespace DxUi;
 
         _rootStorage = std::make_unique<Panel>();
         _root        = _rootStorage.get();
@@ -1112,6 +1112,10 @@ private:
         }
 
         _filterCombo = _root->AddChild<ComboBox>();
+        if (_filterCombo)
+        {
+            _filterCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+        }
         _filterCombo->SetEditable(true);
         _filterCombo->SetVariant(ComboBoxVariant::Edit);
         _filterCombo->SetAutoOpenOnTextInput(false);
@@ -1403,19 +1407,19 @@ private:
     bool _enabled      = false;
     bool _helpExpanded = false;
     std::wstring _initialText;
-    RedSalamander::DxUi::ThemePalette _palette{};
+    DxUi::ThemePalette _palette{};
     wil::unique_hwnd _hWnd;
-    RedSalamander::DxUi::WindowHost _dxHost;
-    std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
-    RedSalamander::DxUi::Panel* _root           = nullptr;
-    RedSalamander::DxUi::Label* _useLabel       = nullptr;
-    RedSalamander::DxUi::Toggle* _toggle        = nullptr;
-    RedSalamander::DxUi::ComboBox* _filterCombo = nullptr;
-    RedSalamander::DxUi::Button* _hintButton    = nullptr;
-    RedSalamander::DxUi::Label* _helpLabel      = nullptr;
-    RedSalamander::DxUi::Button* _okButton      = nullptr;
-    RedSalamander::DxUi::Button* _cancelButton  = nullptr;
-    bool _done                                  = false;
+    DxUi::WindowHost _dxHost;
+    std::unique_ptr<DxUi::Panel> _rootStorage;
+    DxUi::Panel* _root           = nullptr;
+    DxUi::Label* _useLabel       = nullptr;
+    DxUi::Toggle* _toggle        = nullptr;
+    DxUi::ComboBox* _filterCombo = nullptr;
+    DxUi::Button* _hintButton    = nullptr;
+    DxUi::Label* _helpLabel      = nullptr;
+    DxUi::Button* _okButton      = nullptr;
+    DxUi::Button* _cancelButton  = nullptr;
+    bool _done                   = false;
     std::optional<FolderView::NameFilterState> _result;
 };
 
@@ -1666,7 +1670,7 @@ private:
             return;
         }
 
-        using namespace RedSalamander::DxUi;
+        using namespace DxUi;
 
         _rootStorage = std::make_unique<Panel>();
         _root        = _rootStorage.get();
@@ -1934,19 +1938,19 @@ private:
     std::wstring _captionText;
     std::wstring _labelText;
     bool _helpExpanded = false;
-    RedSalamander::DxUi::ThemePalette _palette{};
+    DxUi::ThemePalette _palette{};
     wil::unique_hwnd _hWnd;
-    RedSalamander::DxUi::WindowHost _dxHost;
-    std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
-    RedSalamander::DxUi::Panel* _root           = nullptr;
-    RedSalamander::DxUi::Label* _label          = nullptr;
-    RedSalamander::DxUi::TextField* _textField  = nullptr;
-    RedSalamander::DxUi::Button* _historyButton = nullptr;
-    RedSalamander::DxUi::Button* _hintButton    = nullptr;
-    RedSalamander::DxUi::Label* _helpLabel      = nullptr;
-    RedSalamander::DxUi::Button* _okButton      = nullptr;
-    RedSalamander::DxUi::Button* _cancelButton  = nullptr;
-    bool _done                                  = false;
+    DxUi::WindowHost _dxHost;
+    std::unique_ptr<DxUi::Panel> _rootStorage;
+    DxUi::Panel* _root           = nullptr;
+    DxUi::Label* _label          = nullptr;
+    DxUi::TextField* _textField  = nullptr;
+    DxUi::Button* _historyButton = nullptr;
+    DxUi::Button* _hintButton    = nullptr;
+    DxUi::Label* _helpLabel      = nullptr;
+    DxUi::Button* _okButton      = nullptr;
+    DxUi::Button* _cancelButton  = nullptr;
+    bool _done                   = false;
     std::optional<std::wstring> _result;
 };
 
@@ -2353,7 +2357,7 @@ private:
             return;
         }
 
-        using namespace RedSalamander::DxUi;
+        using namespace DxUi;
 
         _rootStorage = std::make_unique<Panel>();
         _root        = _rootStorage.get();
@@ -2600,18 +2604,18 @@ private:
     std::wstring _validationText;
     std::wstring _captionText;
     AppTheme _theme{};
-    RedSalamander::DxUi::ThemePalette _palette{};
+    DxUi::ThemePalette _palette{};
     wil::unique_hwnd _hWnd;
-    RedSalamander::DxUi::WindowHost _dxHost;
-    std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
-    RedSalamander::DxUi::Panel* _root             = nullptr;
-    RedSalamander::DxUi::Label* _pathCaptionLabel = nullptr;
-    RedSalamander::DxUi::Label* _pathLabel        = nullptr;
-    RedSalamander::DxUi::Label* _nameCaptionLabel = nullptr;
-    RedSalamander::DxUi::TextField* _nameField    = nullptr;
-    RedSalamander::DxUi::Label* _validationLabel  = nullptr;
-    RedSalamander::DxUi::Button* _createButton    = nullptr;
-    RedSalamander::DxUi::Button* _cancelButton    = nullptr;
+    DxUi::WindowHost _dxHost;
+    std::unique_ptr<DxUi::Panel> _rootStorage;
+    DxUi::Panel* _root             = nullptr;
+    DxUi::Label* _pathCaptionLabel = nullptr;
+    DxUi::Label* _pathLabel        = nullptr;
+    DxUi::Label* _nameCaptionLabel = nullptr;
+    DxUi::TextField* _nameField    = nullptr;
+    DxUi::Label* _validationLabel  = nullptr;
+    DxUi::Button* _createButton    = nullptr;
+    DxUi::Button* _cancelButton    = nullptr;
     std::optional<UINT> _validationMessageId;
     bool _done = false;
     std::optional<std::wstring> _result;
@@ -2900,7 +2904,7 @@ private:
             return;
         }
 
-        using namespace RedSalamander::DxUi;
+        using namespace DxUi;
 
         _rootStorage = std::make_unique<Panel>();
         _root        = _rootStorage.get();
@@ -2935,6 +2939,10 @@ private:
             _editorCaptionLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 
             _editorCombo = _root->AddChild<ComboBox>();
+            if (_editorCombo)
+            {
+                _editorCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+            }
             _editorCombo->SetVariant(ComboBoxVariant::Window);
             _editorCombo->SetOnSelectionChanged([this](size_t index) noexcept
             {
@@ -3004,7 +3012,7 @@ private:
         const auto startedAt = std::chrono::steady_clock::now();
         _editorActionIds.clear();
         _editorDisplayNames.clear();
-        std::vector<RedSalamander::DxUi::ComboBox::Item> items;
+        std::vector<DxUi::ComboBox::Item> items;
 
         const std::wstring trimmed = StringUtils::TrimWhitespaceCopy(_currentText);
         std::optional<FileActionResolver::Request> request;
@@ -3030,7 +3038,7 @@ private:
                 const std::wstring displayName = action->displayName.empty() ? action->id : action->displayName;
                 _editorActionIds.push_back(action->id);
                 _editorDisplayNames.push_back(displayName);
-                items.push_back(RedSalamander::DxUi::ComboBox::Item{action->id, displayName});
+                items.push_back(DxUi::ComboBox::Item{action->id, displayName});
             }
         }
 
@@ -3282,20 +3290,20 @@ private:
     std::wstring _validationText;
     std::wstring _captionText;
     AppTheme _theme{};
-    RedSalamander::DxUi::ThemePalette _palette{};
+    DxUi::ThemePalette _palette{};
     wil::unique_hwnd _hWnd;
-    RedSalamander::DxUi::WindowHost _dxHost;
-    std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
-    RedSalamander::DxUi::Panel* _root               = nullptr;
-    RedSalamander::DxUi::Label* _pathCaptionLabel   = nullptr;
-    RedSalamander::DxUi::Label* _pathLabel          = nullptr;
-    RedSalamander::DxUi::Label* _nameCaptionLabel   = nullptr;
-    RedSalamander::DxUi::TextField* _nameField      = nullptr;
-    RedSalamander::DxUi::Label* _editorCaptionLabel = nullptr;
-    RedSalamander::DxUi::ComboBox* _editorCombo     = nullptr;
-    RedSalamander::DxUi::Label* _validationLabel    = nullptr;
-    RedSalamander::DxUi::Button* _createButton      = nullptr;
-    RedSalamander::DxUi::Button* _cancelButton      = nullptr;
+    DxUi::WindowHost _dxHost;
+    std::unique_ptr<DxUi::Panel> _rootStorage;
+    DxUi::Panel* _root               = nullptr;
+    DxUi::Label* _pathCaptionLabel   = nullptr;
+    DxUi::Label* _pathLabel          = nullptr;
+    DxUi::Label* _nameCaptionLabel   = nullptr;
+    DxUi::TextField* _nameField      = nullptr;
+    DxUi::Label* _editorCaptionLabel = nullptr;
+    DxUi::ComboBox* _editorCombo     = nullptr;
+    DxUi::Label* _validationLabel    = nullptr;
+    DxUi::Button* _createButton      = nullptr;
+    DxUi::Button* _cancelButton      = nullptr;
     std::optional<UINT> _validationMessageId;
     bool _showEditorControls = true;
     bool _done               = false;
@@ -3591,7 +3599,7 @@ private:
             return;
         }
 
-        using namespace RedSalamander::DxUi;
+        using namespace DxUi;
 
         _rootStorage = std::make_unique<Panel>();
         _root        = _rootStorage.get();
@@ -3600,6 +3608,10 @@ private:
         _styleLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 
         _styleCombo = _root->AddChild<ComboBox>();
+        if (_styleCombo)
+        {
+            _styleCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+        }
         _styleCombo->SetVariant(ComboBoxVariant::Window);
         _styleCombo->SetEditable(false);
 
@@ -3618,6 +3630,10 @@ private:
         _targetLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 
         _targetCombo = _root->AddChild<ComboBox>();
+        if (_targetCombo)
+        {
+            _targetCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+        }
         _targetCombo->SetVariant(ComboBoxVariant::Window);
         _targetCombo->SetEditable(false);
 
@@ -3880,19 +3896,19 @@ private:
     bool _allowSubdirs   = false;
     bool _includeSubdirs = false;
     wil::unique_hwnd _hWnd;
-    RedSalamander::DxUi::WindowHost _dxHost;
-    RedSalamander::DxUi::ThemePalette _palette{};
-    std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
-    RedSalamander::DxUi::Panel* _root                  = nullptr;
-    RedSalamander::DxUi::Label* _styleLabel            = nullptr;
-    RedSalamander::DxUi::ComboBox* _styleCombo         = nullptr;
-    RedSalamander::DxUi::Label* _targetLabel           = nullptr;
-    RedSalamander::DxUi::ComboBox* _targetCombo        = nullptr;
-    RedSalamander::DxUi::Label* _exampleLabel          = nullptr;
-    RedSalamander::DxUi::Toggle* _includeSubdirsToggle = nullptr;
-    RedSalamander::DxUi::Button* _okButton             = nullptr;
-    RedSalamander::DxUi::Button* _cancelButton         = nullptr;
-    bool _done                                         = false;
+    DxUi::WindowHost _dxHost;
+    DxUi::ThemePalette _palette{};
+    std::unique_ptr<DxUi::Panel> _rootStorage;
+    DxUi::Panel* _root                  = nullptr;
+    DxUi::Label* _styleLabel            = nullptr;
+    DxUi::ComboBox* _styleCombo         = nullptr;
+    DxUi::Label* _targetLabel           = nullptr;
+    DxUi::ComboBox* _targetCombo        = nullptr;
+    DxUi::Label* _exampleLabel          = nullptr;
+    DxUi::Toggle* _includeSubdirsToggle = nullptr;
+    DxUi::Button* _okButton             = nullptr;
+    DxUi::Button* _cancelButton         = nullptr;
+    bool _done                          = false;
     std::optional<ChangeCase::Options> _result;
 };
 
@@ -3943,8 +3959,8 @@ LRESULT FolderWindow::OnChangeCaseTaskUpdate(LPARAM lp) noexcept
         return 0;
     }
 
-    const uint64_t taskId = ResolveChangeCaseTaskUpdate(*payload, [this](const InformationalTaskUpdate& update) noexcept
-    { return CreateOrUpdateInformationalTask(update); });
+    const uint64_t taskId =
+        ResolveChangeCaseTaskUpdate(*payload, [this](const InformationalTaskUpdate& update) noexcept { return CreateOrUpdateInformationalTask(update); });
     return static_cast<LRESULT>(taskId);
 }
 
@@ -3987,41 +4003,39 @@ LRESULT FolderWindow::OnChangeCaseCompleted(LPARAM lp) noexcept
         return 0;
     }
 
-    const Pane pane = payload->pane;
+    const Pane pane                         = payload->pane;
     const std::filesystem::path focusFolder = std::move(payload->focusFolder);
-    const std::wstring focusDisplayName = std::move(payload->focusDisplayName);
-    uint64_t taskId = 0u;
-    const HRESULT startHr = _fileOperations->AdmitScheduledRename(
-        pane,
-        payload->fileSystem,
-        FileOperations::RenameOrigin::ChangeCase,
-        std::move(payload->operations),
-        {},
-        [this, pane, focusFolder, focusDisplayName](const uint64_t publishedTaskId) mutable
+    const std::wstring focusDisplayName     = std::move(payload->focusDisplayName);
+    uint64_t taskId                         = 0u;
+    const HRESULT startHr = _fileOperations->AdmitScheduledRename(pane,
+                                                                  payload->fileSystem,
+                                                                  FileOperations::RenameOrigin::ChangeCase,
+                                                                  std::move(payload->operations),
+                                                                  {},
+                                                                  [this, pane, focusFolder, focusDisplayName](const uint64_t publishedTaskId) mutable
+    {
+        _fileOperationRequestCompletionCallbacks.insert_or_assign(publishedTaskId,
+                                                                  [this, pane, focusFolder, focusDisplayName](const FileOperationCompletedEvent& event) mutable
         {
-            _fileOperationRequestCompletionCallbacks.insert_or_assign(
-                publishedTaskId,
-                [this, pane, focusFolder, focusDisplayName](const FileOperationCompletedEvent& event) mutable
+            PaneState& completionState = pane == Pane::Left ? _leftPane : _rightPane;
+            if (SUCCEEDED(event.hr))
+            {
+                const std::optional<std::filesystem::path> currentFolder = completionState.folderView.GetFolderPath();
+                if (currentFolder.has_value() && ! focusFolder.empty() && ! focusDisplayName.empty() &&
+                    OrdinalString::EqualsNoCasePath(currentFolder.value(), focusFolder))
                 {
-                    PaneState& completionState = pane == Pane::Left ? _leftPane : _rightPane;
-                    if (SUCCEEDED(event.hr))
-                    {
-                        const std::optional<std::filesystem::path> currentFolder = completionState.folderView.GetFolderPath();
-                        if (currentFolder.has_value() && ! focusFolder.empty() && ! focusDisplayName.empty() &&
-                            OrdinalString::EqualsNoCasePath(currentFolder.value(), focusFolder))
-                        {
-                            completionState.folderView.RememberFocusedItemForFolder(focusFolder, focusDisplayName);
-                        }
-                    }
-                    completionState.folderView.ForceRefresh();
-                });
-        },
-        &taskId);
+                    completionState.folderView.RememberFocusedItemForFolder(focusFolder, focusDisplayName);
+                }
+            }
+            completionState.folderView.ForceRefresh();
+        });
+    },
+                                                                  &taskId);
     if (FAILED(startHr) || taskId == 0u)
     {
         const HRESULT failureHr = FAILED(startHr) ? startHr : E_UNEXPECTED;
-        std::wstring title   = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
-        std::wstring message = FormatStringResource(nullptr, IDS_FMT_PANE_CHANGE_CASE_FAILED, static_cast<unsigned long>(failureHr));
+        std::wstring title      = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
+        std::wstring message    = FormatStringResource(nullptr, IDS_FMT_PANE_CHANGE_CASE_FAILED, static_cast<unsigned long>(failureHr));
         state.folderView.ShowAlertOverlay(
             FolderView::ErrorOverlayKind::Operation, FolderView::OverlaySeverity::Error, std::move(title), std::move(message), failureHr);
         MessageBeep(MB_ICONERROR);
@@ -4668,8 +4682,7 @@ void FolderWindow::SetFolderPath(Pane pane, const std::filesystem::path& path)
             return;
         }
 
-        static_cast<void>(
-            ShowConnectionManagerWindow(_hWnd.get(), *this, L"RedSalamander", *_settings, _theme, filterPluginId, static_cast<uint8_t>(pane)));
+        static_cast<void>(ShowConnectionManagerWindow(_hWnd.get(), *this, L"RedSalamander", *_settings, _theme, filterPluginId, static_cast<uint8_t>(pane)));
     };
 
     auto parseNavConnectionName = [&](std::wstring_view rawNavText, std::wstring& outConnectionName, std::wstring& outPathOverride) -> bool
@@ -5610,7 +5623,8 @@ bool DebugSetFolderViewPaneFilterPromptHelpExpanded(bool expanded) noexcept
 bool DebugConfirmFolderViewPaneFilterPrompt() noexcept
 {
     const HWND hwnd = GetFolderViewPaneFilterPromptHandle();
-    return PostDxUiPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Confirm));
+    return PostDxUiPromptCloseDebugCommand(
+        hwnd, WndMsg::kFolderViewPaneFilterPromptDebug, static_cast<WPARAM>(FolderViewPaneFilterPromptDebugCommand::Confirm));
 }
 
 bool DebugCancelFolderViewPaneFilterPrompt() noexcept
@@ -5840,7 +5854,8 @@ bool DebugSetFolderViewChangeCasePromptSelections(size_t styleIndex, size_t targ
 bool DebugConfirmFolderViewChangeCasePrompt() noexcept
 {
     const HWND hwnd = GetFolderViewChangeCasePromptHandle();
-    return PostDxUiPromptCloseDebugCommand(hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Confirm));
+    return PostDxUiPromptCloseDebugCommand(
+        hwnd, WndMsg::kFolderViewChangeCasePromptDebug, static_cast<WPARAM>(FolderViewChangeCasePromptDebugCommand::Confirm));
 }
 
 bool DebugCancelFolderViewChangeCasePrompt() noexcept

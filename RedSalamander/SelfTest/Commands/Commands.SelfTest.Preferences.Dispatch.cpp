@@ -3,6 +3,9 @@ namespace
 
 void RunPreferencesCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
 {
+    SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_repeated_close_releases_hosts", [=](CaseState& state) noexcept {
+        return TestPreferencesDialogRepeatedCloseReleasesHosts(mainWindow, state);
+    });
     SelfTest::RunCase(options, suite, L"cmd_preferences_dialog_category_tree_uses_dxui_host_without_visible_legacy_treeview", [=](CaseState& state) noexcept {
         return TestPreferencesDialogCategoryTreeUsesDxUiHost(mainWindow, state);
     });

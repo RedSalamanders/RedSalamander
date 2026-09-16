@@ -1,5 +1,33 @@
 # Performance Validation Specification
 
+## I19 accepted static-library adoption costs
+
+On 2026-09-13 the user explicitly accepted the measured `.lib` adoption trade-off
+and requested closeout. Retain the [matched Preferences record](../TestRuns/Local-x64/DxUiAdoption/2026-09-13-LocalQualification/README.md)
+and the original package comparisons. All 40 Preferences round trips pass; the
+candidate's median observed peak private bytes increase by 1,046,528 bytes (0.384%),
+while working set decreases 1.071%. CPU measurements change in opposite directions
+across the pairs and establish no CPU improvement or regression.
+
+The accepted resource envelope is the measured I19 adoption cost on the recorded
+test-enabled x64 Release fixture and portable package, approximately 1 MiB additional
+peak private memory and 1.4% additional packaged disk space. Canonical source/test
+ownership and the corrected shared-control behavior justify that bounded cost.
+Preserve the baseline, original failed attempts and existing thresholds; this
+decision neither admits additional growth nor establishes normal idle, GPU,
+hardware-presentation, DLL-versus-library isolation or long-run resource behavior.
+RedXe and DxUi retain their own measured trade-offs in their resource contracts.
+
+Final local package verification at `1232d181` records 415,535
+additional compressed bytes (1.37%) and
+1,140,347 additional expanded bytes (1.45%).
+The [final A/B/A receipt](../TestRuns/Local-x64/DxUiAdoption/2026-09-13-Packaging1232d181/README.md)
+verifies all 11 packaged DxUi identities and identical baseline payloads before/after.
+These are the final artifact measurements for the accepted approximate adoption cost;
+earlier package results remain retained. This package check does not remeasure memory,
+CPU, GPU or frame latency and does not authorize future growth.
+
+
 ## File Operations residual and UI focus regression witnesses
 
 - `Beeline_CopySkipLinksKeepsPlaceholders` requires a real non-name-surrogate placeholder on NTFS.
@@ -501,7 +529,11 @@ report expected/observed counts on failure; S_OK alone is not complete coverage.
 singular/bulk Copy APIs run serial/parallel shallow, literal-name, malformed,
 out-of-root, overlong, blocked LIST, late refusal/cancel and depth-128/129 cases;
 both Move APIs additionally prove accepted depth 128. Two wide Copy cases publish
-4,097 real files, beyond the aggregate queue ceiling. Exact source/destination
+4,097 real files, beyond the aggregate queue ceiling. Wide-copy fixture deadlines are
+180 seconds in Debug/Release and 360 seconds in ASan Debug; the explicit instrumented
+allowance preserves the identical corpus and bounds fixture execution. It is not a
+throughput acceptance threshold. Other shape deadlines and the two-second observed
+cancellation bound remain unchanged. Exact source/destination
 bytes, outside siblings and terminal status are checked independently. A late
 failure must retain an earlier subtree's published file; an invalid first listing
 must not create children. Copy must not fabricate a destructive-source receipt.
@@ -713,7 +745,8 @@ it makes no baseline or latency-improvement claim.
 Single-pass File Operations discovery emits one bounded terminal metric set per task:
 `FileOps.Discovery.OpenUs`, `CallbackCount`, `CallbackUs`, `LockWaitUs`, `MaxQueueDepth`,
 `StarvationCount`, `FirstMutationBeforeClose`, `FirstMutationUs`,
-`BytesCompletedWhileOpen`, `MutationsCompletedWhileOpen`, `SkipReleaseUs`, and `Closed`.
+`BytesCompletedWhileOpen`, `MutationsCompletedWhileOpen`, `SkipReleaseUs`, `GrowthAfterClose`, and
+`Closed`.
 `FirstMutationUs` is elapsed time from discovery start to the first host-proved completion observed
 while discovery remains open. `BytesCompletedWhileOpen` and `MutationsCompletedWhileOpen` are
 saturating task-local totals; they are measurement only and must not feed scheduling. Provider
@@ -721,7 +754,13 @@ progress contributes real deltas. Exact Local permanent Delete contributes its t
 selected-root result once, with that root's discovered bytes, because that exact path intentionally
 has no provider progress callback. `MaxQueueDepth` is compared with the fixed
 discovery-ahead target 256, not with tree size. `FirstMutationBeforeClose=1` is required in the
-wide-tree overlap scenario and proves that discovery did not become a preflight barrier.
+wide-tree overlap scenario and proves that discovery did not become a preflight barrier; it is not a
+universal requirement, because a selected root that is one known file closes its exact total before
+any payload moves. `GrowthAfterClose` counts discovery reports that added work after the task's
+totals were already final; closure is one-way, so every scenario requires exactly 0. The
+`DiscoveryScope_` family carries the paired witnesses: with the leaf, nested-cleanup and
+provisional-rename rules disabled it reads 5 and 6 on the managed-directory and rename-merge
+scenarios and the leaf checkpoint is never reached, and it reads 0 with them in place.
 `Phase5_DiscoveryCancelLatencyLocal` records bounded cancellation while traversal and transfer are
 both live; `Phase5_DiscoverySkipContinues` and
 `Phase5_SwitchParallelToWaitDuringDiscovery` prove the one-way Skip state and its separation from
@@ -748,9 +787,13 @@ with a 25-ms backend delay, then cancels a second task while discovery and mutat
 The fixed-volume control copies four 4-MiB files independently on marker-authorized C and D roots at
 16 MiB/s, then repeats both concurrently. It emits
 `FileOps.SelfTest.R4A19.{ProviderControl,ProviderCancel,IndependentVolumes,IndependentVolumeCIsolatedUs,IndependentVolumeDIsolatedUs}`.
-Every eligible provider fixture requires first mutation before discovery closure and within 1 second,
-nonzero open-discovery byte/mutation facts, zero discovery starvation, and exact bytes/items. Fake
-MTP requires maximum backend concurrency exactly 1 and cancellation within 500 ms. Concurrent C/D
+The fake-MTP fixture, whose route the host bridge traverses, requires first mutation before discovery
+closure and within 1 second, nonzero open-discovery byte/mutation facts, zero discovery starvation,
+and exact bytes/items. The Dummy fixture runs on the provider's direct route, where Dummy already
+holds its subtree before it mutates and therefore closes its record on the exact total before the
+first byte moves; it requires that closed record (512 KiB, 64 files, 9 directories), zero
+open-discovery bytes/mutations, zero growth after closure, zero discovery starvation, and exact
+bytes. Fake MTP requires maximum backend concurrency exactly 1 and cancellation within 500 ms. Concurrent C/D
 wall time must be at most 1.35 times the slower isolated control and both tasks must have overlapping
 progress. Ready queue, bridge admission queue, retained entries, queued path bytes, metadata, and
 limit-hit gates remain 256, 256, 4,096, 16 MiB, 8 MiB, and zero. Qualification is five independent
@@ -791,7 +834,9 @@ document and constant typed-result state. It emits
 once per process. Capture five sequential independent processes per side beneath
 `Specs/TestRuns/<MachineHash>/FileOps/`. Acceptance requires candidate p95 no greater than
 `max(1.50 * baseline p95, baseline p95 + 50,000 us)`, every duration below 2,000,000 us, and exact
-12,288/8,192/4,096 counts. A RED baseline may fail the receipt assertion after emitting the measured
+12,288/8,192/4,096 counts. Debug and ASan Debug correctness runs retain the same loop, counts and
+validity assertions with a five-second diagnostic ceiling, matching the adjacent R0e profile;
+they do not establish Release performance qualification. A RED baseline may fail the receipt assertion after emitting the measured
 loop; retain that failure rather than substituting a synthetic control. This is in-process
 admission/classification and constant-resource evidence, not live-provider latency.
 

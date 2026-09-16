@@ -53,22 +53,22 @@
 #include "PlugInterfaces/Informations.h"
 #include "Ui/AlertOverlay.h"
 
-#include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "FileMetadataFormatting.h"
 #include "FileOperationArtifactRegistry.h"
 #include "FileOperationConfirmation.h"
 #include "FolderView.h"
 #include "FolderViewEmptyStateLayout.h"
-#include "PaneVisualState.h"
 #include "Helpers.h"
 #include "HostServices.h"
 #include "IconCache.h"
+#include "PaneVisualState.h"
 #include "ThemedInputFrames.h"
 #include "UiMetrics.h"
 #include "WindowMessages.h"
 #include "WindowSizing.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
 
 #ifndef GET_X_LPARAM
 #define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
@@ -226,8 +226,8 @@ std::wstring PadLeftToWidth(std::wstring_view text, size_t width)
 
 std::wstring BuildDetailsText(bool isDirectory, uint64_t sizeBytes, int64_t lastWriteTime, DWORD fileAttributes, size_t sizeSlotChars)
 {
-    const auto fields = Common::FileMetadata::FormatDisplayFields(
-        {.lastWriteTime100nsSince1601 = lastWriteTime, .fileAttributes = fileAttributes}, Common::FileMetadata::DisplayProfile::CompactDetails);
+    const auto fields = Common::FileMetadata::FormatDisplayFields({.lastWriteTime100nsSince1601 = lastWriteTime, .fileAttributes = fileAttributes},
+                                                                  Common::FileMetadata::DisplayProfile::CompactDetails);
 
     if (isDirectory)
     {
@@ -537,7 +537,7 @@ private:
             return;
         }
 
-        using namespace RedSalamander::DxUi;
+        using namespace DxUi;
 
         _rootStorage = std::make_unique<Panel>();
         _root        = _rootStorage.get();
@@ -734,7 +734,7 @@ private:
                         snapshot->selectionEnd   = snapshot->text.size();
                     }
 
-                    RedSalamander::DxUi::TextFieldDebugSingleLinePaintState paintState{};
+                    DxUi::TextFieldDebugSingleLinePaintState paintState{};
                     if (_field->DebugGetSingleLinePaintState(_dxHost, paintState))
                     {
                         snapshot->textRect              = paintState.textRect;
@@ -773,17 +773,17 @@ private:
     bool _isDirectory = false;
     std::wstring _captionText;
     AppTheme _theme{};
-    RedSalamander::DxUi::ThemePalette _palette{};
+    DxUi::ThemePalette _palette{};
     wil::unique_hwnd _hWnd;
-    RedSalamander::DxUi::WindowHost _dxHost;
-    std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
-    RedSalamander::DxUi::Panel* _root          = nullptr;
-    RedSalamander::DxUi::Label* _label         = nullptr;
-    RedSalamander::DxUi::TextField* _field     = nullptr;
-    RedSalamander::DxUi::Button* _okButton     = nullptr;
-    RedSalamander::DxUi::Button* _cancelButton = nullptr;
-    RedSalamander::DxUi::Button* _batchButton  = nullptr;
-    bool _done                                 = false;
+    DxUi::WindowHost _dxHost;
+    std::unique_ptr<DxUi::Panel> _rootStorage;
+    DxUi::Panel* _root          = nullptr;
+    DxUi::Label* _label         = nullptr;
+    DxUi::TextField* _field     = nullptr;
+    DxUi::Button* _okButton     = nullptr;
+    DxUi::Button* _cancelButton = nullptr;
+    DxUi::Button* _batchButton  = nullptr;
+    bool _done                  = false;
     RenamePromptResult _result{};
 };
 
@@ -967,7 +967,7 @@ HRESULT QueryShellShortcutExactPathExists(const std::filesystem::path& linkPath,
 
 HRESULT VerifyShellShortcutExactPath(const std::filesystem::path& linkPath) noexcept
 {
-    bool exists = false;
+    bool exists      = false;
     const HRESULT hr = QueryShellShortcutExactPathExists(linkPath, exists);
     if (FAILED(hr))
     {
@@ -1189,13 +1189,12 @@ private:
 class FolderViewDataObject final : public IDataObject
 {
 public:
-    FolderViewDataObject(
-        std::vector<std::filesystem::path> paths,
-        std::wstring pluginId,
-        std::wstring instanceContext,
-        DWORD preferredEffect,
-        bool includeHDrop,
-        bool includeInternalFormat = true)
+    FolderViewDataObject(std::vector<std::filesystem::path> paths,
+                         std::wstring pluginId,
+                         std::wstring instanceContext,
+                         DWORD preferredEffect,
+                         bool includeHDrop,
+                         bool includeInternalFormat = true)
         : _refCount(1),
           _paths(std::move(paths)),
           _pluginId(std::move(pluginId)),
@@ -1584,8 +1583,8 @@ private:
     std::vector<std::filesystem::path> _paths;
     std::wstring _pluginId;
     std::wstring _instanceContext;
-    DWORD _preferredEffect = DROPEFFECT_COPY;
-    bool _includeHDrop     = false;
+    DWORD _preferredEffect      = DROPEFFECT_COPY;
+    bool _includeHDrop          = false;
     bool _includeInternalFormat = true;
 };
 

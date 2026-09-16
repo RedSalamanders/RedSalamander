@@ -1,6 +1,6 @@
 #include "TerminalAccessibility.h"
 
-#include "DxUi/DxUi.AccessibilityTextUnits.h"
+#include <DxUi/AccessibilityTextUnits.h>
 
 #include <algorithm>
 #include <atomic>
@@ -11,9 +11,9 @@
 #include <new>
 #include <string_view>
 
+#include <UIAutomation.h>
 #include <objbase.h>
 #include <oleauto.h>
-#include <UIAutomation.h>
 
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 4820 28182)
@@ -42,15 +42,15 @@ struct Snapshot final
 
 struct State final
 {
-    State() = default;
-    State(const State&) = delete;
-    State(State&&) = delete;
+    State()                        = default;
+    State(const State&)            = delete;
+    State(State&&)                 = delete;
     State& operator=(const State&) = delete;
-    State& operator=(State&&) = delete;
+    State& operator=(State&&)      = delete;
 
     std::mutex mutex;
-    HWND window = nullptr;
-    bool retired = false;
+    HWND window             = nullptr;
+    bool retired            = false;
     uint64_t nextGeneration = 1u;
     std::shared_ptr<const Snapshot> snapshot;
 };
@@ -74,13 +74,12 @@ using UniqueSafeArray = std::unique_ptr<SAFEARRAY, SafeArrayDeleter>;
         return E_POINTER;
     }
     VariantInit(output);
-    BSTR text = SysAllocStringLen(value.data(), static_cast<UINT>(
-                                                   std::min<size_t>(value.size(), (std::numeric_limits<UINT>::max)())));
+    BSTR text = SysAllocStringLen(value.data(), static_cast<UINT>(std::min<size_t>(value.size(), (std::numeric_limits<UINT>::max)())));
     if (text == nullptr && ! value.empty())
     {
         return E_OUTOFMEMORY;
     }
-    output->vt = VT_BSTR;
+    output->vt      = VT_BSTR;
     output->bstrVal = text;
     return S_OK;
 }
@@ -111,8 +110,7 @@ using UniqueSafeArray = std::unique_ptr<SAFEARRAY, SafeArrayDeleter>;
     return state->retired;
 }
 
-[[nodiscard]] std::shared_ptr<const Snapshot> CaptureSnapshot(
-    const std::shared_ptr<State>& state, HWND* window = nullptr) noexcept
+[[nodiscard]] std::shared_ptr<const Snapshot> CaptureSnapshot(const std::shared_ptr<State>& state, HWND* window = nullptr) noexcept
 {
     std::scoped_lock lock(state->mutex);
     if (state->retired || ! state->snapshot)
@@ -130,28 +128,28 @@ MIDL_INTERFACE("18A4D4E9-424C-46C4-9BC1-5B7E7FDC7985")
 ITerminalTextRangeIdentity : public IUnknown
 {
 public:
-    virtual HRESULT STDMETHODCALLTYPE GetIdentity(
-        const void** stateKey, uint64_t* generation, size_t* start, size_t* end) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetIdentity(const void** stateKey, uint64_t* generation, size_t* start, size_t* end) noexcept = 0;
 };
 
 class TerminalTextRange final : public ITextRangeProvider, public ITerminalTextRangeIdentity
 {
 public:
-    TerminalTextRange(std::shared_ptr<State> state,
-                      std::shared_ptr<const Snapshot> snapshot,
-                      IRawElementProviderSimple* owner,
-                      size_t start,
-                      size_t end) noexcept
-        : _state(std::move(state)), _snapshot(std::move(snapshot)), _owner(owner), _start(start), _end(end)
+    TerminalTextRange(
+        std::shared_ptr<State> state, std::shared_ptr<const Snapshot> snapshot, IRawElementProviderSimple* owner, size_t start, size_t end) noexcept
+        : _state(std::move(state)),
+          _snapshot(std::move(snapshot)),
+          _owner(owner),
+          _start(start),
+          _end(end)
     {
         g_accessibilityObjectCount.fetch_add(1u, std::memory_order_acq_rel);
         clamp();
     }
 
-    TerminalTextRange(const TerminalTextRange&) = delete;
-    TerminalTextRange(TerminalTextRange&&) = delete;
+    TerminalTextRange(const TerminalTextRange&)            = delete;
+    TerminalTextRange(TerminalTextRange&&)                 = delete;
     TerminalTextRange& operator=(const TerminalTextRange&) = delete;
-    TerminalTextRange& operator=(TerminalTextRange&&) = delete;
+    TerminalTextRange& operator=(TerminalTextRange&&)      = delete;
 
     ~TerminalTextRange()
     {
@@ -196,17 +194,16 @@ public:
         return value;
     }
 
-    HRESULT STDMETHODCALLTYPE GetIdentity(
-        const void** stateKey, uint64_t* generation, size_t* start, size_t* end) noexcept override
+    HRESULT STDMETHODCALLTYPE GetIdentity(const void** stateKey, uint64_t* generation, size_t* start, size_t* end) noexcept override
     {
         if (stateKey == nullptr || generation == nullptr || start == nullptr || end == nullptr)
         {
             return E_POINTER;
         }
-        *stateKey = _state.get();
+        *stateKey   = _state.get();
         *generation = _snapshot->generation;
-        *start = _start;
-        *end = _end;
+        *start      = _start;
+        *end        = _end;
         return S_OK;
     }
 
@@ -236,12 +233,12 @@ public:
         {
             return E_POINTER;
         }
-        *output = FALSE;
+        *output              = FALSE;
         const void* stateKey = nullptr;
-        uint64_t generation = 0u;
-        size_t start = 0u;
-        size_t end = 0u;
-        const HRESULT hr = identity(range, stateKey, generation, start, end);
+        uint64_t generation  = 0u;
+        size_t start         = 0u;
+        size_t end           = 0u;
+        const HRESULT hr     = identity(range, stateKey, generation, start, end);
         if (FAILED(hr))
         {
             return hr;
@@ -259,12 +256,12 @@ public:
         {
             return E_POINTER;
         }
-        *output = 0;
+        *output              = 0;
         const void* stateKey = nullptr;
-        uint64_t generation = 0u;
-        size_t start = 0u;
-        size_t end = 0u;
-        const HRESULT hr = identity(targetRange, stateKey, generation, start, end);
+        uint64_t generation  = 0u;
+        size_t start         = 0u;
+        size_t end           = 0u;
+        const HRESULT hr     = identity(targetRange, stateKey, generation, start, end);
         if (FAILED(hr))
         {
             return hr;
@@ -273,9 +270,9 @@ public:
         {
             return E_INVALIDARG;
         }
-        const size_t left = endpoint == TextPatternRangeEndpoint_Start ? _start : _end;
+        const size_t left  = endpoint == TextPatternRangeEndpoint_Start ? _start : _end;
         const size_t right = targetEndpoint == TextPatternRangeEndpoint_Start ? start : end;
-        *output = left < right ? -1 : left > right ? 1 : 0;
+        *output            = left < right ? -1 : left > right ? 1 : 0;
         return S_OK;
     }
 
@@ -285,15 +282,16 @@ public:
         {
             return UIA_E_ELEMENTNOTAVAILABLE;
         }
-        const RedSalamander::DxUi::AccessibilityTextUnitSpan span =
-            RedSalamander::DxUi::GetEnclosingAccessibilityTextUnitSpan(_snapshot->text, _start, unit);
-        _start = span.start;
-        _end = span.end;
+        const DxUi::AccessibilityTextUnitSpan span = DxUi::GetEnclosingAccessibilityTextUnitSpan(_snapshot->text, _start, unit);
+        _start                                     = span.start;
+        _end                                       = span.end;
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE FindAttribute(
-        TEXTATTRIBUTEID /*attributeId*/, VARIANT /*value*/, BOOL /*backward*/, ITextRangeProvider** output) noexcept override
+    HRESULT STDMETHODCALLTYPE FindAttribute(TEXTATTRIBUTEID /*attributeId*/,
+                                            VARIANT /*value*/,
+                                            BOOL /*backward*/,
+                                            ITextRangeProvider** output) noexcept override
     {
         if (output == nullptr)
         {
@@ -303,8 +301,7 @@ public:
         return retired() ? UIA_E_ELEMENTNOTAVAILABLE : S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE FindText(
-        BSTR text, BOOL backward, BOOL ignoreCase, ITextRangeProvider** output) noexcept override
+    HRESULT STDMETHODCALLTYPE FindText(BSTR text, BOOL backward, BOOL ignoreCase, ITextRangeProvider** output) noexcept override
     {
         if (output == nullptr)
         {
@@ -322,19 +319,15 @@ public:
         const std::wstring_view needle(text, SysStringLen(text));
         const std::wstring_view haystack(_snapshot->text.data() + _start, _end - _start);
         const auto equal = [ignoreCase](wchar_t left, wchar_t right) noexcept
-        {
-            return ignoreCase == FALSE ? left == right : towlower(left) == towlower(right);
-        };
-        auto found = backward == FALSE
-            ? std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end(), equal)
-            : std::find_end(haystack.begin(), haystack.end(), needle.begin(), needle.end(), equal);
+        { return ignoreCase == FALSE ? left == right : towlower(left) == towlower(right); };
+        auto found = backward == FALSE ? std::search(haystack.begin(), haystack.end(), needle.begin(), needle.end(), equal)
+                                       : std::find_end(haystack.begin(), haystack.end(), needle.begin(), needle.end(), equal);
         if (found == haystack.end())
         {
             return S_OK;
         }
         const size_t start = _start + static_cast<size_t>(std::distance(haystack.begin(), found));
-        auto* range = new (std::nothrow) TerminalTextRange(
-            _state, _snapshot, _owner.get(), start, start + needle.size());
+        auto* range        = new (std::nothrow) TerminalTextRange(_state, _snapshot, _owner.get(), start, start + needle.size());
         if (range == nullptr)
         {
             return E_OUTOFMEMORY;
@@ -403,7 +396,7 @@ public:
         }
         const size_t available = _end - _start;
         const size_t requested = maxLength < 0 ? available : std::min(available, static_cast<size_t>(maxLength));
-        *output = SysAllocStringLen(_snapshot->text.data() + _start, static_cast<UINT>(requested));
+        *output                = SysAllocStringLen(_snapshot->text.data() + _start, static_cast<UINT>(requested));
         return *output != nullptr || requested == 0u ? S_OK : E_OUTOFMEMORY;
     }
 
@@ -419,21 +412,18 @@ public:
             return UIA_E_ELEMENTNOTAVAILABLE;
         }
         const bool collapsed = _start == _end;
-        const auto result = RedSalamander::DxUi::MoveAccessibilityTextPositionByUnit(
-            _snapshot->text, _start, unit, count);
+        const auto result    = DxUi::MoveAccessibilityTextPositionByUnit(_snapshot->text, _start, unit, count);
         if (result.moved != 0 || collapsed)
         {
-            const auto span = RedSalamander::DxUi::GetEnclosingAccessibilityTextUnitSpan(
-                _snapshot->text, result.position, unit);
-            _start = collapsed ? result.position : span.start;
-            _end = collapsed ? result.position : span.end;
+            const auto span = DxUi::GetEnclosingAccessibilityTextUnitSpan(_snapshot->text, result.position, unit);
+            _start          = collapsed ? result.position : span.start;
+            _end            = collapsed ? result.position : span.end;
         }
         *output = result.moved;
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE MoveEndpointByUnit(
-        TextPatternRangeEndpoint endpoint, TextUnit unit, int count, int* output) noexcept override
+    HRESULT STDMETHODCALLTYPE MoveEndpointByUnit(TextPatternRangeEndpoint endpoint, TextUnit unit, int count, int* output) noexcept override
     {
         if (output == nullptr)
         {
@@ -444,10 +434,9 @@ public:
         {
             return UIA_E_ELEMENTNOTAVAILABLE;
         }
-        size_t& value = endpoint == TextPatternRangeEndpoint_Start ? _start : _end;
-        const auto result = RedSalamander::DxUi::MoveAccessibilityTextPositionByUnit(
-            _snapshot->text, value, unit, count);
-        value = result.position;
+        size_t& value     = endpoint == TextPatternRangeEndpoint_Start ? _start : _end;
+        const auto result = DxUi::MoveAccessibilityTextPositionByUnit(_snapshot->text, value, unit, count);
+        value             = result.position;
         if (_start > _end)
         {
             if (endpoint == TextPatternRangeEndpoint_Start)
@@ -468,10 +457,10 @@ public:
                                                   TextPatternRangeEndpoint targetEndpoint) noexcept override
     {
         const void* stateKey = nullptr;
-        uint64_t generation = 0u;
-        size_t start = 0u;
-        size_t end = 0u;
-        const HRESULT hr = identity(targetRange, stateKey, generation, start, end);
+        uint64_t generation  = 0u;
+        size_t start         = 0u;
+        size_t end           = 0u;
+        const HRESULT hr     = identity(targetRange, stateKey, generation, start, end);
         if (FAILED(hr))
         {
             return hr;
@@ -481,7 +470,7 @@ public:
             return E_INVALIDARG;
         }
         size_t& value = endpoint == TextPatternRangeEndpoint_Start ? _start : _end;
-        value = targetEndpoint == TextPatternRangeEndpoint_Start ? start : end;
+        value         = targetEndpoint == TextPatternRangeEndpoint_Start ? start : end;
         if (_start > _end)
         {
             if (endpoint == TextPatternRangeEndpoint_Start)
@@ -531,11 +520,7 @@ private:
         return IsRetired(_state);
     }
 
-    [[nodiscard]] HRESULT identity(ITextRangeProvider* range,
-                                   const void*& stateKey,
-                                   uint64_t& generation,
-                                   size_t& start,
-                                   size_t& end) const noexcept
+    [[nodiscard]] HRESULT identity(ITextRangeProvider* range, const void*& stateKey, uint64_t& generation, size_t& start, size_t& end) const noexcept
     {
         if (range == nullptr || retired())
         {
@@ -553,7 +538,7 @@ private:
     void clamp() noexcept
     {
         _start = std::min(_start, _snapshot->text.size());
-        _end = std::clamp(_end, _start, _snapshot->text.size());
+        _end   = std::clamp(_end, _start, _snapshot->text.size());
     }
 
     std::atomic<ULONG> _refCount{1u};
@@ -561,7 +546,7 @@ private:
     std::shared_ptr<const Snapshot> _snapshot;
     wil::com_ptr_nothrow<IRawElementProviderSimple> _owner;
     size_t _start = 0u;
-    size_t _end = 0u;
+    size_t _end   = 0u;
 };
 
 class TerminalProvider final : public IRawElementProviderSimple, public ITextProvider
@@ -571,10 +556,10 @@ public:
     {
         g_accessibilityObjectCount.fetch_add(1u, std::memory_order_acq_rel);
     }
-    TerminalProvider(const TerminalProvider&) = delete;
-    TerminalProvider(TerminalProvider&&) = delete;
+    TerminalProvider(const TerminalProvider&)            = delete;
+    TerminalProvider(TerminalProvider&&)                 = delete;
     TerminalProvider& operator=(const TerminalProvider&) = delete;
-    TerminalProvider& operator=(TerminalProvider&&) = delete;
+    TerminalProvider& operator=(TerminalProvider&&)      = delete;
     ~TerminalProvider()
     {
         g_accessibilityObjectCount.fetch_sub(1u, std::memory_order_acq_rel);
@@ -653,7 +638,7 @@ public:
             return E_POINTER;
         }
         VariantInit(output);
-        HWND window = nullptr;
+        HWND window         = nullptr;
         const auto snapshot = CaptureSnapshot(_state, &window);
         if (! snapshot)
         {
@@ -661,37 +646,33 @@ public:
         }
         switch (propertyId)
         {
-        case UIA_NamePropertyId:
-            return SetStringVariant(output, LoadStringResource(g_hInstance, IDS_TERMINAL_ACCESSIBILITY_NAME));
-        case UIA_AutomationIdPropertyId:
-            return SetStringVariant(output, L"RedSalamander.EmbeddedTerminal");
-        case UIA_ClassNamePropertyId:
-            return SetStringVariant(output, L"RedSalamander.Terminal.Plugin.Window");
-        case UIA_ControlTypePropertyId:
-            output->vt = VT_I4;
-            output->lVal = UIA_DocumentControlTypeId;
-            break;
-        case UIA_NativeWindowHandlePropertyId:
-            output->vt = VT_I4;
-            output->lVal = HandleToLong(window);
-            break;
-        case UIA_IsControlElementPropertyId:
-        case UIA_IsContentElementPropertyId:
-        case UIA_IsEnabledPropertyId:
-        case UIA_IsKeyboardFocusablePropertyId:
-            output->vt = VT_BOOL;
-            output->boolVal = VARIANT_TRUE;
-            break;
-        case UIA_HasKeyboardFocusPropertyId:
-            output->vt = VT_BOOL;
-            output->boolVal = snapshot->focused ? VARIANT_TRUE : VARIANT_FALSE;
-            break;
-        case UIA_IsPasswordPropertyId:
-            output->vt = VT_BOOL;
-            output->boolVal = VARIANT_FALSE;
-            break;
-        default:
-            break;
+            case UIA_NamePropertyId: return SetStringVariant(output, LoadStringResource(g_hInstance, IDS_TERMINAL_ACCESSIBILITY_NAME));
+            case UIA_AutomationIdPropertyId: return SetStringVariant(output, L"RedSalamander.EmbeddedTerminal");
+            case UIA_ClassNamePropertyId: return SetStringVariant(output, L"RedSalamander.Terminal.Plugin.Window");
+            case UIA_ControlTypePropertyId:
+                output->vt   = VT_I4;
+                output->lVal = UIA_DocumentControlTypeId;
+                break;
+            case UIA_NativeWindowHandlePropertyId:
+                output->vt   = VT_I4;
+                output->lVal = HandleToLong(window);
+                break;
+            case UIA_IsControlElementPropertyId:
+            case UIA_IsContentElementPropertyId:
+            case UIA_IsEnabledPropertyId:
+            case UIA_IsKeyboardFocusablePropertyId:
+                output->vt      = VT_BOOL;
+                output->boolVal = VARIANT_TRUE;
+                break;
+            case UIA_HasKeyboardFocusPropertyId:
+                output->vt      = VT_BOOL;
+                output->boolVal = snapshot->focused ? VARIANT_TRUE : VARIANT_FALSE;
+                break;
+            case UIA_IsPasswordPropertyId:
+                output->vt      = VT_BOOL;
+                output->boolVal = VARIANT_FALSE;
+                break;
+            default: break;
         }
         return S_OK;
     }
@@ -702,7 +683,7 @@ public:
         {
             return E_POINTER;
         }
-        *output = nullptr;
+        *output     = nullptr;
         HWND window = nullptr;
         if (! CaptureSnapshot(_state, &window) || window == nullptr)
         {
@@ -730,9 +711,9 @@ public:
         {
             return E_POINTER;
         }
-        *output = nullptr;
+        *output                   = nullptr;
         ITextRangeProvider* range = nullptr;
-        HRESULT hr = get_DocumentRange(&range);
+        HRESULT hr                = get_DocumentRange(&range);
         if (FAILED(hr))
         {
             return hr;
@@ -744,7 +725,7 @@ public:
             return E_OUTOFMEMORY;
         }
         LONG index = 0;
-        hr = SafeArrayPutElement(array.get(), &index, range);
+        hr         = SafeArrayPutElement(array.get(), &index, range);
         range->Release();
         if (FAILED(hr))
         {
@@ -754,8 +735,7 @@ public:
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE RangeFromChild(
-        IRawElementProviderSimple* /*childElement*/, ITextRangeProvider** output) noexcept override
+    HRESULT STDMETHODCALLTYPE RangeFromChild(IRawElementProviderSimple* /*childElement*/, ITextRangeProvider** output) noexcept override
     {
         if (output == nullptr)
         {
@@ -788,10 +768,7 @@ public:
     }
 
 private:
-    [[nodiscard]] HRESULT createRange(const std::shared_ptr<const Snapshot>& snapshot,
-                                      size_t start,
-                                      size_t end,
-                                      ITextRangeProvider** output) noexcept
+    [[nodiscard]] HRESULT createRange(const std::shared_ptr<const Snapshot>& snapshot, size_t start, size_t end, ITextRangeProvider** output) noexcept
     {
         if (output == nullptr)
         {
@@ -802,8 +779,7 @@ private:
         {
             return UIA_E_ELEMENTNOTAVAILABLE;
         }
-        auto* range = new (std::nothrow) TerminalTextRange(
-            _state, snapshot, static_cast<IRawElementProviderSimple*>(this), start, end);
+        auto* range = new (std::nothrow) TerminalTextRange(_state, snapshot, static_cast<IRawElementProviderSimple*>(this), start, end);
         if (range == nullptr)
         {
             return E_OUTOFMEMORY;
@@ -823,7 +799,9 @@ struct TerminalAccessibility::Impl final
     wil::com_ptr_nothrow<IRawElementProviderSimple> provider;
 };
 
-TerminalAccessibility::TerminalAccessibility() : _impl(std::make_unique<Impl>()) {}
+TerminalAccessibility::TerminalAccessibility() : _impl(std::make_unique<Impl>())
+{
+}
 TerminalAccessibility::~TerminalAccessibility()
 {
     Retire();
@@ -835,14 +813,14 @@ HRESULT TerminalAccessibility::Initialize(HWND window) noexcept
     {
         return E_INVALIDARG;
     }
-    _impl->state = std::make_shared<State>();
-    auto initial = std::make_shared<Snapshot>();
+    _impl->state        = std::make_shared<State>();
+    auto initial        = std::make_shared<Snapshot>();
     initial->generation = 1u;
     {
         std::scoped_lock lock(_impl->state->mutex);
-        _impl->state->window = window;
+        _impl->state->window         = window;
         _impl->state->nextGeneration = 2u;
-        _impl->state->snapshot = std::move(initial);
+        _impl->state->snapshot       = std::move(initial);
     }
     auto* provider = new (std::nothrow) TerminalProvider(_impl->state);
     if (provider == nullptr)
@@ -860,9 +838,9 @@ void TerminalAccessibility::Publish(std::wstring text, bool focused) noexcept
     {
         return;
     }
-    auto next = std::make_shared<Snapshot>();
-    next->text = std::move(text);
-    next->focused = focused;
+    auto next        = std::make_shared<Snapshot>();
+    next->text       = std::move(text);
+    next->focused    = focused;
     bool textChanged = false;
     {
         std::scoped_lock lock(_impl->state->mutex);
@@ -870,8 +848,8 @@ void TerminalAccessibility::Publish(std::wstring text, bool focused) noexcept
         {
             return;
         }
-        next->generation = _impl->state->nextGeneration++;
-        textChanged = ! _impl->state->snapshot || _impl->state->snapshot->text != next->text;
+        next->generation       = _impl->state->nextGeneration++;
+        textChanged            = ! _impl->state->snapshot || _impl->state->snapshot->text != next->text;
         _impl->state->snapshot = std::move(next);
     }
     if (textChanged && _impl->provider)
@@ -908,8 +886,8 @@ void TerminalAccessibility::Retire() noexcept
             return;
         }
         _impl->state->retired = true;
-        window = _impl->state->window;
-        _impl->state->window = nullptr;
+        window                = _impl->state->window;
+        _impl->state->window  = nullptr;
         _impl->state->snapshot.reset();
     }
     if (_impl->provider)
@@ -936,7 +914,7 @@ HRESULT TerminalAccessibility::DebugGetName(std::wstring& name) noexcept
     VARIANT value{};
     VariantInit(&value);
     const auto clearValue = wil::scope_exit([&value]() noexcept { static_cast<void>(VariantClear(&value)); });
-    const HRESULT hr = _impl->provider->GetPropertyValue(UIA_NamePropertyId, &value);
+    const HRESULT hr      = _impl->provider->GetPropertyValue(UIA_NamePropertyId, &value);
     if (FAILED(hr))
     {
         return hr;
@@ -949,16 +927,15 @@ HRESULT TerminalAccessibility::DebugGetName(std::wstring& name) noexcept
     return S_OK;
 }
 
-extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderTerminalAccessibilityLocalizationSelfTests(
-    unsigned int* passedTests,
-    unsigned int* failedTests) noexcept
+extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderTerminalAccessibilityLocalizationSelfTests(unsigned int* passedTests,
+                                                                                                           unsigned int* failedTests) noexcept
 {
     if (passedTests == nullptr || failedTests == nullptr)
     {
         return E_POINTER;
     }
-    *passedTests = 0u;
-    *failedTests = 0u;
+    *passedTests     = 0u;
+    *failedTests     = 0u;
     const auto check = [passedTests, failedTests](bool condition) noexcept
     {
         if (condition)

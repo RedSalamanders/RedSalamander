@@ -846,14 +846,14 @@ IDWriteTextLayout* ViewerText::GetTextSegmentLayout(size_t startIndex, size_t en
             entry.endIndex == static_cast<uint32_t>(endIndex) && entry.widthMilliDip == widthKey && entry.layout)
         {
             entry.lastUse = ++_textLayoutUseCounter;
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
             _debugTextLayoutCacheHits += 1u;
 #endif
             return entry.layout.get();
         }
     }
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     _debugTextLayoutCacheMisses += 1u;
 #endif
     wil::com_ptr<IDWriteTextLayout> layout;
@@ -1218,7 +1218,7 @@ LRESULT ViewerText::OnTextViewLButtonDown(HWND hwnd, POINT pt) noexcept
 
 LRESULT ViewerText::OnTextViewMouseMove(HWND hwnd, POINT pt, WPARAM keyState) noexcept
 {
-#if defined(ENABLE_TESTS) && defined(_DEBUG)
+#ifdef ENABLE_TESTS
     _debugHasLastTextViewMouseMoveClientPoint = true;
     _debugLastTextViewMouseMoveClientPoint    = pt;
     const auto debugHit                       = HitTestTextView(hwnd, pt);
@@ -1332,7 +1332,7 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
             const float marginDip = RoundDipToDevicePixels(6.0f, dpi);
             const float charW     = (_textCharWidthDip > 0.0f) ? _textCharWidthDip : 8.0f;
             const float lineH     = (_textLineHeightDip > 0.0f) ? _textLineHeightDip : 14.0f;
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
             _debugTextRenderCount += 1u;
             _debugTextVisibleRowCount        = 0u;
             _debugTextVisibleStyledRowCount  = 0u;
@@ -1423,7 +1423,7 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
             const COLORREF diffGapHatchColorRef       = BlendColorRefTruncate(bg, fg, (_hasTheme && _theme.darkMode) ? 48u : 34u);
             const D2D1_COLOR_F diffMarkerFg           = ColorFFromColorRef(diffMarkerColorRef, (_hasTheme && _theme.darkMode) ? 0.88f : 0.78f);
             const D2D1_COLOR_F diffGapHatchFg         = ColorFFromColorRef(diffGapHatchColorRef, (_hasTheme && _theme.darkMode) ? 0.34f : 0.22f);
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
             _debugDiffMarkerArgb                = ArgbFromColorRef(diffMarkerColorRef, (_hasTheme && _theme.darkMode) ? 224u : 200u);
             _debugDiffGapHatchArgb              = ArgbFromColorRef(diffGapHatchColorRef, (_hasTheme && _theme.darkMode) ? 88u : 56u);
             _debugDiffContextUsesBaseBackground = activeDiffVariant != nullptr;
@@ -1690,7 +1690,7 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                                 D2D1::Point2F(startX, rc.bottom), D2D1::Point2F(startX + diagonalDip, rc.top), _textViewBrush.get(), thicknessDip);
                         }
                         _textViewBrush->SetColor(ColorFFromColorRef(fg));
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
                         _debugTextVisibleGapHatchCount += 1u;
 #endif
                     };
@@ -1787,7 +1787,7 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                         _textViewBrush->SetColor(ColorFFromColorRef(fg));
                     };
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
                     if (isFirstSegmentForLogical && rowStyle)
                     {
                         if (splitPaneRow)
@@ -2138,7 +2138,7 @@ LRESULT ViewerText::OnTextViewPaint(HWND hwnd) noexcept
                 }
             }
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
             _debugTextVisibleRowCount = visibleRowsDrawn;
             _debugTextLastPaintUs =
                 static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - paintStartedAt).count());
@@ -4659,7 +4659,7 @@ bool ViewerText::StartAsyncTextStreamLoad(HWND hwnd, uint64_t startOffset, bool 
 {
     if (! hwnd || ! _hEdit || ! _fileSystem || _currentPath.empty() || _fileSize == 0u || _windowIdentity == 0u)
     {
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
         _debugTextStreamRejectedCount += 1u;
 #endif
         return false;
@@ -4668,7 +4668,7 @@ bool ViewerText::StartAsyncTextStreamLoad(HWND hwnd, uint64_t startOffset, bool 
     const uint64_t clampedStart = AlignTextStreamOffset(std::min<uint64_t>(std::max(startOffset, _textStreamSkipBytes), _fileSize));
     if (clampedStart > static_cast<uint64_t>(std::numeric_limits<__int64>::max()))
     {
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
         _debugTextStreamRejectedCount += 1u;
 #endif
         return false;
@@ -4680,7 +4680,7 @@ bool ViewerText::StartAsyncTextStreamLoad(HWND hwnd, uint64_t startOffset, bool 
     _pendingTextStreamStartOffset   = clampedStart;
     _textStreamLoadPending          = true;
     AsyncTextStreamFault injectedFault = AsyncTextStreamFault::None;
-#if defined(_DEBUG) && defined(ENABLE_TESTS)
+#ifdef ENABLE_TESTS
     injectedFault                  = _debugNextAsyncTextStreamFault;
     _debugNextAsyncTextStreamFault = AsyncTextStreamFault::None;
 #endif
@@ -4720,7 +4720,7 @@ bool ViewerText::StartAsyncTextStreamLoad(HWND hwnd, uint64_t startOffset, bool 
                       : std::unique_ptr<AsyncTextStreamWorkItem>(new (std::nothrow) AsyncTextStreamWorkItem{});
     if (! result || ! work)
     {
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
         _debugTextStreamRejectedCount += 1u;
 #endif
         OnAsyncTextStreamFailure(requestId, windowIdentity, E_OUTOFMEMORY);
@@ -4738,7 +4738,7 @@ bool ViewerText::StartAsyncTextStreamLoad(HWND hwnd, uint64_t startOffset, bool 
     if (! work->moduleKeepAlive)
     {
         const DWORD error = GetLastError();
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
         _debugTextStreamRejectedCount += 1u;
 #endif
         OnAsyncTextStreamFailure(requestId, windowIdentity, HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_MOD_NOT_FOUND));
@@ -4898,7 +4898,7 @@ bool ViewerText::StartAsyncTextStreamLoad(HWND hwnd, uint64_t startOffset, bool 
     if (submitted == FALSE)
     {
         Release();
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
         _debugTextStreamRejectedCount += 1u;
 #endif
         OnAsyncTextStreamFailure(requestId, windowIdentity, HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_MEMORY));
@@ -4906,7 +4906,7 @@ bool ViewerText::StartAsyncTextStreamLoad(HWND hwnd, uint64_t startOffset, bool 
     }
 
     static_cast<void>(work.release());
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     _debugTextStreamAcceptedCount += 1u;
 #endif
     if (_hWnd)
@@ -4924,7 +4924,7 @@ void ViewerText::OnAsyncTextStreamComplete(std::unique_ptr<AsyncTextStreamResult
     }
     if (result->windowIdentity != _windowIdentity || result->requestId != _activeAsyncTextStreamRequestId)
     {
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
         _debugTextStreamStaleCount += 1u;
 #endif
         return;
@@ -4935,7 +4935,7 @@ void ViewerText::OnAsyncTextStreamComplete(std::unique_ptr<AsyncTextStreamResult
         return;
     }
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     const auto uiApplyStartedAt = std::chrono::steady_clock::now();
 #endif
     _textStreamLoadPending = false;
@@ -4968,7 +4968,7 @@ void ViewerText::OnAsyncTextStreamComplete(std::unique_ptr<AsyncTextStreamResult
     {
         InvalidateRect(_hWnd.get(), &_statusRect, FALSE);
     }
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     _debugTextStreamTerminalCount += 1u;
     _debugTextStreamLastTerminalHr = result->hr;
     _debugTextStreamLastElapsedUs  = result->elapsedUs;
@@ -4981,14 +4981,14 @@ void ViewerText::OnAsyncTextStreamFailure(uint64_t requestId, uint64_t windowIde
 {
     if (windowIdentity != _windowIdentity || requestId != _activeAsyncTextStreamRequestId)
     {
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
         _debugTextStreamStaleCount += 1u;
 #endif
         return;
     }
     _textStreamLoadPending = false;
     Debug::Error(L"ViewerText: streamed text window request {} failed (hr=0x{:08X}).", requestId, static_cast<unsigned long>(hr));
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     _debugTextStreamTerminalCount += 1u;
     _debugTextStreamLastTerminalHr = hr;
 #endif

@@ -10,13 +10,13 @@
 #include <windowsx.h>
 
 #include "CommandRegistry.h"
-#include "DxUi/DxUi.Typography.h"
 #include "Helpers.h"
 #include "HwndRenderTargetResources.h"
 #include "ShortcutManager.h"
 #include "WindowMessages.h"
 #include "WindowSizing.h"
 #include "resource.h"
+#include <DxUi/Typography.h>
 
 namespace
 {
@@ -172,7 +172,7 @@ void ApplyFunctionBarTextTrimming(IDWriteTextFormat* format, IDWriteInlineObject
 }
 
 [[nodiscard]] HRESULT CreateFunctionBarTextFormat(FunctionBarRenderResources& resources,
-                                                  const RedSalamander::DxUi::Typography::TypographySpec& spec,
+                                                  const DxUi::Typography::TypographySpec& spec,
                                                   DWRITE_TEXT_ALIGNMENT alignment,
                                                   IDWriteTextFormat** outFormat) noexcept
 {
@@ -181,7 +181,7 @@ void ApplyFunctionBarTextTrimming(IDWriteTextFormat* format, IDWriteInlineObject
         return E_INVALIDARG;
     }
 
-    const HRESULT hr = RedSalamander::DxUi::Typography::CreateTextFormat(resources.dwriteFactory.get(), spec, outFormat, L"");
+    const HRESULT hr = DxUi::Typography::CreateTextFormat(resources.dwriteFactory.get(), spec, outFormat, L"");
     if (FAILED(hr) || ! *outFormat)
     {
         return FAILED(hr) ? hr : E_FAIL;
@@ -194,7 +194,7 @@ void ApplyFunctionBarTextTrimming(IDWriteTextFormat* format, IDWriteInlineObject
 
 [[nodiscard]] bool EnsureFunctionBarTextFormats(HWND hwnd, FunctionBarRenderResources& resources) noexcept
 {
-    const UINT dpi = RedSalamander::DxUi::Typography::GetEffectiveDpi(hwnd);
+    const UINT dpi = DxUi::Typography::GetEffectiveDpi(hwnd);
     if (resources.dpi != dpi)
     {
         resources.dpi = dpi;
@@ -206,8 +206,8 @@ void ApplyFunctionBarTextTrimming(IDWriteTextFormat* format, IDWriteInlineObject
         return false;
     }
 
-    const auto keySpec  = RedSalamander::DxUi::Typography::MakeUiTextSpec(static_cast<float>(kKeyFontHeightDip));
-    const auto textSpec = RedSalamander::DxUi::Typography::MakeUiTextSpec(static_cast<float>(kTextFontHeightDip));
+    const auto keySpec  = DxUi::Typography::MakeUiTextSpec(static_cast<float>(kKeyFontHeightDip));
+    const auto textSpec = DxUi::Typography::MakeUiTextSpec(static_cast<float>(kTextFontHeightDip));
 
     if (! resources.keyFormat)
     {
@@ -357,26 +357,25 @@ using Common::Colors::BlendColorRefWeightedTruncate;
     return result;
 }
 
-[[nodiscard]] RedSalamander::DxUi::Typography::TextPixelMetrics MeasureFunctionBarTextMetrics(HWND hwnd,
-                                                                                              const RedSalamander::DxUi::Typography::TypographySpec& spec,
-                                                                                              std::wstring_view text) noexcept
+[[nodiscard]] DxUi::Typography::TextPixelMetrics MeasureFunctionBarTextMetrics(HWND hwnd,
+                                                                               const DxUi::Typography::TypographySpec& spec,
+                                                                               std::wstring_view text) noexcept
 {
-    IDWriteFactory* dwriteFactory = RedSalamander::DxUi::Typography::GetSharedMeasurementFactory();
+    IDWriteFactory* dwriteFactory = DxUi::Typography::GetSharedMeasurementFactory();
     if (! dwriteFactory)
     {
         return {};
     }
 
     wil::com_ptr<IDWriteTextFormat> textFormat;
-    const HRESULT hr = RedSalamander::DxUi::Typography::CreateTextFormat(dwriteFactory, spec, textFormat.put(), L"");
+    const HRESULT hr = DxUi::Typography::CreateTextFormat(dwriteFactory, spec, textFormat.put(), L"");
     if (FAILED(hr) || ! textFormat)
     {
         return {};
     }
 
     ConfigureFunctionBarTextFormat(textFormat.get(), DWRITE_TEXT_ALIGNMENT_LEADING);
-    return RedSalamander::DxUi::Typography::MeasureSingleLineTextMetrics(
-        dwriteFactory, textFormat.get(), RedSalamander::DxUi::Typography::GetEffectiveDpi(hwnd), text);
+    return DxUi::Typography::MeasureSingleLineTextMetrics(dwriteFactory, textFormat.get(), DxUi::Typography::GetEffectiveDpi(hwnd), text);
 }
 
 } // namespace
@@ -691,8 +690,8 @@ std::optional<uint32_t> FunctionBar::HitTestFunctionKey(POINT pt) const noexcept
         const std::wstring maxModifiersText = BuildModifierText(ShortcutManager::kModCtrl | ShortcutManager::kModAlt | ShortcutManager::kModShift);
         if (! maxModifiersText.empty())
         {
-            const auto modMetrics = MeasureFunctionBarTextMetrics(
-                _hWnd.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(static_cast<float>(kTextFontHeightDip)), maxModifiersText);
+            const auto modMetrics =
+                MeasureFunctionBarTextMetrics(_hWnd.get(), DxUi::Typography::MakeUiTextSpec(static_cast<float>(kTextFontHeightDip)), maxModifiersText);
             reservedModifiersWidth = modMetrics.widthPx + (modifiersPaddingX * 2) + modifiersGap;
 
             const int minZoneWidthPx = PxFromDip(kMinZoneWidthForModifiers);
@@ -785,7 +784,7 @@ void FunctionBar::PaintToHdc(HDC hdc) noexcept
         const std::wstring maxModifiersText = BuildModifierText(ShortcutManager::kModCtrl | ShortcutManager::kModAlt | ShortcutManager::kModShift);
         if (! maxModifiersText.empty())
         {
-            const auto modMetrics = RedSalamander::DxUi::Typography::MeasureSingleLineTextMetrics(
+            const auto modMetrics = DxUi::Typography::MeasureSingleLineTextMetrics(
                 resources->dwriteFactory.get(), resources->modifierFormat.get(), resources->dpi, maxModifiersText);
             reservedModifiersWidth = modMetrics.widthPx + (modifiersPaddingX * 2) + modifiersGap;
 
@@ -849,7 +848,7 @@ void FunctionBar::PaintToHdc(HDC hdc) noexcept
             keyLabel[3] = L'\0';
         }
         const int keyLabelLength = static_cast<int>(std::wcslen(keyLabel));
-        const auto keyMetrics    = RedSalamander::DxUi::Typography::MeasureSingleLineTextMetrics(
+        const auto keyMetrics    = DxUi::Typography::MeasureSingleLineTextMetrics(
             resources->dwriteFactory.get(), resources->keyFormat.get(), resources->dpi, std::wstring_view(keyLabel, static_cast<size_t>(keyLabelLength)));
         const int keyWidthPx  = std::max(1, keyMetrics.widthPx);
         const int keyHeightPx = std::max(1, keyMetrics.lineHeightPx);

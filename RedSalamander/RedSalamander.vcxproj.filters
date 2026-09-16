@@ -279,6 +279,7 @@
     <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.CoreDiffs.cpp" />
     <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.RuntimeAndRemote.cpp" />
     <None Include="SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.Mtp.cpp" />
+    <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.DiscoveryProviders.cpp" />
     <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases05_06.cpp" />
     <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases07_09.cpp" />
     <None Include="SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases10_13.cpp" />

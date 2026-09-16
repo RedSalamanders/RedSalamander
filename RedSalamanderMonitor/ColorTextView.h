@@ -44,8 +44,8 @@
 #pragma comment(lib, "dxgi")
 
 #include "Document.h"
-#include "DxUi/DxUi.FrameRuntime.h"
 #include "Helpers.h"
+#include <DxUi/FrameRuntime.h>
 
 #pragma warning(push)
 #pragma warning(disable : 4820) // bytes padding added after data member
@@ -125,10 +125,10 @@ public:
     void QueueEtwEvent(const Debug::InfoParam& info, std::wstring message);
     struct RetentionLimits
     {
-        size_t maxQueuedEvents      = 4'096u;
-        size_t maxRetainedLines     = 100'000u;
+        size_t maxQueuedEvents        = 4'096u;
+        size_t maxRetainedLines       = 100'000u;
         uint64_t maxRetainedTextBytes = 64u * 1024u * 1024u;
-        size_t maxSearchMatches     = 100'000u;
+        size_t maxSearchMatches       = 100'000u;
     };
     void SetRetentionLimits(const RetentionLimits& limits) noexcept;
     [[nodiscard]] uint64_t GetDroppedEventCount() const noexcept
@@ -426,7 +426,7 @@ private:
     std::wstring _search;
     bool _searchCaseSensitive = false;
     std::vector<Line::ColorSpan> _matches;
-    __int64 _matchIndex = -1;
+    __int64 _matchIndex      = -1;
     size_t _searchScanLine   = 0u;
     size_t _searchScanOffset = 0u;
     enum class FindStartMode : uint8_t
@@ -584,9 +584,9 @@ private:
     bool _hasPendingScroll   = false;
     LONG _pendingScrollDy    = 0;
     RECT _pendingDirtyRect{};
-    RedSalamander::DxUi::FrameClock _frameClock;
-    RedSalamander::DxUi::FrameStage _frameStage = RedSalamander::DxUi::FrameStage::Idle;
-    std::optional<RedSalamander::DxUi::FrameTimestamp> _pendingAppendToVisibleStartedAt;
+    DxUi::FrameClock _frameClock;
+    DxUi::FrameStage _frameStage = DxUi::FrameStage::Idle;
+    std::optional<DxUi::FrameTimestamp> _pendingAppendToVisibleStartedAt;
 
     // Layout optimization
     bool _pendingScrollToBottom = false; // ensure bottom after next layout

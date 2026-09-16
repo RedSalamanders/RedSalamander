@@ -1,6 +1,6 @@
 #include "ColorTextView.h"
-#include "MonitorFileReader.h"
 #include "ColorTextScrollBars.h"
+#include "MonitorFileReader.h"
 #include "UnicodeClipboard.h"
 #include "resource.h"
 
@@ -497,7 +497,7 @@ void ColorTextView::ResetAfterDocumentReplacement()
     _caretPos         = 0;
     _scrollY          = 0.0f;
     _matches.clear();
-    _matchIndex                  = -1;
+    _matchIndex            = -1;
     _pendingScrollToBottom = false;
     _pendingAppendToVisibleStartedAt.reset();
 
@@ -597,8 +597,8 @@ void ColorTextView::QueueEtwEvent(const Debug::InfoParam& info, std::wstring mes
 
     bool shouldPost = false;
     {
-        auto lock           = _etwQueueCS.lock();
-        const bool wasEmpty = _etwEventQueue.empty();
+        auto lock                    = _etwQueueCS.lock();
+        const bool wasEmpty          = _etwEventQueue.empty();
         const size_t maxQueuedEvents = _maxQueuedEvents.load(std::memory_order_acquire);
         while (_etwEventQueue.size() >= maxQueuedEvents)
         {
@@ -606,7 +606,7 @@ void ColorTextView::QueueEtwEvent(const Debug::InfoParam& info, std::wstring mes
             _queueDroppedEvents.fetch_add(1u, std::memory_order_relaxed);
         }
         _etwEventQueue.push_back({info, std::move(message)});
-        const uint64_t queueDepth = static_cast<uint64_t>(_etwEventQueue.size());
+        const uint64_t queueDepth  = static_cast<uint64_t>(_etwEventQueue.size());
         uint64_t previousHighWater = _queueHighWaterMark.load(std::memory_order_relaxed);
         while (queueDepth > previousHighWater &&
                ! _queueHighWaterMark.compare_exchange_weak(previousHighWater, queueDepth, std::memory_order_relaxed, std::memory_order_relaxed))
@@ -715,13 +715,13 @@ void ColorTextView::ClearText()
     _maxMeasuredWidth = 0.f;
     _maxMeasuredIndex = 0;
     _matches.clear();
-    _matchIndex = -1;
+    _matchIndex       = -1;
     _searchScanLine   = 0u;
     _searchScanOffset = 0u;
-    _selStart   = 0;
-    _selEnd     = 0;
-    _caretPos   = 0;
-    _mouseDown  = false;
+    _selStart         = 0;
+    _selEnd           = 0;
+    _caretPos         = 0;
+    _mouseDown        = false;
     _textLayout.reset();
     _tailLayout.reset();
     _fallbackLayout.reset();
@@ -729,15 +729,15 @@ void ColorTextView::ClearText()
     _sliceFilteredRuns.clear();
     _fallbackFilteredRuns.clear();
     _lineMetrics.clear();
-    _tailLayoutValid      = false;
-    _fallbackValid        = false;
-    _scrollY              = 0.0f;
-    _contentHeight        = 0;
-    _approxContentWidth   = 0;
-    _sliceFirstLine       = 0;
-    _sliceLastLine        = 0;
-    _sliceFirstDisplayRow = 0;
-    _sliceIsFiltered      = false;
+    _tailLayoutValid       = false;
+    _fallbackValid         = false;
+    _scrollY               = 0.0f;
+    _contentHeight         = 0;
+    _approxContentWidth    = 0;
+    _sliceFirstLine        = 0;
+    _sliceLastLine         = 0;
+    _sliceFirstDisplayRow  = 0;
+    _sliceIsFiltered       = false;
     _sliceStartPos         = 0;
     _sliceEndPos           = 0;
     _pendingScrollToBottom = false;
@@ -757,9 +757,7 @@ void ColorTextView::HandleDocumentEviction(const Document::RetentionResult& evic
 
     _retainedDroppedEvents.fetch_add(static_cast<uint64_t>(eviction.linesEvicted), std::memory_order_relaxed);
     const auto shiftPosition = [evicted = eviction.characterPositionsEvicted](UINT32 position) noexcept
-    {
-        return evicted >= position ? 0u : static_cast<UINT32>(static_cast<uint64_t>(position) - evicted);
-    };
+    { return evicted >= position ? 0u : static_cast<UINT32>(static_cast<uint64_t>(position) - evicted); };
     _selStart = shiftPosition(_selStart);
     _selEnd   = shiftPosition(_selEnd);
     _caretPos = shiftPosition(_caretPos);
@@ -771,14 +769,14 @@ void ColorTextView::HandleDocumentEviction(const Document::RetentionResult& evic
     _matches.erase(std::remove_if(_matches.begin(),
                                   _matches.end(),
                                   [evictedPositions](Line::ColorSpan& match) noexcept
-                                  {
-                                      if (static_cast<uint64_t>(match.start) < evictedPositions)
-                                      {
-                                          return true;
-                                      }
-                                      match.start = static_cast<UINT32>(static_cast<uint64_t>(match.start) - evictedPositions);
-                                      return false;
-                                  }),
+    {
+        if (static_cast<uint64_t>(match.start) < evictedPositions)
+        {
+            return true;
+        }
+        match.start = static_cast<UINT32>(static_cast<uint64_t>(match.start) - evictedPositions);
+        return false;
+    }),
                    _matches.end());
     _matchIndex = -1;
     if (_searchScanLine >= eviction.linesEvicted)
@@ -2207,9 +2205,8 @@ void ColorTextView::EmitAppendToVisibleIfReady()
         return;
     }
 
-    const RedSalamander::DxUi::FrameTimestamp appendVisibleAt = _frameClock.Now();
-    RedSalamander::DxUi::EmitFrameMetric(L"monitor.frame.append_to_visible_us",
-                                         _frameClock.ElapsedUs(_pendingAppendToVisibleStartedAt.value(), appendVisibleAt));
+    const DxUi::FrameTimestamp appendVisibleAt = _frameClock.Now();
+    DxUi::EmitFrameMetric(L"monitor.frame.append_to_visible_us", _frameClock.ElapsedUs(_pendingAppendToVisibleStartedAt.value(), appendVisibleAt));
     _pendingAppendToVisibleStartedAt.reset();
 }
 
@@ -2509,13 +2506,13 @@ void ColorTextView::DrawScene(bool clearTarget)
     {
         // COLD PATH: Full virtualization mode (scroll-back through history)
         // TRACER_CTX(L"ScrollBackMode");
-        const bool emitScrollbackSliceMetric                        = _renderMode == RenderMode::SCROLL_BACK;
-        const RedSalamander::DxUi::FrameTimestamp scrollbackStarted = _frameClock.Now();
-        const auto emitScrollbackSliceMetricOnExit                  = wil::scope_exit([&]
+        const bool emitScrollbackSliceMetric         = _renderMode == RenderMode::SCROLL_BACK;
+        const DxUi::FrameTimestamp scrollbackStarted = _frameClock.Now();
+        const auto emitScrollbackSliceMetricOnExit   = wil::scope_exit([&]
         {
             if (emitScrollbackSliceMetric)
             {
-                RedSalamander::DxUi::EmitFrameMetric(L"monitor.frame.scrollback_slice_us", _frameClock.ElapsedUs(scrollbackStarted, _frameClock.Now()));
+                DxUi::EmitFrameMetric(L"monitor.frame.scrollback_slice_us", _frameClock.ElapsedUs(scrollbackStarted, _frameClock.Now()));
             }
         });
 
@@ -2681,7 +2678,7 @@ void ColorTextView::DrawScene(bool clearTarget)
 void ColorTextView::OnPaint()
 {
     // TRACER;
-    const RedSalamander::DxUi::FrameTimestamp frameStarted = _frameClock.Now();
+    const DxUi::FrameTimestamp frameStarted = _frameClock.Now();
 
     PAINTSTRUCT ps{};
     // scope for BeginPaint/EndPaint
@@ -2799,7 +2796,7 @@ void ColorTextView::OnPaint()
     HRESULT hr = S_OK;
     if (partialEligible)
     {
-        RedSalamander::DxUi::FrameStageScope renderStage(_frameStage, RedSalamander::DxUi::FrameStage::Render);
+        DxUi::FrameStageScope renderStage(_frameStage, DxUi::FrameStage::Render);
         {
             _d2dCtx->BeginDraw();
             auto endDraw               = wil::scope_exit([&] { hr = _d2dCtx->EndDraw(); });
@@ -2891,7 +2888,7 @@ void ColorTextView::OnPaint()
         }
 
         {
-            RedSalamander::DxUi::FrameStageScope renderStage(_frameStage, RedSalamander::DxUi::FrameStage::Render);
+            DxUi::FrameStageScope renderStage(_frameStage, DxUi::FrameStage::Render);
             _d2dCtx->BeginDraw();
             auto endDraw = wil::scope_exit([&] { hr = _d2dCtx->EndDraw(); });
             DrawScene(true);
@@ -2943,14 +2940,14 @@ void ColorTextView::OnPaint()
         params.pScrollOffset   = &scrollOffset;
     }
 
-    const UINT syncInterval                                  = _inSizeMove ? 0u : 1u;
-    const RedSalamander::DxUi::FrameTimestamp presentStarted = _frameClock.Now();
-    HRESULT presentHr                                        = S_OK;
+    const UINT syncInterval                   = _inSizeMove ? 0u : 1u;
+    const DxUi::FrameTimestamp presentStarted = _frameClock.Now();
+    HRESULT presentHr                         = S_OK;
     {
-        RedSalamander::DxUi::FrameStageScope presentStage(_frameStage, RedSalamander::DxUi::FrameStage::Present);
+        DxUi::FrameStageScope presentStage(_frameStage, DxUi::FrameStage::Present);
         presentHr = _swapChain->Present1(syncInterval, 0, &params);
     }
-    const RedSalamander::DxUi::FrameTimestamp presentFinished = _frameClock.Now();
+    const DxUi::FrameTimestamp presentFinished = _frameClock.Now();
     if (FAILED(presentHr))
     {
         auto presentMsg = std::format("!!! Present1 failed: HRESULT = 0x{:08X}\n", presentHr);
@@ -2975,8 +2972,8 @@ void ColorTextView::OnPaint()
     _pendingScrollDy    = 0;
     _pendingDirtyRect   = RECT{};
 
-    RedSalamander::DxUi::EmitFrameMetric(L"monitor.frame.present_us", _frameClock.ElapsedUs(presentStarted, presentFinished));
-    RedSalamander::DxUi::EmitFrameMetric(L"monitor.frame.total_us", _frameClock.ElapsedUs(frameStarted, presentFinished));
+    DxUi::EmitFrameMetric(L"monitor.frame.present_us", _frameClock.ElapsedUs(presentStarted, presentFinished));
+    DxUi::EmitFrameMetric(L"monitor.frame.total_us", _frameClock.ElapsedUs(frameStarted, presentFinished));
     Debug::Perf::Emit(L"monitor.frame.mode", RenderModePerfDetail(), 0, RenderModePerfValue(), 0, S_OK);
     EmitAppendToVisibleIfReady();
 }
@@ -3179,10 +3176,10 @@ bool ColorTextView::ShouldUseAutoScrollMode() const
 void ColorTextView::RebuildTailLayout()
 {
     // TRACER;
-    const RedSalamander::DxUi::FrameTimestamp tailLayoutStarted = _frameClock.Now();
-    RedSalamander::DxUi::FrameStageScope layoutStage(_frameStage, RedSalamander::DxUi::FrameStage::Layout);
-    const auto emitTailLayoutMetric = wil::scope_exit([&]
-    { RedSalamander::DxUi::EmitFrameMetric(L"monitor.frame.tail_layout_us", _frameClock.ElapsedUs(tailLayoutStarted, _frameClock.Now())); });
+    const DxUi::FrameTimestamp tailLayoutStarted = _frameClock.Now();
+    DxUi::FrameStageScope layoutStage(_frameStage, DxUi::FrameStage::Layout);
+    const auto emitTailLayoutMetric =
+        wil::scope_exit([&] { DxUi::EmitFrameMetric(L"monitor.frame.tail_layout_us", _frameClock.ElapsedUs(tailLayoutStarted, _frameClock.Now())); });
 
     if (! _dwriteFactory || ! _textFormat)
     {
@@ -4555,14 +4552,14 @@ void ColorTextView::EnsureWidthAsync()
     };
 #pragma warning(pop)
 
-    auto ctx          = std::make_unique<WidthCtx>();
-    ctx->targetWindow = _hWndAtomic.load(std::memory_order_acquire);
+    auto ctx           = std::make_unique<WidthCtx>();
+    ctx->targetWindow  = _hWndAtomic.load(std::memory_order_acquire);
     ctx->dwriteFactory = _dwriteFactory;
     ctx->textFormat    = _textFormat;
-    ctx->seq            = seq;
-    ctx->indices = std::move(indices);
-    ctx->texts   = std::move(texts);
-    auto rawCtx  = ctx.release();
+    ctx->seq           = seq;
+    ctx->indices       = std::move(indices);
+    ctx->texts         = std::move(texts);
+    auto rawCtx        = ctx.release();
 
     auto worker = [](PTP_CALLBACK_INSTANCE, PVOID param) noexcept
     {
@@ -4803,7 +4800,7 @@ void ColorTextView::CopySelectionToClipboard()
 void ColorTextView::RebuildMatches()
 {
     _matches.clear();
-    _matchIndex = -1;
+    _matchIndex       = -1;
     _searchScanLine   = 0u;
     _searchScanOffset = 0u;
 
@@ -4826,9 +4823,9 @@ void ColorTextView::AppendMatchesForRange(size_t /*firstSourceLine*/)
         return;
     }
 
-    const bool filterActive = _document.GetFilterMask() != Debug::InfoParam::Type::All;
+    const bool filterActive     = _document.GetFilterMask() != Debug::InfoParam::Type::All;
     const size_t totalLineCount = _document.TotalLineCount();
-    _searchScanLine = std::min(_searchScanLine, totalLineCount);
+    _searchScanLine             = std::min(_searchScanLine, totalLineCount);
 
     while (_searchScanLine < totalLineCount && _matches.size() < _maxSearchMatches)
     {
@@ -4840,8 +4837,7 @@ void ColorTextView::AppendMatchesForRange(size_t /*firstSourceLine*/)
         }
 
         const Line line       = _document.GetSourceLine(_searchScanLine);
-        const size_t position = _searchCaseSensitive ? line.text.find(_search, _searchScanOffset)
-                                                     : FindCaseIncensitive(line.text, _search, _searchScanOffset);
+        const size_t position = _searchCaseSensitive ? line.text.find(_search, _searchScanOffset) : FindCaseIncensitive(line.text, _search, _searchScanOffset);
         if (position == std::wstring::npos)
         {
             ++_searchScanLine;
@@ -4851,8 +4847,7 @@ void ColorTextView::AppendMatchesForRange(size_t /*firstSourceLine*/)
 
         const UINT32 lineStart = _document.GetLineStartOffset(_searchScanLine);
         const UINT32 prefixLen = _document.PrefixLength(line);
-        _matches.push_back(Line::ColorSpan{
-            lineStart + prefixLen + static_cast<UINT32>(position), static_cast<UINT32>(_search.size()), _theme.searchHighlight});
+        _matches.push_back(Line::ColorSpan{lineStart + prefixLen + static_cast<UINT32>(position), static_cast<UINT32>(_search.size()), _theme.searchHighlight});
         _searchScanOffset = position + _search.size();
     }
 }
@@ -5468,7 +5463,7 @@ LRESULT ColorTextView::OnAppLayoutReady(LayoutPacket* pkt)
 
 LRESULT ColorTextView::OnAppEtwBatch()
 {
-    const RedSalamander::DxUi::FrameTimestamp batchDrainStarted = _frameClock.Now();
+    const DxUi::FrameTimestamp batchDrainStarted = _frameClock.Now();
     // Cap batch size to avoid blocking the UI thread for too long on mega-bursts.
     // The queue keeps overflow in place so producers do not contend with a front insert under the lock.
     constexpr size_t kMaxBatchSize = 200;

@@ -1,25 +1,25 @@
 #include "Framework.h"
 
 #include "CompareDirectoriesWindow.Internal.h"
-#include "DxUi/DxUi.FocusRestore.h"
-#include "DxUi/DxUiNativeMenuInterop.h"
 #include "DxUiThemePalette.h"
+#include <DxUi/FocusRestore.h>
+#include <DxUi/NativeMenuInterop.h>
 
 namespace CompareDirectoriesWindowInternal
 {
 namespace
 {
-using RedSalamander::DxUi::Button;
-using RedSalamander::DxUi::ContextMenu;
-using RedSalamander::DxUi::ContextMenuRootHorizontalAlignment;
-using RedSalamander::DxUi::ContextMenuRootSwitchRequest;
-using RedSalamander::DxUi::ContextMenuRootVerticalPlacement;
-using RedSalamander::DxUi::ContextMenuSessionCallbacks;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::MenuBar;
-using RedSalamander::DxUi::MenuFlyoutItem;
-using RedSalamander::DxUi::MenuItemKind;
+using DxUi::Button;
+using DxUi::ContextMenu;
+using DxUi::ContextMenuRootHorizontalAlignment;
+using DxUi::ContextMenuRootSwitchRequest;
+using DxUi::ContextMenuRootVerticalPlacement;
+using DxUi::ContextMenuSessionCallbacks;
+using DxUi::FontRole;
+using DxUi::Label;
+using DxUi::MenuBar;
+using DxUi::MenuFlyoutItem;
+using DxUi::MenuItemKind;
 
 constexpr wchar_t kCompareDxMenuBarWindowClassName[]    = L"RedSalamander.CompareDirectories.DxMenuBar";
 constexpr wchar_t kCompareDxChromeHostWindowClassName[] = L"RedSalamander.CompareDirectories.DxChromeHost";
@@ -191,7 +191,7 @@ bool CompareDirectoriesWindow::EnsureDxChromeHosts() noexcept
         }
     }
 
-    const auto attachBannerButtonHost = [&](wil::unique_hwnd& hostHwnd, RedSalamander::DxUi::WindowHost& host, Button*& button, const UINT commandId) noexcept
+    const auto attachBannerButtonHost = [&](wil::unique_hwnd& hostHwnd, DxUi::WindowHost& host, Button*& button, const UINT commandId) noexcept
     {
         if (hostHwnd)
         {
@@ -219,7 +219,7 @@ bool CompareDirectoriesWindow::EnsureDxChromeHosts() noexcept
             return false;
         }
 
-        auto root = std::make_unique<RedSalamander::DxUi::Panel>();
+        auto root = std::make_unique<DxUi::Panel>();
         button    = root->AddChild<Button>();
         button->SetOnClick([this, commandId]() noexcept
         {
@@ -240,7 +240,7 @@ bool CompareDirectoriesWindow::EnsureDxChromeHosts() noexcept
     _chrome.usesBannerButtons = dxOptionsAttached && dxRescanAttached;
 
     const auto attachBannerLabelHost =
-        [&](wil::unique_hwnd& hostHwnd, RedSalamander::DxUi::WindowHost& host, Label*& label, const FontRole fontRole, const std::wstring& text) noexcept
+        [&](wil::unique_hwnd& hostHwnd, DxUi::WindowHost& host, Label*& label, const FontRole fontRole, const std::wstring& text) noexcept
     {
         if (hostHwnd)
         {
@@ -352,7 +352,7 @@ void CompareDirectoriesWindow::SyncDxMenuBar() noexcept
     }
 
     HMENU menu = _chrome.menuHandle ? _chrome.menuHandle.get() : (_hWnd ? GetMenu(_hWnd.get()) : nullptr);
-    _chrome.menuBar->SetItems(RedSalamander::DxUi::BuildNativeMenuBarItems(menu));
+    _chrome.menuBar->SetItems(DxUi::BuildNativeMenuBarItems(menu));
     _chrome.menuBar->SetOnOpenItem([this](size_t index, POINT screenPoint, bool keyboardInvocation) noexcept
     { OpenDxMenuBarPopup(index, screenPoint, keyboardInvocation); });
 
@@ -483,12 +483,12 @@ bool CompareDirectoriesWindow::ActivateDxMenuBarMnemonic(wchar_t mnemonic) noexc
 
 void CompareDirectoriesWindow::CaptureDxMenuBarFocusRestoreTarget() noexcept
 {
-    RedSalamander::DxUi::CaptureFocusRestoreTarget(_hWnd.get(), _chrome.menuBarHostHwnd.get(), _chrome.menuBarFocusRestoreHwnd);
+    DxUi::CaptureFocusRestoreTarget(_hWnd.get(), _chrome.menuBarHostHwnd.get(), _chrome.menuBarFocusRestoreHwnd);
 }
 
 void CompareDirectoriesWindow::RestoreDxMenuBarFocus() noexcept
 {
-    static_cast<void>(RedSalamander::DxUi::RestoreCapturedFocus(_chrome.menuBarFocusRestoreHwnd, _hWnd.get()));
+    static_cast<void>(DxUi::RestoreCapturedFocus(_chrome.menuBarFocusRestoreHwnd, _hWnd.get()));
 }
 
 std::optional<size_t> CompareDirectoriesWindow::HitTestDxMenuBarScreenPoint(POINT screenPoint) const noexcept
@@ -498,7 +498,7 @@ std::optional<size_t> CompareDirectoriesWindow::HitTestDxMenuBarScreenPoint(POIN
         return std::nullopt;
     }
 
-    const std::optional<RedSalamander::DxUi::PointDip> pointDip = _chrome.menuBarHost.ScreenPointToDipPoint(screenPoint);
+    const std::optional<DxUi::PointDip> pointDip = _chrome.menuBarHost.ScreenPointToDipPoint(screenPoint);
     if (! pointDip.has_value())
     {
         return std::nullopt;
@@ -570,7 +570,7 @@ std::optional<ContextMenuRootSwitchRequest> CompareDirectoriesWindow::BuildDxMen
 
     ContextMenuRootSwitchRequest request{};
     request.screenPoint = anchorPoint.value();
-    request.items       = RedSalamander::DxUi::ConvertNativeHMenuToFlyoutItems(popupMenu);
+    request.items       = DxUi::ConvertNativeHMenuToFlyoutItems(popupMenu);
     if (request.items.empty())
     {
         return std::nullopt;
@@ -601,7 +601,7 @@ void CompareDirectoriesWindow::OpenDxMenuBarPopup(size_t index, POINT screenPoin
     _chrome.menuBarSelectedIndexSnapshot.store(static_cast<int>(index), std::memory_order_release);
     _chrome.menuBarHost.Invalidate();
 
-    const auto flyoutItems = RedSalamander::DxUi::ConvertNativeHMenuToFlyoutItems(popupMenu);
+    const auto flyoutItems = DxUi::ConvertNativeHMenuToFlyoutItems(popupMenu);
     if (flyoutItems.empty())
     {
         _chrome.menuBar->SetSelectedIndex(std::nullopt);
@@ -611,11 +611,11 @@ void CompareDirectoriesWindow::OpenDxMenuBarPopup(size_t index, POINT screenPoin
     }
 
     ContextMenuSessionCallbacks sessionCallbacks{};
-    sessionCallbacks.focusFirstNavigableItem   = keyboardInvocation;
+    sessionCallbacks.focusFirstNavigableItem    = keyboardInvocation;
     sessionCallbacks.ignoreInitialLeftButtonUp  = keyboardInvocation;
     sessionCallbacks.ignoreInitialRightButtonUp = keyboardInvocation;
-    size_t activeIndex                       = index;
-    sessionCallbacks.switchRootFromPointer   = [this, &activeIndex](POINT hoverScreenPoint) -> std::optional<ContextMenuRootSwitchRequest>
+    size_t activeIndex                          = index;
+    sessionCallbacks.switchRootFromPointer      = [this, &activeIndex](POINT hoverScreenPoint) -> std::optional<ContextMenuRootSwitchRequest>
     {
         const std::optional<size_t> hitIndex = HitTestDxMenuBarScreenPoint(hoverScreenPoint);
         if (! hitIndex.has_value() || hitIndex.value() == activeIndex || ! _chrome.menuBar)
@@ -676,7 +676,7 @@ void CompareDirectoriesWindow::OpenDxMenuBarPopup(size_t index, POINT screenPoin
 
 LRESULT CompareDirectoriesWindow::HandleDxChromeHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept
 {
-    const auto dispatch = [&](wil::unique_hwnd& expectedHwnd, RedSalamander::DxUi::WindowHost& host, const bool menuBarHost) noexcept -> std::optional<LRESULT>
+    const auto dispatch = [&](wil::unique_hwnd& expectedHwnd, DxUi::WindowHost& host, const bool menuBarHost) noexcept -> std::optional<LRESULT>
     {
         if (! expectedHwnd || hwnd != expectedHwnd.get())
         {

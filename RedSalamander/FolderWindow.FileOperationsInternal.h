@@ -926,6 +926,18 @@ struct FolderWindow::FileOperationState
             std::wstring operationDestinationPath;
             bool keepBothRequested = false;
             std::atomic<bool> explicitSkipObserved{false};
+            // Discovery scope. A selected root's traversal owner reports that root's cumulative
+            // totals and closes its scope exactly once. A provider call the traversal owner makes
+            // inside its own walk (exact source cleanup, a child's Native rename, an owned-stage
+            // removal) is a different discovery scope: it carries the same cancellation, deadline
+            // and bandwidth controls, but it must not publish child-local totals or closure into
+            // the root. Such calls receive a separate cookie with suppression set.
+            bool suppressDiscoveryReports = false;
+            // A provisional provider mutation whose own report cannot yet know whether it resolved
+            // the selected root: a Native directory rename that may continue as a host rename merge.
+            // Cumulative counts are kept; only the one-way closure is withheld until the host knows
+            // which traversal owns the rest of the root.
+            std::atomic<bool> deferDiscoveryClosure{false};
             bool sourceIsDirectory             = false;
             uint64_t lastDiscoveredBytes       = 0;
             uint64_t lastDiscoveredFiles       = 0;
@@ -1470,6 +1482,10 @@ struct FolderWindow::FileOperationState
         std::atomic<uint64_t> _discoveryMaxQueueDepth{0};
         std::atomic<uint64_t> _discoveryStarvationCount{0};
         std::atomic<bool> _firstMutationBeforeDiscoveryClosed{false};
+        // Observation only: how many discovery reports added work after the task's totals were
+        // already presented as final. Closure is one-way, so a correct traversal never grows after
+        // it; any nonzero value means some scope closed a root it did not finish owning.
+        std::atomic<uint64_t> _discoveryGrowthAfterCloseCount{0};
         std::mutex _discoveryMutex;
         std::vector<uint8_t> _discoveryItemClosed;
         size_t _closedDiscoveryItemCount = 0;
@@ -1990,6 +2006,9 @@ void ReleaseFileOpsPostFinishedCompletionPauseForSelfTest() noexcept;
 void SetFileOpsBridgeMoveSourceCleanupPauseForSelfTest(bool enabled) noexcept;
 bool HasFileOpsBridgeMoveSourceCleanupPauseEnteredForSelfTest() noexcept;
 void ReleaseFileOpsBridgeMoveSourceCleanupPauseForSelfTest() noexcept;
+void SetFileOpsSelectedLeafDiscoveryPublishedPauseForSelfTest(bool enabled) noexcept;
+bool HasFileOpsSelectedLeafDiscoveryPublishedPauseEnteredForSelfTest() noexcept;
+void ReleaseFileOpsSelectedLeafDiscoveryPublishedPauseForSelfTest() noexcept;
 void SetFileOpsNativeMoveCreateDirectoryRaceForSelfTest(unsigned long count) noexcept;
 unsigned long TakeFileOpsNativeMoveCreateDirectoryRaceAttemptsForSelfTest() noexcept;
 void SetFileOpsManagedCleanupKnownNonCommitForSelfTest(HRESULT status, unsigned long count) noexcept;
@@ -2053,6 +2072,7 @@ struct FileOpsConflictMetadataDebugResult
 bool DebugReadFileOpsConflictMetadataForSelfTest(IFileSystemIO* io, std::wstring_view path, FileOpsConflictMetadataDebugResult& out) noexcept;
 bool DebugFileOpsUnboundCollisionWithholdsDestructiveActionsForSelfTest() noexcept;
 bool DebugFileOpsConflictActionPolicyCoverageForSelfTest() noexcept;
+void DebugBuildFileOpsVisualConflictPolicyForSelfTest(FolderWindow::FileOperationState::Task::ConflictPromptState& prompt, bool allowReplacement) noexcept;
 bool RunFileOpsPerItemSchedulerShutdownQuietPointSelfTestForSelfTest(FolderWindow::FileOperationState& state) noexcept;
 bool RunFileOpsPerItemSchedulerNestedSaturationSelfTestForSelfTest(FolderWindow::FileOperationState& state) noexcept;
 bool RunFileOpsPerItemSchedulerFailurePolicySelfTestForSelfTest(FolderWindow::FileOperationState& state) noexcept;

@@ -1,13 +1,13 @@
 #pragma once
 
-#include "DxUi.h"
+#include <DxUi/DxUi.h>
 
 #include <string>
 #include <string_view>
 
 namespace RedConfigure::Ui
 {
-class LocalizationExampleControl final : public RedSalamander::DxUi::Control
+class LocalizationExampleControl final : public DxUi::Control
 {
 public:
     enum class Kind : uint8_t
@@ -27,7 +27,7 @@ public:
         RequestInvalidate();
     }
 
-    void Paint(RedSalamander::DxUi::WindowHost& host) const override
+    void Paint(DxUi::WindowHost& host) const override
     {
         auto* dc = host.GetDeviceContext();
         if (! dc)
@@ -51,7 +51,7 @@ public:
         {
             sample.replace(placeholder, 3u, L"42");
         }
-        const auto draw = [&](std::wstring_view text, const D2D1_RECT_F& rect, RedSalamander::DxUi::FontRole role, const D2D1_COLOR_F& color)
+        const auto draw = [&](std::wstring_view text, const D2D1_RECT_F& rect, DxUi::FontRole role, const D2D1_COLOR_F& color)
         {
             if (auto* brush = host.GetSolidBrush(color))
             {
@@ -60,7 +60,7 @@ public:
         };
         draw(sample,
              D2D1::RectF(bounds.left + 12.0f, bounds.top + 18.0f, bounds.right - 12.0f, bounds.bottom - 10.0f),
-             RedSalamander::DxUi::FontRole::BodyStrong,
+             DxUi::FontRole::BodyStrong,
              palette.text);
     }
 

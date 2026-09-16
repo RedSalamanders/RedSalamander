@@ -151,7 +151,9 @@
       <SetConfiguration>Configuration=$(Configuration)</SetConfiguration>
     </ProjectReference>
   </ItemGroup>
+  <Import Project="..\..\Build\RedSalamander.DxUi.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="..\..\Build\RedSalamander.DxUi.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>

@@ -5,6 +5,7 @@
 #include "PlugInterfaces/Host.h"
 
 #include "DeleteOnCloseTemporaryFile.h"
+#include "FileSystemDiscoveryScope.h"
 #include "Helpers.h"
 
 #include <algorithm>
@@ -611,6 +612,12 @@ struct FileOperationProgress
     IFileSystemCallback* callback = nullptr;
     void* cookie                  = nullptr;
 
+    // Exactly one of these exists per governed call, singular or bulk, so it is also exactly one
+    // discovery scope with one closure. It reports through the options copy above, never through
+    // the thread-local ambient options: that carrier belongs to whichever call owns the current
+    // thread, and a report through it would land in a scope this call does not own.
+    std::optional<Common::FileOperations::DiscoveryScope> discovery;
+
     std::atomic_bool internalCancel{false};
     std::atomic<uint64_t> bandwidthLimitBytesPerSecond{0};
 
@@ -640,6 +647,7 @@ struct FileOperationProgress
             options = *initialOptions;
         }
         options.sizeBytes = sizeof(FileSystemOptions);
+        discovery.emplace(&options);
         bandwidthLimitBytesPerSecond.store(options.bandwidthLimitBytesPerSecond, std::memory_order_release);
 
         if (callback)
@@ -648,6 +656,40 @@ struct FileOperationProgress
         }
 
         return S_OK;
+    }
+
+    // One listing entry, classified the way this provider's namespace defines it. A dialect that
+    // cannot report a size yields sizeKnown == false; that item still counts, but contributes no
+    // bytes, because a listing that omits a size is not a listing that says zero.
+    void NoteDiscoveredEntry(const FilesInformationCurl::Entry& entry) noexcept
+    {
+        if (! discovery.has_value())
+        {
+            return;
+        }
+        if ((entry.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
+        {
+            static_cast<void>(discovery->AddDirectory());
+        }
+        else if (entry.sizeKnown)
+        {
+            static_cast<void>(discovery->AddFile(entry.sizeBytes));
+        }
+        else
+        {
+            static_cast<void>(discovery->AddFileWithUnknownSize());
+        }
+    }
+
+    // A singular call whose total is final before its first byte moves closes here, so the caller's
+    // card never has to guess through the transfer. A walk closes when the call ends, and a bulk
+    // call after its last root; both are the destructor's job.
+    void CloseDiscovery() noexcept
+    {
+        if (discovery.has_value())
+        {
+            discovery->Close();
+        }
     }
 
     [[nodiscard]] HRESULT CheckCancel() noexcept

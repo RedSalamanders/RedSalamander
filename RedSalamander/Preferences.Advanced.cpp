@@ -12,15 +12,23 @@
 #include <string>
 #include <vector>
 
-#include "DxUi/DxUi.h"
 #include "Helpers.h"
 #include "UiMetrics.h"
 #include "WindowMessages.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
 
 // Local convenience aliases for frequently-used shared utilities
 namespace
 {
+using DxUi::Button;
+using DxUi::ButtonVariant;
+using DxUi::CardPanel;
+using DxUi::FontRole;
+using DxUi::Label;
+using DxUi::TextField;
+using DxUi::ThemePalette;
+using DxUi::Toggle;
 using PrefsCache::EnsureWorkingCacheSettings;
 using PrefsCache::FormatCacheBytes;
 using PrefsCache::GetCacheSettingsOrDefault;
@@ -32,14 +40,6 @@ using PrefsConnections::MaybeResetWorkingConnectionsSettingsIfEmpty;
 using PrefsFileOperations::EnsureWorkingFileOperationsSettings;
 using PrefsFileOperations::GetFileOperationsSettingsOrDefault;
 using PrefsFileOperations::MaybeResetWorkingFileOperationsSettingsIfEmpty;
-using RedSalamander::DxUi::Button;
-using RedSalamander::DxUi::ButtonVariant;
-using RedSalamander::DxUi::CardPanel;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::TextField;
-using RedSalamander::DxUi::ThemePalette;
-using RedSalamander::DxUi::Toggle;
 
 constexpr std::array<UINT, 3> kAdvancedHeaderStringIds = {{
     IDS_PREFS_ADV_HEADER_CONNECTIONS_HELLO,
@@ -741,7 +741,7 @@ bool AdvancedPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noe
 
     {
         AdvancedDxPage& page = dxState->page;
-        std::vector<RedSalamander::DxUi::Control*> orderedChildren;
+        std::vector<DxUi::Control*> orderedChildren;
         orderedChildren.reserve(_pageContentRoot->DebugChildCount());
 
         const auto appendHeader = [&](const size_t index) noexcept { orderedChildren.push_back(page.headers[index]); };
@@ -1044,11 +1044,10 @@ void AdvancedPane::LayoutDxPage(
     const int stateTextWidth = std::max(onWidth, offWidth);
 
     const int measuredToggleWidth = std::max(minToggleWidth, (2 * paddingX) + stateTextWidth + gapX + trackWidth);
-    const int toggleWidth =
-        static_cast<int>(std::lround(RedSalamander::DxUi::ResolveConstrainedExtent({.minExtent       = static_cast<float>(minToggleWidth),
-                                                                                    .preferredExtent = static_cast<float>(measuredToggleWidth),
-                                                                                    .maxExtent       = static_cast<float>(measuredToggleWidth)},
-                                                                                   static_cast<float>(std::max(0, width - 2 * cardPaddingX - cardGapX)))));
+    const int toggleWidth = static_cast<int>(std::lround(DxUi::ResolveConstrainedExtent({.minExtent       = static_cast<float>(minToggleWidth),
+                                                                                         .preferredExtent = static_cast<float>(measuredToggleWidth),
+                                                                                         .maxExtent       = static_cast<float>(measuredToggleWidth)},
+                                                                                        static_cast<float>(std::max(0, width - 2 * cardPaddingX - cardGapX)))));
 
     auto layoutToggleCard =
         [&](std::wstring_view labelText, std::wstring_view descText, CardPanel* dxCard, Label* dxLabel, Label* dxDescription, Toggle* dxToggle) noexcept
@@ -1106,7 +1105,7 @@ void AdvancedPane::LayoutDxPage(
                               Label* dxDescription,
                               TextField* dxEdit) noexcept
     {
-        desiredWidth         = static_cast<int>(std::lround(RedSalamander::DxUi::ResolveConstrainedExtent(
+        desiredWidth         = static_cast<int>(std::lround(DxUi::ResolveConstrainedExtent(
             {.minExtent = 0.0f, .preferredExtent = static_cast<float>(desiredWidth), .maxExtent = static_cast<float>(desiredWidth)},
             static_cast<float>(std::max(0, width - 2 * cardPaddingX)))));
         const int textWidth  = std::max(0, width - 2 * cardPaddingX - cardGapX - desiredWidth);

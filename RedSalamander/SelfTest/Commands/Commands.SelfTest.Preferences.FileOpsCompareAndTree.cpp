@@ -147,15 +147,14 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         PumpPendingMessages();
 
         PreferencesDebugSnapshot snapshot{};
-        state.Require(SelectPreferencesCategoryAndWaitForStableSurface(
-                          kPrefCategoryFileOperations,
-                          [](const PreferencesDebugSnapshot& value) noexcept
+        state.Require(SelectPreferencesCategoryAndWaitForStableSurface(kPrefCategoryFileOperations,
+                                                                       [](const PreferencesDebugSnapshot& value) noexcept
         {
             return value.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_FILE_OPERATIONS) &&
-                   value.pageDescription == LoadStringResource(nullptr, IDS_PREFS_CAT_FILE_OPERATIONS_DESC) &&
-                   value.visibleCurrentPageChildWindowCount == 1u && value.currentPageDxHostResizeFailureCount == 0u;
+                   value.pageDescription == LoadStringResource(nullptr, IDS_PREFS_CAT_FILE_OPERATIONS_DESC) && value.visibleCurrentPageChildWindowCount == 1u &&
+                   value.currentPageDxHostResizeFailureCount == 0u;
         },
-                          snapshot),
+                                                                       snapshot),
                       std::format(L"Preferences navigation did not move to the File Operations category during {}.", context));
         state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_FILE_OPERATIONS),
                       std::format(L"Preferences page title did not switch to File Operations during {}.", context));
@@ -358,7 +357,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for File Operations live interaction test.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for File Operations live interaction test.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryFileOperations),
@@ -704,7 +704,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Advanced theme-cycle validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Advanced theme-cycle validation.");
         PumpPendingMessages();
 
         SendMessageW(treeHost, WM_KEYDOWN, VK_END, 0);
@@ -906,9 +907,9 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
     Common::Settings::Settings monitorSeed{};
     const HRESULT monitorLoadHr = Common::Settings::TryLoadSettingsNoRecovery(kPreferencesMonitorAppId, monitorSeed);
-    state.Require(monitorLoadHr == S_OK || monitorLoadHr == S_FALSE,
-                  std::format(L"Failed to load the RedSalamanderMonitor settings baseline before seeding: 0x{:08X}.",
-                              static_cast<unsigned long>(monitorLoadHr)));
+    state.Require(
+        monitorLoadHr == S_OK || monitorLoadHr == S_FALSE,
+        std::format(L"Failed to load the RedSalamanderMonitor settings baseline before seeding: 0x{:08X}.", static_cast<unsigned long>(monitorLoadHr)));
     if (! state.failure.empty())
     {
         return false;
@@ -962,7 +963,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Monitor filter-preset validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Monitor filter-preset validation.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryMonitor), L"Preferences did not accept debug selection of the Monitor page.");
@@ -1116,8 +1118,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     }
 
     state.Require(waitForNoMaskEdit(maskName), L"Preferences Monitor should not expose a numeric filter mask edit after switching to Custom.");
-    state.Require(ToggleVisibleDescendantByNameWithMessagePump(
-                      getActivePage(), textToggleName, L"Preferences Monitor initial custom Text toggle"),
+    state.Require(ToggleVisibleDescendantByNameWithMessagePump(getActivePage(), textToggleName, L"Preferences Monitor initial custom Text toggle"),
                   L"Preferences Monitor Text filter toggle did not accept live UIA TogglePattern mutation.");
     state.Require(waitForToggleState(textToggleName, ToggleState_On), L"Preferences Monitor Text filter toggle did not settle after live mutation.");
     if (! state.failure.empty())
@@ -1173,8 +1174,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                   L"Preferences Monitor filter preset combo did not accept debug switch to Custom before Apply validation.");
     state.Require(waitForComboValue(comboName, customText), L"Preferences Monitor filter preset combo did not settle to Custom before Apply validation.");
     state.Require(waitForNoMaskEdit(maskName), L"Preferences Monitor should not expose a numeric filter mask edit before Apply validation.");
-    state.Require(ToggleVisibleDescendantByNameWithMessagePump(
-                      getActivePage(), textToggleName, L"Preferences Monitor Apply custom Text toggle"),
+    state.Require(ToggleVisibleDescendantByNameWithMessagePump(getActivePage(), textToggleName, L"Preferences Monitor Apply custom Text toggle"),
                   L"Preferences Monitor Text filter toggle did not accept the custom value before Apply validation.");
     state.Require(waitForToggleState(textToggleName, ToggleState_On),
                   L"Preferences Monitor Text filter toggle did not settle to the custom value before Apply validation.");
@@ -1301,7 +1301,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for File Operations tab-traversal validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for File Operations tab-traversal validation.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryFileOperations),
@@ -1454,7 +1455,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     const std::wstring bandwidthComboName  = LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_PRESET_TITLE);
     const std::wstring customBandwidthName = LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_CUSTOM_TITLE);
     const std::wstring unlimitedText       = LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_UNLIMITED);
-    const auto verifyAfterCopyState = CollectVisibleDescendantTogglePatternState(activePage);
+    const auto verifyAfterCopyState        = CollectVisibleDescendantTogglePatternState(activePage);
     state.Require(verifyAfterCopyState.has_value(), L"Preferences File Operations tab-traversal validation could not find the visible verification toggle.");
     if (! verifyAfterCopyState.has_value())
     {
@@ -1470,14 +1471,14 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
     if (verifyAfterCopyState->toggleState != ToggleState_On)
     {
-        state.Require(ToggleVisibleDescendantByNameWithMessagePump(
-                          activePage, verifyAfterCopyName, L"Preferences File Operations prerequisite verification toggle"),
-                      L"Preferences File Operations verification toggle did not accept prerequisite enablement before tab-traversal validation.");
+        state.Require(
+            ToggleVisibleDescendantByNameWithMessagePump(activePage, verifyAfterCopyName, L"Preferences File Operations prerequisite verification toggle"),
+            L"Preferences File Operations verification toggle did not accept prerequisite enablement before tab-traversal validation.");
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
         {
             return value.currentCategory == kPrefCategoryFileOperations &&
-                    value.fileOperationsFocusTarget == PreferencesFileOperationsDebugFocusTarget::VerifyAfterCopyToggle && value.createdPaneWindowCount == 0u &&
+                   value.fileOperationsFocusTarget == PreferencesFileOperationsDebugFocusTarget::VerifyAfterCopyToggle && value.createdPaneWindowCount == 0u &&
                    value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount == 1u && value.currentPageDxHostResizeFailureCount == 0u;
         },
                           snapshot),
@@ -1502,7 +1503,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                       [](const PreferencesDebugSnapshot& value) noexcept
     {
         return value.currentCategory == kPrefCategoryFileOperations &&
-                value.fileOperationsFocusTarget == PreferencesFileOperationsDebugFocusTarget::VerifyAfterCopyToggle && value.createdPaneWindowCount == 0u &&
+               value.fileOperationsFocusTarget == PreferencesFileOperationsDebugFocusTarget::VerifyAfterCopyToggle && value.createdPaneWindowCount == 0u &&
                value.visiblePaneWindowCount == 0u && value.visibleCurrentPageChildWindowCount == 1u && value.currentPageDxHostResizeFailureCount == 0u;
     },
                       snapshot),
@@ -1655,7 +1656,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return pagePatternStats;
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for File Operations round-trip test.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for File Operations round-trip test.");
     PumpPendingMessages();
 
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryFileOperations),
@@ -1836,7 +1838,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for File Operations custom-bandwidth test.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for File Operations custom-bandwidth test.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryFileOperations),
@@ -2056,11 +2059,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return false;
     }
 
-    if (! SetVisibleDescendantValueByNameWithMessagePump(getActivePage(),
-                                                         UIA_EditControlTypeId,
-                                                         customEditName,
-                                                         editedCustomValue,
-                                                         L"Preferences File Operations custom-bandwidth SetValue"))
+    if (! SetVisibleDescendantValueByNameWithMessagePump(
+            getActivePage(), UIA_EditControlTypeId, customEditName, editedCustomValue, L"Preferences File Operations custom-bandwidth SetValue"))
     {
         state.Require(false, L"Preferences File Operations custom-bandwidth edit did not accept live UIA ValuePattern mutation.");
         return false;
@@ -2192,7 +2192,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for File Operations theme-cycle validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for File Operations theme-cycle validation.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryFileOperations),
@@ -2229,16 +2230,16 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     }
 
     state.Require(DebugFocusPreferencesFileOperationsVerifyAfterCopyToggle(),
-                   L"Preferences File Operations verification toggle did not accept focus before theme-cycle validation.");
+                  L"Preferences File Operations verification toggle did not accept focus before theme-cycle validation.");
     state.Require(waitForSnapshot(
                       [](const PreferencesDebugSnapshot& value) noexcept
     {
         return value.currentCategory == kPrefCategoryFileOperations &&
-                value.fileOperationsFocusTarget == PreferencesFileOperationsDebugFocusTarget::VerifyAfterCopyToggle &&
+               value.fileOperationsFocusTarget == PreferencesFileOperationsDebugFocusTarget::VerifyAfterCopyToggle &&
                value.currentPageDxHostResizeFailureCount == 0u;
     },
                       snapshot),
-                   L"Preferences File Operations focus target did not settle to the verification toggle before theme-cycle validation.");
+                  L"Preferences File Operations focus target did not settle to the verification toggle before theme-cycle validation.");
     if (! state.failure.empty())
     {
         return false;
@@ -2246,7 +2247,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
     bool initialToggleChecked = false;
     state.Require(DebugGetPreferencesFileOperationsVerifyAfterCopyToggleChecked(initialToggleChecked),
-                   L"Preferences File Operations verification toggle state was unavailable before theme-cycle validation.");
+                  L"Preferences File Operations verification toggle state was unavailable before theme-cycle validation.");
     if (! state.failure.empty())
     {
         return false;
@@ -2295,16 +2296,16 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         }
 
         state.Require(DebugFocusPreferencesFileOperationsVerifyAfterCopyToggle(),
-                       std::format(L"Preferences File Operations verification toggle did not reacquire focus after the {} theme update.", label));
+                      std::format(L"Preferences File Operations verification toggle did not reacquire focus after the {} theme update.", label));
         state.Require(waitForSnapshot(
                           [](const PreferencesDebugSnapshot& value) noexcept
         {
             return value.currentCategory == kPrefCategoryFileOperations &&
-                    value.fileOperationsFocusTarget == PreferencesFileOperationsDebugFocusTarget::VerifyAfterCopyToggle &&
+                   value.fileOperationsFocusTarget == PreferencesFileOperationsDebugFocusTarget::VerifyAfterCopyToggle &&
                    value.currentPageDxHostResizeFailureCount == 0u;
         },
                           snapshot),
-                       std::format(L"Preferences File Operations focus target did not return to the verification toggle after the {} theme update.", label));
+                      std::format(L"Preferences File Operations focus target did not return to the verification toggle after the {} theme update.", label));
         if (! state.failure.empty())
         {
             return;
@@ -2325,9 +2326,9 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
         bool currentToggleChecked = false;
         state.Require(DebugGetPreferencesFileOperationsVerifyAfterCopyToggleChecked(currentToggleChecked),
-                       std::format(L"Preferences File Operations verification toggle state was unavailable after the {} theme update.", label));
+                      std::format(L"Preferences File Operations verification toggle state was unavailable after the {} theme update.", label));
         state.Require(currentToggleChecked == initialToggleChecked,
-                       std::format(L"Preferences File Operations verification toggle changed unexpectedly after the {} theme update.", label));
+                      std::format(L"Preferences File Operations verification toggle changed unexpectedly after the {} theme update.", label));
 
         const auto valueState = CollectVisibleDescendantValuePatternStateByName(activePage, UIA_EditControlTypeId, bridgeBufferLabel);
         state.Require(valueState.has_value(), std::format(L"Preferences File Operations bridge-buffer edit disappeared after the {} theme update.", label));
@@ -2413,15 +2414,14 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         PumpPendingMessages();
 
         PreferencesDebugSnapshot snapshot{};
-        state.Require(SelectPreferencesCategoryAndWaitForStableSurface(
-                          kPrefCategoryCompareDirectories,
-                          [](const PreferencesDebugSnapshot& value) noexcept
+        state.Require(SelectPreferencesCategoryAndWaitForStableSurface(kPrefCategoryCompareDirectories,
+                                                                       [](const PreferencesDebugSnapshot& value) noexcept
         {
             return value.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_COMPARE_DIRECTORIES) &&
                    value.compareDirectoriesVisibleSectionHeaderCount == 4u && value.visibleCurrentPageChildWindowCount == 1u &&
                    value.currentPageDxHostResizeFailureCount == 0u;
         },
-                          snapshot),
+                                                                       snapshot),
                       std::format(L"Preferences navigation did not move to the Compare Directories category during {}.", context));
         state.Require(snapshot.pageTitle == LoadStringResource(nullptr, IDS_PREFS_CAT_COMPARE_DIRECTORIES),
                       std::format(L"Preferences page title did not switch to Compare Directories during {}.", context));
@@ -2621,7 +2621,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Compare Directories live interaction test.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Compare Directories live interaction test.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryCompareDirectories),
@@ -2816,8 +2817,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     const std::wstring initialEditValue = initialValueState->value;
 
     state.Require(
-        ToggleVisibleDescendantByNameWithMessagePump(
-            getActivePage(), toggleName, L"Preferences Compare Directories Cancel-discard toggle mutation"),
+        ToggleVisibleDescendantByNameWithMessagePump(getActivePage(), toggleName, L"Preferences Compare Directories Cancel-discard toggle mutation"),
         L"Preferences Compare Directories page visible DX toggle did not accept live UIA TogglePattern mutation during shell Cancel discard validation.");
     state.Require(waitForToggleState(toggleName, flippedToggleValue),
                   L"Preferences Compare Directories page visible DX toggle did not settle to the edited state during shell Cancel discard validation.");
@@ -2855,13 +2855,11 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     state.Require(waitForEditValue(editName, initialEditValue),
                   L"Preferences shell Cancel action did not discard the Compare Directories edit mutation before the page was reopened.");
 
-    state.Require(ToggleVisibleDescendantByNameWithMessagePump(
-                      getActivePage(), toggleName, L"Preferences Compare Directories reopened toggle mutation"),
+    state.Require(ToggleVisibleDescendantByNameWithMessagePump(getActivePage(), toggleName, L"Preferences Compare Directories reopened toggle mutation"),
                   L"Preferences Compare Directories page visible DX toggle did not accept reopened live UIA TogglePattern mutation.");
     state.Require(waitForToggleState(toggleName, flippedToggleValue),
                   L"Preferences Compare Directories page visible DX toggle did not settle to the reopened edited state after live UIA mutation.");
-    state.Require(ToggleVisibleDescendantByNameWithMessagePump(
-                      getActivePage(), toggleName, L"Preferences Compare Directories toggle restoration"),
+    state.Require(ToggleVisibleDescendantByNameWithMessagePump(getActivePage(), toggleName, L"Preferences Compare Directories toggle restoration"),
                   L"Preferences Compare Directories page visible DX toggle did not accept restoration through reopened live UIA TogglePattern.");
     state.Require(waitForToggleState(toggleName, initialToggleValue),
                   L"Preferences Compare Directories page visible DX toggle did not restore its original state after reopened live UIA mutation.");
@@ -3226,8 +3224,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     state.Require(waitForComboValue(comboName, editedComboValue), L"Preferences Compare Directories content-workers combo did not settle to the edited value.");
     trace(L"compare_dirs_content_workers: combo edited value settled");
     trace(L"compare_dirs_content_workers: before ignore-files toggle");
-    state.Require(ToggleVisibleDescendantByNameWithMessagePump(
-                      getActivePage(), ignoreFilesName, L"Preferences Compare Directories Ignore files toggle"),
+    state.Require(ToggleVisibleDescendantByNameWithMessagePump(getActivePage(), ignoreFilesName, L"Preferences Compare Directories Ignore files toggle"),
                   L"Preferences Compare Directories Ignore files toggle did not accept live UIA TogglePattern mutation.");
     trace(L"compare_dirs_content_workers: after ignore-files toggle");
 
@@ -3242,12 +3239,10 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     trace(L"compare_dirs_content_workers: ignore-files edit revealed");
 
     trace(L"compare_dirs_content_workers: before edit set");
-    state.Require(SetVisibleDescendantValueByNameWithMessagePump(getActivePage(),
-                                                                 UIA_EditControlTypeId,
-                                                                 ignoreFilesEditName,
-                                                                 editedIgnoreFilesPatterns,
-                                                                 L"Preferences Compare Directories Ignore files SetValue"),
-                  L"Preferences Compare Directories Ignore files edit did not accept live UIA ValuePattern mutation.");
+    state.Require(
+        SetVisibleDescendantValueByNameWithMessagePump(
+            getActivePage(), UIA_EditControlTypeId, ignoreFilesEditName, editedIgnoreFilesPatterns, L"Preferences Compare Directories Ignore files SetValue"),
+        L"Preferences Compare Directories Ignore files edit did not accept live UIA ValuePattern mutation.");
     state.Require(waitForEditValue(ignoreFilesEditName, editedIgnoreFilesPatterns),
                   L"Preferences Compare Directories Ignore files edit did not settle to the edited value.");
     trace(L"compare_dirs_content_workers: edit value settled");
@@ -3281,9 +3276,9 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                   L"Preferences shell Cancel action did not restore the Compare Directories content-workers combo value.");
     state.Require(waitForNoVisibleEdit(), L"Preferences Compare Directories Ignore files edit should stay hidden after Cancel restores the toggle to Off.");
     trace(L"compare_dirs_content_workers: cancel restore validated");
-    state.Require(ToggleVisibleDescendantByNameWithMessagePump(
-                      getActivePage(), ignoreFilesName, L"Preferences Compare Directories reopened Ignore files toggle"),
-                  L"Preferences Compare Directories Ignore files toggle did not accept reopened live UIA TogglePattern mutation.");
+    state.Require(
+        ToggleVisibleDescendantByNameWithMessagePump(getActivePage(), ignoreFilesName, L"Preferences Compare Directories reopened Ignore files toggle"),
+        L"Preferences Compare Directories Ignore files toggle did not accept reopened live UIA TogglePattern mutation.");
 
     std::wstring reopenedIgnoreFilesEditName;
     state.Require(waitForAnyVisibleEditValue(initialIgnoreFilesPatterns, &reopenedIgnoreFilesEditName),
@@ -3373,7 +3368,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Compare Directories tail-toggle validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Compare Directories tail-toggle validation.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryCompareDirectories),
@@ -3650,7 +3646,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Compare Directories tab-traversal validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Compare Directories tab-traversal validation.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryCompareDirectories),
@@ -3951,19 +3948,18 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     PreferencesDebugSnapshot snapshot{};
     state.Require(DebugSelectPreferencesCategory(kPrefCategoryCompareDirectories),
                   L"Failed to select the Preferences Compare Directories category before round-trip validation.");
-    state.Require(DebugFocusPreferencesCategoryTree(),
-                  std::format(L"Failed to restore Preferences category tree focus before Compare Directories round-trip validation; {}.",
-                              describeSnapshot(snapshot)));
+    state.Require(
+        DebugFocusPreferencesCategoryTree(),
+        std::format(L"Failed to restore Preferences category tree focus before Compare Directories round-trip validation; {}.", describeSnapshot(snapshot)));
     PumpPendingMessages();
 
     const std::wstring compareTitle       = LoadStringResource(nullptr, IDS_PREFS_CAT_COMPARE_DIRECTORIES);
     const std::wstring compareDescription = LoadStringResource(nullptr, IDS_PREFS_CAT_COMPARE_DIRECTORIES_DESC);
     const std::wstring generalTitle       = LoadStringResource(nullptr, IDS_PREFS_CAT_GENERAL);
     const std::wstring generalDescription = LoadStringResource(nullptr, IDS_PREFS_CAT_GENERAL_DESC);
-    state.Require(waitForSnapshot(
-                      [&](const PreferencesDebugSnapshot& value) noexcept
+    state.Require(waitForSnapshot([&](const PreferencesDebugSnapshot& value) noexcept
     { return isStablePage(value, kPrefCategoryCompareDirectories, compareTitle, compareDescription); },
-                      snapshot),
+                                  snapshot),
                   std::format(L"Preferences Compare Directories page did not settle to the stabilized one-host DxUi surface before round-trip validation; {}.",
                               describeSnapshot(snapshot)));
     if (! state.failure.empty())
@@ -3994,12 +3990,11 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     PumpPendingMessages();
 
     snapshot = {};
-    state.Require(waitForSnapshot(
-                      [&](const PreferencesDebugSnapshot& value) noexcept
+    state.Require(
+        waitForSnapshot([&](const PreferencesDebugSnapshot& value) noexcept
     { return isStablePage(value, kPrefCategoryGeneral, generalTitle, generalDescription); },
-                      snapshot),
-                  std::format(L"Preferences did not restore the General one-host DxUi page while leaving Compare Directories; {}.",
-                              describeSnapshot(snapshot)));
+                        snapshot),
+        std::format(L"Preferences did not restore the General one-host DxUi page while leaving Compare Directories; {}.", describeSnapshot(snapshot)));
     if (! state.failure.empty())
     {
         return false;
@@ -4021,10 +4016,9 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     PumpPendingMessages();
 
     snapshot = {};
-    state.Require(waitForSnapshot(
-                      [&](const PreferencesDebugSnapshot& value) noexcept
+    state.Require(waitForSnapshot([&](const PreferencesDebugSnapshot& value) noexcept
     { return isStablePage(value, kPrefCategoryCompareDirectories, compareTitle, compareDescription); },
-                      snapshot),
+                                  snapshot),
                   std::format(L"Preferences Compare Directories page did not repaint and restore the stabilized one-host DxUi surface after returning from "
                               L"General; {}.",
                               describeSnapshot(snapshot)));
@@ -4119,7 +4113,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return false;
         }
 
-        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Compare Directories theme-cycle validation.");
+        state.Require(FocusWindowAndWait(treeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Compare Directories theme-cycle validation.");
         PumpPendingMessages();
 
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryCompareDirectories),
@@ -4508,12 +4503,14 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
         state.Require(pagePatternStats->visibleElementCount > 0u,
                       std::format(L"Preferences {} page should expose visible UI Automation descendants on the settings surface.", pageLabel));
-        state.Require(
-            pagePatternStats->editControlCount == 0u,
-            std::format(L"Preferences {} settings surface should not expose editable descendants; saw {} edits.", pageLabel, pagePatternStats->editControlCount));
-        state.Require(
-            pagePatternStats->comboBoxControlCount == 0u,
-            std::format(L"Preferences {} settings surface should not expose a pane-focus combo; saw {} combos.", pageLabel, pagePatternStats->comboBoxControlCount));
+        state.Require(pagePatternStats->editControlCount == 0u,
+                      std::format(L"Preferences {} settings surface should not expose editable descendants; saw {} edits.",
+                                  pageLabel,
+                                  pagePatternStats->editControlCount));
+        state.Require(pagePatternStats->comboBoxControlCount == 0u,
+                      std::format(L"Preferences {} settings surface should not expose a pane-focus combo; saw {} combos.",
+                                  pageLabel,
+                                  pagePatternStats->comboBoxControlCount));
         state.Require(pagePatternStats->togglePatternCount == 2u,
                       std::format(L"Preferences {} settings surface should expose two independent pane-focus toggles; saw {} toggles.",
                                   pageLabel,
@@ -4524,7 +4521,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                       std::format(L"Preferences {} settings surface should expose visible named text descendants.", pageLabel));
     };
 
-    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Editors/Mouse live note validation.");
+    state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                  L"Failed to focus the Preferences category host for Editors/Mouse live note validation.");
     PumpPendingMessages();
 
     verifyMousePage(kPrefCategoryMouse, IDS_PREFS_CAT_MOUSE, L"Mouse");
@@ -4692,26 +4690,26 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                 PreferencesDebugSnapshot actualSnapshot{};
                 static_cast<void>(DebugGetPreferencesDialogSnapshot(actualSnapshot));
                 return std::format(L"Preferences {} {} focus target not reached during note-page tab traversal; actual categoryTreeFocused={}, "
-                                    L"expectedCategoryTreeFocused={}, retainedShellFocusTarget={}, expectedRetainedShellFocusTarget={}, "
-                                    L"currentCategory={}, expectedCategory={}, createdPaneWindowCount={}, visiblePaneWindowCount={}, "
-                                    L"visibleCurrentPageChildWindowCount={}, currentPageDxHostResizeFailureCount={}, shellDxHostResizeFailureCount={}, "
-                                    L"focus={:#x}, pageHost={:#x}, shellHost={:#x}.",
-                                    pageLabel,
-                                    label,
-                                    actualSnapshot.categoryTreeFocused ? 1 : 0,
-                                    expectCategoryTreeFocus ? 1 : 0,
-                                    static_cast<int>(actualSnapshot.shellFocusTarget),
-                                    static_cast<int>(expectedRetainedShellTarget),
-                                    static_cast<int>(actualSnapshot.currentCategory),
-                                    static_cast<int>(expectedCategory),
-                                    actualSnapshot.createdPaneWindowCount,
-                                    actualSnapshot.visiblePaneWindowCount,
-                                    actualSnapshot.visibleCurrentPageChildWindowCount,
-                                    actualSnapshot.currentPageDxHostResizeFailureCount,
-                                    actualSnapshot.shellDxHostResizeFailureCount,
-                                    reinterpret_cast<uintptr_t>(GetFocus()),
-                                    reinterpret_cast<uintptr_t>(DebugGetPreferencesActivePageHandle()),
-                                    reinterpret_cast<uintptr_t>(DebugGetPreferencesShellHostHandle()));
+                                   L"expectedCategoryTreeFocused={}, retainedShellFocusTarget={}, expectedRetainedShellFocusTarget={}, "
+                                   L"currentCategory={}, expectedCategory={}, createdPaneWindowCount={}, visiblePaneWindowCount={}, "
+                                   L"visibleCurrentPageChildWindowCount={}, currentPageDxHostResizeFailureCount={}, shellDxHostResizeFailureCount={}, "
+                                   L"focus={:#x}, pageHost={:#x}, shellHost={:#x}.",
+                                   pageLabel,
+                                   label,
+                                   actualSnapshot.categoryTreeFocused ? 1 : 0,
+                                   expectCategoryTreeFocus ? 1 : 0,
+                                   static_cast<int>(actualSnapshot.shellFocusTarget),
+                                   static_cast<int>(expectedRetainedShellTarget),
+                                   static_cast<int>(actualSnapshot.currentCategory),
+                                   static_cast<int>(expectedCategory),
+                                   actualSnapshot.createdPaneWindowCount,
+                                   actualSnapshot.visiblePaneWindowCount,
+                                   actualSnapshot.visibleCurrentPageChildWindowCount,
+                                   actualSnapshot.currentPageDxHostResizeFailureCount,
+                                   actualSnapshot.shellDxHostResizeFailureCount,
+                                   reinterpret_cast<uintptr_t>(GetFocus()),
+                                   reinterpret_cast<uintptr_t>(DebugGetPreferencesActivePageHandle()),
+                                   reinterpret_cast<uintptr_t>(DebugGetPreferencesShellHostHandle()));
             }());
         };
 
@@ -4811,14 +4809,13 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     }};
     for (const Common::Settings::MouseSettings& expected : settingsCases)
     {
-        state.Require(DebugSetPreferencesMouseFocusFollowsPointerSettings(
-                          expected.focusFollowsPointer, expected.focusFollowsPointerWhenTerminalOpen),
+        state.Require(DebugSetPreferencesMouseFocusFollowsPointerSettings(expected.focusFollowsPointer, expected.focusFollowsPointerWhenTerminalOpen),
                       L"Failed to set the independent Preferences Mouse pane-focus toggles.");
         Common::Settings::MouseSettings actual{};
         state.Require(DebugGetPreferencesMouseFocusFollowsPointerSettings(actual) && actual == expected,
                       L"Preferences Mouse pane-focus toggles did not update the working settings draft independently.");
 
-        const bool expectedDirty              = expected != Common::Settings::MouseSettings{};
+        const bool expectedDirty               = expected != Common::Settings::MouseSettings{};
         const PreferencesDebugSnapshot current = captureSnapshot();
         state.Require(current.dirty == expectedDirty && current.shellApplyButtonEnabled == expectedDirty,
                       L"Preferences Mouse draft changes did not keep the shared dirty state and visible Apply button synchronized.");
@@ -4847,8 +4844,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
     const HWND shellHost            = DebugGetPreferencesShellHostHandle();
     const std::wstring applyCaption = LoadStringResource(nullptr, IDS_BTN_APPLY);
-    state.Require(InvokeVisibleDescendantByNameWithMessagePump(
-                      shellHost, UIA_ButtonControlTypeId, applyCaption, L"Preferences Mouse shell Apply invoke"),
+    state.Require(InvokeVisibleDescendantByNameWithMessagePump(shellHost, UIA_ButtonControlTypeId, applyCaption, L"Preferences Mouse shell Apply invoke"),
                   L"Enabled Preferences Apply button did not accept the live UI Automation invoke.");
     PumpPendingMessages();
 
@@ -4859,7 +4855,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         while (std::chrono::steady_clock::now() < deadline)
         {
             PumpPendingMessages();
-            persisted = {};
+            persisted            = {};
             const HRESULT loadHr = Common::Settings::TryLoadSettingsNoRecovery(L"RedSalamander", persisted);
             if (loadHr == S_OK && persisted.mouse.has_value() && persisted.mouse.value().focusFollowsPointer &&
                 persisted.mouse.value().focusFollowsPointerWhenTerminalOpen)
@@ -4871,19 +4867,16 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
         persisted = {};
         return Common::Settings::TryLoadSettingsNoRecovery(L"RedSalamander", persisted) == S_OK && persisted.mouse.has_value() &&
-            persisted.mouse.value().focusFollowsPointer && persisted.mouse.value().focusFollowsPointerWhenTerminalOpen;
+               persisted.mouse.value().focusFollowsPointer && persisted.mouse.value().focusFollowsPointerWhenTerminalOpen;
     };
 
-    state.Require(g_settings.mouse.has_value() && g_settings.mouse.value().focusFollowsPointer &&
-                      g_settings.mouse.value().focusFollowsPointerWhenTerminalOpen,
+    state.Require(g_settings.mouse.has_value() && g_settings.mouse.value().focusFollowsPointer && g_settings.mouse.value().focusFollowsPointerWhenTerminalOpen,
                   L"Preferences Apply did not commit the Mouse draft to the running settings snapshot.");
     state.Require(waitForPersistedMouse(), L"Preferences Apply did not serialize both Mouse settings to the main settings document.");
     state.Require(persisted.theme.currentThemeId == expectedThemeId,
                   L"Preferences Mouse Apply dropped an unrelated theme setting while merging the main settings document.");
-    state.Require(! persisted.shortcuts.has_value(),
-                  L"Preferences Apply should keep factory-default shortcuts pruned from the canonical settings document.");
-    state.Require(g_settings.shortcuts.has_value(),
-                  L"Preferences Apply did not rematerialize factory-default shortcuts in the running settings snapshot.");
+    state.Require(! persisted.shortcuts.has_value(), L"Preferences Apply should keep factory-default shortcuts pruned from the canonical settings document.");
+    state.Require(g_settings.shortcuts.has_value(), L"Preferences Apply did not rematerialize factory-default shortcuts in the running settings snapshot.");
     if (g_settings.shortcuts.has_value())
     {
         ShortcutManager runtimeShortcuts;
@@ -4893,8 +4886,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         state.Require(functionBarCommand.has_value() && functionBarCommand.value() == L"cmd/pane/view",
                       L"Preferences Apply broke the live F3 Function Bar association.");
 
-        const std::optional<std::wstring_view> applicationCommand =
-            runtimeShortcuts.FindApplicationCommand(VK_OEM_COMMA, ShortcutManager::kModCtrl);
+        const std::optional<std::wstring_view> applicationCommand = runtimeShortcuts.FindApplicationCommand(VK_OEM_COMMA, ShortcutManager::kModCtrl);
         state.Require(applicationCommand.has_value() && applicationCommand.value() == L"cmd/app/preferences",
                       L"Preferences Apply broke the live Ctrl+Comma application shortcut association.");
 
@@ -4909,8 +4901,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                   L"Preferences Mouse Apply did not advance the baseline and disable Apply after persistence.");
 
     state.Require(DebugCancelPreferencesDialog(), L"Failed to cancel Preferences after Mouse pane-focus settings validation.");
-    state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(2000ms)),
-                  L"Preferences window did not close after Mouse pane-focus settings validation.");
+    state.Require(WaitForWindowClosed(prefs, SelfTest::Scale(2000ms)), L"Preferences window did not close after Mouse pane-focus settings validation.");
     return state.failure.empty();
 }
 
@@ -5142,9 +5133,9 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 }
 
 [[nodiscard]] std::wstring DescribePreferencesReverseNavigationStateForSelfTest(bool capturedSnapshot,
-                                                                                 const PreferencesDebugSnapshot& snapshot,
-                                                                                 HWND prefs,
-                                                                                 HWND categoryTreeHost)
+                                                                                const PreferencesDebugSnapshot& snapshot,
+                                                                                HWND prefs,
+                                                                                HWND categoryTreeHost)
 {
     const HWND focused = GetFocus();
     return std::format(L"capturedSnapshot={} category={} pageTitle='{}' treeFocused={} treeDxFocus={} treeSelected={} selectedVisibleIndex={} "
@@ -5276,7 +5267,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         do
         {
             PumpPendingMessages();
-            snapshot = {};
+            snapshot            = {};
             const bool captured = DebugGetPreferencesDialogSnapshot(snapshot);
             if (captured && categoryTreeReadyForKey(snapshot, expectedCategory, expectedTitle))
             {
@@ -5290,7 +5281,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                         snapshot = std::move(settledSnapshot);
                         return true;
                     }
-                    snapshot = std::move(settledSnapshot);
+                    snapshot      = std::move(settledSnapshot);
                     stableSamples = 0u;
                 }
             }
@@ -5363,9 +5354,9 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                   L"Failed to reset the Preferences category tree to General before reverse keyboard-navigation test.");
     state.Require(DebugFocusPreferencesCategoryTree(),
                   std::format(L"Failed to focus the Preferences DxUi category tree before reverse keyboard-navigation test; {}.", describeCurrentState(false)));
-    state.Require(waitForCategoryTreeReadyForKey(kPrefCategoryGeneral, LoadStringResource(nullptr, IDS_PREFS_CAT_GENERAL), L"initial reverse-navigation reset", true),
-                  std::format(L"Preferences category tree did not become ready on General before reverse keyboard-navigation test; {}.",
-                              describeCurrentState()));
+    state.Require(
+        waitForCategoryTreeReadyForKey(kPrefCategoryGeneral, LoadStringResource(nullptr, IDS_PREFS_CAT_GENERAL), L"initial reverse-navigation reset", true),
+        std::format(L"Preferences category tree did not become ready on General before reverse keyboard-navigation test; {}.", describeCurrentState()));
 
     const auto sendCategoryTreeKey =
         [&](const PrefCategory expectedBeforeCategory, std::wstring_view expectedBeforeTitle, const UINT virtualKey, std::wstring_view context) noexcept
@@ -5378,18 +5369,15 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         }
 
         state.Require(waitForCategoryTreeReadyForKey(expectedBeforeCategory, expectedBeforeTitle, std::format(L"{} pre-key", context), false),
-                      std::format(L"Preferences category tree did not settle on the expected pre-key state before {}; {}.",
-                                  context,
-                                  describeCurrentState()));
+                      std::format(L"Preferences category tree did not settle on the expected pre-key state before {}; {}.", context, describeCurrentState()));
         if (! state.failure.empty())
         {
             return false;
         }
 
-        state.Require(DebugSendPreferencesCategoryTreeKey(virtualKey),
-                      std::format(L"Preferences category tree did not accept the deterministic DxUi key route before {}; {}.",
-                                  context,
-                                  describeCurrentState()));
+        state.Require(
+            DebugSendPreferencesCategoryTreeKey(virtualKey),
+            std::format(L"Preferences category tree did not accept the deterministic DxUi key route before {}; {}.", context, describeCurrentState()));
         PumpPendingMessages();
         return state.failure.empty();
     };
@@ -5398,8 +5386,9 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     {
         return false;
     }
-    state.Require(waitForCategoryTreeReadyForKey(kPrefCategoryAdvanced, LoadStringResource(nullptr, IDS_PREFS_CAT_ADVANCED), L"reverse-navigation VK_END", false),
-                  std::format(L"VK_END should move Preferences reverse-navigation setup to the focused Advanced category; {}.", describeCurrentState()));
+    state.Require(
+        waitForCategoryTreeReadyForKey(kPrefCategoryAdvanced, LoadStringResource(nullptr, IDS_PREFS_CAT_ADVANCED), L"reverse-navigation VK_END", false),
+        std::format(L"VK_END should move Preferences reverse-navigation setup to the focused Advanced category; {}.", describeCurrentState()));
 
     if (! sendCategoryTreeKey(kPrefCategoryAdvanced, LoadStringResource(nullptr, IDS_PREFS_CAT_ADVANCED), VK_UP, L"reverse-navigation VK_UP"))
     {
@@ -5412,29 +5401,32 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     {
         return false;
     }
-    state.Require(waitForCategoryTreeReadyForKey(kPrefCategoryAdvanced, LoadStringResource(nullptr, IDS_PREFS_CAT_ADVANCED), L"reverse-navigation VK_DOWN", false),
-                  std::format(L"VK_DOWN should move Preferences navigation from Monitor back to the focused Advanced category; {}.", describeCurrentState()));
+    state.Require(
+        waitForCategoryTreeReadyForKey(kPrefCategoryAdvanced, LoadStringResource(nullptr, IDS_PREFS_CAT_ADVANCED), L"reverse-navigation VK_DOWN", false),
+        std::format(L"VK_DOWN should move Preferences navigation from Monitor back to the focused Advanced category; {}.", describeCurrentState()));
 
     if (! sendCategoryTreeKey(kPrefCategoryAdvanced, LoadStringResource(nullptr, IDS_PREFS_CAT_ADVANCED), VK_UP, L"second reverse-navigation VK_UP"))
     {
         return false;
     }
-    state.Require(waitForCategoryTreeReadyForKey(kPrefCategoryMonitor, LoadStringResource(nullptr, IDS_PREFS_CAT_MONITOR), L"second reverse-navigation VK_UP", false),
-                  std::format(L"VK_UP should restore Preferences navigation from Advanced to the focused Monitor category; {}.", describeCurrentState()));
+    state.Require(
+        waitForCategoryTreeReadyForKey(kPrefCategoryMonitor, LoadStringResource(nullptr, IDS_PREFS_CAT_MONITOR), L"second reverse-navigation VK_UP", false),
+        std::format(L"VK_UP should restore Preferences navigation from Advanced to the focused Monitor category; {}.", describeCurrentState()));
 
     if (! sendCategoryTreeKey(kPrefCategoryMonitor, LoadStringResource(nullptr, IDS_PREFS_CAT_MONITOR), VK_UP, L"third reverse-navigation VK_UP"))
     {
         return false;
     }
-    state.Require(waitForCategoryTreeReadyForKey(kPrefCategoryHotPaths, LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS), L"third reverse-navigation VK_UP", false),
-                  std::format(L"Each VK_UP should move Preferences navigation exactly one focused visible category upward; {}.", describeCurrentState()));
+    state.Require(
+        waitForCategoryTreeReadyForKey(kPrefCategoryHotPaths, LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS), L"third reverse-navigation VK_UP", false),
+        std::format(L"Each VK_UP should move Preferences navigation exactly one focused visible category upward; {}.", describeCurrentState()));
 
     if (! sendCategoryTreeKey(kPrefCategoryHotPaths, LoadStringResource(nullptr, IDS_PREFS_CAT_HOT_PATHS), VK_HOME, L"reverse-navigation VK_HOME"))
     {
         return false;
     }
-    bool returnedHome = waitForCategoryTreeReadyForKey(
-        kPrefCategoryGeneral, LoadStringResource(nullptr, IDS_PREFS_CAT_GENERAL), L"reverse-navigation VK_HOME", false);
+    bool returnedHome =
+        waitForCategoryTreeReadyForKey(kPrefCategoryGeneral, LoadStringResource(nullptr, IDS_PREFS_CAT_GENERAL), L"reverse-navigation VK_HOME", false);
     if (! returnedHome && DebugFocusPreferencesCategoryTree() && DebugSendPreferencesCategoryTreeKey(VK_HOME))
     {
         PumpPendingMessages();
@@ -5496,13 +5488,9 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                   L"Failed to refocus the Preferences category host after page-navigation reset.");
     PumpPendingMessages();
 
-    const auto isSameDialogAlive = [&]() noexcept
-    {
-        return GetPreferencesDialogHandle() == prefs && IsWindow(prefs) != FALSE;
-    };
+    const auto isSameDialogAlive = [&]() noexcept { return GetPreferencesDialogHandle() == prefs && IsWindow(prefs) != FALSE; };
 
-    const auto describePageNavigationState =
-        [&](std::wstring_view context, const bool snapshotAvailable, const PreferencesDebugSnapshot& value) noexcept
+    const auto describePageNavigationState = [&](std::wstring_view context, const bool snapshotAvailable, const PreferencesDebugSnapshot& value) noexcept
     {
         const HWND currentDialog = GetPreferencesDialogHandle();
         return std::format(L"{}: snapshotAvailable={}, dialogAlive={}, sameDialog={}, expectedDialog=0x{:X}, currentDialog=0x{:X}, "
@@ -5526,7 +5514,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     const auto waitForSnapshot = [&](const auto& predicate, PreferencesDebugSnapshot& outSnapshot, bool& outSnapshotAvailable) noexcept
     {
         outSnapshotAvailable = false;
-        const auto deadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+        const auto deadline  = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
         while (std::chrono::steady_clock::now() < deadline)
         {
             PumpPendingMessages();
@@ -5535,7 +5523,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                 outSnapshot = {};
                 return false;
             }
-            outSnapshot = {};
+            outSnapshot          = {};
             outSnapshotAvailable = DebugGetPreferencesDialogSnapshot(outSnapshot);
             if (outSnapshotAvailable && predicate(outSnapshot))
             {
@@ -5557,7 +5545,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
     PreferencesDebugSnapshot snapshot{};
     bool initialSnapshotAvailable = false;
-    const bool initialSettled      = waitForSnapshot(
+    const bool initialSettled     = waitForSnapshot(
         [](const PreferencesDebugSnapshot& value) noexcept
     {
         return value.currentCategory == kPrefCategoryGeneral && value.categoryTreeFocused && value.categoryTreeHasSelectedItem &&
@@ -5593,7 +5581,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
     PreferencesDebugSnapshot afterPageDown{};
     bool afterPageDownSnapshotAvailable = false;
-    const bool pageDownSettled           = waitForSnapshot(
+    const bool pageDownSettled          = waitForSnapshot(
         [&](const PreferencesDebugSnapshot& value) noexcept
     {
         return value.categoryTreeFocused && value.categoryTreeHasSelectedItem && value.categoryTreeSelectedVisibleIndex > initialSelectedVisibleIndex &&
@@ -5633,7 +5621,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
     PreferencesDebugSnapshot afterPageUp{};
     bool afterPageUpSnapshotAvailable = false;
-    const bool pageUpSettled           = waitForSnapshot(
+    const bool pageUpSettled          = waitForSnapshot(
         [&](const PreferencesDebugSnapshot& value) noexcept
     {
         return value.categoryTreeFocused && value.categoryTreeHasSelectedItem &&
@@ -5959,9 +5947,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         {
             PumpPendingMessages();
             outSnapshot = {};
-            if (DebugGetPreferencesDialogSnapshot(outSnapshot) && outSnapshot.categoryTreeFocused &&
-                outSnapshot.categoryTreeDxHostFocusControlActive && outSnapshot.categoryTreeHasSelectedItem &&
-                outSnapshot.currentCategory == expectedCategory && outSnapshot.pageTitle == expectedTitle)
+            if (DebugGetPreferencesDialogSnapshot(outSnapshot) && outSnapshot.categoryTreeFocused && outSnapshot.categoryTreeDxHostFocusControlActive &&
+                outSnapshot.categoryTreeHasSelectedItem && outSnapshot.currentCategory == expectedCategory && outSnapshot.pageTitle == expectedTitle)
             {
                 return true;
             }
@@ -5970,9 +5957,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         }
 
         outSnapshot = {};
-        return DebugGetPreferencesDialogSnapshot(outSnapshot) && outSnapshot.categoryTreeFocused &&
-               outSnapshot.categoryTreeDxHostFocusControlActive && outSnapshot.categoryTreeHasSelectedItem &&
-               outSnapshot.currentCategory == expectedCategory && outSnapshot.pageTitle == expectedTitle;
+        return DebugGetPreferencesDialogSnapshot(outSnapshot) && outSnapshot.categoryTreeFocused && outSnapshot.categoryTreeDxHostFocusControlActive &&
+               outSnapshot.categoryTreeHasSelectedItem && outSnapshot.currentCategory == expectedCategory && outSnapshot.pageTitle == expectedTitle;
     };
 
     const auto sendBoundaryKey = [&](const UINT virtualKey) noexcept
@@ -5993,8 +5979,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     {
         endSettled = waitForBoundarySnapshot(kPrefCategoryAdvanced, LoadStringResource(nullptr, IDS_PREFS_CAT_ADVANCED), afterEnd);
     }
-    state.Require(endSettled,
-                  L"Failed to capture the settled Preferences category-tree VK_END boundary state.");
+    state.Require(endSettled, L"Failed to capture the settled Preferences category-tree VK_END boundary state.");
     if (! state.failure.empty())
     {
         return false;
@@ -6022,8 +6007,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     {
         homeSettled = waitForBoundarySnapshot(kPrefCategoryGeneral, LoadStringResource(nullptr, IDS_PREFS_CAT_GENERAL), afterHome);
     }
-    state.Require(homeSettled,
-                  L"Failed to capture the settled Preferences category-tree VK_HOME boundary state.");
+    state.Require(homeSettled, L"Failed to capture the settled Preferences category-tree VK_HOME boundary state.");
     if (! state.failure.empty())
     {
         return false;
@@ -6113,7 +6097,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return false;
         }
 
-        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})), L"Failed to focus the Preferences category host for Themes header-resize validation.");
+        state.Require(FocusWindowAndWait(categoryTreeHost, SelfTest::Scale(std::chrono::milliseconds{1000})),
+                      L"Failed to focus the Preferences category host for Themes header-resize validation.");
         state.Require(DebugSelectPreferencesCategory(kPrefCategoryThemes),
                       L"Failed to select the Preferences Themes category for Themes header-resize validation.");
         PumpPendingMessages();
@@ -7764,9 +7749,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     {
         return value.currentCategory == kPrefCategoryPlugins && value.categoryTreeFocused && value.categoryTreeDxHostFocusControlActive &&
                value.categoryTreeHasSelectedItem && ! value.pluginsExpanded && value.pluginsTreeChildCount > 0u && ! value.pluginItemSelected &&
-               ! value.pluginsDetailsActive && value.pluginsPaneVisible &&
-               value.categoryTreeSelectedVisibleIndex == pluginsCategoryVisibleIndex && value.pageScrollY == baselinePageScrollY &&
-               value.currentPageDxHostResizeFailureCount == 0u && ! value.categoryTreeDxHostHasResizeFailures;
+               ! value.pluginsDetailsActive && value.pluginsPaneVisible && value.categoryTreeSelectedVisibleIndex == pluginsCategoryVisibleIndex &&
+               value.pageScrollY == baselinePageScrollY && value.currentPageDxHostResizeFailureCount == 0u && ! value.categoryTreeDxHostHasResizeFailures;
     },
                       snapshot),
                   L"VK_LEFT on the Preferences Plugins tree node should collapse the expanded Plugins branch without leaving the DX tree path.");
@@ -7781,9 +7765,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     {
         return value.currentCategory == kPrefCategoryPlugins && value.categoryTreeFocused && value.categoryTreeDxHostFocusControlActive &&
                value.categoryTreeHasSelectedItem && value.pluginsExpanded && value.pluginsTreeChildCount > 0u && ! value.pluginItemSelected &&
-               ! value.pluginsDetailsActive && value.pluginsPaneVisible &&
-               value.categoryTreeSelectedVisibleIndex == pluginsCategoryVisibleIndex && value.pageScrollY == baselinePageScrollY &&
-               value.currentPageDxHostResizeFailureCount == 0u && ! value.categoryTreeDxHostHasResizeFailures;
+               ! value.pluginsDetailsActive && value.pluginsPaneVisible && value.categoryTreeSelectedVisibleIndex == pluginsCategoryVisibleIndex &&
+               value.pageScrollY == baselinePageScrollY && value.currentPageDxHostResizeFailureCount == 0u && ! value.categoryTreeDxHostHasResizeFailures;
     },
                       snapshot),
                   L"VK_RIGHT on the collapsed Preferences Plugins tree node should re-expand the branch without leaving the DX tree path.");
@@ -7799,8 +7782,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return value.currentCategory == kPrefCategoryPlugins && value.categoryTreeFocused && value.categoryTreeDxHostFocusControlActive &&
                value.categoryTreeHasSelectedItem && value.pluginsExpanded && value.pluginsTreeChildCount > 0u && value.pluginItemSelected &&
                value.pluginsDetailsActive && ! value.pluginsSelectedPluginIdText.empty() && value.pluginsPaneVisible &&
-               value.categoryTreeSelectedVisibleIndex > pluginsCategoryVisibleIndex &&
-               value.currentPageDxHostResizeFailureCount == 0u && ! value.categoryTreeDxHostHasResizeFailures;
+               value.categoryTreeSelectedVisibleIndex > pluginsCategoryVisibleIndex && value.currentPageDxHostResizeFailureCount == 0u &&
+               ! value.categoryTreeDxHostHasResizeFailures;
     },
                       snapshot),
                   L"VK_RIGHT on the expanded Preferences Plugins tree node should enter the first child row and activate its detail page on the DX tree path.");
@@ -7827,40 +7810,41 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
 [[nodiscard]] std::wstring DescribePreferencesCategoryChurnSnapshotForSelfTest(const PreferencesDebugSnapshot& snapshot)
 {
-    return std::format(L"category={} title='{}' treeRender={} treeInvalidate={} selectedVisibleIndex={} firstVisibleIndex={} treeFocused={} treeFocusControl={} "
-                       L"nativeFocus=0x{:X} focusId={} focusClass='{}' focusInPage={} active=0x{:X} foreground=0x{:X} foregroundPid={} treeSelected={} "
-                       L"treeScrollDip={} treeScrollbar={} pageScroll={}/{} pageHostScroll={} pageHostRender={} pageRenderTotal={} "
-                       L"visibleChildren={} visibleCurrentPageChildren={} currentPageDxHosts={} currentPageResizeFailures={} shellResizeFailures={} "
-                       L"treeResizeFailures={}",
-                       static_cast<int>(snapshot.currentCategory),
-                       snapshot.pageTitle,
-                       snapshot.categoryTreeDxHostRenderCount,
-                       snapshot.categoryTreeDxHostInvalidateCount,
-                       snapshot.categoryTreeSelectedVisibleIndex,
-                       snapshot.categoryTreeFirstVisibleIndex,
-                       snapshot.categoryTreeFocused,
-                       snapshot.categoryTreeDxHostFocusControlActive,
-                       snapshot.nativeFocusWindow,
-                       snapshot.nativeFocusControlId,
-                       snapshot.nativeFocusClassName,
-                       snapshot.nativeFocusWithinPageHost,
-                       snapshot.activeWindow,
-                       snapshot.foregroundWindow,
-                       snapshot.foregroundProcessId,
-                       snapshot.categoryTreeHasSelectedItem,
-                       snapshot.categoryTreeVerticalScrollDip,
-                       snapshot.categoryTreeHasVerticalScrollbar,
-                       snapshot.pageScrollY,
-                       snapshot.pageScrollMaxY,
-                       snapshot.pageHostShowsVerticalScroll,
-                       snapshot.pageHostDxHostRenderCount,
-                       snapshot.currentPageDxHostRenderCountTotal,
-                       snapshot.visibleChildWindowCount,
-                       snapshot.visibleCurrentPageChildWindowCount,
-                       snapshot.currentPageRenderedDxHostCount,
-                       snapshot.currentPageDxHostResizeFailureCount,
-                       snapshot.shellDxHostResizeFailureCount,
-                       snapshot.categoryTreeDxHostHasResizeFailures);
+    return std::format(
+        L"category={} title='{}' treeRender={} treeInvalidate={} selectedVisibleIndex={} firstVisibleIndex={} treeFocused={} treeFocusControl={} "
+        L"nativeFocus=0x{:X} focusId={} focusClass='{}' focusInPage={} active=0x{:X} foreground=0x{:X} foregroundPid={} treeSelected={} "
+        L"treeScrollDip={} treeScrollbar={} pageScroll={}/{} pageHostScroll={} pageHostRender={} pageRenderTotal={} "
+        L"visibleChildren={} visibleCurrentPageChildren={} currentPageDxHosts={} currentPageResizeFailures={} shellResizeFailures={} "
+        L"treeResizeFailures={}",
+        static_cast<int>(snapshot.currentCategory),
+        snapshot.pageTitle,
+        snapshot.categoryTreeDxHostRenderCount,
+        snapshot.categoryTreeDxHostInvalidateCount,
+        snapshot.categoryTreeSelectedVisibleIndex,
+        snapshot.categoryTreeFirstVisibleIndex,
+        snapshot.categoryTreeFocused,
+        snapshot.categoryTreeDxHostFocusControlActive,
+        snapshot.nativeFocusWindow,
+        snapshot.nativeFocusControlId,
+        snapshot.nativeFocusClassName,
+        snapshot.nativeFocusWithinPageHost,
+        snapshot.activeWindow,
+        snapshot.foregroundWindow,
+        snapshot.foregroundProcessId,
+        snapshot.categoryTreeHasSelectedItem,
+        snapshot.categoryTreeVerticalScrollDip,
+        snapshot.categoryTreeHasVerticalScrollbar,
+        snapshot.pageScrollY,
+        snapshot.pageScrollMaxY,
+        snapshot.pageHostShowsVerticalScroll,
+        snapshot.pageHostDxHostRenderCount,
+        snapshot.currentPageDxHostRenderCountTotal,
+        snapshot.visibleChildWindowCount,
+        snapshot.visibleCurrentPageChildWindowCount,
+        snapshot.currentPageRenderedDxHostCount,
+        snapshot.currentPageDxHostResizeFailureCount,
+        snapshot.shellDxHostResizeFailureCount,
+        snapshot.categoryTreeDxHostHasResizeFailures);
 }
 
 [[nodiscard]] bool TestPreferencesDialogCategorySwitchesDoNotChurnTreeHost(HWND mainWindow, CaseState& state) noexcept
@@ -7893,12 +7877,11 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return false;
     }
 
-    const int categoryDpi = static_cast<int>(GetDpiForWindow(categoryTreeHost));
     bool desktopFocusContended = false;
     POINT originalCursor{};
     const bool originalCursorAvailable = GetCursorPos(&originalCursor) != FALSE;
     DirectedSelfTestInputWarning inputWarning;
-    const auto restoreCursor = wil::scope_exit([&]() noexcept
+    const auto restoreCursor         = wil::scope_exit([&]() noexcept
     {
         if (originalCursorAvailable)
         {
@@ -7925,7 +7908,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return state.failure.empty();
     };
 
-    const auto clickCategory = [&](const LPARAM point, const PrefCategory expectedCategory, const UINT expectedTitleId, std::wstring_view phase) noexcept
+    const auto clickCategory = [&](const PrefCategory expectedCategory, const UINT expectedTitleId, std::wstring_view phase) noexcept
     {
         constexpr uint64_t kMaxExpectedCategoryTreeInvalidateDelta = 32u;
 
@@ -7934,6 +7917,18 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return;
         }
 
+        RECT categoryRect{};
+        state.Require(DebugGetPreferencesCategoryClientRect(expectedCategory, categoryRect),
+                      L"The requested Preferences category must expose a visible client rectangle.");
+        RECT treeClient{};
+        state.Require(GetClientRect(categoryTreeHost, &treeClient) != FALSE && ! IsRectEmpty(&categoryRect) && categoryRect.left >= treeClient.left &&
+                          categoryRect.top >= treeClient.top && categoryRect.right <= treeClient.right && categoryRect.bottom <= treeClient.bottom,
+                      L"The Preferences category click rectangle must be clipped to the visible client area.");
+        if (! state.failure.empty())
+        {
+            return;
+        }
+        const LPARAM point = MAKELPARAM((categoryRect.left + categoryRect.right) / 2, (categoryRect.top + categoryRect.bottom) / 2);
         POINT cursorPoint{static_cast<short>(LOWORD(point)), static_cast<short>(HIWORD(point))};
         state.Require(ClientToScreen(categoryTreeHost, &cursorPoint) != FALSE,
                       L"Failed to convert the Preferences category click point to screen coordinates.");
@@ -7974,31 +7969,34 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                 desktopFocusContended = true;
                 return;
             }
-            state.Require(false, L"Preferences category tree render count did not settle after category click.");
+            state.Require(false,
+                          std::format(L"Preferences category tree render count did not settle after category click. phase={} before=[{}] after=[{}]",
+                                      phase,
+                                      DescribePreferencesCategoryChurnSnapshotForSelfTest(before),
+                                      DescribePreferencesCategoryChurnSnapshotForSelfTest(after)));
             return;
         }
         if (after.foregroundWindow != before.foregroundWindow || after.foregroundProcessId != before.foregroundProcessId)
         {
             desktopFocusContended = true;
-            SelfTest::AppendSelfTestTrace(std::format(
-                L"Preferences category churn {}: foreground changed during measurement; before=0x{:X}/{} after=0x{:X}/{}.",
-                phase,
-                before.foregroundWindow,
-                before.foregroundProcessId,
-                after.foregroundWindow,
-                after.foregroundProcessId));
+            SelfTest::AppendSelfTestTrace(
+                std::format(L"Preferences category churn {}: foreground changed during measurement; before=0x{:X}/{} after=0x{:X}/{}.",
+                            phase,
+                            before.foregroundWindow,
+                            before.foregroundProcessId,
+                            after.foregroundWindow,
+                            after.foregroundProcessId));
             return;
         }
 
         const std::wstring expectedTitle   = LoadStringResource(nullptr, expectedTitleId);
         const uint64_t treeRenderDelta     = after.categoryTreeDxHostRenderCount - before.categoryTreeDxHostRenderCount;
         const uint64_t treeInvalidateDelta = after.categoryTreeDxHostInvalidateCount - before.categoryTreeDxHostInvalidateCount;
-        SelfTest::AppendSelfTestTrace(std::format(
-            L"Preferences category churn {}: after renderDelta={} invalidateDelta={} {}",
-            phase,
-            treeRenderDelta,
-            treeInvalidateDelta,
-            DescribePreferencesCategoryChurnSnapshotForSelfTest(after)));
+        SelfTest::AppendSelfTestTrace(std::format(L"Preferences category churn {}: after renderDelta={} invalidateDelta={} {}",
+                                                  phase,
+                                                  treeRenderDelta,
+                                                  treeInvalidateDelta,
+                                                  DescribePreferencesCategoryChurnSnapshotForSelfTest(after)));
 
         state.Require(after.currentCategory == expectedCategory, L"Preferences category click did not update the active category.");
         state.Require(after.pageTitle == expectedTitle, L"Preferences category click did not update the page title.");
@@ -8007,18 +8005,18 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         state.Require(after.categoryTreeHasSelectedItem, L"Preferences category tree lost its selected item after category navigation.");
         state.Require(after.visibleCurrentPageChildWindowCount == 1u,
                       L"Preferences category navigation should keep exactly one visible current page host child.");
-        state.Require(after.currentPageRenderedDxHostCount == 1u,
-                      L"Preferences category navigation should leave exactly one rendered current-page DxUi host.");
+        state.Require(after.currentPageRenderedDxHostCount == 1u, L"Preferences category navigation should leave exactly one rendered current-page DxUi host.");
         state.Require(after.currentPageDxHostResizeFailureCount == 0u, L"Preferences active page reported DX resize failures after category navigation.");
         state.Require(after.shellDxHostResizeFailureCount == 0u, L"Preferences shell reported DX resize failures after category navigation.");
         state.Require(! after.categoryTreeDxHostHasResizeFailures, L"Preferences category tree host reported DX resize failures after category navigation.");
 
-        state.Require(treeRenderDelta <= treeInvalidateDelta + 1u,
-                      std::format(L"Preferences category-tree renders should be attributable to input invalidation plus at most one explicit page-switch redraw; "
-                                  L"renderDelta={}, invalidateDelta={}, phase={}",
-                                  treeRenderDelta,
-                                  treeInvalidateDelta,
-                                  phase));
+        state.Require(
+            treeRenderDelta <= treeInvalidateDelta + 1u,
+            std::format(L"Preferences category-tree renders should be attributable to input invalidation plus at most one explicit page-switch redraw; "
+                        L"renderDelta={}, invalidateDelta={}, phase={}",
+                        treeRenderDelta,
+                        treeInvalidateDelta,
+                        phase));
         state.Require(treeRenderDelta > 0u && treeInvalidateDelta <= kMaxExpectedCategoryTreeInvalidateDelta,
                       std::format(L"Preferences category tree should settle without runaway invalidation during {}; category {}; saw {} render(s) from "
                                   L"{} invalidation(s), invalidationLimit={}, before=[{}], after=[{}], expectedTitle='{}'.",
@@ -8032,17 +8030,11 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                                   expectedTitle));
     };
 
-    const LPARAM panesPoint   = MAKELPARAM(MulDiv(24, categoryDpi, USER_DEFAULT_SCREEN_DPI), MulDiv(36, categoryDpi, USER_DEFAULT_SCREEN_DPI));
-    const LPARAM viewersPoint = MAKELPARAM(MulDiv(24, categoryDpi, USER_DEFAULT_SCREEN_DPI), MulDiv(60, categoryDpi, USER_DEFAULT_SCREEN_DPI));
-    const LPARAM generalPoint = MAKELPARAM(MulDiv(24, categoryDpi, USER_DEFAULT_SCREEN_DPI), MulDiv(12, categoryDpi, USER_DEFAULT_SCREEN_DPI));
-
     state.Require(focusCategoryTreeHost(L"stale main-window focus-restore probe"),
                   L"Preferences category tree could not be focused before the stale main-window focus-restore probe.");
     PreferencesDebugSnapshot staleRestoreBefore{};
-    state.Require(DebugGetPreferencesDialogSnapshot(staleRestoreBefore),
-                  L"Could not capture Preferences before the stale main-window focus-restore probe.");
-    state.Require(PostMessageW(mainWindow, WndMsg::kPaneRestoreFolderFocus, 0, 0) != FALSE,
-                  L"Could not queue the stale main-window focus-restore probe.");
+    state.Require(DebugGetPreferencesDialogSnapshot(staleRestoreBefore), L"Could not capture Preferences before the stale main-window focus-restore probe.");
+    state.Require(PostMessageW(mainWindow, WndMsg::kPaneRestoreFolderFocus, 0, 0) != FALSE, L"Could not queue the stale main-window focus-restore probe.");
     PumpPendingMessages();
     PreferencesDebugSnapshot staleRestoreSnapshot{};
     state.Require(DebugGetPreferencesDialogSnapshot(staleRestoreSnapshot), L"Could not capture Preferences after the stale main-window focus-restore probe.");
@@ -8059,7 +8051,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return false;
     }
 
-    clickCategory(panesPoint, kPrefCategoryPanes, IDS_PREFS_CAT_PANES, L"initial panes");
+    clickCategory(kPrefCategoryPanes, IDS_PREFS_CAT_PANES, L"initial panes");
     if (desktopFocusContended)
     {
         return state.Skip(L"Preferences category churn requires a stable foreground window; the desktop foreground changed during measurement.");
@@ -8069,7 +8061,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return false;
     }
 
-    clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS, L"initial viewers");
+    clickCategory(kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS, L"initial viewers");
     if (desktopFocusContended)
     {
         return state.Skip(L"Preferences category churn requires a stable foreground window; the desktop foreground changed during measurement.");
@@ -8079,7 +8071,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
         return false;
     }
 
-    clickCategory(generalPoint, kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL, L"initial general");
+    clickCategory(kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL, L"initial general");
     if (desktopFocusContended)
     {
         return state.Skip(L"Preferences category churn requires a stable foreground window; the desktop foreground changed during measurement.");
@@ -8091,7 +8083,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
     for (size_t iteration = 0; iteration < 8u; ++iteration)
     {
-        clickCategory(panesPoint, kPrefCategoryPanes, IDS_PREFS_CAT_PANES, std::format(L"loop {} panes", iteration + 1u));
+        clickCategory(kPrefCategoryPanes, IDS_PREFS_CAT_PANES, std::format(L"loop {} panes", iteration + 1u));
         if (desktopFocusContended)
         {
             return state.Skip(L"Preferences category churn requires a stable foreground window; the desktop foreground changed during measurement.");
@@ -8101,7 +8093,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return false;
         }
 
-        clickCategory(viewersPoint, kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS, std::format(L"loop {} viewers", iteration + 1u));
+        clickCategory(kPrefCategoryViewers, IDS_PREFS_CAT_VIEWERS, std::format(L"loop {} viewers", iteration + 1u));
         if (desktopFocusContended)
         {
             return state.Skip(L"Preferences category churn requires a stable foreground window; the desktop foreground changed during measurement.");
@@ -8111,7 +8103,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
             return false;
         }
 
-        clickCategory(generalPoint, kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL, std::format(L"loop {} general", iteration + 1u));
+        clickCategory(kPrefCategoryGeneral, IDS_PREFS_CAT_GENERAL, std::format(L"loop {} general", iteration + 1u));
         if (desktopFocusContended)
         {
             return state.Skip(L"Preferences category churn requires a stable foreground window; the desktop foreground changed during measurement.");
@@ -8344,8 +8336,8 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
 
         const POINT coldWheelPoint{pageHostRect.left + std::max<LONG>(1, pageHostWidth / 2),
                                    pageHostRect.top + std::min<LONG>(std::max<LONG>(8, pageHostHeight / 4), pageHostHeight - 1)};
-        HWND coldWindowAtWheelPoint = nullptr;
-        const HWND prefsRoot         = GetAncestor(prefs, GA_ROOT);
+        HWND coldWindowAtWheelPoint   = nullptr;
+        const HWND prefsRoot          = GetAncestor(prefs, GA_ROOT);
         const auto foregroundDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(std::chrono::milliseconds{1000});
         do
         {
@@ -9100,7 +9092,7 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
     }
 
     const Common::Settings::EditorFileActionsSettings editorsBefore = g_settings.fileActions.editors;
-    const auto restoreEditors                                      = wil::scope_exit([&]() noexcept { g_settings.fileActions.editors = editorsBefore; });
+    const auto restoreEditors                                       = wil::scope_exit([&]() noexcept { g_settings.fileActions.editors = editorsBefore; });
 
     const auto makeExternalEditorAction = [](std::wstring_view id, std::wstring_view name) noexcept
     {
@@ -9151,20 +9143,19 @@ void RequireUsefulIconCachePerfRows(CaseState& state) noexcept
                                    const auto& verifyPageStats) noexcept
     {
         PreferencesDebugSnapshot snapshot{};
-        const bool settled = SelectPreferencesCategoryAndWaitForStableSurface(
-            expectedCategory,
-            [&](const PreferencesDebugSnapshot& value) noexcept
-        { return value.pageTitle == expectedTitle && value.pageDescription == expectedDescription && value.currentPageDxHostResizeFailureCount == 0u; },
-            snapshot);
-        state.Require(settled,
-                      std::format(L"Preferences rapid-switch test did not settle to category {} from point {:#x}; actualCategory={}, title='{}', description='{}', "
-                                  L"pageResizeFailures={}.",
-                                  static_cast<int>(expectedCategory),
-                                  static_cast<unsigned long long>(point),
-                                  static_cast<int>(snapshot.currentCategory),
-                                  snapshot.pageTitle,
-                                  snapshot.pageDescription,
-                                  snapshot.currentPageDxHostResizeFailureCount));
+        const bool settled = SelectPreferencesCategoryAndWaitForStableSurface(expectedCategory, [&](const PreferencesDebugSnapshot& value) noexcept {
+            return value.pageTitle == expectedTitle && value.pageDescription == expectedDescription && value.currentPageDxHostResizeFailureCount == 0u;
+        }, snapshot);
+        state.Require(
+            settled,
+            std::format(L"Preferences rapid-switch test did not settle to category {} from point {:#x}; actualCategory={}, title='{}', description='{}', "
+                        L"pageResizeFailures={}.",
+                        static_cast<int>(expectedCategory),
+                        static_cast<unsigned long long>(point),
+                        static_cast<int>(snapshot.currentCategory),
+                        snapshot.pageTitle,
+                        snapshot.pageDescription,
+                        snapshot.currentPageDxHostResizeFailureCount));
         if (! state.failure.empty())
         {
             return;

@@ -1,6 +1,6 @@
 #include "NavigationViewInternal.h"
 
-#include "DxUi/DxUi.Typography.h"
+#include <DxUi/Typography.h>
 #include <windowsx.h>
 
 #include <shellapi.h>
@@ -152,8 +152,7 @@ void NavigationView::EnsureD2DResources()
 
     if (! _pathFormat)
     {
-        hr = RedSalamander::DxUi::Typography::CreateTextFormat(
-            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(breadcrumbSize), _pathFormat.put(), L"");
+        hr = DxUi::Typography::CreateTextFormat(_dwriteFactory.get(), DxUi::Typography::MakeUiTextSpec(breadcrumbSize), _pathFormat.put(), L"");
         if (SUCCEEDED(hr))
         {
             _pathFormat->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
@@ -163,8 +162,7 @@ void NavigationView::EnsureD2DResources()
 
     if (! _separatorFormat)
     {
-        hr = RedSalamander::DxUi::Typography::CreateTextFormat(
-            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiIconSpec(separatorSize), _separatorFormat.put(), L"");
+        hr = DxUi::Typography::CreateTextFormat(_dwriteFactory.get(), DxUi::Typography::MakeUiIconSpec(separatorSize), _separatorFormat.put(), L"");
         if (SUCCEEDED(hr))
         {
             _dwriteFluentIconsValid   = true;
@@ -174,8 +172,7 @@ void NavigationView::EnsureD2DResources()
         }
         else
         {
-            hr = RedSalamander::DxUi::Typography::CreateTextFormat(
-                _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(separatorSize), _separatorFormat.put(), L"");
+            hr = DxUi::Typography::CreateTextFormat(_dwriteFactory.get(), DxUi::Typography::MakeUiTextSpec(separatorSize), _separatorFormat.put(), L"");
             if (SUCCEEDED(hr))
             {
                 _dwriteFluentIconsValid   = false;
@@ -632,13 +629,8 @@ void NavigationView::RenderDriveSection()
 
         if (lineBrush && _separatorFormat)
         {
-            _d2dContext->DrawTextW(&_menuFallbackGlyph,
-                                   1u,
-                                   _separatorFormat.get(),
-                                   section1RectF,
-                                   lineBrush,
-                                   D2D1_DRAW_TEXT_OPTIONS_NO_SNAP,
-                                   DWRITE_MEASURING_MODE_NATURAL);
+            _d2dContext->DrawTextW(
+                &_menuFallbackGlyph, 1u, _separatorFormat.get(), section1RectF, lineBrush, D2D1_DRAW_TEXT_OPTIONS_NO_SNAP, DWRITE_MEASURING_MODE_NATURAL);
         }
     }
 

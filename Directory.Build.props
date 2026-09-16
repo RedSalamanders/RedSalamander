@@ -70,6 +70,8 @@
   <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj'">
     <WindowsTargetPlatformVersion>10.0.26100.0</WindowsTargetPlatformVersion>
     <PlatformToolset>v145</PlatformToolset>
+    <!-- Keep ARM64 cross-LTCG in a 64-bit host; explicit and native ARM64 selections remain authoritative. -->
+    <PreferredToolArchitecture Condition="'$(PreferredToolArchitecture)'=='' and '$(Platform)'=='ARM64' and ('$(PROCESSOR_ARCHITECTURE)'=='AMD64' or '$(PROCESSOR_ARCHITEW6432)'=='AMD64')">x64</PreferredToolArchitecture>
     <CharacterSet>Unicode</CharacterSet>
     <RSBuildEnableTests Condition="'$(RSBuildEnableTests)'=='' and ('$(Configuration)'=='Debug' or '$(Configuration)'=='ASan Debug')">true</RSBuildEnableTests>
     <RSBuildEnableTests Condition="'$(RSBuildEnableTests)'==''">false</RSBuildEnableTests>

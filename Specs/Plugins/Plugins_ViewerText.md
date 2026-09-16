@@ -154,6 +154,16 @@ either choice until the user commits a row.
 
 ## Performance Validation
 
+ViewerText snapshot messages, snapshot counters, pointer/async diagnostics and fault-injection
+hooks use `ENABLE_TESTS`, including the embedded preview snapshot bridge in the host. They must
+work in explicitly test-enabled Release as well as Debug and ASan Debug on both architectures.
+They must not depend on `_DEBUG`; ordinary builds with tests disabled omit these test-only paths.
+The existing `pane_view_options_toggle_preview_pane_tabs_and_selection`,
+`viewer_text_hex_byte_color_perf`, `viewer_text_diff_perf`,
+`cmd_viewer_text_context_menu_uses_delivered_anchor` and `cmd_viewer_text_hover_uses_delivered_point`
+Commands cases exercise the bridge, rendered text/hex/diff snapshots and delivered pointer coordinates
+without relaxing their deadlines or assertions.
+
 ViewerText diff mode treats these as protected performance scenarios:
 - parsed side-by-side open for a large multi-file patch,
 - side-by-side scroll repaint after the first visible render,

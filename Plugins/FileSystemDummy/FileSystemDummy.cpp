@@ -9,8 +9,11 @@
 #include <new>
 #include <utility>
 
+#include <optional>
+
 #include "FileSystemDummy.h"
 #include "FileSystemDummyResources.h"
+#include "FileSystemDiscoveryScope.h"
 #include "Helpers.h"
 #include "ContentDigest.h"
 #include "PlugInterfaces/Host.h"
@@ -2271,12 +2274,25 @@ HRESULT BuildFileInfoBuffer(const std::vector<DummyEntry>& entries, std::vector<
 #pragma warning(disable : 4625 4626)
 struct OperationContext
 {
+    // The discovery scope below owns a mutex and must close exactly once, so this context is pinned
+    // to one call. It is only ever a local passed by reference; say so rather than letting the
+    // compiler delete the copy and move members silently.
+    OperationContext()                                   = default;
+    OperationContext(const OperationContext&)            = delete;
+    OperationContext(OperationContext&&)                 = delete;
+    OperationContext& operator=(const OperationContext&) = delete;
+    OperationContext& operator=(OperationContext&&)      = delete;
+    ~OperationContext()                                  = default;
+
     FileSystemOperation type      = FILESYSTEM_COPY;
     IFileSystemCallback* callback = nullptr;
     void* callbackCookie          = nullptr;
     uint64_t progressStreamId     = 0;
     FileSystemOptions optionsState{};
     FileSystemOptions* options          = nullptr;
+    // One governed call is one discovery scope. Held by value so it closes when the context dies,
+    // which is what keeps the many early returns below from leaving a caller's scope open.
+    std::optional<Common::FileOperations::DiscoveryScope> discovery;
     uint64_t virtualLimitBytesPerSecond = 0;
     unsigned long latencyMilliseconds   = 0;
     std::uint64_t throughputSeed        = 0;
@@ -2321,6 +2337,7 @@ void InitializeOperationContext(OperationContext& context,
     {
         context.options = nullptr;
     }
+    context.discovery.emplace(context.options);
     context.virtualLimitBytesPerSecond = 0;
     context.latencyMilliseconds        = 0;
     context.throughputSeed             = 0;
@@ -4216,6 +4233,36 @@ uint64_t FileSystemDummy::ComputeNodeBytes(const DummyNode& node) const noexcept
         total += ComputeNodeBytes(*child);
     }
     return total;
+}
+
+// What this call has to discover, over the part of the virtual tree that actually exists. A Dummy
+// directory is generated lazily, so an ungenerated subtree is reported as one directory with no
+// descendants rather than forced into existence: discovery must not change what the provider would
+// otherwise do, and an ungenerated child count is unknown, never zero.
+void FileSystemDummy::AccumulateDiscoveredNodes(const DummyNode& node,
+                                                uint64_t& files,
+                                                uint64_t& directories,
+                                                uint64_t& bytes) const noexcept
+{
+    if (! node.isDirectory)
+    {
+        ++files;
+        bytes += node.sizeBytes;
+        return;
+    }
+
+    ++directories;
+    if (! node.childrenGenerated)
+    {
+        return;
+    }
+    for (const auto& child : node.children)
+    {
+        if (child)
+        {
+            AccumulateDiscoveredNodes(*child, files, directories, bytes);
+        }
+    }
 }
 
 bool FileSystemDummy::IsAncestor(const DummyNode& node, const DummyNode& possibleDescendant) const noexcept
@@ -6224,8 +6271,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItem(const wchar_t* sourcePath,
         return hr;
     }
 
-    uint64_t itemBytes = 0;
-    HRESULT itemHr     = S_OK;
+    uint64_t itemBytes            = 0;
+    HRESULT itemHr                = S_OK;
+    uint64_t discoveredFiles      = 0;
+    uint64_t discoveredDirectories = 0;
+    uint64_t discoveredBytes      = 0;
 
     {
         std::scoped_lock lock(_mutex);
@@ -6233,6 +6283,9 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItem(const wchar_t* sourcePath,
         itemHr                = ResolvePath(normalizedSource, &sourceNode, false, false);
         if (SUCCEEDED(itemHr))
         {
+            // Report before mutating: this is what the call found it had to do, and the source is
+            // still there to be measured.
+            AccumulateDiscoveredNodes(*sourceNode, discoveredFiles, discoveredDirectories, discoveredBytes);
             const std::filesystem::path destinationParentPath = normalizedDestination.parent_path();
             const std::wstring destinationName                = normalizedDestination.filename().wstring();
             if (destinationName.empty())
@@ -6249,6 +6302,16 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItem(const wchar_t* sourcePath,
                 }
             }
         }
+    }
+    if (context.discovery.has_value())
+    {
+        // The node is the whole of this call's work, so the total is final here, before the
+        // caller sees a byte of progress; a bulk walk keeps adding and closes after its last node.
+        if (discoveredFiles != 0u || discoveredDirectories != 0u)
+        {
+            static_cast<void>(context.discovery->AddPlan(discoveredBytes, discoveredFiles, discoveredDirectories));
+        }
+        context.discovery->Close();
     }
 
     if (SUCCEEDED(itemHr))
@@ -6364,8 +6427,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItem(const wchar_t* sourcePath,
         return hr;
     }
 
-    uint64_t itemBytes = 0;
-    HRESULT itemHr     = S_OK;
+    uint64_t itemBytes             = 0;
+    HRESULT itemHr                 = S_OK;
+    uint64_t discoveredFiles       = 0;
+    uint64_t discoveredDirectories = 0;
+    uint64_t discoveredBytes       = 0;
 
     {
         std::scoped_lock lock(_mutex);
@@ -6373,6 +6439,17 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItem(const wchar_t* sourcePath,
         itemHr                = ResolvePath(normalizedSource, &sourceNode, false, false);
         if (SUCCEEDED(itemHr))
         {
+            // A relocation moves the node itself, so the honest record is that node: a directory
+            // contributes one directory and none of its descendants, because none are visited.
+            if (sourceNode->isDirectory)
+            {
+                ++discoveredDirectories;
+            }
+            else
+            {
+                ++discoveredFiles;
+                discoveredBytes += sourceNode->sizeBytes;
+            }
             const std::filesystem::path destinationParentPath = normalizedDestination.parent_path();
             const std::wstring destinationName                = normalizedDestination.filename().wstring();
             if (destinationName.empty())
@@ -6396,6 +6473,16 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItem(const wchar_t* sourcePath,
                 }
             }
         }
+    }
+    if (context.discovery.has_value())
+    {
+        // The node is the whole of this call's work, so the total is final here, before the
+        // caller sees a byte of progress; a bulk walk keeps adding and closes after its last node.
+        if (discoveredFiles != 0u || discoveredDirectories != 0u)
+        {
+            static_cast<void>(context.discovery->AddPlan(discoveredBytes, discoveredFiles, discoveredDirectories));
+        }
+        context.discovery->Close();
     }
 
     if (SUCCEEDED(itemHr))
@@ -6511,7 +6598,10 @@ FileSystemDummy::DeleteItem(const wchar_t* path, FileSystemFlags flags, const Fi
         return hr;
     }
 
-    HRESULT itemHr = S_OK;
+    HRESULT itemHr                 = S_OK;
+    uint64_t discoveredFiles       = 0;
+    uint64_t discoveredDirectories = 0;
+    uint64_t discoveredBytes       = 0;
 
     {
         std::scoped_lock lock(_mutex);
@@ -6519,8 +6609,20 @@ FileSystemDummy::DeleteItem(const wchar_t* path, FileSystemFlags flags, const Fi
         itemHr          = ResolvePath(normalized, &node, false, false);
         if (SUCCEEDED(itemHr))
         {
+            // A delete removes everything it can reach, so it discovers the subtree it removes.
+            AccumulateDiscoveredNodes(*node, discoveredFiles, discoveredDirectories, discoveredBytes);
             itemHr = DeleteNode(*node, flags);
         }
+    }
+    if (context.discovery.has_value())
+    {
+        // The node is the whole of this call's work, so the total is final here, before the
+        // caller sees a byte of progress; a bulk walk keeps adding and closes after its last node.
+        if (discoveredFiles != 0u || discoveredDirectories != 0u)
+        {
+            static_cast<void>(context.discovery->AddPlan(discoveredBytes, discoveredFiles, discoveredDirectories));
+        }
+        context.discovery->Close();
     }
 
     if (SUCCEEDED(itemHr))
@@ -6633,8 +6735,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItem(const wchar_t* sourcePath,
         return hr;
     }
 
-    uint64_t itemBytes = 0;
-    HRESULT itemHr     = S_OK;
+    uint64_t itemBytes             = 0;
+    HRESULT itemHr                 = S_OK;
+    uint64_t discoveredFiles       = 0;
+    uint64_t discoveredDirectories = 0;
+    uint64_t discoveredBytes       = 0;
 
     {
         std::scoped_lock lock(_mutex);
@@ -6642,6 +6747,17 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItem(const wchar_t* sourcePath,
         itemHr                = ResolvePath(normalizedSource, &sourceNode, false, false);
         if (SUCCEEDED(itemHr))
         {
+            // A relocation moves the node itself, so the honest record is that node: a directory
+            // contributes one directory and none of its descendants, because none are visited.
+            if (sourceNode->isDirectory)
+            {
+                ++discoveredDirectories;
+            }
+            else
+            {
+                ++discoveredFiles;
+                discoveredBytes += sourceNode->sizeBytes;
+            }
             const std::filesystem::path destinationParentPath = normalizedDestination.parent_path();
             const std::wstring destinationName                = normalizedDestination.filename().wstring();
             if (destinationName.empty())
@@ -6665,6 +6781,16 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItem(const wchar_t* sourcePath,
                 }
             }
         }
+    }
+    if (context.discovery.has_value())
+    {
+        // The node is the whole of this call's work, so the total is final here, before the
+        // caller sees a byte of progress; a bulk walk keeps adding and closes after its last node.
+        if (discoveredFiles != 0u || discoveredDirectories != 0u)
+        {
+            static_cast<void>(context.discovery->AddPlan(discoveredBytes, discoveredFiles, discoveredDirectories));
+        }
+        context.discovery->Close();
     }
 
     context.completedBytes = 0;
@@ -6868,6 +6994,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItems(const wchar_t* const* sourc
 
         DummyNode* source            = nullptr;
         DummyNode* destinationParent = nullptr;
+        // This walk visits one node per work item, descendants included, so each resolved node is
+        // one discovery. Classified under the lock and reported after it, like the single-item routes.
+        bool discoveredNode      = false;
+        bool discoveredDirectory = false;
+        uint64_t discoveredBytes = 0;
 
         {
             std::scoped_lock lock(_mutex);
@@ -6886,6 +7017,9 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItems(const wchar_t* const* sourc
 
             if (SUCCEEDED(itemHr) && source && destinationParent)
             {
+                discoveredNode      = true;
+                discoveredDirectory = source->isDirectory;
+                discoveredBytes     = source->isDirectory ? 0u : source->sizeBytes;
                 if (source->isDirectory)
                 {
                     if (! context.recursive)
@@ -6941,6 +7075,10 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::CopyItems(const wchar_t* const* sourc
                     itemHr = CopyNode(*source, *destinationParent, work.destinationName, flags, &itemBytes);
                 }
             }
+        }
+        if (discoveredNode && context.discovery.has_value())
+        {
+            static_cast<void>(discoveredDirectory ? context.discovery->AddDirectory() : context.discovery->AddFile(discoveredBytes));
         }
 
         if (SUCCEEDED(itemHr))
@@ -7181,6 +7319,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItems(const wchar_t* const* sourc
 
         DummyNode* source            = nullptr;
         DummyNode* destinationParent = nullptr;
+        // Unlike the single-item Move, this walk visits every node of a directory it relocates, so
+        // each resolved node is one discovery. Classified under the lock and reported after it.
+        bool discoveredNode      = false;
+        bool discoveredDirectory = false;
+        uint64_t discoveredBytes = 0;
 
         {
             std::scoped_lock lock(_mutex);
@@ -7207,6 +7350,9 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItems(const wchar_t* const* sourc
 
             if (SUCCEEDED(itemHr) && source && destinationParent)
             {
+                discoveredNode      = true;
+                discoveredDirectory = source->isDirectory;
+                discoveredBytes     = source->isDirectory ? 0u : source->sizeBytes;
                 if (source->isDirectory)
                 {
                     if (! context.recursive)
@@ -7265,6 +7411,10 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::MoveItems(const wchar_t* const* sourc
                     itemHr = MoveNode(*source, *destinationParent, work.destinationName, flags, &itemBytes);
                 }
             }
+        }
+        if (discoveredNode && context.discovery.has_value())
+        {
+            static_cast<void>(discoveredDirectory ? context.discovery->AddDirectory() : context.discovery->AddFile(discoveredBytes));
         }
 
         if (SUCCEEDED(itemHr))
@@ -7435,15 +7585,24 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::DeleteItems(const wchar_t* const* pat
         const std::wstring parentText = normalized.parent_path().wstring();
         const std::wstring leafText   = normalized.filename().wstring();
 
-        HRESULT itemHr = S_OK;
+        HRESULT itemHr                 = S_OK;
+        uint64_t discoveredFiles       = 0;
+        uint64_t discoveredDirectories = 0;
+        uint64_t discoveredBytes       = 0;
         {
             std::scoped_lock lock(_mutex);
             DummyNode* node = nullptr;
             itemHr          = ResolvePath(normalized, &node, false, false);
             if (SUCCEEDED(itemHr))
             {
+                // A delete removes everything it can reach, so it discovers the subtree it removes.
+                AccumulateDiscoveredNodes(*node, discoveredFiles, discoveredDirectories, discoveredBytes);
                 itemHr = DeleteNode(*node, flags);
             }
+        }
+        if (context.discovery.has_value() && (discoveredFiles != 0u || discoveredDirectories != 0u))
+        {
+            static_cast<void>(context.discovery->AddPlan(discoveredBytes, discoveredFiles, discoveredDirectories));
         }
 
         if (SUCCEEDED(itemHr))
@@ -7583,6 +7742,11 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItems(const FileSystemRenamePai
 
         uint64_t itemBytes = 0;
         HRESULT itemHr     = S_OK;
+        // A rename relocates the node itself, so a directory discovers one directory and none of
+        // its descendants. Classified under the lock and reported after it.
+        bool discoveredNode      = false;
+        bool discoveredDirectory = false;
+        uint64_t discoveredBytes = 0;
 
         {
             std::scoped_lock lock(_mutex);
@@ -7592,6 +7756,9 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItems(const FileSystemRenamePai
 
             if (SUCCEEDED(itemHr) && source)
             {
+                discoveredNode          = true;
+                discoveredDirectory     = source->isDirectory;
+                discoveredBytes         = source->isDirectory ? 0u : source->sizeBytes;
                 DummyNode* sourceParent = source->parent;
                 if (! sourceParent)
                 {
@@ -7602,6 +7769,10 @@ HRESULT STDMETHODCALLTYPE FileSystemDummy::RenameItems(const FileSystemRenamePai
                     itemHr = MoveNode(*source, *sourceParent, item.newName, flags, &itemBytes);
                 }
             }
+        }
+        if (discoveredNode && context.discovery.has_value())
+        {
+            static_cast<void>(discoveredDirectory ? context.discovery->AddDirectory() : context.discovery->AddFile(discoveredBytes));
         }
 
         if (SUCCEEDED(itemHr))

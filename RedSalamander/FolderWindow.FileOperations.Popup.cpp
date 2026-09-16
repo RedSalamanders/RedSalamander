@@ -1,16 +1,16 @@
-#include "FolderWindow.FileOperations.Popup.h"
+﻿#include "FolderWindow.FileOperations.Popup.h"
 
-#include "DxUi/DxUi.Typography.h"
-#include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "FluentIcons.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "HostServices.h"
 #include "NavigationLocation.h"
 #include "ThroughputParsing.h"
-#include "WindowMaximizeBehavior.h"
 #include "Win32CallbackHelpers.h"
+#include "WindowMaximizeBehavior.h"
 #include "WindowSizing.h"
+#include <DxUi/DxUi.h>
+#include <DxUi/Typography.h>
 
 #include <algorithm>
 #include <array>
@@ -72,26 +72,26 @@ constexpr ULONGLONG kTaskbarListRetryDelayMs                        = 1000ull;
     return kind == Kind::FooterQueueMode || kind == Kind::TaskSpeedLimit;
 }
 
-[[nodiscard]] RedSalamander::DxUi::ButtonVariant HostedButtonVariant(FileOperationsPopupInternal::PopupHitTest::Kind kind) noexcept
+[[nodiscard]] DxUi::ButtonVariant HostedButtonVariant(FileOperationsPopupInternal::PopupHitTest::Kind kind) noexcept
 {
     using Kind = FileOperationsPopupInternal::PopupHitTest::Kind;
     if (kind == Kind::FooterToggleDetails || kind == Kind::CompletedGroupToggle || kind == Kind::TaskToggleCollapse)
     {
-        return RedSalamander::DxUi::ButtonVariant::Disclosure;
+        return DxUi::ButtonVariant::Disclosure;
     }
     if (UsesSelectorButtonChrome(kind))
     {
-        return RedSalamander::DxUi::ButtonVariant::Selector;
+        return DxUi::ButtonVariant::Selector;
     }
     if (OpensButtonFlyout(kind))
     {
-        return RedSalamander::DxUi::ButtonVariant::DropDown;
+        return DxUi::ButtonVariant::DropDown;
     }
     if (kind == FileOperationsPopupInternal::PopupHitTest::Kind::FooterOptions)
     {
-        return RedSalamander::DxUi::ButtonVariant::IconOnly;
+        return DxUi::ButtonVariant::IconOnly;
     }
-    return RedSalamander::DxUi::ButtonVariant::Standard;
+    return DxUi::ButtonVariant::Standard;
 }
 
 [[nodiscard]] std::wstring FormatSpeedLimitSelectorText(uint64_t bytesPerSecond)
@@ -738,7 +738,7 @@ void CopyPublishedConflictPolicy(const FolderWindow::FileOperationState::Task::C
 }
 
 [[nodiscard]] std::wstring ConflictActionText(ConflictAction action,
-                                              ConflictBucket bucket = ConflictBucket::Unknown,
+                                              ConflictBucket bucket         = ConflictBucket::Unknown,
                                               FileSystemOperation operation = FILESYSTEM_COPY) noexcept
 {
     switch (action)
@@ -920,10 +920,10 @@ struct GlobalFileOperationsStatusSummary
     uint32_t openDiscoveryTasks        = 0u;
     // A closed task with no total at all: nothing is known about it and it will not close later,
     // so it keeps the aggregate indeterminate (unlike an open task, which only adds to the count).
-    bool hasClosedUnknownTotals        = false;
-    double displayedBytesPerSec        = 0.0;
-    bool hasAggregateEta               = false;
-    double aggregateEtaSeconds         = 0.0;
+    bool hasClosedUnknownTotals = false;
+    double displayedBytesPerSec = 0.0;
+    bool hasAggregateEta        = false;
+    double aggregateEtaSeconds  = 0.0;
 };
 
 struct GlobalTaskbarProgressModel
@@ -1013,8 +1013,7 @@ void PublishPlannedItemTotalAfterDiscovery(FileOperationsPopupInternal::TaskSnap
         return false;
     }
     const auto phase = static_cast<FileOperations::TaskLifecyclePhase>(task.lifecyclePhase);
-    return phase == FileOperations::TaskLifecyclePhase::Preparing ||
-           phase == FileOperations::TaskLifecyclePhase::AwaitingAcceptance;
+    return phase == FileOperations::TaskLifecyclePhase::Preparing || phase == FileOperations::TaskLifecyclePhase::AwaitingAcceptance;
 }
 
 [[nodiscard]] TaskStatusKind ResolveTaskStatusKind(const FileOperationsPopupInternal::TaskSnapshot& task) noexcept
@@ -1307,8 +1306,8 @@ struct TerminalAxisBadge final
     }
     if (task.operation == FILESYSTEM_MOVE && task.retainedSourceCount > 0u)
     {
-        const UINT wording = task.retainedSourceNativeCount == task.retainedSourceCount ? IDS_FILEOPS_RESULT_MOVED_SOURCE_FOLDER_KEPT
-                                                                                        : IDS_FILEOPS_RESULT_COPIED_SOURCE_KEPT;
+        const UINT wording =
+            task.retainedSourceNativeCount == task.retainedSourceCount ? IDS_FILEOPS_RESULT_MOVED_SOURCE_FOLDER_KEPT : IDS_FILEOPS_RESULT_COPIED_SOURCE_KEPT;
         badges[count++] = TerminalAxisBadge{LoadStringResource(nullptr, wording), PopupStatusVisualTone::Warning, L"SourceRetained"};
     }
     return count;
@@ -1622,8 +1621,7 @@ struct CompletedGroupResultSummary final
                 static_cast<unsigned long>(std::clamp(std::lround(static_cast<double>(GlobalAggregateProgressFraction(summary)) * 100.0), 0L, 100L));
             statusParts.push_back(FormatStringResource(nullptr, IDS_FMT_FILEOPS_KNOWN_WORK, knownWorkPercent));
         }
-        statusParts.push_back(
-            FormatStringResource(nullptr, IDS_FMT_FILEOPS_GLOBAL_DISCOVERING_COUNT, static_cast<unsigned long>(summary.openDiscoveryTasks)));
+        statusParts.push_back(FormatStringResource(nullptr, IDS_FMT_FILEOPS_GLOBAL_DISCOVERING_COUNT, static_cast<unsigned long>(summary.openDiscoveryTasks)));
     }
 
     const std::wstring separator = LoadStringResource(nullptr, IDS_FILEOPS_GLOBAL_STATUS_SEPARATOR);
@@ -1894,7 +1892,7 @@ private:
             return;
         }
 
-        using namespace RedSalamander::DxUi;
+        using namespace DxUi;
 
         _rootStorage = std::make_unique<Panel>();
         _root        = _rootStorage.get();
@@ -2203,15 +2201,15 @@ private:
     AppTheme _theme{};
     uint64_t _initialLimitBytesPerSecond = 0;
     wil::unique_hwnd _hWnd;
-    RedSalamander::DxUi::WindowHost _dxHost;
-    std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
-    RedSalamander::DxUi::Panel* _root = nullptr;
-    RedSalamander::DxUi::ThemePalette _palette{};
-    RedSalamander::DxUi::Label* _label         = nullptr;
-    RedSalamander::DxUi::TextField* _field     = nullptr;
-    RedSalamander::DxUi::Label* _hintLabel     = nullptr;
-    RedSalamander::DxUi::Button* _okButton     = nullptr;
-    RedSalamander::DxUi::Button* _cancelButton = nullptr;
+    DxUi::WindowHost _dxHost;
+    std::unique_ptr<DxUi::Panel> _rootStorage;
+    DxUi::Panel* _root = nullptr;
+    DxUi::ThemePalette _palette{};
+    DxUi::Label* _label         = nullptr;
+    DxUi::TextField* _field     = nullptr;
+    DxUi::Label* _hintLabel     = nullptr;
+    DxUi::Button* _okButton     = nullptr;
+    DxUi::Button* _cancelButton = nullptr;
     std::wstring _validationText;
     bool _showingValidationError = false;
     bool _done                   = false;
@@ -2464,7 +2462,7 @@ float RateSampleHue(std::wstring_view sourcePath) noexcept
     }
     if (hue >= 0.0f)
     {
-        return RedSalamander::DxUi::ThroughputGraphColorFromHue(hue, theme.dark);
+        return DxUi::ThroughputGraphColorFromHue(hue, theme.dark);
     }
     const D2D1::ColorF accent = theme.navigationView.accent;
     return D2D1_COLOR_F{accent.r, accent.g, accent.b, accent.a};
@@ -2570,7 +2568,7 @@ void AddPendingHueWeight(FileOperationsPopupInternal::RateHistory& history, uint
 [[nodiscard]] bool RateHistoryGraphBandsAreActive(const FileOperationsPopupInternal::RateHistory* history, const AppTheme& theme) noexcept
 {
     const size_t maximumConcurrentColorSlots = history ? MaximumConcurrentRateHistoryColorSlots(*history) : 0u;
-    return RedSalamander::DxUi::ShouldRenderThroughputGraphBands(theme.menu.rainbowMode, true, theme.highContrast, maximumConcurrentColorSlots);
+    return DxUi::ShouldRenderThroughputGraphBands(theme.menu.rainbowMode, true, theme.highContrast, maximumConcurrentColorSlots);
 }
 
 void ResetRateStreamProgress(FileOperationsPopupInternal::RateHistory& history) noexcept
@@ -2591,15 +2589,14 @@ void SyncRateStreamBaselines(FileOperationsPopupInternal::RateHistory& history, 
         entry.completedBytes    = stream.completedBytes;
         entry.lastUpdateTick    = stream.lastUpdateTick;
         entry.assignedHue       = -1.0f;
-        entry.assignedColorSlot = RedSalamander::DxUi::ThroughputGraphSample::kInvalidColorSlot;
+        entry.assignedColorSlot = DxUi::ThroughputGraphSample::kInvalidColorSlot;
     }
 }
 
 [[nodiscard]] uint8_t AssignFirstFreeStreamColorSlot(std::array<bool, FileOperationsPopupInternal::RateHistory::kMaxHueWeightsPerSample>& occupied) noexcept
 {
     const auto available = std::ranges::find(occupied, false);
-    return available == occupied.end() ? RedSalamander::DxUi::ThroughputGraphSample::kInvalidColorSlot
-                                       : static_cast<uint8_t>(std::distance(occupied.begin(), available));
+    return available == occupied.end() ? DxUi::ThroughputGraphSample::kInvalidColorSlot : static_cast<uint8_t>(std::distance(occupied.begin(), available));
 }
 
 // The fixed slot palette keeps concurrent colors well separated while bounding
@@ -2671,7 +2668,7 @@ void AccumulateStreamHueWeights(FileOperationsPopupInternal::RateHistory& histor
         }
 
         const bool sameItem     = baseline && baseline->sourcePath == stream.sourcePath;
-        uint8_t streamColorSlot = RedSalamander::DxUi::ThroughputGraphSample::kInvalidColorSlot;
+        uint8_t streamColorSlot = DxUi::ThroughputGraphSample::kInvalidColorSlot;
         if (sameItem && baseline->assignedColorSlot < FileOperationsPopupInternal::RateHistory::kMaxHueWeightsPerSample)
         {
             streamColorSlot = baseline->assignedColorSlot;
@@ -2846,7 +2843,7 @@ void AppendRateSample(FileOperationsPopupInternal::RateHistory& history, double 
                 history.hueWeights[slot][0] = {
                     .hue       = hue,
                     .weight    = 1.0,
-                    .colorSlot = RedSalamander::DxUi::ThroughputGraphSample::kInvalidColorSlot,
+                    .colorSlot = DxUi::ThroughputGraphSample::kInvalidColorSlot,
                 };
             }
             history.hues[slot] = hue;
@@ -3293,7 +3290,7 @@ float FileOperationsPopupInternal::FileOperationsPopupState::ResolveDisclosurePr
     {
         const ULONGLONG elapsed = tick >= animation.startTick ? tick - animation.startTick : 0u;
         const float linear      = std::clamp(static_cast<float>(elapsed) / static_cast<float>(kDurationMs), 0.0f, 1.0f);
-        const float eased       = RedSalamander::DxUi::EvaluateEasing(RedSalamander::DxUi::EasingCurve::PointToPoint, linear);
+        const float eased       = DxUi::EvaluateEasing(DxUi::EasingCurve::PointToPoint, linear);
         animation.displayed     = std::lerp(animation.start, animation.target, static_cast<double>(eased));
     };
     advance();
@@ -3408,66 +3405,59 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureTextFormats() 
 
     if (! _headerFormat)
     {
-        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
-            _dwriteFactory.get(),
-            RedSalamander::DxUi::Typography::MakeUiTextSpec(DipsToPixels(12.0f, _dpi), DWRITE_FONT_WEIGHT_SEMI_BOLD),
-            _headerFormat.put(),
-            L""));
+        static_cast<void>(DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), DxUi::Typography::MakeUiTextSpec(DipsToPixels(12.0f, _dpi), DWRITE_FONT_WEIGHT_SEMI_BOLD), _headerFormat.put(), L""));
     }
 
     if (! _bodyFormat)
     {
-        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
-            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(DipsToPixels(12.0f, _dpi)), _bodyFormat.put(), L""));
+        static_cast<void>(
+            DxUi::Typography::CreateTextFormat(_dwriteFactory.get(), DxUi::Typography::MakeUiTextSpec(DipsToPixels(12.0f, _dpi)), _bodyFormat.put(), L""));
     }
 
     if (! _smallFormat)
     {
-        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
-            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(DipsToPixels(11.0f, _dpi)), _smallFormat.put(), L""));
+        static_cast<void>(
+            DxUi::Typography::CreateTextFormat(_dwriteFactory.get(), DxUi::Typography::MakeUiTextSpec(DipsToPixels(11.0f, _dpi)), _smallFormat.put(), L""));
     }
 
     if (! _graphTrailingLabelFormat)
     {
-        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
-            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(DipsToPixels(11.0f, _dpi)), _graphTrailingLabelFormat.put(), L""));
+        static_cast<void>(DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), DxUi::Typography::MakeUiTextSpec(DipsToPixels(11.0f, _dpi)), _graphTrailingLabelFormat.put(), L""));
     }
 
     if (! _buttonFormat)
     {
-        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
-            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(DipsToPixels(12.0f, _dpi)), _buttonFormat.put(), L""));
+        static_cast<void>(
+            DxUi::Typography::CreateTextFormat(_dwriteFactory.get(), DxUi::Typography::MakeUiTextSpec(DipsToPixels(12.0f, _dpi)), _buttonFormat.put(), L""));
     }
 
     if (! _buttonSmallFormat)
     {
-        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
-            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(DipsToPixels(11.0f, _dpi)), _buttonSmallFormat.put(), L""));
+        static_cast<void>(DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), DxUi::Typography::MakeUiTextSpec(DipsToPixels(11.0f, _dpi)), _buttonSmallFormat.put(), L""));
     }
 
     if (! _graphOverlayFormat)
     {
-        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
-            _dwriteFactory.get(),
-            RedSalamander::DxUi::Typography::MakeUiTextSpec(DipsToPixels(14.0f, _dpi), DWRITE_FONT_WEIGHT_SEMI_BOLD),
-            _graphOverlayFormat.put(),
-            L""));
+        static_cast<void>(DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), DxUi::Typography::MakeUiTextSpec(DipsToPixels(14.0f, _dpi), DWRITE_FONT_WEIGHT_SEMI_BOLD), _graphOverlayFormat.put(), L""));
     }
 
     if (! _statusIconFallbackFormat)
     {
-        static_cast<void>(RedSalamander::DxUi::Typography::CreateTextFormat(
-            _dwriteFactory.get(),
-            RedSalamander::DxUi::Typography::MakeUiTextSpec(DipsToPixels(14.0f, _dpi), DWRITE_FONT_WEIGHT_SEMI_BOLD),
-            _statusIconFallbackFormat.put(),
-            L""));
+        static_cast<void>(DxUi::Typography::CreateTextFormat(_dwriteFactory.get(),
+                                                             DxUi::Typography::MakeUiTextSpec(DipsToPixels(14.0f, _dpi), DWRITE_FONT_WEIGHT_SEMI_BOLD),
+                                                             _statusIconFallbackFormat.put(),
+                                                             L""));
     }
 
     if (! _statusIconFormat)
     {
         // Optional: Segoe Fluent Icons. If missing, fallback format draws standard Unicode glyphs.
-        const HRESULT hr = RedSalamander::DxUi::Typography::CreateTextFormat(
-            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiIconSpec(DipsToPixels(14.0f, _dpi)), _statusIconFormat.put(), L"");
+        const HRESULT hr =
+            DxUi::Typography::CreateTextFormat(_dwriteFactory.get(), DxUi::Typography::MakeUiIconSpec(DipsToPixels(14.0f, _dpi)), _statusIconFormat.put(), L"");
         if (FAILED(hr))
         {
             _statusIconFormat.reset();
@@ -3528,8 +3518,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureCaptionGlyphTe
 
     if (! _captionGlyphFallbackFormat)
     {
-        const HRESULT hr = RedSalamander::DxUi::Typography::CreateTextFormat(
-            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiTextSpec(20.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD), _captionGlyphFallbackFormat.put(), L"");
+        const HRESULT hr = DxUi::Typography::CreateTextFormat(
+            _dwriteFactory.get(), DxUi::Typography::MakeUiTextSpec(20.0f, DWRITE_FONT_WEIGHT_SEMI_BOLD), _captionGlyphFallbackFormat.put(), L"");
         if (FAILED(hr))
         {
             _captionGlyphFallbackFormat.reset();
@@ -3538,8 +3528,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureCaptionGlyphTe
 
     if (! _captionGlyphFormat)
     {
-        const HRESULT hr = RedSalamander::DxUi::Typography::CreateTextFormat(
-            _dwriteFactory.get(), RedSalamander::DxUi::Typography::MakeUiIconSpec(20.0f), _captionGlyphFormat.put(), L"");
+        const HRESULT hr = DxUi::Typography::CreateTextFormat(_dwriteFactory.get(), DxUi::Typography::MakeUiIconSpec(20.0f), _captionGlyphFormat.put(), L"");
         if (FAILED(hr))
         {
             _captionGlyphFormat.reset();
@@ -3680,7 +3669,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureBrushes() noex
     const D2D1::ColorF warningText = theme.folderView.warningText;
     const D2D1::ColorF errorText   = theme.folderView.errorText;
 
-    const D2D1::ColorF graphLine   = theme.fileOperations.graphLine;
+    const D2D1::ColorF graphLine = theme.fileOperations.graphLine;
 
     if (! _bgBrush)
     {
@@ -3828,6 +3817,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::EnsureBrushes() noex
 
 std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState::BuildSnapshot() const
 {
+#ifdef ENABLE_TESTS
+    if (debugVisualScenario.has_value())
+    {
+        return debugVisualScenario.value();
+    }
+#endif
     std::vector<FolderWindow::FileOperationState::Task*> tasks;
     std::vector<FolderWindow::InformationalTaskUpdate> informationalTasks;
     std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> completedTasks;
@@ -4154,20 +4149,20 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
         snap.verificationRequested                 = completed.verifiedItemCount > 0u || completed.verificationProblemItemCount > 0u;
         snap.verifiedItemCount                     = completed.verifiedItemCount;
         snap.verificationProblemItemCount          = completed.verificationProblemItemCount;
-        snap.verificationState      = static_cast<uint8_t>(completed.verificationFailedItemCount > 0u        ? FileOperations::VerificationState::Failed
-                                                           : completed.verificationCanceledItemCount > 0u    ? FileOperations::VerificationState::Canceled
-                                                           : completed.verificationUnavailableItemCount > 0u ? FileOperations::VerificationState::Unavailable
-                                                           : completed.verifiedItemCount > 0u                ? FileOperations::VerificationState::Verified
-                                                                                                             : FileOperations::VerificationState::NotRequested);
-        snap.hasIndeterminateResult = completed.indeterminateItemCount > 0u;
-        snap.interruptedMoveNotice  = completed.interruptedMoveNotice;
-        snap.interruptedOperationId = completed.interruptedOperationId;
-        snap.clipboardMoveAdmission = completed.clipboardMoveAdmission;
-        snap.clipboardMoveConsumed  = completed.clipboardMoveConsumed;
-        snap.hasSourceActionPaths   = ! completed.retainedSourcePaths.empty() || ! completed.unknownSourcePaths.empty();
-        snap.retainedSourceCount    = completed.retainedSourceCount;
+        snap.verificationState         = static_cast<uint8_t>(completed.verificationFailedItemCount > 0u        ? FileOperations::VerificationState::Failed
+                                                              : completed.verificationCanceledItemCount > 0u    ? FileOperations::VerificationState::Canceled
+                                                              : completed.verificationUnavailableItemCount > 0u ? FileOperations::VerificationState::Unavailable
+                                                              : completed.verifiedItemCount > 0u ? FileOperations::VerificationState::Verified
+                                                                                                 : FileOperations::VerificationState::NotRequested);
+        snap.hasIndeterminateResult    = completed.indeterminateItemCount > 0u;
+        snap.interruptedMoveNotice     = completed.interruptedMoveNotice;
+        snap.interruptedOperationId    = completed.interruptedOperationId;
+        snap.clipboardMoveAdmission    = completed.clipboardMoveAdmission;
+        snap.clipboardMoveConsumed     = completed.clipboardMoveConsumed;
+        snap.hasSourceActionPaths      = ! completed.retainedSourcePaths.empty() || ! completed.unknownSourcePaths.empty();
+        snap.retainedSourceCount       = completed.retainedSourceCount;
         snap.retainedSourceNativeCount = completed.retainedSourceNativeCount;
-        snap.unknownSourceCount     = completed.unknownSourceCount;
+        snap.unknownSourceCount        = completed.unknownSourceCount;
         snap.exactRetainedSourceActionAvailable = completed.clipboardMoveAdmission && NavigationLocation::IsFilePluginShortId(completed.sourcePluginShortId) &&
                                                   completed.retainedSourceCount > 0u && completed.unknownSourceCount == 0u &&
                                                   completed.exactRetainedSourceItems.size() == completed.retainedSourceCount;
@@ -4193,6 +4188,70 @@ std::vector<TaskSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
 
     return result;
 }
+
+#ifdef ENABLE_TESTS
+void FileOperationsPopupInternal::FileOperationsPopupState::DebugSetVisualScenario(std::vector<TaskSnapshot> tasks, bool collapsed, bool completedGroupExpanded)
+{
+    _collapsedTasks.clear();
+    _compactExpandedTasks.clear();
+    _taskHeightAnimations.clear();
+    _rates.clear();
+    _completedGroupExpanded     = completedGroupExpanded;
+    _maxAutoSizedWindowHeight   = 0;
+    _lastAutoSizedContentHeight = -1.0f;
+    for (auto& task : tasks)
+    {
+        task.statusKind              = ResolveTaskStatusKind(task);
+        _collapsedTasks[task.taskId] = collapsed;
+        if (task.conflict.active && ! task.conflict.metadataLoading)
+        {
+            FolderWindow::FileOperationState::Task::ConflictPromptState prompt{};
+            prompt.bucket = static_cast<FileOperations::ConflictClass>(task.conflict.bucket);
+            DebugBuildFileOpsVisualConflictPolicyForSelfTest(prompt, task.conflict.destinationMetadata.available);
+            CopyPublishedConflictPolicy(prompt, task.conflict);
+        }
+        auto& history                            = _rates[task.taskId];
+        history.initialized                      = true;
+        history.count                            = 120u;
+        history.writeIndex                       = 120u;
+        history.displayedBytesPerSec             = task.paused || task.conflict.active || task.finished || ! task.started || task.verificationActive ||
+                                                           task.operation == FILESYSTEM_DELETE || task.totalBytes == 0u
+                                                       ? 0.0
+                                                       : 64.0 * 1024.0 * 1024.0;
+        history.displayedItemsPerSec             = task.operation == FILESYSTEM_DELETE ? 24.0 : 0.0;
+        history.smoothedItemsPerSec              = history.displayedItemsPerSec;
+        history.smoothedBytesPerSec              = history.displayedBytesPerSec;
+        history.displayedVerificationBytesPerSec = task.verificationActive ? 128.0 * 1024.0 * 1024.0 : 0.0;
+        history.smoothedEtaSeconds               = task.verificationActive ? 32.0 : 80.0;
+        history.hasSmoothedEta                   = task.started && ! task.finished && ! task.paused && task.discoveryClosed;
+        history.provisionalEtaSeconds            = 80.0;
+        history.hasProvisionalEta                = task.started && ! task.discoveryClosed && ! task.paused;
+        history.streamProgressCount              = task.inFlightFileCount;
+        for (size_t i = 0u; i < task.inFlightFileCount; ++i)
+        {
+            auto& stream             = history.streamProgress[i];
+            stream.cookieKey         = task.inFlightFiles[i].cookieKey;
+            stream.progressStreamId  = task.inFlightFiles[i].progressStreamId;
+            stream.sourcePath        = task.inFlightFiles[i].sourcePath;
+            stream.assignedColorSlot = static_cast<uint8_t>(i);
+            stream.assignedHue       = static_cast<float>(i) * 137.5f;
+        }
+        for (size_t i = 0u; i < history.count; ++i)
+        {
+            history.samples[i] =
+                task.operation == FILESYSTEM_DELETE || task.totalBytes == 0u || ! task.started ? 0.0f : static_cast<float>((48u + i % 23u) * 1024u * 1024u);
+            history.verificationSamples[i] = task.verificationActive ? history.samples[i] * 2.0f : 0.0f;
+            history.hues[i]                = 210.0f;
+            history.hueWeightCounts[i]     = static_cast<uint8_t>(task.inFlightFileCount);
+            for (size_t j = 0u; j < task.inFlightFileCount; ++j)
+            {
+                history.hueWeights[i][j] = {history.streamProgress[j].assignedHue, 1.0, static_cast<uint8_t>(j)};
+            }
+        }
+    }
+    debugVisualScenario = std::move(tasks);
+}
+#endif
 
 std::vector<RateSnapshot> FileOperationsPopupInternal::FileOperationsPopupState::BuildRateSnapshot() const
 {
@@ -4288,6 +4347,12 @@ std::vector<RateSnapshot> FileOperationsPopupInternal::FileOperationsPopupState:
 
 void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexcept
 {
+#ifdef ENABLE_TESTS
+    if (debugVisualScenario.has_value())
+    {
+        return;
+    }
+#endif
     const bool capturePerf                   = Debug::Perf::IsCaptureEnabled();
     const uint64_t perfStartUs               = capturePerf ? PerfNowUs() : 0u;
     const ULONGLONG nowTick                  = GetTickCount64();
@@ -4474,12 +4539,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::UpdateRates() noexce
         if (! itemRate && ! task.discoveryClosed && ! task.paused && task.discoveredTotalBytes > task.completedBytes &&
             IsByteRateUsableForEta(history.displayedBytesPerSec))
         {
-            const double rawProvisionalSeconds =
-                static_cast<double>(task.discoveredTotalBytes - task.completedBytes) / history.displayedBytesPerSec;
-            history.provisionalEtaSeconds = history.hasProvisionalEta
-                                                ? SmoothEtaSecondsForDisplay(history.provisionalEtaSeconds, rawProvisionalSeconds, smoothingElapsedMs)
-                                                : rawProvisionalSeconds;
-            history.hasProvisionalEta     = true;
+            const double rawProvisionalSeconds = static_cast<double>(task.discoveredTotalBytes - task.completedBytes) / history.displayedBytesPerSec;
+            history.provisionalEtaSeconds      = history.hasProvisionalEta
+                                                     ? SmoothEtaSecondsForDisplay(history.provisionalEtaSeconds, rawProvisionalSeconds, smoothingElapsedMs)
+                                                     : rawProvisionalSeconds;
+            history.hasProvisionalEta          = true;
         }
         else
         {
@@ -4811,14 +4875,14 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ArmUiMotionTimer(HWN
 void FileOperationsPopupInternal::FileOperationsPopupState::DrawDxUiButtonChrome(const PopupButton& button,
                                                                                  IDWriteTextFormat* format,
                                                                                  std::wstring_view text,
-                                                                                 RedSalamander::DxUi::ButtonVariant variant) noexcept
+                                                                                 DxUi::ButtonVariant variant) noexcept
 {
     if (! _target || ! _buttonChromeBrush || ! folderWindow || ! hostLifetime.lock())
     {
         return;
     }
 
-    RedSalamander::DxUi::ButtonChromeDrawSpec spec{};
+    DxUi::ButtonChromeDrawSpec spec{};
     spec.bounds       = button.bounds;
     spec.text         = text;
     spec.variant      = variant;
@@ -4833,13 +4897,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawDxUiButtonChrome
     }
 
     const AppTheme& appTheme = folderWindow->GetTheme();
-    RedSalamander::DxUi::DrawButtonChrome(
-        _target.get(), _buttonChromeBrush.get(), format, iconFormat, MakeAppThemeDxPalette(appTheme, appTheme.windowBackground), spec);
+    DxUi::DrawButtonChrome(_target.get(), _buttonChromeBrush.get(), format, iconFormat, MakeAppThemeDxPalette(appTheme, appTheme.windowBackground), spec);
 }
 
 void FileOperationsPopupInternal::FileOperationsPopupState::DrawButton(const PopupButton& button, IDWriteTextFormat* format, std::wstring_view text) noexcept
 {
-    DrawDxUiButtonChrome(button, format, text, RedSalamander::DxUi::ButtonVariant::Standard);
+    DrawDxUiButtonChrome(button, format, text, DxUi::ButtonVariant::Standard);
 }
 
 void FileOperationsPopupInternal::FileOperationsPopupState::DrawFooterQueueModeControl(const PopupButton& button, bool queueMode) noexcept
@@ -4853,7 +4916,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawFooterQueueModeC
     DrawDxUiButtonChrome(button,
                          _buttonSmallFormat.get(),
                          queueMode ? std::wstring_view(_footerQueueText) : std::wstring_view(_footerParallelText),
-                         RedSalamander::DxUi::ButtonVariant::Selector);
+                         DxUi::ButtonVariant::Selector);
 }
 
 void FileOperationsPopupInternal::FileOperationsPopupState::DrawFooterAutoDismissControl(const PopupButton& button, bool enabled) noexcept
@@ -4927,14 +4990,14 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawMenuButton(const
                                                                            IDWriteTextFormat* format,
                                                                            std::wstring_view text) noexcept
 {
-    DrawDxUiButtonChrome(button, format, text, RedSalamander::DxUi::ButtonVariant::DropDown);
+    DrawDxUiButtonChrome(button, format, text, DxUi::ButtonVariant::DropDown);
 }
 
 void FileOperationsPopupInternal::FileOperationsPopupState::DrawSelectorButton(const PopupButton& button,
                                                                                IDWriteTextFormat* format,
                                                                                std::wstring_view text) noexcept
 {
-    DrawDxUiButtonChrome(button, format, text, RedSalamander::DxUi::ButtonVariant::Selector);
+    DrawDxUiButtonChrome(button, format, text, DxUi::ButtonVariant::Selector);
 }
 
 void FileOperationsPopupInternal::FileOperationsPopupState::DrawCheckboxBox(const D2D1_RECT_F& rect, bool checked) noexcept
@@ -4996,11 +5059,9 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawDisclosureChevro
         return;
     }
 
-    const RedSalamander::DxUi::DisclosureChevronVisualState visual =
-        RedSalamander::DxUi::ResolveDisclosureChevronVisualState(expandedProgress, RedSalamander::DxUi::ChevronDirection::Left);
-    const wchar_t fluentGlyph = visual.direction == RedSalamander::DxUi::ChevronDirection::Left ? FluentIcons::kChevronLeft : FluentIcons::kChevronDown;
-    const wchar_t fallbackGlyph =
-        visual.direction == RedSalamander::DxUi::ChevronDirection::Left ? FluentIcons::kFallbackChevronLeft : FluentIcons::kFallbackChevronDown;
+    const DxUi::DisclosureChevronVisualState visual = DxUi::ResolveDisclosureChevronVisualState(expandedProgress, DxUi::ChevronDirection::Left);
+    const wchar_t fluentGlyph                       = visual.direction == DxUi::ChevronDirection::Left ? FluentIcons::kChevronLeft : FluentIcons::kChevronDown;
+    const wchar_t fallbackGlyph = visual.direction == DxUi::ChevronDirection::Left ? FluentIcons::kFallbackChevronLeft : FluentIcons::kFallbackChevronDown;
     if (visual.rotationDegrees == 0.0f)
     {
         static_cast<void>(DrawCenteredGlyph(rc, fluentGlyph, fallbackGlyph));
@@ -5072,7 +5133,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
     for (size_t sampleOffset = 0u; sampleOffset < history.count; ++sampleOffset)
     {
         const size_t index = (history.writeIndex + RateHistory::kMaxSamples - history.count + sampleOffset) % RateHistory::kMaxSamples;
-        RedSalamander::DxUi::ThroughputGraphSample sample{};
+        DxUi::ThroughputGraphSample sample{};
         sample.value          = std::max(0.0f, history.samples[index]);
         sample.hueDegrees     = history.hues[index];
         sample.hueWeightCount = std::min<size_t>(history.hueWeightCounts[index], sample.hueWeights.size());
@@ -5094,6 +5155,22 @@ void FileOperationsPopupInternal::FileOperationsPopupState::DrawBandwidthGraph(c
 
 std::wstring FileOperationsPopupInternal::FileOperationsPopupState::HostedControlText(const PopupHitTest& hit) const
 {
+#ifdef ENABLE_TESTS
+    if (debugVisualScenario)
+    {
+        const auto fixture = std::find_if(
+            debugVisualScenario->begin(), debugVisualScenario->end(), [&](const TaskSnapshot& task) noexcept { return task.taskId == hit.taskId; });
+        if (fixture != debugVisualScenario->end())
+        {
+            if (hit.kind == PopupHitTest::Kind::TaskPause)
+                return LoadStringResource(nullptr, fixture->paused ? IDS_FILEOP_BTN_RESUME : IDS_FILEOP_BTN_PAUSE);
+            if (hit.kind == PopupHitTest::Kind::TaskSpeedLimit)
+                return FormatSpeedLimitSelectorText(fixture->desiredSpeedLimitBytesPerSecond);
+            if (hit.kind == PopupHitTest::Kind::TaskConflictAction)
+                return ConflictActionText(static_cast<ConflictAction>(hit.data), static_cast<ConflictBucket>(fixture->conflict.bucket), fixture->operation);
+        }
+    }
+#endif
     switch (hit.kind)
     {
         case PopupHitTest::Kind::FooterCancelAll: return LoadStringResource(nullptr, IDS_FILEOPS_BTN_CANCEL_ALL);
@@ -5138,12 +5215,12 @@ std::wstring FileOperationsPopupInternal::FileOperationsPopupState::HostedContro
         case PopupHitTest::Kind::TaskConflictToggleApplyToAll: return LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_APPLY_TO_ALL_SHORT);
         case PopupHitTest::Kind::TaskConflictAction:
         {
-            ConflictBucket bucket = ConflictBucket::Unknown;
+            ConflictBucket bucket         = ConflictBucket::Unknown;
             FileSystemOperation operation = FILESYSTEM_COPY;
             if (const auto* task = fileOps ? fileOps->FindTask(hit.taskId) : nullptr)
             {
                 std::scoped_lock lock(task->_conflictArbiter.mutex);
-                bucket = task->_conflictArbiter.prompt.bucket;
+                bucket    = task->_conflictArbiter.prompt.bucket;
                 operation = task->GetOperation();
             }
             return ConflictActionText(static_cast<ConflictAction>(hit.data), bucket, operation);
@@ -5385,11 +5462,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
                 const PopupHitTest hit            = _buttons[visual.index].hit;
                 const std::wstring controlText    = HostedControlText(hit);
                 const std::wstring accessibleName = HostedControlAccessibleName(hit);
-                auto* button                      = _controlsRoot->AddChild<RedSalamander::DxUi::Button>(controlText);
+                auto* button                      = _controlsRoot->AddChild<DxUi::Button>(controlText);
                 button->SetAccessibleName(accessibleName);
                 button->SetAccessibleAutomationId(std::format(L"FileOperations.Action.{}.{}.{}", static_cast<uint32_t>(hit.kind), hit.taskId, hit.data));
                 button->SetTooltipText(accessibleName != controlText ? accessibleName : std::wstring{});
-                button->SetDensity(RedSalamander::DxUi::Density::Compact);
+                button->SetDensity(DxUi::Density::Compact);
                 const auto activate = [this, hwnd, hit]
                 {
                     if (IsWindow(hwnd) != FALSE && hostLifetime.lock())
@@ -5411,7 +5488,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
             else if (visual.kind == HostedKind::Progress)
             {
                 const HostedProgressDescriptor& descriptor = _hostedProgressDescriptors[visual.index];
-                auto* progress                             = _controlsRoot->AddChild<RedSalamander::DxUi::ProgressBar>();
+                auto* progress                             = _controlsRoot->AddChild<DxUi::ProgressBar>();
                 progress->SetAccessibleAutomationId(descriptor.taskId == 0u ? L"FileOperations.Aggregate.Progress"
                                                                             : std::format(L"FileOperations.Task.{}.Progress", descriptor.taskId));
                 _hostedProgressBars[visual.index] = progress;
@@ -5419,15 +5496,15 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
             else if (visual.kind == HostedKind::Graph)
             {
                 const HostedGraphDescriptor& descriptor = _hostedGraphDescriptors[visual.index];
-                auto* graph                             = _controlsRoot->AddChild<RedSalamander::DxUi::ThroughputGraph>();
+                auto* graph                             = _controlsRoot->AddChild<DxUi::ThroughputGraph>();
                 graph->SetAccessibleAutomationId(std::format(L"FileOperations.Task.{}.ThroughputGraph", descriptor.taskId));
                 _hostedGraphs[visual.index] = graph;
             }
             else
             {
                 const HostedTooltipDescriptor& descriptor = _hostedTooltipDescriptors[visual.index];
-                auto* region                              = _controlsRoot->AddChild<RedSalamander::DxUi::Label>();
-                region->SetAccessibilityRole(RedSalamander::DxUi::AccessibilityRole::Status);
+                auto* region                              = _controlsRoot->AddChild<DxUi::Label>();
+                region->SetAccessibilityRole(DxUi::AccessibilityRole::Status);
                 region->SetAccessibleAutomationId(descriptor.automationId);
                 region->SetAccessibleName(descriptor.text);
                 region->SetAccessibleHelpText(descriptor.text);
@@ -5440,11 +5517,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
 
     for (size_t index = 0u; index < _buttons.size() && index < _hostedButtons.size(); ++index)
     {
-        const D2D1_RECT_F bounds                  = _buttons[index].bounds;
-        RedSalamander::DxUi::Button* const button = _hostedButtons[index];
-        const PopupHitTest& hit                   = _buttons[index].hit;
-        const std::wstring controlText            = HostedControlText(hit);
-        const std::wstring accessibleName         = HostedControlAccessibleName(hit);
+        const D2D1_RECT_F bounds          = _buttons[index].bounds;
+        DxUi::Button* const button        = _hostedButtons[index];
+        const PopupHitTest& hit           = _buttons[index].hit;
+        const std::wstring controlText    = HostedControlText(hit);
+        const std::wstring accessibleName = HostedControlAccessibleName(hit);
         button->SetBounds(D2D1::RectF(_controlsHost.PixelsToDip(bounds.left),
                                       _controlsHost.PixelsToDip(bounds.top),
                                       _controlsHost.PixelsToDip(bounds.right),
@@ -5456,17 +5533,17 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
 
         if (hit.kind == PopupHitTest::Kind::FooterToggleDetails)
         {
-            button->SetDisclosureCollapsedDirection(RedSalamander::DxUi::ChevronDirection::Left);
+            button->SetDisclosureCollapsedDirection(DxUi::ChevronDirection::Left);
             button->SetDisclosureExpanded(fileOps ? ! fileOps->GetPopupFooterOnly() : true);
         }
         else if (hit.kind == PopupHitTest::Kind::CompletedGroupToggle)
         {
-            button->SetDisclosureCollapsedDirection(RedSalamander::DxUi::ChevronDirection::Left);
+            button->SetDisclosureCollapsedDirection(DxUi::ChevronDirection::Left);
             button->SetDisclosureExpanded(_completedGroupExpanded);
         }
         else if (hit.kind == PopupHitTest::Kind::TaskToggleCollapse)
         {
-            button->SetDisclosureCollapsedDirection(RedSalamander::DxUi::ChevronDirection::Left);
+            button->SetDisclosureCollapsedDirection(DxUi::ChevronDirection::Left);
             button->SetDisclosureExpanded(! IsTaskCollapsedForDisplay(hit.taskId, fileOps ? fileOps->GetPopupCompactDensity() : false));
         }
         else
@@ -5592,7 +5669,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
         }
     }
 
-    const auto findPublishedActionButton = [&](uint64_t taskId, uint8_t rawAction) noexcept -> RedSalamander::DxUi::Button*
+    const auto findPublishedActionButton = [&](uint64_t taskId, uint8_t rawAction) noexcept -> DxUi::Button*
     {
         for (size_t index = 0u; index < _hostedButtonHits.size() && index < _hostedButtons.size(); ++index)
         {
@@ -5605,10 +5682,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
         return nullptr;
     };
 
-    RedSalamander::DxUi::Button* defaultButton = nullptr;
-    RedSalamander::DxUi::Button* escapeButton  = nullptr;
-    _conflictEscapeTaskId                      = 0u;
-    _conflictEscapeAction                      = 0u;
+    DxUi::Button* defaultButton = nullptr;
+    DxUi::Button* escapeButton  = nullptr;
+    _conflictEscapeTaskId       = 0u;
+    _conflictEscapeAction       = 0u;
     if (decisionTask)
     {
         defaultButton         = findPublishedActionButton(decisionTask->taskId, decisionTask->conflict.defaultAction);
@@ -5658,7 +5735,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::SyncHostedControls(H
                     announcement = std::format(L"{0}. {1}", announcement, question);
                 }
             }
-            if (RedSalamander::DxUi::RaiseWindowHostAccessibilityNotification(hwnd, announcement, std::format(L"FileOperations.Task.{}", task.taskId)))
+            if (DxUi::RaiseWindowHostAccessibilityNotification(hwnd, announcement, std::format(L"FileOperations.Task.{}", task.taskId)))
             {
                 ++_hostedAccessibilityNotificationCount;
             }
@@ -5741,7 +5818,13 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
     const bool compactDensity                               = fileOps ? fileOps->GetPopupCompactDensity() : false;
     GlobalFileOperationsStatusSummary globalSummary         = BuildGlobalStatusSummary(snapshot, &_rates);
     const bool showPauseResumeAll                           = HasFooterPauseResumeAllControl(globalSummary);
-    const bool showCancelAll                                = fileOps && fileOps->HasActiveOperations();
+    bool showCancelAll                                      = fileOps && fileOps->HasActiveOperations();
+#ifdef ENABLE_TESTS
+    if (debugVisualScenario.has_value())
+    {
+        showCancelAll = std::ranges::any_of(snapshot, [](const auto& task) { return task.kind == TaskSnapshot::Kind::FileOperation && ! task.finished; });
+    }
+#endif
     const CompletedGroupResultSummary completedGroupSummary = BuildCompletedGroupResultSummary(snapshot);
     const uint32_t completedGroupCount                      = completedGroupSummary.total;
     const bool showCompletedGroup                           = ShouldShowCompletedGroup(completedGroupCount);
@@ -6859,7 +6942,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                         }
                         _hostedProgressDescriptors.push_back(
                             HostedProgressDescriptor{barRc, task.taskId, static_cast<double>(hostedFraction) * 100.0, ! hostedHasTotal});
-
                     }
 
                     if (info.finished)
@@ -7581,7 +7663,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                 _progressItemBrush->SetColor(rowColor);
 #ifdef ENABLE_TESTS
                                 const float assignedHue      = AssignedRateStreamHue(history, inFlightEntry);
-                                const D2D1_COLOR_F bandColor = RedSalamander::DxUi::ThroughputGraphColorFromHue(assignedHue, theme.dark);
+                                const D2D1_COLOR_F bandColor = DxUi::ThroughputGraphColorFromHue(assignedHue, theme.dark);
                                 if (assignedHue >= 0.0f && rowColor.r == bandColor.r && rowColor.g == bandColor.g && rowColor.b == bandColor.b &&
                                     rowColor.a == bandColor.a)
                                 {
@@ -7868,7 +7950,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     const D2D1_RECT_F barRc = D2D1::RectF(barX, barsTop, barX + barW, barsTop + barHItem);
                     _hostedProgressDescriptors.push_back(
                         HostedProgressDescriptor{barRc, task.taskId, progressPresentation.fraction * 100.0, ! progressPresentation.determinate});
-
                 }
                 else if (hasConflictPrompt || ! progressPresentation.showTransferProgress)
                 {
@@ -7892,7 +7973,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     }
                     _hostedProgressDescriptors.push_back(
                         HostedProgressDescriptor{totalBarRc, task.taskId, std::clamp(hostedFraction, 0.0, 1.0) * 100.0, ! hostedUseBytes && ! hostedUseItems});
-
                 }
                 else
                 {
@@ -7914,7 +7994,6 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                     progressDescriptor.primarySegmentValue   = VerificationTransferProgressPercent(task);
                     progressDescriptor.secondarySegmentValue = VerificationProofProgressPercent(task);
                     _hostedProgressDescriptors.push_back(progressDescriptor);
-
                 }
 
                 {
@@ -7974,8 +8053,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::Render(HWND hwnd) no
                                 for (size_t i = 0; i < primaryActionCount; ++i)
                                 {
                                     const ConflictAction action = ConflictActionFromRaw(task.conflict.primaryActions[i]);
-                                    const std::wstring label =
-                                        ConflictActionText(action, static_cast<ConflictBucket>(task.conflict.bucket), task.operation);
+                                    const std::wstring label    = ConflictActionText(action, static_cast<ConflictBucket>(task.conflict.bucket), task.operation);
 
                                     PopupButton btn{};
                                     btn.bounds     = D2D1::RectF(xBtn, rowY, xBtn + btnW, rowYBottom);
@@ -8681,7 +8759,7 @@ PopupHitTest FileOperationsPopupInternal::FileOperationsPopupState::HitTest(floa
 }
 
 std::optional<FileOperationsPopupInternal::PopupMenuAnchor> FileOperationsPopupInternal::FileOperationsPopupState::ResolveButtonMenuAnchor(
-    HWND hwnd, const PopupHitTest& hit, RedSalamander::DxUi::ContextMenuRootVerticalPlacement placement) const noexcept
+    HWND hwnd, const PopupHitTest& hit, DxUi::ContextMenuRootVerticalPlacement placement) const noexcept
 {
     if (! hwnd || IsWindow(hwnd) == FALSE)
     {
@@ -8719,7 +8797,7 @@ std::optional<FileOperationsPopupInternal::PopupMenuAnchor> FileOperationsPopupI
 
     POINT anchor{
         static_cast<LONG>(std::lround(alignEnd ? match->bounds.right : match->bounds.left)),
-        static_cast<LONG>(std::lround(placement == RedSalamander::DxUi::ContextMenuRootVerticalPlacement::Above ? match->bounds.top : match->bounds.bottom)),
+        static_cast<LONG>(std::lround(placement == DxUi::ContextMenuRootVerticalPlacement::Above ? match->bounds.top : match->bounds.bottom)),
     };
     if (ClientToScreen(hwnd, &anchor) == FALSE)
     {
@@ -8729,7 +8807,7 @@ std::optional<FileOperationsPopupInternal::PopupMenuAnchor> FileOperationsPopupI
     PopupMenuAnchor result{};
     result.screenPoint = anchor;
     result.sessionCallbacks.rootHorizontalAlignment =
-        alignEnd ? RedSalamander::DxUi::ContextMenuRootHorizontalAlignment::End : RedSalamander::DxUi::ContextMenuRootHorizontalAlignment::Start;
+        alignEnd ? DxUi::ContextMenuRootHorizontalAlignment::End : DxUi::ContextMenuRootHorizontalAlignment::Start;
     result.sessionCallbacks.rootVerticalPlacement = placement;
     result.sessionCallbacks.minRootWidthDip       = PixelsToDips(match->bounds.right - match->bounds.left, _dpi);
     return result;
@@ -8799,29 +8877,28 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowQueueModeMenu(HW
     constexpr int kQueueCommand    = 1;
     constexpr int kParallelCommand = 2;
     const bool queueMode           = fileOps->GetQueueNewTasks();
-    std::array<RedSalamander::DxUi::MenuFlyoutItem, 2u> items{};
-    items[0].kind      = RedSalamander::DxUi::MenuItemKind::Radio;
+    std::array<DxUi::MenuFlyoutItem, 2u> items{};
+    items[0].kind      = DxUi::MenuItemKind::Radio;
     items[0].text      = LoadStringResource(nullptr, IDS_FILEOPS_BTN_MODE_QUEUE);
     items[0].commandId = kQueueCommand;
     items[0].checked   = queueMode;
-    items[1].kind      = RedSalamander::DxUi::MenuItemKind::Radio;
+    items[1].kind      = DxUi::MenuItemKind::Radio;
     items[1].text      = LoadStringResource(nullptr, IDS_FILEOPS_BTN_MODE_PARALLEL);
     items[1].commandId = kParallelCommand;
     items[1].checked   = ! queueMode;
 
-    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
-    const auto anchor =
-        ResolveButtonMenuAnchor(hwnd, PopupHitTest{PopupHitTest::Kind::FooterQueueMode, 0u, 0u}, RedSalamander::DxUi::ContextMenuRootVerticalPlacement::Above);
+    DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    const auto anchor = ResolveButtonMenuAnchor(hwnd, PopupHitTest{PopupHitTest::Kind::FooterQueueMode, 0u, 0u}, DxUi::ContextMenuRootVerticalPlacement::Above);
     const POINT point = anchor.has_value() ? anchor->screenPoint : ResolveOwnerCenterScreenPoint(hwnd);
     if (anchor.has_value())
     {
         sessionCallbacks = anchor->sessionCallbacks;
     }
-    static_cast<void>(RedSalamander::DxUi::ContextMenu::ShowAsync(hwnd,
-                                                                  point,
-                                                                  items,
-                                                                  MakeAppThemeDxPalette(folderWindow->GetTheme()),
-                                                                  [this, hwnd](std::optional<int> chosen) noexcept
+    static_cast<void>(DxUi::ContextMenu::ShowAsync(hwnd,
+                                                   point,
+                                                   items,
+                                                   MakeAppThemeDxPalette(folderWindow->GetTheme()),
+                                                   [this, hwnd](std::optional<int> chosen) noexcept
     {
         if (! chosen.has_value() || ! hwnd || IsWindow(hwnd) == FALSE || ! hostLifetime.lock() || ! fileOps)
         {
@@ -8834,7 +8911,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowQueueModeMenu(HW
             Invalidate(hwnd);
         }
     },
-                                                                  sessionCallbacks));
+                                                   sessionCallbacks));
 }
 
 void FileOperationsPopupInternal::FileOperationsPopupState::ShowFooterOptionsMenu(HWND hwnd) noexcept
@@ -8850,34 +8927,33 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowFooterOptionsMen
     const bool autoDismiss            = fileOps->GetAutoDismissSuccess();
     const bool compactDensity         = fileOps->GetPopupCompactDensity();
 
-    std::array<RedSalamander::DxUi::MenuFlyoutItem, 4u> items{};
-    items[0].kind      = RedSalamander::DxUi::MenuItemKind::Toggle;
+    std::array<DxUi::MenuFlyoutItem, 4u> items{};
+    items[0].kind      = DxUi::MenuItemKind::Toggle;
     items[0].text      = LoadStringResource(nullptr, autoDismiss ? IDS_FILEOPS_CHECK_AUTODISMISS_ON : IDS_FILEOPS_CHECK_AUTODISMISS_OFF);
     items[0].commandId = kAutoDismissCommand;
     items[0].checked   = autoDismiss;
-    items[1].kind      = RedSalamander::DxUi::MenuItemKind::Separator;
-    items[2].kind      = RedSalamander::DxUi::MenuItemKind::Radio;
+    items[1].kind      = DxUi::MenuItemKind::Separator;
+    items[2].kind      = DxUi::MenuItemKind::Radio;
     items[2].text      = LoadStringResource(nullptr, IDS_FILEOPS_BTN_DENSITY_COMPACT);
     items[2].commandId = kCompactCommand;
     items[2].checked   = compactDensity;
-    items[3].kind      = RedSalamander::DxUi::MenuItemKind::Radio;
+    items[3].kind      = DxUi::MenuItemKind::Radio;
     items[3].text      = LoadStringResource(nullptr, IDS_FILEOPS_BTN_DENSITY_EXPANDED);
     items[3].commandId = kExpandedCommand;
     items[3].checked   = ! compactDensity;
 
-    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
-    const auto anchor =
-        ResolveButtonMenuAnchor(hwnd, PopupHitTest{PopupHitTest::Kind::FooterOptions, 0u, 0u}, RedSalamander::DxUi::ContextMenuRootVerticalPlacement::Above);
+    DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    const auto anchor = ResolveButtonMenuAnchor(hwnd, PopupHitTest{PopupHitTest::Kind::FooterOptions, 0u, 0u}, DxUi::ContextMenuRootVerticalPlacement::Above);
     const POINT point = anchor.has_value() ? anchor->screenPoint : ResolveOwnerCenterScreenPoint(hwnd);
     if (anchor.has_value())
     {
         sessionCallbacks = anchor->sessionCallbacks;
     }
-    static_cast<void>(RedSalamander::DxUi::ContextMenu::ShowAsync(hwnd,
-                                                                  point,
-                                                                  items,
-                                                                  MakeAppThemeDxPalette(folderWindow->GetTheme()),
-                                                                  [this, hwnd](std::optional<int> chosen) noexcept
+    static_cast<void>(DxUi::ContextMenu::ShowAsync(hwnd,
+                                                   point,
+                                                   items,
+                                                   MakeAppThemeDxPalette(folderWindow->GetTheme()),
+                                                   [this, hwnd](std::optional<int> chosen) noexcept
     {
         if (! chosen.has_value() || ! hwnd || IsWindow(hwnd) == FALSE || ! hostLifetime.lock() || ! fileOps)
         {
@@ -8896,7 +8972,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowFooterOptionsMen
         }
         Invalidate(hwnd);
     },
-                                                                  sessionCallbacks));
+                                                   sessionCallbacks));
 }
 
 void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(HWND hwnd, uint64_t taskId) noexcept
@@ -8912,18 +8988,28 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
     }
 
     FolderWindow::FileOperationState::Task* task = fileOps->FindTask(taskId);
-    if (! task)
+    const TaskSnapshot* fixture                  = nullptr;
+#ifdef ENABLE_TESTS
+    if (debugVisualScenario)
+    {
+        const auto found = std::find_if(
+            debugVisualScenario->begin(), debugVisualScenario->end(), [taskId](const TaskSnapshot& value) noexcept { return value.taskId == taskId; });
+        if (found != debugVisualScenario->end())
+            fixture = &*found;
+    }
+#endif
+    if (! task && ! fixture)
     {
         return;
     }
 
-    const FileSystemOperation operation = task->GetOperation();
+    const FileSystemOperation operation = fixture ? fixture->operation : task->GetOperation();
     if (operation != FILESYSTEM_COPY && operation != FILESYSTEM_MOVE)
     {
         return;
     }
 
-    const uint64_t currentLimit = task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
+    const uint64_t currentLimit = fixture ? fixture->desiredSpeedLimitBytesPerSecond : task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
 
     constexpr UINT kCmdUnlimited  = 1u;
     constexpr UINT kCmdCustom     = 2u;
@@ -8938,13 +9024,13 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
         1ull * 1024ull * 1024ull * 1024ull,
     }};
 
-    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    std::vector<DxUi::MenuFlyoutItem> items;
     items.reserve(kPresets.size() + 4u);
 
     auto appendRadioItem = [&](UINT commandId, std::wstring text, bool checked) noexcept
     {
-        RedSalamander::DxUi::MenuFlyoutItem item{};
-        item.kind      = RedSalamander::DxUi::MenuItemKind::Radio;
+        DxUi::MenuFlyoutItem item{};
+        item.kind      = DxUi::MenuItemKind::Radio;
         item.text      = std::move(text);
         item.commandId = static_cast<int>(commandId);
         item.checked   = checked;
@@ -8953,8 +9039,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
 
     appendRadioItem(kCmdUnlimited, LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_MENU_UNLIMITED), currentLimit == 0);
 
-    RedSalamander::DxUi::MenuFlyoutItem separator{};
-    separator.kind = RedSalamander::DxUi::MenuItemKind::Separator;
+    DxUi::MenuFlyoutItem separator{};
+    separator.kind = DxUi::MenuItemKind::Separator;
     items.push_back(separator);
 
     for (size_t i = 0; i < kPresets.size(); ++i)
@@ -8967,24 +9053,24 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
 
     items.push_back(separator);
 
-    RedSalamander::DxUi::MenuFlyoutItem customItem{};
+    DxUi::MenuFlyoutItem customItem{};
     customItem.text      = LoadStringResource(nullptr, IDS_FILEOP_SPEED_LIMIT_MENU_CUSTOM);
     customItem.commandId = static_cast<int>(kCmdCustom);
     items.push_back(std::move(customItem));
 
-    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
-    const auto anchor = ResolveButtonMenuAnchor(
-        hwnd, PopupHitTest{PopupHitTest::Kind::TaskSpeedLimit, taskId, 0u}, RedSalamander::DxUi::ContextMenuRootVerticalPlacement::Below);
+    DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    const auto anchor =
+        ResolveButtonMenuAnchor(hwnd, PopupHitTest{PopupHitTest::Kind::TaskSpeedLimit, taskId, 0u}, DxUi::ContextMenuRootVerticalPlacement::Below);
     const POINT pt = anchor.has_value() ? anchor->screenPoint : ResolveOwnerCenterScreenPoint(hwnd);
     if (anchor.has_value())
     {
         sessionCallbacks = anchor->sessionCallbacks;
     }
-    static_cast<void>(RedSalamander::DxUi::ContextMenu::ShowAsync(hwnd,
-                                                                  pt,
-                                                                  items,
-                                                                  MakeAppThemeDxPalette(folderWindow->GetTheme()),
-                                                                  [this, hwnd, taskId](std::optional<int> chosenOpt) noexcept
+    static_cast<void>(DxUi::ContextMenu::ShowAsync(hwnd,
+                                                   pt,
+                                                   items,
+                                                   MakeAppThemeDxPalette(folderWindow->GetTheme()),
+                                                   [this, hwnd, taskId](std::optional<int> chosenOpt) noexcept
     {
         if (! chosenOpt.has_value())
         {
@@ -9052,7 +9138,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowSpeedLimitMenu(H
         selectedTask->SetDesiredSpeedLimit(newLimit);
         Invalidate(hwnd);
     },
-                                                                  sessionCallbacks));
+                                                   sessionCallbacks));
 }
 
 bool FileOperationsPopupInternal::FileOperationsPopupState::ShowCustomSpeedLimitPromptForTask(HWND hwnd, uint64_t requestedTaskId) noexcept
@@ -9062,7 +9148,7 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::ShowCustomSpeedLimit
         return false;
     }
 
-    uint64_t resolvedTaskId = requestedTaskId;
+    uint64_t resolvedTaskId                      = requestedTaskId;
     FolderWindow::FileOperationState::Task* task = resolvedTaskId != 0 ? fileOps->FindTask(resolvedTaskId) : nullptr;
     if (! task)
     {
@@ -9083,7 +9169,7 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::ShowCustomSpeedLimit
         return false;
     }
 
-    const uint64_t taskId = resolvedTaskId;
+    const uint64_t taskId       = resolvedTaskId;
     const uint64_t currentLimit = task->_desiredSpeedLimitBytesPerSecond.load(std::memory_order_acquire);
     const FolderWindow::FileOperationPromptDispatchScope promptDispatch(*folderWindow);
     const auto promptResult = ShowCustomSpeedLimitPrompt(hwnd, folderWindow->GetTheme(), currentLimit);
@@ -9114,23 +9200,27 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowDestinationMenu(
     }
 
     FolderWindow::FileOperationState::Task* task = fileOps->FindTask(taskId);
-    if (! task)
-    {
+    const TaskSnapshot* visual = nullptr;
+#ifdef ENABLE_TESTS
+    if (debugVisualScenario.has_value())
+        for (const auto& value : debugVisualScenario.value())
+            if (value.taskId == taskId)
+                visual = &value;
+#endif
+    if (! task && ! visual)
         return;
-    }
-
-    const FileSystemOperation operation = task->GetOperation();
+    const FileSystemOperation operation = task ? task->GetOperation() : visual->operation;
     if (operation != FILESYSTEM_COPY && operation != FILESYSTEM_MOVE)
     {
         return;
     }
 
-    if (task->HasStarted())
+    if (task ? task->HasStarted() : visual->started)
     {
         return;
     }
 
-    const std::optional<FolderWindow::Pane> destinationPaneOpt = task->GetDestinationPane();
+    const std::optional<FolderWindow::Pane> destinationPaneOpt = task ? task->GetDestinationPane() : visual->destinationPane;
     if (! destinationPaneOpt.has_value())
     {
         return;
@@ -9138,12 +9228,16 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowDestinationMenu(
 
     const FolderWindow::Pane destinationPane                  = destinationPaneOpt.value();
     const std::optional<std::filesystem::path> otherPanelPath = folderWindow->GetCurrentPluginPath(destinationPane);
-    const std::vector<std::filesystem::path> history          = folderWindow->GetFolderHistory(destinationPane);
+    std::vector<std::filesystem::path> history = folderWindow->GetFolderHistory(destinationPane);
+#ifdef ENABLE_TESTS
+    if (visual)
+        history = debugVisualDestinationHistory;
+#endif
 
     constexpr UINT kCmdOtherPanel  = 1u;
     constexpr UINT kCmdHistoryBase = 10u;
 
-    const std::filesystem::path currentDestination = task->GetDestinationFolder();
+    const std::filesystem::path currentDestination = task ? task->GetDestinationFolder() : visual->destinationFolder;
 
     NavigationLocation::Location destinationLocation;
     const std::optional<std::filesystem::path> displayDestination = folderWindow->GetCurrentPath(destinationPane);
@@ -9205,11 +9299,11 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowDestinationMenu(
         entries.push_back(std::move(entry));
     }
 
-    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    std::vector<DxUi::MenuFlyoutItem> items;
     items.reserve(entries.size() + 2u);
 
-    RedSalamander::DxUi::MenuFlyoutItem otherPanelItem{};
-    otherPanelItem.kind      = RedSalamander::DxUi::MenuItemKind::Radio;
+    DxUi::MenuFlyoutItem otherPanelItem{};
+    otherPanelItem.kind      = DxUi::MenuItemKind::Radio;
     otherPanelItem.text      = LoadStringResource(nullptr, IDS_FILEOP_DEST_OTHER_PANEL);
     otherPanelItem.commandId = static_cast<int>(kCmdOtherPanel);
     otherPanelItem.checked   = otherPanelPath.has_value() && otherPanelPath.value() == currentDestination;
@@ -9217,35 +9311,34 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowDestinationMenu(
 
     if (! entries.empty())
     {
-        RedSalamander::DxUi::MenuFlyoutItem separator{};
-        separator.kind = RedSalamander::DxUi::MenuItemKind::Separator;
+        DxUi::MenuFlyoutItem separator{};
+        separator.kind = DxUi::MenuItemKind::Separator;
         items.push_back(separator);
     }
 
     for (size_t i = 0; i < entries.size(); ++i)
     {
-        RedSalamander::DxUi::MenuFlyoutItem item{};
-        item.kind      = RedSalamander::DxUi::MenuItemKind::Radio;
+        DxUi::MenuFlyoutItem item{};
+        item.kind      = DxUi::MenuItemKind::Radio;
         item.text      = entries[i].label;
         item.commandId = static_cast<int>(kCmdHistoryBase + static_cast<UINT>(i));
         item.checked   = entries[i].folder == currentDestination;
         items.push_back(std::move(item));
     }
 
-    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
-    const auto anchor = ResolveButtonMenuAnchor(
-        hwnd, PopupHitTest{PopupHitTest::Kind::TaskDestination, taskId, 0u}, RedSalamander::DxUi::ContextMenuRootVerticalPlacement::Below);
+    DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    const auto anchor =
+        ResolveButtonMenuAnchor(hwnd, PopupHitTest{PopupHitTest::Kind::TaskDestination, taskId, 0u}, DxUi::ContextMenuRootVerticalPlacement::Below);
     const POINT pt = anchor.has_value() ? anchor->screenPoint : ResolveOwnerCenterScreenPoint(hwnd);
     if (anchor.has_value())
     {
         sessionCallbacks = anchor->sessionCallbacks;
     }
-    static_cast<void>(
-        RedSalamander::DxUi::ContextMenu::ShowAsync(hwnd,
-                                                    pt,
-                                                    items,
-                                                    MakeAppThemeDxPalette(folderWindow->GetTheme()),
-                                                    [this, hwnd, taskId, otherPanelPath, entries = std::move(entries)](std::optional<int> chosenOpt) noexcept
+    static_cast<void>(DxUi::ContextMenu::ShowAsync(hwnd,
+                                                   pt,
+                                                   items,
+                                                   MakeAppThemeDxPalette(folderWindow->GetTheme()),
+                                                   [this, hwnd, taskId, otherPanelPath, entries = std::move(entries)](std::optional<int> chosenOpt) noexcept
     {
         if (! chosenOpt.has_value())
         {
@@ -9287,7 +9380,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowDestinationMenu(
             Invalidate(hwnd);
         }
     },
-                                                    sessionCallbacks));
+                                                   sessionCallbacks));
 }
 
 bool FileOperationsPopupInternal::FileOperationsPopupState::SubmitCompletedOverflowAction(HWND hwnd,
@@ -9401,13 +9494,13 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowCompletedOverflo
         return;
     }
 
-    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    std::vector<DxUi::MenuFlyoutItem> items;
     items.reserve(8u);
 
     const bool hasDiagnostics = ! taskIt->interruptedMoveNotice && (taskIt->warningCount > 0 || taskIt->errorCount > 0);
     if (hasDiagnostics)
     {
-        RedSalamander::DxUi::MenuFlyoutItem failedItemsItem{};
+        DxUi::MenuFlyoutItem failedItemsItem{};
         failedItemsItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_FAILED_ITEMS);
         failedItemsItem.commandId = static_cast<int>(kCompletedOverflowActionFailedItems);
         items.push_back(std::move(failedItemsItem));
@@ -9415,7 +9508,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowCompletedOverflo
 
     if (ResolveCompletedTaskRevealLocation(*taskIt).has_value())
     {
-        RedSalamander::DxUi::MenuFlyoutItem revealItem{};
+        DxUi::MenuFlyoutItem revealItem{};
         revealItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_REVEAL_ITEM);
         revealItem.commandId = static_cast<int>(kCompletedOverflowActionRevealDestination);
         items.push_back(std::move(revealItem));
@@ -9423,7 +9516,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowCompletedOverflo
 
     if (taskIt->hasSourceActionPaths)
     {
-        RedSalamander::DxUi::MenuFlyoutItem openSourceItem{};
+        DxUi::MenuFlyoutItem openSourceItem{};
         openSourceItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_OPEN_SOURCE);
         openSourceItem.commandId = static_cast<int>(kCompletedOverflowActionOpenSource);
         items.push_back(std::move(openSourceItem));
@@ -9431,12 +9524,12 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowCompletedOverflo
 
     if (taskIt->exactRetainedSourceActionAvailable)
     {
-        RedSalamander::DxUi::MenuFlyoutItem selectRetainedItem{};
+        DxUi::MenuFlyoutItem selectRetainedItem{};
         selectRetainedItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_SELECT_RETAINED);
         selectRetainedItem.commandId = static_cast<int>(kCompletedOverflowActionSelectRetained);
         items.push_back(std::move(selectRetainedItem));
 
-        RedSalamander::DxUi::MenuFlyoutItem cutRetainedItem{};
+        DxUi::MenuFlyoutItem cutRetainedItem{};
         cutRetainedItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_CUT_RETAINED_AGAIN);
         cutRetainedItem.commandId = static_cast<int>(kCompletedOverflowActionCutRetainedAgain);
         items.push_back(std::move(cutRetainedItem));
@@ -9444,7 +9537,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowCompletedOverflo
 
     if (CompletedTaskCanUseDestinationActions(*taskIt))
     {
-        RedSalamander::DxUi::MenuFlyoutItem openDestinationItem{};
+        DxUi::MenuFlyoutItem openDestinationItem{};
         openDestinationItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_OPEN_DESTINATION);
         openDestinationItem.commandId = static_cast<int>(kCompletedOverflowActionOpenDestination);
         items.push_back(std::move(openDestinationItem));
@@ -9452,30 +9545,30 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowCompletedOverflo
 
     if (hasDiagnostics)
     {
-        RedSalamander::DxUi::MenuFlyoutItem showLogItem{};
+        DxUi::MenuFlyoutItem showLogItem{};
         showLogItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_SHOW_LOG);
         showLogItem.commandId = static_cast<int>(kCompletedOverflowActionShowLog);
         items.push_back(std::move(showLogItem));
 
-        RedSalamander::DxUi::MenuFlyoutItem exportIssuesItem{};
+        DxUi::MenuFlyoutItem exportIssuesItem{};
         exportIssuesItem.text      = LoadStringResource(nullptr, IDS_FILEOP_BTN_EXPORT_ISSUES);
         exportIssuesItem.commandId = static_cast<int>(kCompletedOverflowActionExportIssues);
         items.push_back(std::move(exportIssuesItem));
     }
 
-    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
-    const auto anchor = ResolveButtonMenuAnchor(
-        hwnd, PopupHitTest{PopupHitTest::Kind::TaskCompletedMore, taskId, 2u}, RedSalamander::DxUi::ContextMenuRootVerticalPlacement::Above);
+    DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    const auto anchor =
+        ResolveButtonMenuAnchor(hwnd, PopupHitTest{PopupHitTest::Kind::TaskCompletedMore, taskId, 2u}, DxUi::ContextMenuRootVerticalPlacement::Above);
     const POINT pt = anchor.has_value() ? anchor->screenPoint : ResolveOwnerCenterScreenPoint(hwnd);
     if (anchor.has_value())
     {
         sessionCallbacks = anchor->sessionCallbacks;
     }
-    static_cast<void>(RedSalamander::DxUi::ContextMenu::ShowAsync(hwnd,
-                                                                  pt,
-                                                                  items,
-                                                                  MakeAppThemeDxPalette(folderWindow->GetTheme()),
-                                                                  [this, hwnd, taskId](std::optional<int> chosenOpt) noexcept
+    static_cast<void>(DxUi::ContextMenu::ShowAsync(hwnd,
+                                                   pt,
+                                                   items,
+                                                   MakeAppThemeDxPalette(folderWindow->GetTheme()),
+                                                   [this, hwnd, taskId](std::optional<int> chosenOpt) noexcept
     {
         if (! chosenOpt.has_value())
         {
@@ -9496,7 +9589,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowCompletedOverflo
             static_cast<void>(SubmitCompletedOverflowAction(hwnd, taskId, chosen, true));
         }
     },
-                                                                  sessionCallbacks));
+                                                   sessionCallbacks));
 }
 
 bool FileOperationsPopupInternal::FileOperationsPopupState::SubmitConflictOverflowAction(HWND hwnd, uint64_t taskId, uint32_t rawAction) noexcept
@@ -9593,12 +9686,27 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowConflictOverflow
     }
 
     FolderWindow::FileOperationState::Task* task = fileOps->FindTask(taskId);
-    if (! task)
+    const TaskSnapshot* fixture                  = nullptr;
+#ifdef ENABLE_TESTS
+    if (debugVisualScenario)
+    {
+        const auto found = std::find_if(
+            debugVisualScenario->begin(), debugVisualScenario->end(), [taskId](const TaskSnapshot& value) noexcept { return value.taskId == taskId; });
+        if (found != debugVisualScenario->end())
+            fixture = &*found;
+    }
+#endif
+    if (! task && ! fixture)
     {
         return;
     }
 
     TaskSnapshot::ConflictPromptSnapshot conflict{};
+    if (fixture)
+    {
+        conflict = fixture->conflict;
+    }
+    else
     {
         std::scoped_lock lock(task->_conflictArbiter.mutex);
         if (! task->_conflictArbiter.prompt.active || ! task->_conflictArbiter.prompt.buttonsPublishable)
@@ -9623,35 +9731,34 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowConflictOverflow
     }
 
     constexpr UINT kCmdOverflowBase = 1u;
-    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    std::vector<DxUi::MenuFlyoutItem> items;
     items.reserve(std::min(conflict.overflowActionCount, conflict.overflowActions.size()));
     std::vector<uint32_t> overflowActions;
     overflowActions.reserve(std::min(conflict.overflowActionCount, conflict.overflowActions.size()));
     for (size_t i = 0; i < conflict.overflowActionCount && i < conflict.overflowActions.size(); ++i)
     {
-        RedSalamander::DxUi::MenuFlyoutItem item{};
+        DxUi::MenuFlyoutItem item{};
         const ConflictAction action = ConflictActionFromRaw(conflict.overflowActions[i]);
-        item.text                   = ConflictActionText(action, static_cast<ConflictBucket>(conflict.bucket), task->GetOperation());
+        item.text = ConflictActionText(action, static_cast<ConflictBucket>(conflict.bucket), fixture ? fixture->operation : task->GetOperation());
         item.commandId              = static_cast<int>(kCmdOverflowBase + static_cast<UINT>(i));
         items.push_back(std::move(item));
         overflowActions.push_back(static_cast<uint32_t>(RawConflictAction(action)));
     }
 
-    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
     const uint32_t overflowData = static_cast<uint32_t>(std::min<size_t>(conflict.overflowActionCount, std::numeric_limits<uint32_t>::max()));
-    const auto anchor           = ResolveButtonMenuAnchor(
-        hwnd, PopupHitTest{PopupHitTest::Kind::TaskConflictMore, taskId, overflowData}, RedSalamander::DxUi::ContextMenuRootVerticalPlacement::Below);
+    const auto anchor =
+        ResolveButtonMenuAnchor(hwnd, PopupHitTest{PopupHitTest::Kind::TaskConflictMore, taskId, overflowData}, DxUi::ContextMenuRootVerticalPlacement::Below);
     const POINT pt = anchor.has_value() ? anchor->screenPoint : ResolveOwnerCenterScreenPoint(hwnd);
     if (anchor.has_value())
     {
         sessionCallbacks = anchor->sessionCallbacks;
     }
-    static_cast<void>(
-        RedSalamander::DxUi::ContextMenu::ShowAsync(hwnd,
-                                                    pt,
-                                                    items,
-                                                    MakeAppThemeDxPalette(folderWindow->GetTheme()),
-                                                    [this, hwnd, taskId, overflowActions = std::move(overflowActions)](std::optional<int> chosenOpt) noexcept
+    static_cast<void>(DxUi::ContextMenu::ShowAsync(hwnd,
+                                                   pt,
+                                                   items,
+                                                   MakeAppThemeDxPalette(folderWindow->GetTheme()),
+                                                   [this, hwnd, taskId, overflowActions = std::move(overflowActions)](std::optional<int> chosenOpt) noexcept
     {
         if (! chosenOpt.has_value())
         {
@@ -9672,7 +9779,7 @@ void FileOperationsPopupInternal::FileOperationsPopupState::ShowConflictOverflow
         const size_t index = static_cast<size_t>(chosen - kCmdOverflowBase);
         static_cast<void>(SubmitConflictOverflowAction(hwnd, taskId, overflowActions[index]));
     },
-                                                    sessionCallbacks));
+                                                   sessionCallbacks));
 }
 
 // C4: graphics-independent failure surface. One native text, Cancel all, and Close; no Direct2D,
@@ -9733,41 +9840,41 @@ bool FileOperationsPopupInternal::FileOperationsPopupState::EnterFailureSurface(
     const std::wstring cancelAll = LoadStringResource(nullptr, IDS_FILEOPS_BTN_CANCEL_ALL);
     const std::wstring close     = LoadStringResource(nullptr, IDS_FILEOPS_BTN_CLOSE);
     _failureText                 = CreateWindowExW(0,
-                                   L"STATIC",
-                                   L"",
-                                   WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL,
-                                   0,
-                                   0,
-                                   0,
-                                   0,
-                                   hwnd,
-                                   reinterpret_cast<HMENU>(kFailureSurfaceTextId),
-                                   instance,
-                                   nullptr);
+                                                   L"STATIC",
+                                                   L"",
+                                                   WS_CHILD | WS_VISIBLE | SS_LEFT | SS_NOPREFIX | SS_EDITCONTROL,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   hwnd,
+                                                   reinterpret_cast<HMENU>(kFailureSurfaceTextId),
+                                                   instance,
+                                                   nullptr);
     _failureCancelAll            = CreateWindowExW(0,
-                                        L"BUTTON",
-                                        cancelAll.c_str(),
-                                        WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
-                                        0,
-                                        0,
-                                        0,
-                                        0,
-                                        hwnd,
-                                        reinterpret_cast<HMENU>(kFailureSurfaceCancelAllId),
-                                        instance,
-                                        nullptr);
+                                                   L"BUTTON",
+                                                   cancelAll.c_str(),
+                                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_PUSHBUTTON,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   hwnd,
+                                                   reinterpret_cast<HMENU>(kFailureSurfaceCancelAllId),
+                                                   instance,
+                                                   nullptr);
     _failureClose                = CreateWindowExW(0,
-                                    L"BUTTON",
-                                    close.c_str(),
-                                    WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
-                                    0,
-                                    0,
-                                    0,
-                                    0,
-                                    hwnd,
-                                    reinterpret_cast<HMENU>(kFailureSurfaceCloseId),
-                                    instance,
-                                    nullptr);
+                                                   L"BUTTON",
+                                                   close.c_str(),
+                                                   WS_CHILD | WS_VISIBLE | WS_TABSTOP | BS_DEFPUSHBUTTON,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   0,
+                                                   hwnd,
+                                                   reinterpret_cast<HMENU>(kFailureSurfaceCloseId),
+                                                   instance,
+                                                   nullptr);
     if (! _failureText || ! _failureCancelAll || ! _failureClose)
     {
         // The existing host error surface carries the explanation; Cancel all stays reachable
@@ -9815,8 +9922,8 @@ void FileOperationsPopupInternal::FileOperationsPopupState::LayoutFailureSurface
         {
             _failureFont.reset(CreateFontIndirectW(&metrics.lfMessageFont));
         }
-        _failureFontDpi   = _dpi;
-        const HFONT font  = _failureFont ? _failureFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
+        _failureFontDpi  = _dpi;
+        const HFONT font = _failureFont ? _failureFont.get() : static_cast<HFONT>(GetStockObject(DEFAULT_GUI_FONT));
         for (const HWND child : {_failureText, _failureCancelAll, _failureClose})
         {
             SendMessageW(child, WM_SETFONT, reinterpret_cast<WPARAM>(font), TRUE);
@@ -9877,7 +9984,10 @@ void FileOperationsPopupInternal::FileOperationsPopupState::RefreshFailureSurfac
             case FILESYSTEM_CREATE_DIRECTORY:
             default: break;
         }
-        text.append(L"\r\n").append(LoadStringResource(nullptr, operationId)).append(L": ").append(StatusTextForTask(task, ResolveTaskStatusKind(task), nowTick));
+        text.append(L"\r\n")
+            .append(LoadStringResource(nullptr, operationId))
+            .append(L": ")
+            .append(StatusTextForTask(task, ResolveTaskStatusKind(task), nowTick));
         ++listed;
     }
     if (text != _failureTextValue)
@@ -9922,8 +10032,8 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnCreate(HWND hwn
         const auto palette    = MakeAppThemeDxPalette(theme, theme.windowBackground);
         _reducedMotion        = palette.reducedMotion;
         ApplyWindowChromeTheme(hwnd, theme, WindowBackdropTarget::Tool, GetActiveWindow() == hwnd);
-        RedSalamander::DxUi::WindowHost::AttachOptions options{};
-        options.presentationMode = RedSalamander::DxUi::WindowHost::PresentationMode::CompositionSwapChain;
+        DxUi::WindowHost::AttachOptions options{};
+        options.presentationMode = DxUi::WindowHost::PresentationMode::CompositionSwapChain;
         bool forceAttachFailure  = false;
 #ifdef ENABLE_TESTS
         unsigned int remainingForcedFailures = g_fileOperationsDxUiHostAttachForcedFailures.load(std::memory_order_acquire);
@@ -9940,7 +10050,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnCreate(HWND hwn
         if (! forceAttachFailure && _controlsHost.Attach(hwnd, options))
         {
             _controlsHost.SetTheme(palette);
-            auto root     = std::make_unique<RedSalamander::DxUi::Panel>();
+            auto root     = std::make_unique<DxUi::Panel>();
             _controlsRoot = root.get();
             _controlsHost.SetRoot(std::move(root));
             _controlsHost.SetOnEscape([this, hwnd]
@@ -10764,7 +10874,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
     for (size_t index = 0u; result.completedGroupBadgeTooltipsInformative && index < _hostedTooltipDescriptors.size(); ++index)
     {
         const HostedTooltipDescriptor& descriptor = _hostedTooltipDescriptors[index];
-        const RedSalamander::DxUi::Label* region  = _hostedTooltipRegions[index];
+        const DxUi::Label* region                 = _hostedTooltipRegions[index];
         result.completedGroupBadgeTooltipsInformative =
             region && ! descriptor.text.empty() && descriptor.text.find_first_not_of(L"0123456789 \t") != std::wstring::npos &&
             region->GetTooltipText() == descriptor.text && region->GetAccessibleName() == descriptor.text && region->GetAccessibleHelpText() == descriptor.text;
@@ -11012,12 +11122,12 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
             case PopupHitTest::Kind::FooterToggleDetails:
                 ++result.footerVisibleButtonCount;
                 result.footerDetailsToggleUsesDisclosureChrome =
-                    i < _hostedButtons.size() && _hostedButtons[i] && _hostedButtons[i]->GetVariant() == RedSalamander::DxUi::ButtonVariant::Disclosure;
+                    i < _hostedButtons.size() && _hostedButtons[i] && _hostedButtons[i]->GetVariant() == DxUi::ButtonVariant::Disclosure;
                 break;
             case PopupHitTest::Kind::FooterQueueMode:
                 ++result.footerVisibleButtonCount;
                 result.footerQueueModeUsesSelectorChrome =
-                    i < _hostedButtons.size() && _hostedButtons[i] && _hostedButtons[i]->GetVariant() == RedSalamander::DxUi::ButtonVariant::Selector;
+                    i < _hostedButtons.size() && _hostedButtons[i] && _hostedButtons[i]->GetVariant() == DxUi::ButtonVariant::Selector;
                 break;
             case PopupHitTest::Kind::CompletedGroupToggle: result.completedGroupToggleVisible = true; break;
             case PopupHitTest::Kind::CompletedGroupClear:
@@ -11119,7 +11229,7 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
                 {
                     result.taskSpeedLimitVisible = true;
                     result.taskSpeedLimitUsesSelectorChrome =
-                        i < _hostedButtons.size() && _hostedButtons[i] && _hostedButtons[i]->GetVariant() == RedSalamander::DxUi::ButtonVariant::Selector;
+                        i < _hostedButtons.size() && _hostedButtons[i] && _hostedButtons[i]->GetVariant() == DxUi::ButtonVariant::Selector;
                     result.taskSpeedLimitShowsCurrentValue =
                         i < _hostedButtons.size() && _hostedButtons[i] && taskIt != taskSnapshot.end() &&
                         _hostedButtons[i]->GetText() == FormatSpeedLimitSelectorText(taskIt->desiredSpeedLimitBytesPerSecond);
@@ -11702,7 +11812,7 @@ void DebugFailNextFileOperationsD2DTargetAttempts(unsigned int attempts) noexcep
     g_fileOperationsD2DTargetForcedFailures.store(attempts, std::memory_order_release);
 }
 
-RedSalamander::DxUi::ButtonVariant DebugResolveFileOperationsHostedButtonVariant(FileOperationsPopupInternal::PopupHitTest::Kind kind) noexcept
+DxUi::ButtonVariant DebugResolveFileOperationsHostedButtonVariant(FileOperationsPopupInternal::PopupHitTest::Kind kind) noexcept
 {
     return HostedButtonVariant(kind);
 }
@@ -11786,7 +11896,7 @@ bool DebugBuildFileOperationsGraphFairnessHistorySnapshot(FileOperationsPopupInt
 
         const float rowHue            = AssignedRateStreamHue(&history, &rowStream);
         const D2D1_COLOR_F rowColor   = RainbowProgressColor(darkTheme, rowStream.sourcePath, &history, &rowStream);
-        const D2D1_COLOR_F graphColor = RedSalamander::DxUi::ThroughputGraphColorFromHue(graphStream.assignedHue, darkTheme.dark);
+        const D2D1_COLOR_F graphColor = DxUi::ThroughputGraphColorFromHue(graphStream.assignedHue, darkTheme.dark);
         const bool exactColorMatch    = rowHue == graphStream.assignedHue && rowColor.r == graphColor.r && rowColor.g == graphColor.g &&
                                         rowColor.b == graphColor.b && rowColor.a == graphColor.a;
         if (exactColorMatch)
@@ -11843,9 +11953,9 @@ bool DebugFileOperationsStreamColorSlotsRemainUniqueUnderPermutation() noexcept
 
     AccumulateStreamHueWeights(history, makeSnapshot({3u, 1u, 2u}, 200u), 100u, -1.0f);
     std::array<bool, RateHistory::kMaxHueWeightsPerSample> occupied{};
-    uint8_t slotFor1 = RedSalamander::DxUi::ThroughputGraphSample::kInvalidColorSlot;
-    uint8_t slotFor2 = RedSalamander::DxUi::ThroughputGraphSample::kInvalidColorSlot;
-    uint8_t slotFor3 = RedSalamander::DxUi::ThroughputGraphSample::kInvalidColorSlot;
+    uint8_t slotFor1 = DxUi::ThroughputGraphSample::kInvalidColorSlot;
+    uint8_t slotFor2 = DxUi::ThroughputGraphSample::kInvalidColorSlot;
+    uint8_t slotFor3 = DxUi::ThroughputGraphSample::kInvalidColorSlot;
     for (size_t i = 0; i < history.streamProgressCount; ++i)
     {
         const auto& stream = history.streamProgress[i];
@@ -11959,9 +12069,9 @@ bool DebugValidateFileOperationsVerificationPresentation() noexcept
     {
         return false;
     }
-    streamingTask.discoveryClosed                             = true;
-    streamingTask.totalBytes                                  = 240u;
-    const WholeTaskProgressPresentation closedProgress        = ResolveWholeTaskProgressPresentation(streamingTask);
+    streamingTask.discoveryClosed                      = true;
+    streamingTask.totalBytes                           = 240u;
+    const WholeTaskProgressPresentation closedProgress = ResolveWholeTaskProgressPresentation(streamingTask);
     if (! closedProgress.determinate || closedProgress.provisional || std::abs(closedProgress.fraction - 1.0) > 0.001)
     {
         return false;
@@ -12068,6 +12178,38 @@ bool DebugFileOperationsTaskHasKnownCompactProgress(const FileOperationsPopupInt
     return TaskHasKnownCompactProgress(task);
 }
 
+void DebugResolveFileOperationsWholeTaskProgress(const FileOperationsPopupInternal::TaskSnapshot& task,
+                                                 FileOperationsPopupInternal::TaskProgressPresentationDebugSnapshot& out) noexcept
+{
+    const WholeTaskProgressPresentation presentation = ResolveWholeTaskProgressPresentation(task);
+    out.fraction                                     = presentation.fraction;
+    out.determinate                                  = presentation.determinate;
+    out.provisional                                  = presentation.provisional;
+    out.transferActive                               = presentation.transferActive;
+    out.showDiscoveryActivity                        = presentation.showDiscoveryActivity;
+    out.showTransferProgress                         = presentation.showTransferProgress;
+    out.showTransferMarquee                          = presentation.showTransferMarquee;
+    out.showThroughputGraph                          = presentation.showThroughputGraph;
+    out.includeInAggregateCohort                     = presentation.includeInAggregateCohort;
+}
+
+std::wstring DebugBuildFileOperationsTaskHeaderText(const FileOperationsPopupInternal::TaskSnapshot& task, ULONGLONG nowTick)
+{
+    const UINT opTextId = [&]() -> UINT
+    {
+        switch (task.operation)
+        {
+            case FILESYSTEM_COPY: return static_cast<UINT>(IDS_FILEOP_OPERATION_COPY);
+            case FILESYSTEM_MOVE: return static_cast<UINT>(IDS_FILEOP_OPERATION_MOVE);
+            case FILESYSTEM_DELETE: return static_cast<UINT>(IDS_FILEOP_OPERATION_DELETE);
+            case FILESYSTEM_RENAME: return static_cast<UINT>(IDS_FILEOP_OPERATION_RENAME);
+            case FILESYSTEM_CREATE_DIRECTORY: return static_cast<UINT>(IDS_FILEOP_OPERATION_COPY);
+        }
+        return static_cast<UINT>(IDS_FILEOP_OPERATION_COPY);
+    }();
+    return BuildTaskHeaderText(task, LoadStringResource(nullptr, opTextId), nowTick);
+}
+
 std::wstring DebugFormatFileOperationsConflictTimestamp(__int64 fileTime) noexcept
 {
     return FormatFileTimeLocalCompact(fileTime);
@@ -12107,6 +12249,11 @@ HWND GetFileOperationsSpeedLimitPromptHandle() noexcept
 {
     const HWND hwnd = FindFileOperationsDebugWindowForCurrentProcess(kFileOperationsSpeedLimitPromptClassName);
     return hwnd && IsWindow(hwnd) != FALSE ? hwnd : nullptr;
+}
+
+void DebugShowFileOperationsSpeedLimitPromptForGallery(HWND owner, const AppTheme& theme) noexcept
+{
+    static_cast<void>(ShowCustomSpeedLimitPrompt(owner, theme, 80ull * 1024ull * 1024ull));
 }
 
 bool DebugGetFileOperationsSpeedLimitPromptSnapshot(FileOperationsSpeedLimitPromptDebugSnapshot& out) noexcept

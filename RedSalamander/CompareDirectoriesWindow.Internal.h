@@ -30,7 +30,6 @@
 
 #include "CommandRegistry.h"
 #include "CompareDirectoriesEngine.h"
-#include "DxUi/DxUi.h"
 #include "FileSystemPluginManager.h"
 #include "FluentIcons.h"
 #include "FolderView.h"
@@ -47,6 +46,7 @@
 #include "WindowPlacementPersistence.h"
 #include "WindowSizing.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
 
 namespace CompareDirectoriesWindowInternal
 {
@@ -139,7 +139,7 @@ private:
     [[nodiscard]] std::optional<size_t> HitTestDxMenuBarScreenPoint(POINT screenPoint) const noexcept;
     [[nodiscard]] std::optional<POINT> GetDxMenuBarItemAnchorScreenPoint(size_t index) const noexcept;
     [[nodiscard]] std::optional<size_t> FindNextEnabledDxMenuBarItem(size_t currentIndex, bool forward) const noexcept;
-    [[nodiscard]] std::optional<RedSalamander::DxUi::ContextMenuRootSwitchRequest> BuildDxMenuBarRootSwitchRequest(size_t index) noexcept;
+    [[nodiscard]] std::optional<DxUi::ContextMenuRootSwitchRequest> BuildDxMenuBarRootSwitchRequest(size_t index) noexcept;
     void CaptureDxMenuBarFocusRestoreTarget() noexcept;
     void RestoreDxMenuBarFocus() noexcept;
     void OpenDxMenuBarPopup(size_t index, POINT screenPoint, bool keyboardInvocation) noexcept;
@@ -184,7 +184,7 @@ private:
     void SyncOptionsDxButtons() noexcept;
     void SyncOptionsDxToggles() noexcept;
     void SyncOptionsDxEdits() noexcept;
-    [[nodiscard]] bool EnsureOptionsDxBodyControlVisible(RedSalamander::DxUi::Control* control) noexcept;
+    [[nodiscard]] bool EnsureOptionsDxBodyControlVisible(DxUi::Control* control) noexcept;
     [[nodiscard]] LRESULT HandleOptionsDxHostMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp, bool& handled) noexcept;
     void LayoutOptionsControls() noexcept;
     void PaintOptionsHostBackgroundAndCards(HDC hdc, HWND host) noexcept;
@@ -296,14 +296,14 @@ private:
         wil::unique_hwnd bannerOptionsHostHwnd;
         wil::unique_hwnd bannerRescanHostHwnd;
         wil::unique_hwnd bannerTitleHostHwnd;
-        RedSalamander::DxUi::WindowHost menuBarHost;
-        RedSalamander::DxUi::WindowHost bannerOptionsHost;
-        RedSalamander::DxUi::WindowHost bannerRescanHost;
-        RedSalamander::DxUi::WindowHost bannerTitleHost;
-        RedSalamander::DxUi::MenuBar* menuBar              = nullptr;
-        RedSalamander::DxUi::Button* bannerOptionsButtonDx = nullptr;
-        RedSalamander::DxUi::Button* bannerRescanButtonDx  = nullptr;
-        RedSalamander::DxUi::Label* bannerTitleLabel       = nullptr;
+        DxUi::WindowHost menuBarHost;
+        DxUi::WindowHost bannerOptionsHost;
+        DxUi::WindowHost bannerRescanHost;
+        DxUi::WindowHost bannerTitleHost;
+        DxUi::MenuBar* menuBar              = nullptr;
+        DxUi::Button* bannerOptionsButtonDx = nullptr;
+        DxUi::Button* bannerRescanButtonDx  = nullptr;
+        DxUi::Label* bannerTitleLabel       = nullptr;
         std::atomic<int> menuBarSelectedIndexSnapshot{-1};
         HWND menuBarFocusRestoreHwnd = nullptr;
         bool usesMenuBar             = false;
@@ -366,8 +366,8 @@ private:
         wil::unique_hwnd scanProgressText;
         wil::unique_hwnd scanProgressBar;
         wil::unique_hwnd scanProgressTextHostHwnd;
-        RedSalamander::DxUi::WindowHost scanProgressTextHost;
-        RedSalamander::DxUi::Label* scanProgressTextLabel = nullptr;
+        DxUi::WindowHost scanProgressTextHost;
+        DxUi::Label* scanProgressTextLabel = nullptr;
         BannerProgressState banner{};
         uint64_t scanStartTickMs                    = 0;
         float spinnerAngleDeg                       = 0.0f;
@@ -408,19 +408,19 @@ private:
 
     struct OptionsToggleCardDx
     {
-        RedSalamander::DxUi::CardPanel* card    = nullptr;
-        RedSalamander::DxUi::Label* title       = nullptr;
-        RedSalamander::DxUi::Label* description = nullptr;
-        RedSalamander::DxUi::Toggle* toggle     = nullptr;
+        DxUi::CardPanel* card    = nullptr;
+        DxUi::Label* title       = nullptr;
+        DxUi::Label* description = nullptr;
+        DxUi::Toggle* toggle     = nullptr;
     };
 
     struct OptionsIgnoreCardDx
     {
-        RedSalamander::DxUi::CardPanel* card    = nullptr;
-        RedSalamander::DxUi::Label* title       = nullptr;
-        RedSalamander::DxUi::Label* description = nullptr;
-        RedSalamander::DxUi::Toggle* toggle     = nullptr;
-        RedSalamander::DxUi::TextField* edit    = nullptr;
+        DxUi::CardPanel* card    = nullptr;
+        DxUi::Label* title       = nullptr;
+        DxUi::Label* description = nullptr;
+        DxUi::Toggle* toggle     = nullptr;
+        DxUi::TextField* edit    = nullptr;
     };
 
     struct OptionsBodyDx
@@ -436,11 +436,11 @@ private:
         OptionsBodyDx& operator=(OptionsBodyDx&&) noexcept = delete;
 
         wil::unique_hwnd hostHwnd;
-        RedSalamander::DxUi::WindowHost host;
-        RedSalamander::DxUi::Label* headerCompare  = nullptr;
-        RedSalamander::DxUi::Label* headerSubdirs  = nullptr;
-        RedSalamander::DxUi::Label* headerAdvanced = nullptr;
-        RedSalamander::DxUi::Label* headerIgnore   = nullptr;
+        DxUi::WindowHost host;
+        DxUi::Label* headerCompare  = nullptr;
+        DxUi::Label* headerSubdirs  = nullptr;
+        DxUi::Label* headerAdvanced = nullptr;
+        DxUi::Label* headerIgnore   = nullptr;
         OptionsToggleCardDx compareSize;
         OptionsToggleCardDx compareDateTime;
         OptionsToggleCardDx compareAttributes;
@@ -451,7 +451,7 @@ private:
         OptionsToggleCardDx keepIdenticalItems;
         OptionsIgnoreCardDx ignoreFiles;
         OptionsIgnoreCardDx ignoreDirectories;
-        RedSalamander::DxUi::Control* lastFooterReturnTarget = nullptr;
+        DxUi::Control* lastFooterReturnTarget = nullptr;
 
         void Detach() noexcept
         {
@@ -498,9 +498,9 @@ private:
         OptionsButtonDx& operator=(OptionsButtonDx&&) noexcept = delete;
 
         wil::unique_hwnd hostHwnd;
-        RedSalamander::DxUi::WindowHost host;
-        RedSalamander::DxUi::Button* button = nullptr;
-        int attachFailureStage              = 0;
+        DxUi::WindowHost host;
+        DxUi::Button* button   = nullptr;
+        int attachFailureStage = 0;
 
         void Detach() noexcept
         {
@@ -587,7 +587,7 @@ private:
 
     OptionsPanelController _optionsPanel{};
 
-    Common::Settings::Settings* _settings = nullptr;
+    Common::Settings::Settings* _settings  = nullptr;
     FolderWindow* _applicationFolderWindow = nullptr;
     AppTheme _theme{};
     const ShortcutManager* _shortcuts = nullptr;

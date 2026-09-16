@@ -135,3 +135,8 @@ BEGIN
     IDS_VIEWERRAW_RAW_BUFFER_TRUNCATED "Vyrovnávací paměť dekódovaného obrázku RAW je zkrácená."
     IDS_VIEWERRAW_RAW_OUTPUT_BUDGET "Výstup RAW překračuje paměťový limit dekódovaných obrázků."
 END
+
+STRINGTABLE
+BEGIN
+    IDS_DXUI_NO_MATCHES "Žádné shody"
+END

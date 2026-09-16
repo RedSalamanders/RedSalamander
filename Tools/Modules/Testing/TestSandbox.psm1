@@ -446,11 +446,20 @@ function Remove-RSTestSandboxStaleRunDirectories {
 
         [string[]]$AllowedRunIds = @(),
 
+        [string[]]$CandidateRunIds = @(),
+
         [int64[]]$LiveProcessIds = @(),
 
         [hashtable]$LiveProcessStartTimesUtc = @{}
     )
 
+    # Synthetic liveness is used by fixtures. Never let that view authorize a root-wide sweep.
+    if ($PSBoundParameters.ContainsKey('LiveProcessIds') -and -not $PSBoundParameters.ContainsKey('CandidateRunIds')) {
+        throw 'A synthetic process snapshot requires an explicit CandidateRunIds cleanup scope.'
+    }
+    foreach ($candidate in $CandidateRunIds) {
+        [void](Assert-RSTestSandboxPathSegment -Value $candidate -Description 'Cleanup candidate run id')
+    }
     $normalizedTestRoot = ConvertTo-RSFullPath -Path $TestRoot
     [void](Assert-RSTestSandboxRootAuthorized -TestRoot $normalizedTestRoot -RequireMarker)
     $runsRoot = (Join-Path $normalizedTestRoot 'runs').TrimEnd('\')
@@ -466,6 +475,7 @@ function Remove-RSTestSandboxStaleRunDirectories {
 
     $results = @()
     foreach ($target in @(Resolve-RSTestSandboxStaleRunTargets @resolveParams)) {
+        if ($PSBoundParameters.ContainsKey('CandidateRunIds') -and $target.RunId -notin $CandidateRunIds) { continue }
         $targetPath = (ConvertTo-RSFullPath -Path $target.Path).TrimEnd('\')
         if (-not $targetPath.StartsWith("$runsRoot\", [System.StringComparison]::OrdinalIgnoreCase)) {
             throw "Refusing to remove stale TestSandbox run outside '$runsRoot': $targetPath"

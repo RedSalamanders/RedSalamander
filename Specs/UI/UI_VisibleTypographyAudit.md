@@ -5,7 +5,7 @@ Last reviewed: 2026-08-04
 
 ## Product contract
 
-- App-owned visible text uses the typography services in `Common/DxUi/DxUi.Typography.h` and DirectWrite.
+- App-owned visible text uses the typography services in the public `<DxUi/Typography.h>` and DirectWrite.
 - Windows 11 UI families are `Segoe UI Variable Small` for caption/header-scale text, `Segoe UI Variable Text` for body/control text, and `Segoe UI Variable Display` for large display text.
 - `Segoe Fluent Icons`, `Segoe UI Emoji`, and `Consolas` are the only family exceptions for icon glyphs, emoji, and monospace content respectively.
 - Product code must not introduce visible GDI text, caller-owned UI `HFONT` state, or native-font propagation as a fallback for a DxUi surface.

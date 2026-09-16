@@ -25,8 +25,6 @@
 
 #include <WebView2.h>
 
-#include "DxUi/DxUi.h"
-#include "DxUi/DxUiNativeMenuInterop.h"
 #include "EmbeddedViewerBase.h"
 #include "Helpers.h"
 #include "PlugInterfaces/FileSystem.h"
@@ -34,6 +32,8 @@
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
 #include "ViewerWebSecurity.h"
+#include <DxUi/DxUi.h>
+#include <DxUi/NativeMenuInterop.h>
 
 enum class ViewerWebKind : uint8_t
 {
@@ -110,12 +110,12 @@ private:
         std::wstring statusMessage;
         std::optional<std::filesystem::path> extractedWin32Path;
         ViewerWebSecurity::DocumentRoute documentRoute = ViewerWebSecurity::DocumentRoute::None;
-        uint64_t loadedSourceBytes = 0u;
-        uint64_t generatedOutputBytes = 0u;
-        uint64_t generatedOutputLimit = 0u;
-        bool generatedOutputRejected = false;
-        bool jsonExpandCollapseAvailable = false;
-        bool offerTextViewerFallback     = false;
+        uint64_t loadedSourceBytes                     = 0u;
+        uint64_t generatedOutputBytes                  = 0u;
+        uint64_t generatedOutputLimit                  = 0u;
+        bool generatedOutputRejected                   = false;
+        bool jsonExpandCollapseAvailable               = false;
+        bool offerTextViewerFallback                   = false;
 
         // Snapshot of UI-thread state captured in StartAsyncLoad so the worker never reads live members.
         ViewerWebKind kindSnapshot{};
@@ -130,18 +130,18 @@ private:
 
     struct AsyncSaveWorkItem
     {
-        AsyncSaveWorkItem()                                   = default;
+        AsyncSaveWorkItem()                                    = default;
         AsyncSaveWorkItem(const AsyncSaveWorkItem&)            = delete;
         AsyncSaveWorkItem(AsyncSaveWorkItem&&)                 = delete;
         AsyncSaveWorkItem& operator=(const AsyncSaveWorkItem&) = delete;
         AsyncSaveWorkItem& operator=(AsyncSaveWorkItem&&)      = delete;
 
-        ViewerWeb* viewer  = nullptr;
-        HWND hwnd          = nullptr;
-        uint64_t requestId = 0u;
-        uint64_t maxBytes  = 0u;
+        ViewerWeb* viewer      = nullptr;
+        HWND hwnd              = nullptr;
+        uint64_t requestId     = 0u;
+        uint64_t maxBytes      = 0u;
         uint32_t testFaultMask = 0u;
-        HRESULT hr         = E_FAIL;
+        HRESULT hr             = E_FAIL;
         std::wstring sourcePath;
         std::wstring destinationPath;
         std::wstring statusMessage;
@@ -182,8 +182,7 @@ private:
     HRESULT CreateControllerFromEnvironment(HWND hwnd, ICoreWebView2Environment* environment, uint64_t sharedEnvironmentGeneration) noexcept;
     void DiscardWebView2() noexcept;
     [[nodiscard]] HRESULT ConfigureWebViewSettings() noexcept;
-    HRESULT HandleNavigationStarting(ICoreWebView2NavigationStartingEventArgs* args,
-                                     ViewerWebSecurity::NavigationSurface surface) noexcept;
+    HRESULT HandleNavigationStarting(ICoreWebView2NavigationStartingEventArgs* args, ViewerWebSecurity::NavigationSurface surface) noexcept;
     HRESULT HandleNewWindowRequested(ICoreWebView2NewWindowRequestedEventArgs* args) noexcept;
     void ApplyWebViewThemeScript() noexcept;
     HRESULT NavigatePendingContent(HWND hwnd) noexcept;
@@ -239,11 +238,11 @@ private:
     bool _syncingFileCombo = false;
 
     wil::unique_hmenu _menuHandle;
-    RedSalamander::DxUi::NativeMenuBarHost _menuBarHost;
+    DxUi::NativeMenuBarHost _menuBarHost;
     wil::unique_hwnd _hFileComboHost;
-    RedSalamander::DxUi::WindowHost _fileComboHost;
-    RedSalamander::DxUi::ComboBox* _fileComboControl = nullptr;
-    bool _fileComboHostPreExpandPopup                = false;
+    DxUi::WindowHost _fileComboHost;
+    DxUi::ComboBox* _fileComboControl = nullptr;
+    bool _fileComboHostPreExpandPopup = false;
 
     RECT _headerRect{};
     RECT _contentRect{};
@@ -259,7 +258,7 @@ private:
     std::atomic<uint64_t> _asyncSavePostFailureCount{0u};
     std::wstring _statusMessage;
     bool _loadPostFailureTerminal = false;
-    bool _saveInProgress = false;
+    bool _saveInProgress          = false;
 
     std::optional<std::wstring> _pendingPath;
     std::optional<std::wstring> _pendingWebContent;
@@ -268,16 +267,16 @@ private:
     std::optional<std::filesystem::path> _tempExtractedPath;
     std::wstring _allowedDocumentUrl;
     ViewerWebSecurity::DocumentRoute _documentRoute = ViewerWebSecurity::DocumentRoute::None;
-    uint64_t _loadedSourceBytes = 0u;
-    bool _documentScriptsEnabled = false;
-    bool _navigationCompleted = false;
-    bool _navigationSucceeded = false;
-    bool _generatedOutputRejected = false;
-    uint64_t _generatedOutputBytes = 0u;
-    uint64_t _generatedOutputLimit = 0u;
-    bool _markdownShowSource          = false;
-    bool _jsonExpandCollapseAvailable = false;
-    bool _webViewInitInProgress       = false;
+    uint64_t _loadedSourceBytes                     = 0u;
+    bool _documentScriptsEnabled                    = false;
+    bool _navigationCompleted                       = false;
+    bool _navigationSucceeded                       = false;
+    bool _generatedOutputRejected                   = false;
+    uint64_t _generatedOutputBytes                  = 0u;
+    uint64_t _generatedOutputLimit                  = 0u;
+    bool _markdownShowSource                        = false;
+    bool _jsonExpandCollapseAvailable               = false;
+    bool _webViewInitInProgress                     = false;
 
     wil::com_ptr<ICoreWebView2Controller> _webViewController;
     wil::com_ptr<ICoreWebView2> _webView;

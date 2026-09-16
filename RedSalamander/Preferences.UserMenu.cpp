@@ -9,9 +9,9 @@
 #include "UiMetrics.h"
 #include "resource.h"
 
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::WindowHost;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::WindowHost;
 
 namespace
 {
@@ -95,10 +95,10 @@ bool UserMenuPane::EnsureDxPageHost(HWND parent, PreferencesDialogState& state) 
     _actions = _pageContentRoot->AddChild<Label>();
     _hint    = _pageContentRoot->AddChild<Label>();
 
-    _title->SetFontRole(RedSalamander::DxUi::FontRole::Header);
+    _title->SetFontRole(DxUi::FontRole::Header);
     _actions->SetMultiline(true);
     _hint->SetMultiline(true);
-    _hint->SetFontRole(RedSalamander::DxUi::FontRole::Small);
+    _hint->SetFontRole(DxUi::FontRole::Small);
 
     ApplyTheme(state);
     SyncFromState(state);
@@ -136,7 +136,7 @@ void UserMenuPane::SyncFromState(PreferencesDialogState& state) noexcept
     if (_title)
     {
         _title->SetText(LoadStringResource(nullptr, hasActions ? IDS_PREFS_USER_MENU_ACTIONS_TITLE : IDS_PREFS_USER_MENU_EMPTY_TITLE));
-        _title->SetFontRole(RedSalamander::DxUi::FontRole::Header);
+        _title->SetFontRole(DxUi::FontRole::Header);
     }
     if (_actions)
     {
@@ -145,7 +145,7 @@ void UserMenuPane::SyncFromState(PreferencesDialogState& state) noexcept
     if (_hint)
     {
         _hint->SetText(LoadStringResource(nullptr, IDS_PREFS_USER_MENU_HINT));
-        _hint->SetFontRole(RedSalamander::DxUi::FontRole::Small);
+        _hint->SetFontRole(DxUi::FontRole::Small);
     }
 
     if (_pageHost)

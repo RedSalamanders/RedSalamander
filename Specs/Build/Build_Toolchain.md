@@ -1,5 +1,68 @@
 # Official Build Toolchain Identity
 
+The MSIX project declares Debug, Release and ASan Debug for both x64 and ARM64. Solution mappings preserve the selected configuration; an ASan build must never package Release or ordinary Debug executables. Packaging remains an explicit operation rather than an automatic side effect of a sanitizer solution build, consistent across both architectures.
+
+The reusable hosted build limits initial MSBuild fan-out to two workers following an ARM64 Release compiler heap-exhaustion failure. Native compilation remains a required gate; a worker bound does not establish that the previous failure is resolved until the complete profile builds successfully.
+
+On an x64 Windows host, first-party ARM64 projects default to the x64 compiler and
+linker host. MSVC otherwise defaults that cross-build to the x86 host, whose address
+space can be exhausted during Release whole-program optimization. The early
+`Directory.Build.props` default preserves an explicit `PreferredToolArchitecture`
+selection and native ARM64 host selection. Consumer profile tests evaluate the real
+MSBuild imports for all six profiles and verify that explicit overrides survive.
+DxUi restore evaluates that first-party host policy before computing the library fingerprint.
+The product's DxUi project reference explicitly forwards the selected host: a property evaluated
+inside a consumer project is not inherited automatically by the independent library project.
+Identity probing restores the caller's environment on both success and failure. The existing
+consumer/archive host-mismatch rejection remains mandatory.
+Synthetic restore tests exercise a checkout path whose Git hook paths exceed 260 characters,
+matching the governed Full sandbox depth. Their local Git clones enable long paths without
+changing global or developer-repository settings; focused runs must cover the same boundary.
+
+## Pinned DxUi consumption
+
+`Dependencies/DxUi.lock.json` selects API revision 2 and the single `DxUi.lib` target.
+All DxUi-using production projects consume that pin: RedSalamander, RedConfigure, Monitor, Terminal
+and the viewer plugins. ProductUiTests, RedConfigureTests and PerformanceTests2 use the same imports.
+The old library and DxUiTests projects are retired. Shared implementation and control tests live
+in the canonical DxUi repository; product adapters and their regressions remain in this repository.
+Removing legacy files does not complete the runtime/resource gates recorded in I19.
+Consumers import `Build/RedSalamander.DxUi.props` and `.targets`; they never enumerate library sources.
+The root build restores the exact source with `Tools/Modules/Build/DxUiDependency.psm1`, or developers
+can use `Tools/Restore-DxUi.ps1` before an IDE build. Restore owns the repository/platform dependency
+lease, contains its native child processes and leaves sibling repositories unchanged.
+
+Separate platform properties select an output fingerprint containing source/API, compiler host and
+compiler/linker/MSBuild/SDK identities, CRT family and STL annotation policy. RedSalamander explicitly
+sets `DxUiDisableStlAnnotations=true` to match its ordinary vcpkg C++ dependencies; ASAN heap/stack
+instrumentation remains required. Debug, Release and ASan Debug on x64/ARM64 are the target matrix.
+
+The tracked lock participates in existing source and project-graph identities. A modified managed
+source fails snapshot acquisition; missing or dirty source prevents build-receipt reuse. Successful
+builds verify the actual linker command names the selected archive, reject a legacy archive in that
+module, and produce `<module>.DxUi.json` with source/header/archive/toolchain/module identities.
+These sidecars belong to the module's existing attested runtime closure. This extends existing build
+evidence without introducing a new qualification schema.
+
+Builds request one advisory about newer main with green DxUi CI. Lookup failure does not fail a valid
+fixed-pin build. The maintainer updates the lock and adapters on a product branch, runs product tests,
+and submits the ordinary PR. Library defects are fixed upstream before repeating that consumer loop.
+The build adapter shows a newer main revision without a completed successful validation in red and a
+validated update in yellow; other advisory states use dark yellow. A validated update prints the normal
+`Tools/Update-DxUi.ps1` command and its `-UpdateOnly` alternative on separate yellow lines. Coloring communicates
+advisory severity only and never changes the selected pin or build result.
+`Tools/Update-DxUi.ps1` implements the normal branch update: it accepts only a current `main` commit with successful
+completed DxUi CI, atomically changes the lock, and runs the Full suite. `-UpdateOnly` skips that local suite only
+when equivalent product validation completed in another environment; neither mode auto-commits, and a local validation
+failure retains the changed lock for diagnosis.
+Rollback reverts the complete adoption change and uses the retained previous product package.
+Before merging or releasing a consumer upgrade, publish the tested library commit to
+the public DxUi repository and verify restore without a local Git URL rewrite. Local
+qualification of an unpublished commit does not establish that a clean remote consumer
+can fetch it. Library publication and product merge/release remain explicit lifecycle actions.
+The [I19 checklist](../Plans/Done/DxUi_SharedLibraryAdoptionAndReleasePlan_2026-09-09.md) records actual
+qualification; a declared configuration or library test pass does not qualify a product or native ARM64.
+
 This specification defines the compiler identity used by official RedSalamander builds
 and the evidence every build artifact must retain. It is authoritative for CI and
 release builds; a developer may use another compatible installed toolchain locally,
@@ -325,6 +388,12 @@ matching MUST apply that same prefix mapping to `vcpkg`, compiler, and linker
 command lines that reference the platform-scoped canonical root or custom staging triplet paths; process
 name alone, another repository, or the opposite architecture is not evidence.
 
+CI stages its managed executable-tool checkout and download cache under
+`.build/vcpkg-tool`, matching the generated-output boundary used by source
+snapshots. The checkout must not appear as an untracked nested repository at
+the product root. Its executable and manifest pins remain separately verified;
+the source-integrity check must not gain an exclusion for a root `vcpkg/` checkout.
+
 The `vcpkg-tool.json` executable revision and `vcpkg.json` `builtin-baseline`
 remain independent identities. When a caller materializes them as separate
 checkouts, `vcpkg-install.ps1 -VcpkgExe <tool> -VcpkgRoot <registry>` MUST preserve
@@ -474,3 +543,36 @@ requires a successful full-solution rebuild for that platform; configuration doe
 not partition or independently clear the shared triplet marker.
 Packaging contamination is repository-wide and is never cleared as a side effect
 of an artifact-profile or dependency repair.
+
+
+All first-party native project definitions expose Debug, Release and ASan Debug for x64 and ARM64,
+including the manual Win32HelloCred and historical Gate-0 harness/probe projects. Additional build
+lanes do not rewrite or requalify sealed historical terminal evidence. Reproducing that evidence
+still uses its recorded source and toolchain identity. The current ASan Debug configuration forces
+compiler instrumentation in every translation unit, `/MDd`, `/Od`, and compatible debug information;
+a missing app-local sanitizer runtime fails the build. The existing PluginContractTests
+`--asan-seed-heap-overflow` child remains the detection probe. Native ARM64 execution is required.
+Toolchain receipts identify the MSBuild-selected compiler host and its matching SDK resource compiler,
+rather than assuming Hostx64 on every machine.
+
+DxUi is public: exact-pin HTTPS source restore requires no PAT or Actions secret. Anonymous Git and
+public Actions API access were verified on 2026-09-09. CI can use its automatic read-only job token
+for advisory API rate limits; unavailable/rate-limited advisory queries never change or reject the pin.
+
+The PR native matrix selects x64 and ARM64 runners for all three configurations. Each
+job builds the test-enabled solution, verifies the ASAN defect probe where selected,
+then uses the existing receipt-gated Fresh Full runner in that same job. Cross-job
+nightly/package handoffs still require portable attestation. Runtime execution is
+rejected if host architecture differs from the selected target. No custom DxUi secret
+is required; the public pin restores through HTTPS.
+
+Windows CI enables Git `core.longpaths` before checkout: retained test evidence includes repository paths beyond
+the default Windows Git path limit. This setup runs on the disposable runner before any project validation.
+
+CI formatting checks changed owned native files with the hash-pinned clang-format 22.1.3 wheel in
+`Build/requirements-format.txt`. It does not commit changes or format archived Specs/TestRuns source snapshots.
+
+The reusable CI build step checks the native build exit status immediately, before
+any matrix validator or other native command can overwrite it. A compiler failure
+must fail the build step and prevent native test/provenance acceptance; a missing
+receipt is not the primary diagnosis for an already failed compilation.

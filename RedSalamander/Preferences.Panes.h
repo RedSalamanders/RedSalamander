@@ -3,9 +3,9 @@
 #include <array>
 #include <memory>
 
-#include "DxUi/DxUi.h"
 #include "Preferences.Internal.h"
 #include "Preferences.h"
+#include <DxUi/DxUi.h>
 
 class PanesPane final
 {
@@ -49,9 +49,9 @@ private:
     void LayoutDxPage(
         PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, int sectionY, const PreferencesTypographyContext& typography) noexcept;
 
-    HWND _pageHost                               = nullptr;
-    RedSalamander::DxUi::WindowHost* _pageHostDx = nullptr;
-    RedSalamander::DxUi::Panel* _pageContentRoot = nullptr;
+    HWND _pageHost                = nullptr;
+    DxUi::WindowHost* _pageHostDx = nullptr;
+    DxUi::Panel* _pageContentRoot = nullptr;
     std::unique_ptr<DxState> _dxState;
     bool _useDxUiTwoStateCombos     = false;
     bool _usesDxUiTypographyContext = false;

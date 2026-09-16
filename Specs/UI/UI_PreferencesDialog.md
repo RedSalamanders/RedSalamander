@@ -1,6 +1,6 @@
 # Preferences Dialog Specification
 
-Last updated: 2026-08-29
+Last updated: 2026-09-09
 
 ## Purpose
 
@@ -48,6 +48,9 @@ Related specs:
 - Preferences MUST open as a modeless, independent top-level tool window following `Specs/UI/UI_TopLevelToolWindows.md`.
 - Preferences MUST apply the persisted `ui.windowBackdrop` setting through the shared window chrome/backdrop helper path with tool-window target semantics.
 - Preferences MUST be single-instance within the app process; re-opening the command reuses and activates the existing window.
+- Every subclass MUST forward `WM_NCDESTROY` to its captured original procedure after restoring its hook. Closing Preferences MUST release its dialog owner and all native DxUi hosts; the page host MUST drain posted payloads and detach while its HWND and owner remain valid.
+- Pane cleanup MUST disconnect borrowed grids, models, delegates and callbacks before the shared page host destroys its retained tree. Category switching preserves pane state, so close-time cleanup must cover every initialized pane, including inactive pages.
+- Repeated open/close coverage MUST return both the attached-host count and the UI-thread shared-resource attachment count to their pre-dialog baselines after every close. The 48-cycle regression covers more cumulative attachments than the bounded native payload-window registry can retain.
 - Preferences MUST persist its normal size, position, DPI, monitor identity, and normal/maximized state under `windows.PreferencesWindow` when it closes and in the application-shutdown snapshot. Reopening MUST restore that placement through `WindowPlacementPersistence`.
 - Restore MUST enforce the dialog's current minimum size before the final monitor-work-area clamp. A stale, disconnected-monitor, off-screen, or undersized saved rectangle MUST therefore reopen completely visible; when the work area cannot fit the minimum, full work-area visibility takes precedence.
 - The visible shell consists of:

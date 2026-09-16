@@ -27,6 +27,7 @@
 #include "CurlProcessRuntime.h"
 #include "DeleteOnCloseTemporaryFile.h"
 #include "ContentDigest.h"
+#include "FileSystemDiscoveryScope.h"
 #include "FileSystemGoogleDriveResources.h"
 #include "Helpers.h"
 #include "PaginationGuard.h"
@@ -1068,6 +1069,7 @@ struct FileSystemGoogleDrive::GoogleItem
     std::wstring version; // Drive's monotonically increasing revision counter for the file
     unsigned long attributes = FILE_ATTRIBUTE_NORMAL;
     uint64_t sizeBytes       = 0;
+    bool sizeKnown           = false; // Drive omits "size" for native documents; that is not an empty file
     __int64 creationTime     = 0;
     __int64 lastAccessTime   = 0;
     __int64 lastWriteTime    = 0;
@@ -1586,6 +1588,7 @@ constexpr uint64_t kDriveUploadChunkBytes   = 8ull * 1024u * 1024u; // a multipl
     if (const auto sizeBytes = TryGetJsonUInt64Flexible(entry, "size"); sizeBytes.has_value())
     {
         item.sizeBytes = sizeBytes.value();
+        item.sizeKnown = true;
     }
     if (const auto modifiedTime = TryGetJsonUtf8String(entry, "modifiedTime"); modifiedTime.has_value())
     {
@@ -1761,6 +1764,31 @@ struct DriveTransferContext final
     const FileSystemOptions* options;
     IFileSystemCallback* callback;
     void* cookie;
+    // The governed call's one discovery scope. Owned by the entry point, which alone closes it;
+    // the transfer helpers only add what they find. Null when the call carries no control.
+    Common::FileOperations::DiscoveryScope* discovery = nullptr;
+
+    // One discovered item, as Drive describes it: a folder, a file of known size, or a file whose
+    // size the API withholds (native documents), which still counts but contributes no bytes.
+    void NoteDiscovered(const FileSystemGoogleDrive::GoogleItem& item) const noexcept
+    {
+        if (discovery == nullptr)
+        {
+            return;
+        }
+        if (item.isFolder)
+        {
+            static_cast<void>(discovery->AddDirectory());
+        }
+        else if (item.sizeKnown)
+        {
+            static_cast<void>(discovery->AddFile(item.sizeBytes));
+        }
+        else
+        {
+            static_cast<void>(discovery->AddFileWithUnknownSize());
+        }
+    }
 
     [[nodiscard]] bool AllowOverwrite() const noexcept
     {
@@ -1875,6 +1903,7 @@ struct DriveTransferContext final
         return S_OK;
     };
 
+    context.NoteDiscovered(source);
     RETURN_IF_FAILED(pushFrame(source, destinationParent, destinationName, existing));
     while (! frames.empty())
     {
@@ -1922,6 +1951,9 @@ struct DriveTransferContext final
         }
 
         const FileSystemGoogleDrive::GoogleItem child = frame.children[frame.nextChild++];
+        // Discovered here, whatever happens to it below: a natively moved child folder is one
+        // directory and none of its descendants, a skipped collision is still work this call found.
+        context.NoteDiscovered(child);
         const auto count                              = frame.exactNameCounts.find(child.name);
         const std::wstring exposedName = MakeExposedItemName(child.name, child.id, count == frame.exactNameCounts.end() ? 0u : count->second);
         const FileSystemGoogleDrive::GoogleItem* collision = nullptr;
@@ -1985,8 +2017,19 @@ struct DriveTransferContext final
                                         bool move,
                                         const FileSystemOptions* options,
                                         IFileSystemCallback* callback,
-                                        void* cookie)
+                                        void* cookie,
+                                        Common::FileOperations::DiscoveryScope* discovery,
+                                        bool closeDiscoveryWhenFinal)
 {
+    // A singular call closes the moment its totals are final so the caller's card never has to
+    // guess; a batch has more roots coming and closes once, after the last.
+    const auto discoveryFinal = [&]() noexcept
+    {
+        if (discovery != nullptr && closeDiscoveryWhenFinal)
+        {
+            discovery->Close();
+        }
+    };
     if (! sourcePath || ! destinationPath || sourcePath[0] == L'\0' || destinationPath[0] == L'\0')
     {
         return E_INVALIDARG;
@@ -2064,14 +2107,21 @@ struct DriveTransferContext final
         .options    = options,
         .callback   = callback,
         .cookie     = cookie,
+        .discovery  = discovery,
     };
     if (! source.isFolder)
     {
+        // A known leaf: its size is already resolved, so the total is final before the transfer.
+        context.NoteDiscovered(source);
+        discoveryFinal();
         return DriveTransferFile(context, source, sourceParent.id, destinationParent, destinationLeaf, existingPtr);
     }
     if (move && existingPtr == nullptr)
     {
-        // Native folder move: one parent/name change re-homes the whole subtree.
+        // Native folder move: one parent/name change re-homes the whole subtree, so this call
+        // discovers the folder and none of its descendants.
+        context.NoteDiscovered(source);
+        discoveryFinal();
         FileSystemGoogleDrive::GoogleItem moved;
         const bool sameParent = sourceParent.id == destinationParent.id;
         return fileSystem.UpdateItem(sourceConnection,
@@ -2082,12 +2132,18 @@ struct DriveTransferContext final
                                      std::nullopt,
                                      moved);
     }
-    return DriveTransferTree(context, source, destinationParent, destinationLeaf, existingPtr);
+    const HRESULT treeHr = DriveTransferTree(context, source, destinationParent, destinationLeaf, existingPtr);
+    discoveryFinal();
+    return treeHr;
 }
 
 // Delete: permanent DELETE or trash (recycle). A folder without RECURSIVE must be empty; with
 // RECURSIVE (or when trashing) Drive removes the subtree as one object.
-[[nodiscard]] HRESULT DriveDeletePath(FileSystemGoogleDrive& fileSystem, const wchar_t* path, FileSystemFlags flags)
+[[nodiscard]] HRESULT DriveDeletePath(FileSystemGoogleDrive& fileSystem,
+                                      const wchar_t* path,
+                                      FileSystemFlags flags,
+                                      Common::FileOperations::DiscoveryScope* discovery,
+                                      bool closeDiscoveryWhenFinal)
 {
     if (! path || path[0] == L'\0')
     {
@@ -2112,6 +2168,27 @@ struct DriveTransferContext final
     if (FAILED(hr))
     {
         return hr;
+    }
+    if (discovery != nullptr)
+    {
+        // Drive removes a subtree as one object, so a delete discovers the item it names and
+        // nothing beneath it; that is the whole total, known before anything is removed.
+        if (item.isFolder)
+        {
+            static_cast<void>(discovery->AddDirectory());
+        }
+        else if (item.sizeKnown)
+        {
+            static_cast<void>(discovery->AddFile(item.sizeBytes));
+        }
+        else
+        {
+            static_cast<void>(discovery->AddFileWithUnknownSize());
+        }
+        if (closeDiscoveryWhenFinal)
+        {
+            discovery->Close();
+        }
     }
     if (item.isFolder && (flags & FILESYSTEM_FLAG_RECURSIVE) == 0)
     {
@@ -2170,7 +2247,11 @@ struct DriveTransferContext final
 }
 
 // C10: DriveDeletePath, deleting only while the path still names the pinned file id.
-[[nodiscard]] HRESULT DriveDeletePathIfIdentity(FileSystemGoogleDrive& fileSystem, const wchar_t* path, const FileSystemDeleteIdentity& pinned, FileSystemFlags flags)
+[[nodiscard]] HRESULT DriveDeletePathIfIdentity(FileSystemGoogleDrive& fileSystem,
+                                                const wchar_t* path,
+                                                const FileSystemDeleteIdentity& pinned,
+                                                FileSystemFlags flags,
+                                                Common::FileOperations::DiscoveryScope* discovery)
 {
     if (! path || path[0] == L'\0')
     {
@@ -2200,6 +2281,23 @@ struct DriveTransferContext final
     {
         // The name refers to another object than the one the user confirmed; nothing is deleted.
         return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    }
+    if (discovery != nullptr)
+    {
+        // The confirmed item, and nothing beneath it: Drive removes a subtree as one object.
+        if (item.isFolder)
+        {
+            static_cast<void>(discovery->AddDirectory());
+        }
+        else if (item.sizeKnown)
+        {
+            static_cast<void>(discovery->AddFile(item.sizeBytes));
+        }
+        else
+        {
+            static_cast<void>(discovery->AddFileWithUnknownSize());
+        }
+        discovery->Close();
     }
     if (item.isFolder && (flags & FILESYSTEM_FLAG_RECURSIVE) == 0)
     {
@@ -2434,7 +2532,11 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::CopyItem(const wchar_t* sourceP
     }
     try
     {
-        const HRESULT hr         = DriveTransferPath(*this, sourcePath, destinationPath, flags, false, options, callback, cookie);
+        // One governed call is one discovery scope, reported through this call's own options and
+        // never through the thread-local DriveOperationOptionsScope, which belongs to whichever
+        // call owns the current thread. It closes when this frame ends if nothing closed it sooner.
+        Common::FileOperations::DiscoveryScope discovery(options);
+        const HRESULT hr         = DriveTransferPath(*this, sourcePath, destinationPath, flags, false, options, callback, cookie, &discovery, true);
         const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_COPY, 0u, sourcePath, destinationPath, hr, false, options, cookie);
         return FAILED(callbackHr) ? callbackHr : hr;
     }
@@ -2463,7 +2565,11 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::MoveItem(const wchar_t* sourceP
     }
     try
     {
-        const HRESULT hr         = DriveTransferPath(*this, sourcePath, destinationPath, flags, true, options, callback, cookie);
+        // One governed call is one discovery scope, reported through this call's own options and
+        // never through the thread-local DriveOperationOptionsScope, which belongs to whichever
+        // call owns the current thread. It closes when this frame ends if nothing closed it sooner.
+        Common::FileOperations::DiscoveryScope discovery(options);
+        const HRESULT hr         = DriveTransferPath(*this, sourcePath, destinationPath, flags, true, options, callback, cookie, &discovery, true);
         const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_MOVE, 0u, sourcePath, destinationPath, hr, true, options, cookie);
         return FAILED(callbackHr) ? callbackHr : hr;
     }
@@ -2488,7 +2594,11 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::DeleteItem(
     }
     try
     {
-        const HRESULT hr         = DriveDeletePath(*this, path, flags);
+        // One governed call is one discovery scope, reported through this call's own options and
+        // never through the thread-local DriveOperationOptionsScope, which belongs to whichever
+        // call owns the current thread. It closes when this frame ends if nothing closed it sooner.
+        Common::FileOperations::DiscoveryScope discovery(options);
+        const HRESULT hr         = DriveDeletePath(*this, path, flags, &discovery, true);
         const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_DELETE, 0u, path, nullptr, hr, true, options, cookie);
         return FAILED(callbackHr) ? callbackHr : hr;
     }
@@ -2547,7 +2657,8 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::DeleteIfIdentity(const wchar_t*
     }
     try
     {
-        const HRESULT hr         = DriveDeletePathIfIdentity(*this, path, *identity, flags);
+        Common::FileOperations::DiscoveryScope discovery(options);
+        const HRESULT hr         = DriveDeletePathIfIdentity(*this, path, *identity, flags, &discovery);
         const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_DELETE, 0u, path, nullptr, hr, true, options, cookie);
         return FAILED(callbackHr) ? callbackHr : hr;
     }
@@ -2577,7 +2688,8 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::RenameItem(const wchar_t* sourc
     try
     {
         // A rename is a move whose destination spells the new name; Drive applies both as one PATCH.
-        const HRESULT hr         = DriveTransferPath(*this, sourcePath, destinationPath, flags, true, options, callback, cookie);
+        Common::FileOperations::DiscoveryScope discovery(options);
+        const HRESULT hr         = DriveTransferPath(*this, sourcePath, destinationPath, flags, true, options, callback, cookie, &discovery, true);
         const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_RENAME, 0u, sourcePath, destinationPath, hr, true, options, cookie);
         return FAILED(callbackHr) ? callbackHr : hr;
     }
@@ -2647,6 +2759,10 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::CopyItems(const wchar_t* const*
     }
     try
     {
+        // One governed call is one discovery scope for every selected root, reported through this
+        // call's own options and never through the thread-local DriveOperationOptionsScope. The
+        // batch closes it once, after the last root, when this frame ends.
+        Common::FileOperations::DiscoveryScope discovery(options);
         return RunDriveBatch(count, flags, options, callback, cookie, [&](unsigned long index) {
             const wchar_t* sourcePath = sourcePaths[index];
             std::wstring destination;
@@ -2654,7 +2770,7 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::CopyItems(const wchar_t* const*
             if (SUCCEEDED(hr))
             {
                 destination = JoinDrivePath(destinationFolder, DriveLeafName(NormalizePluginPath(sourcePath)));
-                hr          = DriveTransferPath(*this, sourcePath, destination.c_str(), flags, false, options, callback, cookie);
+                hr          = DriveTransferPath(*this, sourcePath, destination.c_str(), flags, false, options, callback, cookie, &discovery, false);
             }
             const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_COPY, index, sourcePath, destination.c_str(), hr, false, options, cookie);
             ReportDriveProgress(callback, FILESYSTEM_COPY, count, index + 1u, sourcePath, destination.c_str(), options, cookie);
@@ -2691,6 +2807,10 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::MoveItems(const wchar_t* const*
     }
     try
     {
+        // One governed call is one discovery scope for every selected root, reported through this
+        // call's own options and never through the thread-local DriveOperationOptionsScope. The
+        // batch closes it once, after the last root, when this frame ends.
+        Common::FileOperations::DiscoveryScope discovery(options);
         return RunDriveBatch(count, flags, options, callback, cookie, [&](unsigned long index) {
             const wchar_t* sourcePath = sourcePaths[index];
             std::wstring destination;
@@ -2698,7 +2818,7 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::MoveItems(const wchar_t* const*
             if (SUCCEEDED(hr))
             {
                 destination = JoinDrivePath(destinationFolder, DriveLeafName(NormalizePluginPath(sourcePath)));
-                hr          = DriveTransferPath(*this, sourcePath, destination.c_str(), flags, true, options, callback, cookie);
+                hr          = DriveTransferPath(*this, sourcePath, destination.c_str(), flags, true, options, callback, cookie, &discovery, false);
             }
             const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_MOVE, index, sourcePath, destination.c_str(), hr, true, options, cookie);
             ReportDriveProgress(callback, FILESYSTEM_MOVE, count, index + 1u, sourcePath, destination.c_str(), options, cookie);
@@ -2734,9 +2854,13 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::DeleteItems(const wchar_t* cons
     }
     try
     {
+        // One governed call is one discovery scope for every selected root, reported through this
+        // call's own options and never through the thread-local DriveOperationOptionsScope. The
+        // batch closes it once, after the last root, when this frame ends.
+        Common::FileOperations::DiscoveryScope discovery(options);
         return RunDriveBatch(count, flags, options, callback, cookie, [&](unsigned long index) {
             const wchar_t* path      = paths[index];
-            const HRESULT hr         = DriveDeletePath(*this, path, flags);
+            const HRESULT hr         = DriveDeletePath(*this, path, flags, &discovery, false);
             const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_DELETE, index, path, nullptr, hr, true, options, cookie);
             ReportDriveProgress(callback, FILESYSTEM_DELETE, count, index + 1u, path, nullptr, options, cookie);
             return FAILED(callbackHr) ? callbackHr : hr;
@@ -2771,6 +2895,9 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::RenameItems(const FileSystemRen
     }
     try
     {
+        // One governed call is one discovery scope for every renamed root; the batch closes it
+        // once, after the last, when this frame ends.
+        Common::FileOperations::DiscoveryScope discovery(options);
         return RunDriveBatch(count, flags, options, callback, cookie, [&](unsigned long index) {
             const FileSystemRenamePair& pair = items[index];
             std::wstring destination;
@@ -2779,7 +2906,7 @@ HRESULT STDMETHODCALLTYPE FileSystemGoogleDrive::RenameItems(const FileSystemRen
             {
                 // The pair carries the new leaf name; the destination keeps the source's parent.
                 destination = JoinDrivePath(DriveParentPath(NormalizePluginPath(pair.sourcePath)), pair.newName);
-                hr          = DriveTransferPath(*this, pair.sourcePath, destination.c_str(), flags, true, options, callback, cookie);
+                hr          = DriveTransferPath(*this, pair.sourcePath, destination.c_str(), flags, true, options, callback, cookie, &discovery, false);
             }
             const HRESULT callbackHr = ReportDriveItemCompleted(callback, FILESYSTEM_RENAME, index, pair.sourcePath, destination.c_str(), hr, true, options, cookie);
             ReportDriveProgress(callback, FILESYSTEM_RENAME, count, index + 1u, pair.sourcePath, destination.c_str(), options, cookie);

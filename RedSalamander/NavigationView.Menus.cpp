@@ -67,14 +67,14 @@ bool IsFilePluginShortId(std::wstring_view pluginShortId) noexcept
     return path[1] == L':' && (path[2] == L'\\' || path[2] == L'/') && path[3] == L'\0';
 }
 
-void ApplyEmbeddedDestinationDropdownOptions(RedSalamander::DxUi::ContextMenuSessionCallbacks& sessionCallbacks, bool embeddedDestinationMode) noexcept
+void ApplyEmbeddedDestinationDropdownOptions(DxUi::ContextMenuSessionCallbacks& sessionCallbacks, bool embeddedDestinationMode) noexcept
 {
     if (! embeddedDestinationMode)
     {
         return;
     }
 
-    sessionCallbacks.rootVerticalPlacement = RedSalamander::DxUi::ContextMenuRootVerticalPlacement::Above;
+    sessionCallbacks.rootVerticalPlacement = DxUi::ContextMenuRootVerticalPlacement::Above;
     sessionCallbacks.maxRootHeightDip      = kEmbeddedDestinationDropdownMaxHeightDip;
 }
 
@@ -307,7 +307,7 @@ struct MenuInfoLineText
     return nullptr;
 }
 
-[[nodiscard]] std::shared_ptr<RedSalamander::DxUi::MenuFlyoutItem::BitmapIcon> ResolveNavigationMenuBitmapIcon(const NavigationMenuItem& item, int iconSizePx)
+[[nodiscard]] std::shared_ptr<DxUi::MenuFlyoutItem::BitmapIcon> ResolveNavigationMenuBitmapIcon(const NavigationMenuItem& item, int iconSizePx)
 {
     if ((item.flags & NAV_MENU_ITEM_FLAG_SEPARATOR) != 0 || (item.flags & NAV_MENU_ITEM_FLAG_HEADER) != 0 || iconSizePx <= 0)
     {
@@ -325,11 +325,10 @@ struct MenuInfoLineText
     {
         if (! bitmap)
         {
-            return std::shared_ptr<RedSalamander::DxUi::MenuFlyoutItem::BitmapIcon>{};
+            return std::shared_ptr<DxUi::MenuFlyoutItem::BitmapIcon>{};
         }
 
-        return std::make_shared<RedSalamander::DxUi::MenuFlyoutItem::BitmapIcon>(
-            std::move(bitmap), static_cast<UINT>(iconSizePx), static_cast<UINT>(iconSizePx));
+        return std::make_shared<DxUi::MenuFlyoutItem::BitmapIcon>(std::move(bitmap), static_cast<UINT>(iconSizePx), static_cast<UINT>(iconSizePx));
     };
     const auto tryBitmapFromPath = [&](const wchar_t* path, DWORD fileAttributes = 0, bool useFileAttributes = false)
     { return wrapBitmap(IconCache::GetInstance().CreateMenuBitmapFromPath(path, iconSizePx, fileAttributes, useFileAttributes)); };
@@ -389,7 +388,7 @@ struct MenuInfoLineText
     return {};
 }
 
-void ApplyNavigationMenuIcon(RedSalamander::DxUi::MenuFlyoutItem& item, const NavigationMenuItem& sourceItem, int iconSizePx)
+void ApplyNavigationMenuIcon(DxUi::MenuFlyoutItem& item, const NavigationMenuItem& sourceItem, int iconSizePx)
 {
     item.iconBitmap = ResolveNavigationMenuBitmapIcon(sourceItem, iconSizePx);
     if (! item.iconBitmap)
@@ -420,9 +419,9 @@ void ApplyNavigationMenuIcon(RedSalamander::DxUi::MenuFlyoutItem& item, const Na
 
 [[nodiscard]] std::optional<std::wstring> TryGetShortcutTextForCommandId(const Common::Settings::Settings& settings, std::wstring_view commandId) noexcept;
 
-void TrimTrailingMenuSeparators(std::vector<RedSalamander::DxUi::MenuFlyoutItem>& items) noexcept
+void TrimTrailingMenuSeparators(std::vector<DxUi::MenuFlyoutItem>& items) noexcept
 {
-    while (! items.empty() && items.back().kind == RedSalamander::DxUi::MenuItemKind::Separator)
+    while (! items.empty() && items.back().kind == DxUi::MenuItemKind::Separator)
     {
         items.pop_back();
     }
@@ -437,7 +436,7 @@ template <typename RegisterWindowCommandFn, typename RegisterNavigatePathFn>
                                               UINT maxId,
                                               RegisterWindowCommandFn&& registerWindowCommand,
                                               RegisterNavigatePathFn&& registerNavigatePath,
-                                              RedSalamander::DxUi::MenuFlyoutItem& outItem)
+                                              DxUi::MenuFlyoutItem& outItem)
 {
     const std::optional<bool> isLeftPaneOpt = TryResolveLeftPaneNavigationView(navigationViewHwnd);
     if (! isLeftPaneOpt.has_value())
@@ -451,14 +450,14 @@ template <typename RegisterWindowCommandFn, typename RegisterNavigatePathFn>
         return false;
     }
 
-    const auto appendSeparatorIfNeeded = [](std::vector<RedSalamander::DxUi::MenuFlyoutItem>& items) noexcept
+    const auto appendSeparatorIfNeeded = [](std::vector<DxUi::MenuFlyoutItem>& items) noexcept
     {
-        if (items.empty() || items.back().kind == RedSalamander::DxUi::MenuItemKind::Separator)
+        if (items.empty() || items.back().kind == DxUi::MenuItemKind::Separator)
         {
             return;
         }
 
-        items.push_back(RedSalamander::DxUi::MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Separator});
+        items.push_back(DxUi::MenuFlyoutItem{.kind = DxUi::MenuItemKind::Separator});
     };
     const auto appendDisabledItem = [&](UINT labelResourceId, std::wstring_view fallback) noexcept
     {
@@ -467,7 +466,7 @@ template <typename RegisterWindowCommandFn, typename RegisterNavigatePathFn>
         {
             label.assign(fallback);
         }
-        outItem.children.push_back(RedSalamander::DxUi::MenuFlyoutItem{.text = std::wstring(label), .enabled = false});
+        outItem.children.push_back(DxUi::MenuFlyoutItem{.text = std::wstring(label), .enabled = false});
     };
     const auto appendWindowCommandItem =
         [&](UINT labelResourceId, std::wstring_view fallbackLabel, UINT commandId, std::wstring_view shortcutCommandId) noexcept -> bool
@@ -478,7 +477,7 @@ template <typename RegisterWindowCommandFn, typename RegisterNavigatePathFn>
             return false;
         }
 
-        RedSalamander::DxUi::MenuFlyoutItem item{};
+        DxUi::MenuFlyoutItem item{};
         item.text = LoadStringResource(nullptr, labelResourceId);
         if (item.text.empty())
         {
@@ -509,14 +508,14 @@ template <typename RegisterWindowCommandFn, typename RegisterNavigatePathFn>
             return false;
         }
 
-        RedSalamander::DxUi::MenuFlyoutItem item{};
+        DxUi::MenuFlyoutItem item{};
         item.text            = std::move(label);
         item.acceleratorText = std::move(accelerator);
         item.commandId       = static_cast<int>(nextId++);
         item.checked         = checked;
         if (checked)
         {
-            item.kind = RedSalamander::DxUi::MenuItemKind::Toggle;
+            item.kind = DxUi::MenuItemKind::Toggle;
         }
 
         registerNavigatePath(static_cast<UINT>(item.commandId), path);
@@ -904,7 +903,7 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
 
     constexpr unsigned int kMaxActions = ID_NAV_MENU_MAX - ID_NAV_MENU_BASE + 1u;
     UINT nextId                        = ID_NAV_MENU_BASE;
-    std::vector<RedSalamander::DxUi::MenuFlyoutItem> popupItems;
+    std::vector<DxUi::MenuFlyoutItem> popupItems;
     popupItems.reserve(count + 8u);
 
     const bool isFilePluginShortId         = IsFilePluginShortId(_pluginShortId);
@@ -972,7 +971,7 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
             return;
         }
 
-        RedSalamander::DxUi::MenuFlyoutItem submenu{};
+        DxUi::MenuFlyoutItem submenu{};
         const size_t actionCountBefore        = _navigationMenuActions.size();
         const UINT nextIdBefore               = nextId;
         const auto registerNavigatePathAction = [&](const UINT menuId, const std::filesystem::path& path) noexcept
@@ -1082,13 +1081,13 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
             });
         }
 
-        std::vector<RedSalamander::DxUi::MenuFlyoutItem> connectionChildren;
+        std::vector<DxUi::MenuFlyoutItem> connectionChildren;
         if (! connectionItems.empty())
         {
             const std::wstring managerLabel = LoadStringResource(nullptr, IDS_MENU_CONNECTIONS_ELLIPSIS);
             if (! managerLabel.empty() && nextId <= ID_NAV_MENU_MAX)
             {
-                RedSalamander::DxUi::MenuFlyoutItem managerItem{};
+                DxUi::MenuFlyoutItem managerItem{};
                 managerItem.text      = managerLabel;
                 managerItem.commandId = static_cast<int>(nextId++);
                 managerItem.iconGlyph.assign(1u, kMenuGlyphConnections.glyph);
@@ -1101,14 +1100,13 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
                 _navigationMenuActions.push_back(std::move(action));
             }
 
-            connectionChildren.push_back(RedSalamander::DxUi::MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Separator});
+            connectionChildren.push_back(DxUi::MenuFlyoutItem{.kind = DxUi::MenuItemKind::Separator});
         }
 
         if (connectionItems.empty())
         {
             const std::wstring emptyLabel = LoadStringResource(nullptr, IDS_MENU_EMPTY);
-            connectionChildren.push_back(
-                RedSalamander::DxUi::MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Header, .text = emptyLabel.empty() ? L"(Empty)" : emptyLabel});
+            connectionChildren.push_back(DxUi::MenuFlyoutItem{.kind = DxUi::MenuItemKind::Header, .text = emptyLabel.empty() ? L"(Empty)" : emptyLabel});
         }
         else
         {
@@ -1119,7 +1117,7 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
                     break;
                 }
 
-                RedSalamander::DxUi::MenuFlyoutItem child{};
+                DxUi::MenuFlyoutItem child{};
                 child.text      = item.label;
                 child.commandId = static_cast<int>(nextId++);
                 connectionChildren.push_back(std::move(child));
@@ -1132,7 +1130,7 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
             }
         }
 
-        RedSalamander::DxUi::MenuFlyoutItem submenu{};
+        DxUi::MenuFlyoutItem submenu{};
         submenu.text = connectionsLabel;
         submenu.iconGlyph.assign(1u, kMenuGlyphConnections.glyph);
         submenu.children = std::move(connectionChildren);
@@ -1140,20 +1138,18 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
         connectionsItemAdded = true;
     };
 
-    const auto appendSeparatorIfNeeded = [&](std::vector<RedSalamander::DxUi::MenuFlyoutItem>& targetItems) noexcept
+    const auto appendSeparatorIfNeeded = [&](std::vector<DxUi::MenuFlyoutItem>& targetItems) noexcept
     {
-        if (targetItems.empty() || targetItems.back().kind == RedSalamander::DxUi::MenuItemKind::Separator)
+        if (targetItems.empty() || targetItems.back().kind == DxUi::MenuItemKind::Separator)
         {
             return;
         }
 
-        targetItems.push_back(RedSalamander::DxUi::MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Separator});
+        targetItems.push_back(DxUi::MenuFlyoutItem{.kind = DxUi::MenuItemKind::Separator});
     };
 
-    const auto appendNavigationItem = [&](std::vector<RedSalamander::DxUi::MenuFlyoutItem>& targetItems,
-                                          const NavigationMenuItem& item,
-                                          UINT maxId,
-                                          std::wstring_view truncatedLabel) noexcept -> bool
+    const auto appendNavigationItem =
+        [&](std::vector<DxUi::MenuFlyoutItem>& targetItems, const NavigationMenuItem& item, UINT maxId, std::wstring_view truncatedLabel) noexcept -> bool
     {
         if ((item.flags & NAV_MENU_ITEM_FLAG_SEPARATOR) != 0)
         {
@@ -1174,8 +1170,8 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
         }
 
         const MenuPresentationText presentation = DecodeMenuPresentationText(item.label ? item.label : L"");
-        RedSalamander::DxUi::MenuFlyoutItem dxItem{};
-        dxItem.kind            = isHeader ? RedSalamander::DxUi::MenuItemKind::Header : RedSalamander::DxUi::MenuItemKind::Standard;
+        DxUi::MenuFlyoutItem dxItem{};
+        dxItem.kind            = isHeader ? DxUi::MenuItemKind::Header : DxUi::MenuItemKind::Standard;
         dxItem.text            = presentation.label;
         dxItem.acceleratorText = presentation.accelerator;
         ApplyNavigationMenuIcon(dxItem, item, _menuIconSize);
@@ -1224,7 +1220,7 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
 
         const size_t actionCountBefore = _navigationMenuActions.size();
         const UINT nextIdBefore        = nextId;
-        std::vector<RedSalamander::DxUi::MenuFlyoutItem> commonFolderChildren;
+        std::vector<DxUi::MenuFlyoutItem> commonFolderChildren;
         commonFolderChildren.reserve(std::min<unsigned int>(fileMenuOpt.value().count, 8u));
 
         const unsigned int fileCount = fileMenuOpt.value().count;
@@ -1254,7 +1250,7 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
             return;
         }
 
-        RedSalamander::DxUi::MenuFlyoutItem submenu{};
+        DxUi::MenuFlyoutItem submenu{};
         submenu.text     = label;
         submenu.children = std::move(commonFolderChildren);
         popupItems.push_back(std::move(submenu));
@@ -1309,11 +1305,10 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
             tryAppendConnectionsMenu();
             if (connectionsItemAdded && goToItemIndex.has_value() && connectionsIndex + 1u == popupItems.size() && connectionsIndex > goToItemIndex.value())
             {
-                RedSalamander::DxUi::MenuFlyoutItem connectionItem = std::move(popupItems.back());
+                DxUi::MenuFlyoutItem connectionItem = std::move(popupItems.back());
                 popupItems.pop_back();
                 const size_t insertIndex = std::min(goToItemIndex.value(), popupItems.size());
-                popupItems.insert(popupItems.begin() + static_cast<std::vector<RedSalamander::DxUi::MenuFlyoutItem>::difference_type>(insertIndex),
-                                  std::move(connectionItem));
+                popupItems.insert(popupItems.begin() + static_cast<std::vector<DxUi::MenuFlyoutItem>::difference_type>(insertIndex), std::move(connectionItem));
                 goToItemIndex = insertIndex + 1u;
             }
         }
@@ -1341,7 +1336,7 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
             const std::wstring label = LoadStringResource(nullptr, IDS_MENU_CHANGE_DRIVE);
             if (! label.empty())
             {
-                std::vector<RedSalamander::DxUi::MenuFlyoutItem> changeDriveChildren;
+                std::vector<DxUi::MenuFlyoutItem> changeDriveChildren;
                 changeDriveChildren.reserve(fileMenuOpt.value().count);
                 UINT fileId                  = nextId;
                 const unsigned int fileCount = fileMenuOpt.value().count;
@@ -1367,8 +1362,8 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
                     }
 
                     const MenuPresentationText presentation = DecodeMenuPresentationText(item.label ? item.label : L"");
-                    RedSalamander::DxUi::MenuFlyoutItem child{};
-                    child.kind            = isHeader ? RedSalamander::DxUi::MenuItemKind::Header : RedSalamander::DxUi::MenuItemKind::Standard;
+                    DxUi::MenuFlyoutItem child{};
+                    child.kind            = isHeader ? DxUi::MenuItemKind::Header : DxUi::MenuItemKind::Standard;
                     child.text            = presentation.label;
                     child.acceleratorText = presentation.accelerator;
                     ApplyNavigationMenuIcon(child, item, _menuIconSize);
@@ -1393,7 +1388,7 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
                 if (! changeDriveChildren.empty())
                 {
                     appendSeparatorIfNeeded(popupItems);
-                    RedSalamander::DxUi::MenuFlyoutItem submenu{};
+                    DxUi::MenuFlyoutItem submenu{};
                     submenu.text     = label;
                     submenu.children = std::move(changeDriveChildren);
                     popupItems.push_back(std::move(submenu));
@@ -1419,7 +1414,7 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
         return;
     }
 
-    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
     sessionCallbacks.ignoreInitialLeftButtonUp = ignoreInitialLeftButtonUp;
     sessionCallbacks.focusFirstNavigableItem   = focusFirstNavigableItem;
     ApplyEmbeddedDestinationDropdownOptions(sessionCallbacks, _embeddedDestinationMode);
@@ -1435,8 +1430,8 @@ void NavigationView::ShowMenuDropdown(bool ignoreInitialLeftButtonUp, bool focus
                                        _embeddedDestinationMode ? 1 : 0,
                                        reinterpret_cast<uintptr_t>(GetActiveWindow()),
                                        reinterpret_cast<uintptr_t>(GetForegroundWindow()));
-    const auto selectedId = RedSalamander::DxUi::ContextMenu::Show(
-        popupOwner, pt, popupItems, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
+    const auto selectedId =
+        DxUi::ContextMenu::Show(popupOwner, pt, popupItems, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
     const uint64_t elapsedUs = Debug::Perf::ElapsedUs(startedAt);
     TraceNavigationViewMenuDiagnostics(L"navigation.menu-dropdown.result",
                                        L"hwnd={:#x} selected={} durationUs={} items={} focus={:#x} active={:#x} foreground={:#x} capture={:#x}",
@@ -1497,7 +1492,7 @@ void NavigationView::ShowFileSystemDriveMenuDropdown(bool ignoreInitialLeftButto
     const auto clearActions = wil::scope_exit([&]() noexcept { _navigationMenuActions.clear(); });
 
     UINT nextId = ID_NAV_MENU_BASE;
-    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    std::vector<DxUi::MenuFlyoutItem> items;
     items.reserve(fileMenuOpt.value().count + 8u);
 
     const bool isFilePluginShortId         = IsFilePluginShortId(_pluginShortId);
@@ -1515,17 +1510,17 @@ void NavigationView::ShowFileSystemDriveMenuDropdown(bool ignoreInitialLeftButto
         return L"nav:";
     };
 
-    const auto appendSeparatorIfNeeded = [&](std::vector<RedSalamander::DxUi::MenuFlyoutItem>& targetItems) noexcept
+    const auto appendSeparatorIfNeeded = [&](std::vector<DxUi::MenuFlyoutItem>& targetItems) noexcept
     {
-        if (targetItems.empty() || targetItems.back().kind == RedSalamander::DxUi::MenuItemKind::Separator)
+        if (targetItems.empty() || targetItems.back().kind == DxUi::MenuItemKind::Separator)
         {
             return;
         }
 
-        targetItems.push_back(RedSalamander::DxUi::MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Separator});
+        targetItems.push_back(DxUi::MenuFlyoutItem{.kind = DxUi::MenuItemKind::Separator});
     };
 
-    const auto appendNavigationItem = [&](std::vector<RedSalamander::DxUi::MenuFlyoutItem>& targetItems,
+    const auto appendNavigationItem = [&](std::vector<DxUi::MenuFlyoutItem>& targetItems,
                                           const NavigationMenuItem& item,
                                           std::vector<MenuAction>& actionSink,
                                           UINT maxId,
@@ -1548,9 +1543,9 @@ void NavigationView::ShowFileSystemDriveMenuDropdown(bool ignoreInitialLeftButto
             return false;
         }
 
-        RedSalamander::DxUi::MenuFlyoutItem dxItem{};
+        DxUi::MenuFlyoutItem dxItem{};
         const MenuPresentationText presentation = DecodeMenuPresentationText(item.label ? item.label : L"");
-        dxItem.kind                             = isHeader ? RedSalamander::DxUi::MenuItemKind::Header : RedSalamander::DxUi::MenuItemKind::Standard;
+        dxItem.kind                             = isHeader ? DxUi::MenuItemKind::Header : DxUi::MenuItemKind::Standard;
         dxItem.text                             = presentation.label;
         dxItem.acceleratorText                  = presentation.accelerator;
         ApplyNavigationMenuIcon(dxItem, item, _menuIconSize);
@@ -1629,7 +1624,7 @@ void NavigationView::ShowFileSystemDriveMenuDropdown(bool ignoreInitialLeftButto
             return;
         }
 
-        RedSalamander::DxUi::MenuFlyoutItem submenu{};
+        DxUi::MenuFlyoutItem submenu{};
         const size_t actionCountBefore        = _navigationMenuActions.size();
         const UINT nextIdBefore               = nextId;
         const auto registerNavigatePathAction = [&](const UINT menuId, const std::filesystem::path& path) noexcept
@@ -1739,13 +1734,13 @@ void NavigationView::ShowFileSystemDriveMenuDropdown(bool ignoreInitialLeftButto
             });
         }
 
-        std::vector<RedSalamander::DxUi::MenuFlyoutItem> connectionChildren;
+        std::vector<DxUi::MenuFlyoutItem> connectionChildren;
         if (! connectionItems.empty())
         {
             const std::wstring managerLabel = LoadStringResource(nullptr, IDS_MENU_CONNECTIONS_ELLIPSIS);
             if (! managerLabel.empty() && nextId <= ID_NAV_MENU_MAX)
             {
-                RedSalamander::DxUi::MenuFlyoutItem managerItem{};
+                DxUi::MenuFlyoutItem managerItem{};
                 managerItem.text      = managerLabel;
                 managerItem.commandId = static_cast<int>(nextId++);
                 managerItem.iconGlyph.assign(1u, kMenuGlyphConnections.glyph);
@@ -1764,8 +1759,7 @@ void NavigationView::ShowFileSystemDriveMenuDropdown(bool ignoreInitialLeftButto
         if (connectionItems.empty())
         {
             const std::wstring emptyLabel = LoadStringResource(nullptr, IDS_MENU_EMPTY);
-            connectionChildren.push_back(
-                RedSalamander::DxUi::MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Header, .text = emptyLabel.empty() ? L"(Empty)" : emptyLabel});
+            connectionChildren.push_back(DxUi::MenuFlyoutItem{.kind = DxUi::MenuItemKind::Header, .text = emptyLabel.empty() ? L"(Empty)" : emptyLabel});
         }
         else
         {
@@ -1776,7 +1770,7 @@ void NavigationView::ShowFileSystemDriveMenuDropdown(bool ignoreInitialLeftButto
                     break;
                 }
 
-                RedSalamander::DxUi::MenuFlyoutItem child{};
+                DxUi::MenuFlyoutItem child{};
                 child.text      = item.label;
                 child.commandId = static_cast<int>(nextId++);
                 connectionChildren.push_back(std::move(child));
@@ -1789,7 +1783,7 @@ void NavigationView::ShowFileSystemDriveMenuDropdown(bool ignoreInitialLeftButto
             }
         }
 
-        RedSalamander::DxUi::MenuFlyoutItem submenu{};
+        DxUi::MenuFlyoutItem submenu{};
         submenu.text = connectionsLabel;
         submenu.iconGlyph.assign(1u, kMenuGlyphConnections.glyph);
         submenu.children = std::move(connectionChildren);
@@ -1844,11 +1838,10 @@ void NavigationView::ShowFileSystemDriveMenuDropdown(bool ignoreInitialLeftButto
         tryAppendConnectionsMenu();
         if (connectionsItemAdded && goToItemIndex.has_value() && connectionsIndex + 1u == items.size() && connectionsIndex > goToItemIndex.value())
         {
-            RedSalamander::DxUi::MenuFlyoutItem connectionItem = std::move(items.back());
+            DxUi::MenuFlyoutItem connectionItem = std::move(items.back());
             items.pop_back();
             const size_t insertIndex = std::min(goToItemIndex.value(), items.size());
-            items.insert(items.begin() + static_cast<std::vector<RedSalamander::DxUi::MenuFlyoutItem>::difference_type>(insertIndex),
-                         std::move(connectionItem));
+            items.insert(items.begin() + static_cast<std::vector<DxUi::MenuFlyoutItem>::difference_type>(insertIndex), std::move(connectionItem));
             goToItemIndex = insertIndex + 1u;
         }
     }
@@ -1908,7 +1901,7 @@ void NavigationView::ShowFileSystemDriveMenuDropdown(bool ignoreInitialLeftButto
                     }
                 }
 
-                RedSalamander::DxUi::MenuFlyoutItem item{};
+                DxUi::MenuFlyoutItem item{};
                 item.text            = label;
                 item.acceleratorText = accelerator;
                 item.commandId       = static_cast<int>(id);
@@ -1931,13 +1924,13 @@ void NavigationView::ShowFileSystemDriveMenuDropdown(bool ignoreInitialLeftButto
     POINT pt = MakeDropdownAnchorPoint(_sectionDriveRect, false, _embeddedDestinationMode);
     ClientToScreen(_hWnd.get(), &pt);
 
-    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
     sessionCallbacks.ignoreInitialLeftButtonUp = ignoreInitialLeftButtonUp;
     ApplyEmbeddedDestinationDropdownOptions(sessionCallbacks, _embeddedDestinationMode);
 
     const auto startedAt = std::chrono::steady_clock::now();
     const auto selectedId =
-        RedSalamander::DxUi::ContextMenu::Show(popupOwner, pt, items, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
+        DxUi::ContextMenu::Show(popupOwner, pt, items, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
     Debug::Perf::Emit(L"navigation.ui.dropdown_popup_us",
                       L"drive",
                       Debug::Perf::ElapsedUs(startedAt),
@@ -1987,7 +1980,7 @@ void NavigationView::ShowHistoryDropdown(bool ignoreInitialLeftButtonUp, bool fo
         _navDropdownSelectedIndex = -1;
     });
 
-    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    std::vector<DxUi::MenuFlyoutItem> items;
     items.reserve(_navDropdownPaths.size());
 
     auto historyEntryHasActiveFilter = [&](const std::filesystem::path& historyPath) -> bool
@@ -2022,8 +2015,8 @@ void NavigationView::ShowHistoryDropdown(bool ignoreInitialLeftButtonUp, bool fo
     {
         const auto& path = _navDropdownPaths[i];
 
-        RedSalamander::DxUi::MenuFlyoutItem item{};
-        item.kind      = RedSalamander::DxUi::MenuItemKind::Radio;
+        DxUi::MenuFlyoutItem item{};
+        item.kind      = DxUi::MenuItemKind::Radio;
         item.text      = path.wstring();
         item.commandId = ID_HISTORY_BASE + static_cast<int>(i);
         if (historyEntryHasActiveFilter(path))
@@ -2060,11 +2053,11 @@ void NavigationView::ShowHistoryDropdown(bool ignoreInitialLeftButtonUp, bool fo
         return;
     }
 
-    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
     sessionCallbacks.ignoreInitialLeftButtonUp = ignoreInitialLeftButtonUp;
     sessionCallbacks.focusFirstNavigableItem   = focusFirstNavigableItem;
     ApplyEmbeddedDestinationDropdownOptions(sessionCallbacks, _embeddedDestinationMode);
-    sessionCallbacks.rootHorizontalAlignment = RedSalamander::DxUi::ContextMenuRootHorizontalAlignment::End;
+    sessionCallbacks.rootHorizontalAlignment = DxUi::ContextMenuRootHorizontalAlignment::End;
 
     const auto startedAt = std::chrono::steady_clock::now();
     TraceNavigationViewMenuDiagnostics(
@@ -2084,7 +2077,7 @@ void NavigationView::ShowHistoryDropdown(bool ignoreInitialLeftButtonUp, bool fo
     ++_debugHistoryDropdownOpenCount;
 #endif
     const auto selectedId =
-        RedSalamander::DxUi::ContextMenu::Show(popupOwner, pt, items, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
+        DxUi::ContextMenu::Show(popupOwner, pt, items, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
     const uint64_t elapsedUs = Debug::Perf::ElapsedUs(startedAt);
     TraceNavigationViewMenuDiagnostics(
         L"navigation.history-dropdown.result",
@@ -2193,9 +2186,8 @@ void NavigationView::ShowDiskInfoDropdown(bool ignoreInitialLeftButtonUp, bool f
             headerName = L"/";
         }
     }
-    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
-    items.push_back(RedSalamander::DxUi::MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Header,
-                                                        .text = FormatStringResource(nullptr, IDS_FMT_DISK_INFO_HEADER, headerName)});
+    std::vector<DxUi::MenuFlyoutItem> items;
+    items.push_back(DxUi::MenuFlyoutItem{.kind = DxUi::MenuItemKind::Header, .text = FormatStringResource(nullptr, IDS_FMT_DISK_INFO_HEADER, headerName)});
 
     const std::wstring pathText = _currentPluginPath.value().wstring();
     _driveMenuActions.clear();
@@ -2208,18 +2200,17 @@ void NavigationView::ShowDiskInfoDropdown(bool ignoreInitialLeftButtonUp, bool f
 
     const auto appendSeparatorIfNeeded = [&]
     {
-        if (items.empty() || items.back().kind == RedSalamander::DxUi::MenuItemKind::Separator)
+        if (items.empty() || items.back().kind == DxUi::MenuItemKind::Separator)
         {
             return;
         }
-        items.push_back(RedSalamander::DxUi::MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Separator});
+        items.push_back(DxUi::MenuFlyoutItem{.kind = DxUi::MenuItemKind::Separator});
     };
 
     const auto appendInfoLine = [&](std::wstring text)
     {
         MenuInfoLineText line = SplitFormattedMenuInfoLine(std::move(text));
-        items.push_back(RedSalamander::DxUi::MenuFlyoutItem{
-            .kind = RedSalamander::DxUi::MenuItemKind::Info, .text = std::move(line.label), .acceleratorText = std::move(line.value)});
+        items.push_back(DxUi::MenuFlyoutItem{.kind = DxUi::MenuItemKind::Info, .text = std::move(line.label), .acceleratorText = std::move(line.value)});
     };
 
     const bool hasInfoLines = (! _volumeLabel.empty() || ! _fileSystem.empty());
@@ -2298,9 +2289,9 @@ void NavigationView::ShowDiskInfoDropdown(bool ignoreInitialLeftButtonUp, bool f
                 break;
             }
 
-            RedSalamander::DxUi::MenuFlyoutItem dxItem{};
+            DxUi::MenuFlyoutItem dxItem{};
             const MenuPresentationText presentation = DecodeMenuPresentationText(item.label ? item.label : L"");
-            dxItem.kind                             = isHeader ? RedSalamander::DxUi::MenuItemKind::Header : RedSalamander::DxUi::MenuItemKind::Standard;
+            dxItem.kind                             = isHeader ? DxUi::MenuItemKind::Header : DxUi::MenuItemKind::Standard;
             dxItem.text                             = presentation.label;
             dxItem.acceleratorText                  = presentation.accelerator;
             ApplyNavigationMenuIcon(dxItem, item, _menuIconSize);
@@ -2342,15 +2333,15 @@ void NavigationView::ShowDiskInfoDropdown(bool ignoreInitialLeftButtonUp, bool f
         return;
     }
 
-    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
     sessionCallbacks.ignoreInitialLeftButtonUp = ignoreInitialLeftButtonUp;
     sessionCallbacks.focusFirstNavigableItem   = focusFirstNavigableItem;
-    sessionCallbacks.rootHorizontalAlignment   = RedSalamander::DxUi::ContextMenuRootHorizontalAlignment::End;
+    sessionCallbacks.rootHorizontalAlignment   = DxUi::ContextMenuRootHorizontalAlignment::End;
     ApplyEmbeddedDestinationDropdownOptions(sessionCallbacks, _embeddedDestinationMode);
 
     const auto startedAt = std::chrono::steady_clock::now();
     const auto selectedId =
-        RedSalamander::DxUi::ContextMenu::Show(popupOwner, pt, items, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
+        DxUi::ContextMenu::Show(popupOwner, pt, items, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
     Debug::Perf::Emit(L"navigation.ui.dropdown_popup_us",
                       L"disk-info",
                       Debug::Perf::ElapsedUs(startedAt),
@@ -2394,18 +2385,17 @@ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPat
     }
 
     constexpr size_t kMaxSiblingItems = static_cast<size_t>(ID_SIBLING_SEARCH - ID_SIBLING_BASE);
-    const auto lessByName = [](const std::filesystem::path& left, const std::filesystem::path& right)
+    const auto lessByName             = [](const std::filesystem::path& left, const std::filesystem::path& right)
     { return _wcsicmp(left.filename().c_str(), right.filename().c_str()) < 0; };
     const auto isPreferred = [&](const std::filesystem::path& candidate)
     { return wil::compare_string_ordinal(candidate.native(), preferredPath.native(), true) == wistd::weak_ordering::equivalent; };
-    size_t largestReplaceableIndex = SIZE_MAX;
+    size_t largestReplaceableIndex    = SIZE_MAX;
     const auto findLargestReplaceable = [&]()
     {
         largestReplaceableIndex = SIZE_MAX;
         for (size_t i = 0; i < siblings.size(); ++i)
         {
-            if (! isPreferred(siblings[i]) &&
-                (largestReplaceableIndex == SIZE_MAX || lessByName(siblings[largestReplaceableIndex], siblings[i])))
+            if (! isPreferred(siblings[i]) && (largestReplaceableIndex == SIZE_MAX || lessByName(siblings[largestReplaceableIndex], siblings[i])))
             {
                 largestReplaceableIndex = i;
             }
@@ -2429,8 +2419,7 @@ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPat
                 else
                 {
                     truncated = true;
-                    if (largestReplaceableIndex != SIZE_MAX &&
-                        (isPreferred(candidate) || lessByName(candidate, siblings[largestReplaceableIndex])))
+                    if (largestReplaceableIndex != SIZE_MAX && (isPreferred(candidate) || lessByName(candidate, siblings[largestReplaceableIndex])))
                     {
                         siblings[largestReplaceableIndex] = std::move(candidate);
                         findLargestReplaceable();
@@ -2547,15 +2536,15 @@ void NavigationView::ShowSiblingsDropdown(size_t separatorIndex)
 
     const std::filesystem::path normalizedCurrentPath = NormalizeDirectoryPath(segment.fullPath);
     const std::wstring currentPathText                = normalizedCurrentPath.wstring();
-    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    std::vector<DxUi::MenuFlyoutItem> items;
     items.reserve(_navDropdownPaths.size() + (siblingsTruncated ? 2u : 0u));
 
     int selectedIndex = 0;
     for (size_t i = 0; i < _navDropdownPaths.size(); ++i)
     {
         const std::filesystem::path normalizedSiblingPath = NormalizeDirectoryPath(_navDropdownPaths[i]);
-        RedSalamander::DxUi::MenuFlyoutItem item{};
-        item.kind      = RedSalamander::DxUi::MenuItemKind::Radio;
+        DxUi::MenuFlyoutItem item{};
+        item.kind      = DxUi::MenuItemKind::Radio;
         item.text      = FilenameOrPath(normalizedSiblingPath);
         item.commandId = static_cast<int>(ID_SIBLING_BASE + i);
 
@@ -2570,10 +2559,9 @@ void NavigationView::ShowSiblingsDropdown(size_t separatorIndex)
 
     if (siblingsTruncated)
     {
-        items.push_back(RedSalamander::DxUi::MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Separator});
-        items.push_back(RedSalamander::DxUi::MenuFlyoutItem{.text = LoadStringResource(nullptr, IDS_CMD_NAVIGATE_PATH),
-                                                            .iconGlyph = L"\uE721",
-                                                            .commandId = ID_SIBLING_SEARCH});
+        items.push_back(DxUi::MenuFlyoutItem{.kind = DxUi::MenuItemKind::Separator});
+        items.push_back(
+            DxUi::MenuFlyoutItem{.text = LoadStringResource(nullptr, IDS_CMD_NAVIGATE_PATH), .iconGlyph = L"\uE721", .commandId = ID_SIBLING_SEARCH});
     }
 
     if (items.empty())
@@ -2618,7 +2606,7 @@ void NavigationView::ShowSiblingsDropdown(size_t separatorIndex)
         return;
     }
 
-    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
     sessionCallbacks.ignoreInitialLeftButtonUp = true;
     ApplyEmbeddedDestinationDropdownOptions(sessionCallbacks, _embeddedDestinationMode);
 
@@ -2636,7 +2624,7 @@ void NavigationView::ShowSiblingsDropdown(size_t separatorIndex)
                                        reinterpret_cast<uintptr_t>(GetActiveWindow()),
                                        reinterpret_cast<uintptr_t>(GetForegroundWindow()));
     const auto selectedId =
-        RedSalamander::DxUi::ContextMenu::Show(popupOwner, pt, items, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
+        DxUi::ContextMenu::Show(popupOwner, pt, items, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
     const uint64_t elapsedUs = Debug::Perf::ElapsedUs(startedAt);
     TraceNavigationViewMenuDiagnostics(
         L"navigation.siblings-dropdown.result",

@@ -1,4 +1,5 @@
 Set-StrictMode -Version Latest
+Import-Module (Join-Path (Split-Path -Parent $PSScriptRoot) 'Build/DxUiDependency.psm1') -Scope Local -ErrorAction Stop
 
 $script:CanonicalizationId = 'rs-canonical-json-v1'
 $script:MaximumRecordBytes = 16MB
@@ -600,6 +601,9 @@ function Get-RSWorkspaceSnapshotOnce {
     )
 
     $root = [IO.Path]::GetFullPath($RepoRoot).TrimEnd('\')
+    # The tracked exact lock binds source identity. A dirty managed checkout must
+    # never reuse that identity; a fresh workspace may restore it during the build.
+    $null = Get-RSDxUiSourceIdentity -RepoRoot $root -AllowMissing
     $gitDiscoveryTimer = [Diagnostics.Stopwatch]::StartNew()
     $commits = Resolve-RSValidationImpactBase -RepoRoot $root -ImpactBase $ImpactBase
     $baseMap = Get-RSValidationGitObjectMap -RepoRoot $root -Tree $commits.Base

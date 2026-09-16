@@ -1,7 +1,7 @@
 #pragma once
 
-#include "DxUi/DxUi.h"
 #include "Preferences.Internal.h"
+#include <DxUi/DxUi.h>
 
 class UserMenuPane final
 {
@@ -31,11 +31,11 @@ private:
     void ApplyTheme(const PreferencesDialogState& state) noexcept;
     void SyncFromState(PreferencesDialogState& state) noexcept;
 
-    RedSalamander::DxUi::WindowHost* _pageHost   = nullptr;
-    RedSalamander::DxUi::Panel* _pageContentRoot = nullptr;
-    RedSalamander::DxUi::Label* _title           = nullptr;
-    RedSalamander::DxUi::Label* _actions         = nullptr;
-    RedSalamander::DxUi::Label* _hint            = nullptr;
-    PreferencesDialogState* _state               = nullptr;
-    HWND _hostWindow                             = nullptr;
+    DxUi::WindowHost* _pageHost    = nullptr;
+    DxUi::Panel* _pageContentRoot  = nullptr;
+    DxUi::Label* _title            = nullptr;
+    DxUi::Label* _actions          = nullptr;
+    DxUi::Label* _hint             = nullptr;
+    PreferencesDialogState* _state = nullptr;
+    HWND _hostWindow               = nullptr;
 };

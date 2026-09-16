@@ -86,7 +86,7 @@
   </ImportGroup>
   <PropertyGroup Label="UserMacros" />
   <PropertyGroup>
-    <RSTestAdditionalIncludeDirectories>$(SolutionDir)RedConfigure;$(SolutionDir)Common;$(SolutionDir)Common\DxUi</RSTestAdditionalIncludeDirectories>
+    <RSTestAdditionalIncludeDirectories>$(SolutionDir)RedConfigure;$(SolutionDir)Common</RSTestAdditionalIncludeDirectories>
   </PropertyGroup>
   <ItemDefinitionGroup>
     <ClCompile>
@@ -118,11 +118,16 @@
     <ProjectReference Include="..\..\Common\Common\Common.vcxproj">
       <Project>{87fb9a11-83cc-44d8-9fec-9aa9d72667ef}</Project>
     </ProjectReference>
-    <ProjectReference Include="..\..\Common\DxUi\DxUi.vcxproj">
-      <Project>{E0D8E4A1-7AA7-4377-9E4C-A53794E43A1F}</Project>
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\..\RedConfigure\Lang\ja-JP\RedConfigure-ja-JP.vcxproj">
+      <Project>{25272EAA-F0A5-5026-AFDE-0219ADF15EAC}</Project>
+      <LinkLibraryDependencies>false</LinkLibraryDependencies>
     </ProjectReference>
   </ItemGroup>
+  <Import Project="..\..\Build\RedSalamander.DxUi.props" />
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
+  <Import Project="..\..\Build\RedSalamander.DxUi.targets" />
   <ImportGroup Label="ExtensionTargets">
   </ImportGroup>
 </Project>

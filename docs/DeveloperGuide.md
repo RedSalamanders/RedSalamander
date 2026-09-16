@@ -13,9 +13,9 @@ contracts, they do not replace them.
 | Path | Purpose |
 | --- | --- |
 | `RedSalamander/` | Main dual-pane shell, dialogs, settings, command routing, and app theming. |
-| `Common/` | Shared libraries, plugin interfaces, settings helpers, Win32 helpers, and `Common/DxUi`. |
+| `Common/` | Shared libraries, plugin interfaces, settings helpers, Win32 helpers, and product UI adapters. |
 | `Plugins/` | Built-in file-system and viewer plugins. |
-| `Tests/` | Deterministic selftests and component test executables, including `Tests/DxUiTests`. |
+| `Tests/` | Deterministic selftests and component test executables, including `Tests/ProductUiTests`. |
 | `Specs/` | Authoritative product, UI, file-system, testing, and implementation-plan specs. |
 | `docs/` | User and developer documentation that can be published with GitHub Pages. |
 
@@ -386,42 +386,15 @@ See `Specs/Plugins/Plugins_ViewerPlugins.md` and per-viewer specs (`Specs/Plugin
 
 ### DxUi: The Shared DirectX UI Layer
 
-_Retained, Direct2D/DirectWrite UI toolkit in Common/DxUi: a WindowHost binds an HWND to a shared D3D11/D2D device and drives a tree of Control objects with built-in focus, theming, text input, accessibility, and a frame-timed animation dispatcher._
+RedSalamander consumes the public DxUi repository as an exact pinned `DxUi.lib` dependency.
+The library owns retained controls, native window hosting, text/input, accessibility and animation.
+This repository owns product windows, commands, localization, theme conversion and viewer adapters.
 
-DxUi is RedSalamander's shared retained UI toolkit. It moves interactive chrome off native Win32/comctl controls onto one Direct3D 11 + Direct2D + DirectWrite path: a `WindowHost` attaches to a caller-owned `HWND`, owns the DirectX device/swap-chain, and drives a retained tree of `Control` objects with built-in focus, theming, text input, accessibility, tooltips, pointer capture, high-DPI, and animation. The public surface lives in `Common/DxUi/DxUi.h`; private helpers in `Common/DxUi/DxUi.Internal.h`. The authoritative behavior contracts are `Specs/UI/UI_DxUiSharedGrid.md`, `Specs/UI/UI_DxUiWinUIDesign.md`, and `Specs/UI/UI_VisualStyle.md`. A substantial usage guide already exists at [DxUi.md](DxUi.md); this section adds the architectural model behind it.
-
-#### Key files and types
-
-| File | Responsibility |
-| --- | --- |
-| `DxUi.h` | Public API: `Control`, `Panel`, `WindowHost`, `ThemePalette`, all controls, grid/tree interfaces. |
-| `DxUi.WindowHost.cpp` | HWND attach/detach, shared device lifecycle, `HandleMessage` routing, render, focus, DPI, animation subscription. |
-| `DxUi.Controls.cpp` / `DxUi.ComboBox.cpp` | Panels, labels, buttons, toggles, tabs, status strips; combo boxes. |
-| `DxUi.Grid.cpp` / `DxUi.Tree.cpp` | Virtualized data surfaces over `IDxGridModel`/`IDxTreeModel`. |
-| `DxUi.TextInput.cpp` / `DxUi.NativeTextInput.cpp` / `DxUi.TextStoreACP.cpp` | `TextField` editing, IME/TSF, caret windows. |
-| `DxUi.Theme.cpp` | `MakeDefaultThemePalette`, `MakeThemePaletteFromViewerTheme`, resolved visual styles. |
-| `DxUi.Accessibility.cpp` | `AccessibilityProvider` UIA fragment root answering `WM_GETOBJECT`. |
-| `DxUi.FrameRuntime.h/.cpp` | `FrameClock`, `FrameStage`, `MotionPolicy`, hitch-clamp smoothing. |
-| `RedSalamander/Ui/AnimationDispatcher.h` | Shared 8 ms `WM_TIMER` dispatcher (note: lives in the app, not `Common/DxUi`). |
-
-#### Control tree and rendering
-
-`Control` is the abstract base (`Paint`, `Tick`, `OnMouse*`/`OnKey*` virtuals, bounds in DIPs). `Panel::AddChild<T>(...)` owns children via `unique_ptr`; `WindowHost::SetRoot(...)` takes the root. Each control holds a `_lifetimeToken` (`shared_ptr<int>`) so async callbacks can hold a `weak_ptr` and detect destruction. `WindowHost` keeps only non-owning observers (`_focusedControl`, `_hoveredControl`, `_capturedControl`, `_defaultButton`, `_cancelButton`) — these are pruned via `PruneStaleInteractionState`/`ResetRootInteractionState` before the tree changes. Painting goes through `WindowHost::Render`, which uses cached `IDWriteTextFormat` per `FontRole` and an `ID2D1SolidColorBrush` cache keyed by packed color (`GetSolidBrush`).
-
-#### Shared device model
-
-All hosts share one D3D11/D2D/DXGI/DirectWrite stack via `GetSharedWindowHostGraphicsResources()` keyed by a `generation`. `EnsureDeviceResources` rebinds when the generation changes (device loss); `Attach`/`Detach` ref-count the shared bucket (`Register/ReleaseSharedWindowHostAttachment`) so the last detach tears it down — important for plugin smoke tests and clean process exit. Per the spec, this device singleton is single-UI-thread-owned and must fail fast on cross-thread access.
-
-#### Threading and frame rules
-
-Everything — render, hit-test, focus, capture, animation — is UI-thread-only. Worker threads must post payloads to the UI owner, then mutate models and call `NotifyDataChanged`. Animation is cooperative: a control calls `WindowHost::RequestAnimation()`, which subscribes to `Ui::AnimationDispatcher` (a hidden `HWND_MESSAGE` window pumping `WM_TIMER` at 8 ms). Each tick calls `OnAnimationTick`, which calls `_root->Tick(...)`; returning `false` (no work left) auto-unsubscribes. `FrameClock::SmoothDeltaUs` clamps hitches to 50 ms and targets 120 Hz. During `FrameStage::Render`, layout mutation is blocked (`EmitDxUiRenderMutationBlockedForDebug`).
-
-#### Invariants, extension points, gotchas
-
-- Store `WindowHost` in stable storage; route the owner WndProc through `HandleMessage` and always `Detach()` on `WM_NCDESTROY` before destroying owner state.
-- Grid/tree models are non-owning and must outlive the control; never read/mutate them off-thread.
-- Extend by subclassing `Control`/`Panel` or implementing `IDxGridModel`/`IDxGridDelegate`; add a `ThemePalette` token in `DxUi.Theme.cpp` rather than hardcoding colors.
-- Gotchas: no Win32 background brush (DxUi paints its own surface); hidden hosts must not present (`IsHostWindowEffectivelyVisible`); `TextInputBackend` is `Native` only — do not reintroduce hidden edit/RichEdit backers; keep TSF `ITfThreadMgr` active at UI-thread scope and shut it down through `ShutdownNativeTextInputForCurrentThread()`, not per modal prompt or focus cycle.
+Use public `<DxUi/...>` headers and the `DxUi` namespace. Consumer projects import the shared
+MSBuild integration; they do not compile a private copy of library sources. ProductUiTests and
+in-product self-tests validate adapters and real windows. Shared control tests and galleries run
+in the DxUi repository. See [DxUi.md](DxUi.md) for ownership, lifetime rules and the manual update
+loop, and [Build_Toolchain](../Specs/Build/Build_Toolchain.md) for source/output identity enforcement.
 
 ### Settings & SettingsStore: schema, hot reload, migration
 

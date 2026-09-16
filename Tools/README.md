@@ -1,10 +1,27 @@
 # Repository tooling
 
+`Restore-DxUi.ps1 -Platform x64 -Configuration Debug -CheckUpdates` restores the exact
+`Dependencies/DxUi.lock.json` pin before an IDE build. Root `build.ps1` performs this automatically.
+The source and compiler/SDK/CRT-isolated outputs stay under `.build/dependencies/DxUi`; a dirty
+managed source rejects build/test reuse. The optional newer-version notice never edits the lock; a validated candidate
+is yellow and prints the normal update command plus its `-UpdateOnly` alternative. A candidate without a successful
+completed DxUi validation is red and must remain pinned.
+`Update-DxUi.ps1` makes that branch update: it accepts only a current `main` commit with successful completed DxUi
+CI, changes the lock, and runs the Full suite. `Update-DxUi.ps1 -UpdateOnly` skips the local suite only when matching
+product validation already passed in another environment; neither form creates a commit.
+Restore evaluates the selected configuration's first-party compiler host and preserves explicit
+`PreferredToolArchitecture` overrides. The library project reference forwards that same host.
+See `Specs/Build/Build_Toolchain.md` for the manual upgrade and per-module provenance contract.
+
+
 `Tools/` contains the repository's supported developer commands, build and test
 helpers, release policy, and preserved terminal-engine evaluation evidence. Start
 here instead of guessing from a filename.
 
 The machine-readable source of truth is [`tool-inventory.json`](tool-inventory.json).
+The specification inventory admits the three exact reviewed I19 Done paths;
+its focused test also rejects unreviewed siblings. ARM64 and ASan qualification
+remains separately indexed under WIP and is not inferred from plan closeout.
 It records each file's kind, public/internal visibility, lifecycle, purpose,
 consumers, prerequisites, side effects, outputs, owning specification, tests,
 exact replacement path, historical `manualEntryPoints`, and any required
@@ -25,6 +42,10 @@ documented. The only directory rule is the conventional
 `Tools/Tests/*.Tests.ps1` Pester lane; unusual tests and historical tests can
 override that rule with explicit entries.
 
+Current source-contract checks complement native behavior tests. The history-popup guard
+requires a readable popup state and keyboard selection within the existing bounded wait;
+separate diagnostic bookkeeping does not relax that success condition.
+
 ## Where to look
 
 Foreground tests reuse the native `DirectedSelfTestInputWarning` in
@@ -32,6 +53,13 @@ Foreground tests reuse the native `DirectedSelfTestInputWarning` in
 seconds before input and remains during the foreground suite or isolated case.
 Pause keyboard and mouse input until it closes. Background lanes retain their
 no-activation guards. The unified runner continues to own the desktop lease.
+
+The runner gives each FileOperations child process a fresh `LOCALAPPDATA` below
+the selected run's `scratch/fileops-profile` directory, including classification
+retries. Fake MTP journals remain inside that child's lifetime and cannot collide
+with the caller's journal history. The parent environment is unchanged. Use this
+runner for FileOperations qualification; a direct executable diagnostic must also
+provide an isolated local-data directory under the marked TestSandbox root.
 
 | Location | Contents | How it is used |
 |---|---|---|
@@ -126,6 +154,8 @@ contract and is authoritative when the table is intentionally brief.
 | `README.md` | Human inventory | This navigation and safety guide. |
 | `remove-ads.ps1` | Public filesystem command | Canonical explicit NTFS alternate-stream removal. |
 | `ResolveVersionForMsbuild.ps1` | Internal build command | Supplies synchronized version properties to MSBuild. |
+| `Restore-DxUi.ps1` | Public dependency command | Restores the exact public DxUi source and isolated per-platform build inputs; optional advisory never advances the pin. |
+| `Update-DxUi.ps1` | Public dependency-update command | Advances the DxUi lock only to a successfully validated main commit, then runs or explicitly skips Full product validation. |
 | `Restore-TerminalEngineInputs.ps1` | Dormant generic lifecycle command | Downloads or verifies inputs only for an explicit reviewed generic lock. |
 | `Run-AllTests.ps1` | Public canonical test command | CI/Full execution with profile-scoped build inputs and all test-generated local data beneath exact `X:\RedSalamander.Perf` on a selected fixed local drive. First initialization and alternate-volume FileOps roots require explicit opt-in; `path.local.alternate` can pin cross-volume coverage to one exact second-drive root. Optional per-machine resources come from `config\machine-resources.json` beneath the primary root. |
 | `Run-MtpLiveCloseout.ps1` | Public opt-in device command | Runs MTP/PTP live-device closeout smoke and archives all local evidence beneath the selected `X:\RedSalamander.Perf` run. |
@@ -153,6 +183,8 @@ and focused tests.
 | `Modules/Build/ArtifactOperationLock.psm1` | Profile artifact, platform-scoped vcpkg-root, and packaging coordination with native immediate-child-authenticated delegation, scoped contamination, path-qualified residual-process policy, reparse-safe guarded output paths, and same-directory atomic file publication. |
 | `Modules/Build/BuildProjectSelection.psm1` | Solution project selection and transitive dependency resolution. |
 | `Modules/Build/BuildEvidence.psm1` | Manifest-derived artifact/runtime closure, legacy/current vcpkg app-local path normalization, complete Ghostty lock/build-input identity, measured test-surface identity, canonical compiler/linker/RC/SDK identity, verified immutable receipts, receipt-derived portable payload staging/import, and final output rendering. |
+| `Modules/Build/DxUiDependency.psm1` | Exact-pin public restore, compiler/SDK/CRT identity, source cleanliness, bounded update notice with red/yellow severity, linked-module provenance and package sidecar verification. |
+| `Modules/Build/DxUiUpdate.psm1` | Validated DxUi-main selection, atomic product-lock update, and caller-selected product validation. |
 | `Modules/Build/MSBuildInvocation.psm1` | MSBuild launch planning and one diagnostic-header classifier for streaming colors and captured-log counts, including unnumbered warnings/errors. |
 | `Modules/Build/ProcessStreaming.psm1` | Live stdout/stderr subprocess execution. |
 | `Modules/Build/SanitizedEnvironment.psm1` | Canonical environment normalization, kill-on-close contained process launch, and local current-parent identity. |

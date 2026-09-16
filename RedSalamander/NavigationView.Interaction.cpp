@@ -13,7 +13,7 @@
 
 void NavigationView::TraceNavigationInputState(std::wstring_view eventName, std::optional<POINT> clientPoint) const noexcept
 {
-    if (! RedSalamander::DxUi::IsContextMenuDiagnosticsEnabled())
+    if (! DxUi::IsContextMenuDiagnosticsEnabled())
     {
         return;
     }
@@ -155,7 +155,7 @@ void NavigationView::ClearHoverState(std::wstring_view source, bool renderChange
     }
 }
 
-void NavigationView::OnLButtonDown(const RedSalamander::DxUi::PointerInputEvent& event)
+void NavigationView::OnLButtonDown(const DxUi::PointerInputEvent& event)
 {
     if (! ShouldAcceptPointerEvent(event))
     {
@@ -366,7 +366,7 @@ void NavigationView::OnLButtonDown(POINT pt)
                                        _separators.size());
 }
 
-void NavigationView::OnLButtonDblClk(const RedSalamander::DxUi::PointerInputEvent& event)
+void NavigationView::OnLButtonDblClk(const DxUi::PointerInputEvent& event)
 {
     if (! ShouldAcceptPointerEvent(event))
     {
@@ -446,7 +446,7 @@ void NavigationView::OnLButtonDblClk(POINT pt)
     }
 }
 
-void NavigationView::OnMouseMove(const RedSalamander::DxUi::PointerInputEvent& event)
+void NavigationView::OnMouseMove(const DxUi::PointerInputEvent& event)
 {
     if (! ShouldAcceptPointerEvent(event))
     {

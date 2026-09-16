@@ -119,8 +119,7 @@ Describe 'RedSalamander targeted plugin deployment' -Tag RequiresBuildToolchain 
         if ($selectedPlatform -notin @('x64', 'ARM64')) {
             throw 'RS_VALIDATION_PLATFORM must explicitly select x64 or ARM64 for artifact-mutating deployment coverage.'
         }
-        if ($selectedConfiguration -notin @('Debug', 'Release', 'ASan Debug') -or
-            ($selectedPlatform -eq 'ARM64' -and $selectedConfiguration -eq 'ASan Debug')) {
+        if ($selectedConfiguration -notin @('Debug', 'Release', 'ASan Debug')) {
             throw "Unsupported artifact-mutating validation profile: $selectedPlatform|$selectedConfiguration"
         }
         $script:outputDir = Join-Path $repoRoot ('.build\{0}\{1}' -f $selectedPlatform, $selectedConfiguration)

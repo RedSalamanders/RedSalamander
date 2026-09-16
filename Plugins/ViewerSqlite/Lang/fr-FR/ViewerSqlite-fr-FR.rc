@@ -77,3 +77,13 @@ BEGIN
     IDS_VIEWERSQLITE_ERROR_IDENTIFIER_TOO_LONG "La base de données contient un nom de table ou de vue trop long pour être affiché en toute sécurité."
     IDS_VIEWERSQLITE_ERROR_ROW_OFFSET "Le décalage de page demandé est hors de la plage prise en charge."
 END
+
+STRINGTABLE
+BEGIN
+    IDS_DXUI_NO_MATCHES "Aucun résultat"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_DXUI_NO_DATA "Aucune donnée"
+END

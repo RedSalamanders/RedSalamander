@@ -370,6 +370,78 @@ $sample = ']('
         (@($inventory.ProtectedDone.Unexpected) -contains $unreviewedPath) | Should Be $true
     }
 
+    It 'admits only the reviewed completed discovery-scope record' {
+        $root = New-RSSpecFixtureRepository
+        $relativePath = 'Specs/Plans/Done/FileOperations_DiscoveryScopeAndLeafProgress_2026-09-13.md'
+        Set-RSFixtureFile -Root $root -RelativePath $relativePath -Content "# Completed discovery-scope record`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 0
+        (@($inventory.ProtectedDone.AllowedAdditional) -contains $relativePath) | Should Be $true
+        @($inventory.ProtectedDone.Modified).Count | Should Be 0
+
+        $unreviewedPath = 'Specs/Plans/Done/FileOperations_DiscoveryScopeAndLeafProgress_2026-09-14.md'
+        Set-RSFixtureFile -Root $root -RelativePath $unreviewedPath -Content "# Unreviewed sibling`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
+        @($inventory.ProtectedDone.Unexpected).Count | Should Be 1
+        (@($inventory.ProtectedDone.Unexpected) -contains $unreviewedPath) | Should Be $true
+    }
+
+    It 'admits only the reviewed completed direct-API discovery record' {
+        $root = New-RSSpecFixtureRepository
+        $relativePath = 'Specs/Plans/Done/FileOperations_DirectApiDiscoveryContract_2026-09-14.md'
+        Set-RSFixtureFile -Root $root -RelativePath $relativePath -Content "# Completed direct-API discovery record`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 0
+        (@($inventory.ProtectedDone.AllowedAdditional) -contains $relativePath) | Should Be $true
+        @($inventory.ProtectedDone.Modified).Count | Should Be 0
+
+        $unreviewedPath = 'Specs/Plans/Done/FileOperations_DirectApiDiscoveryContract_2026-09-15.md'
+        Set-RSFixtureFile -Root $root -RelativePath $unreviewedPath -Content "# Unreviewed sibling`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
+        @($inventory.ProtectedDone.Unexpected).Count | Should Be 1
+        (@($inventory.ProtectedDone.Unexpected) -contains $unreviewedPath) | Should Be $true
+    }
+
+    It 'admits only the reviewed completed provider discovery parity record' {
+        $root = New-RSSpecFixtureRepository
+        $relativePath = 'Specs/Plans/Done/FileOperations_ProviderDiscoveryParity_2026-09-14.md'
+        Set-RSFixtureFile -Root $root -RelativePath $relativePath -Content "# Completed provider discovery parity record`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 0
+        (@($inventory.ProtectedDone.AllowedAdditional) -contains $relativePath) | Should Be $true
+        @($inventory.ProtectedDone.Modified).Count | Should Be 0
+
+        $unreviewedPath = 'Specs/Plans/Done/FileOperations_ProviderDiscoveryParity_2026-09-15.md'
+        Set-RSFixtureFile -Root $root -RelativePath $unreviewedPath -Content "# Unreviewed sibling`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
+        @($inventory.ProtectedDone.Unexpected).Count | Should Be 1
+        (@($inventory.ProtectedDone.Unexpected) -contains $unreviewedPath) | Should Be $true
+    }
+
+    It 'admits only the reviewed completed S3 marker and residuals record' {
+        $root = New-RSSpecFixtureRepository
+        $relativePath = 'Specs/Plans/Done/FileOperations_S3MarkerAndResiduals_2026-09-15.md'
+        Set-RSFixtureFile -Root $root -RelativePath $relativePath -Content "# Completed S3 marker and residuals record`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 0
+        (@($inventory.ProtectedDone.AllowedAdditional) -contains $relativePath) | Should Be $true
+        @($inventory.ProtectedDone.Modified).Count | Should Be 0
+
+        $unreviewedPath = 'Specs/Plans/Done/FileOperations_S3MarkerAndResiduals_2026-09-16.md'
+        Set-RSFixtureFile -Root $root -RelativePath $unreviewedPath -Content "# Unreviewed sibling`n"
+        $inventory = Get-RSFixtureInventory -Root $root
+        (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
+        @($inventory.ProtectedDone.Unexpected).Count | Should Be 1
+        (@($inventory.ProtectedDone.Unexpected) -contains $unreviewedPath) | Should Be $true
+    }
+
     It 'admits only the reviewed Terminal and File Operations follow-up record' {
         $root = New-RSSpecFixtureRepository
         $relativePath = 'Specs/Plans/Done/Operation_ReviewFollowup_FOTerminalFocus_2026-08-19.md'
@@ -386,6 +458,28 @@ $sample = ']('
         (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
         @($inventory.ProtectedDone.Unexpected).Count | Should Be 1
         (@($inventory.ProtectedDone.Unexpected) -contains $unreviewedPath) | Should Be $true
+    }
+
+    It 'admits only the reviewed DxUi adoption closeout and supporting records' {
+        foreach ($relativePath in @(
+            'Specs/Plans/Done/DxUi_SharedLibraryAdoptionAndReleasePlan_2026-09-09.md',
+            'Specs/Plans/Done/DxUi_SharedLibrary/GapAnalysis_2026-09-09.md',
+            'Specs/Plans/Done/DxUi_SharedLibrary/RetirementDispositions_2026-09-12.md'
+        )) {
+            $root = New-RSSpecFixtureRepository
+            Set-RSFixtureFile -Root $root -RelativePath $relativePath -Content "# Reviewed DxUi adoption record`n"
+            $inventory = Get-RSFixtureInventory -Root $root
+            (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 0
+            (@($inventory.ProtectedDone.AllowedAdditional) -contains $relativePath) | Should Be $true
+            @($inventory.ProtectedDone.Modified).Count | Should Be 0
+
+            $unreviewedPath = $relativePath.Replace('.md', '_unreviewed.md')
+            Set-RSFixtureFile -Root $root -RelativePath $unreviewedPath -Content "# Unreviewed sibling`n"
+            $inventory = Get-RSFixtureInventory -Root $root
+            (Get-RSFindingCount -Inventory $inventory -Code 'DONE_HISTORY_CHANGED') | Should Be 1
+            @($inventory.ProtectedDone.Unexpected).Count | Should Be 1
+            (@($inventory.ProtectedDone.Unexpected) -contains $unreviewedPath) | Should Be $true
+        }
     }
 
     It 'rejects a tombstone above the line cap' {

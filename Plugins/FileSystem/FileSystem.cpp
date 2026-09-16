@@ -1996,6 +1996,13 @@ public:
         if (started == FALSE)
         {
             const DWORD error = GetLastError();
+            if (error == ERROR_HANDLE_EOF)
+            {
+                // A read at or past the end may fail synchronously instead of going pending;
+                // which one the volume chooses is not the caller's concern. End of file is the
+                // same ordinary zero-byte result on both routes.
+                return S_OK;
+            }
             if (error != ERROR_IO_PENDING)
             {
                 return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_READ_FAULT);

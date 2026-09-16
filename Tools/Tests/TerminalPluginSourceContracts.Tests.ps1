@@ -261,7 +261,7 @@ Describe 'Embedded Terminal plugin source contracts' {
         $source | Should Match 'insertion->initiatingSourceGeneration != _sourceGeneration'
         $source | Should Match 'insertion->initiatingSourceLocation\.kind != _sourceLocationKind'
         $source | Should Match '_hasPendingUserInput, _trustedCurrentDirectory'
-        $folderNavigation | Should Match 'UpdateSourceLocation\(&update\);[\s\S]*?if \(SUCCEEDED\(updateHr\)\)[\s\S]*?terminalSourceGeneration = update\.sourceGeneration'
+        $folderNavigation | Should Match 'UpdateSourceLocation\(&update\);[\s\S]*?if \(SUCCEEDED\(updateHr\)\)[\s\S]*?terminalSourceGeneration\s*=\s*update\.sourceGeneration'
 
         $writeTextInput = [regex]::Match(
             $source,
@@ -753,7 +753,9 @@ Describe 'Embedded Terminal plugin source contracts' {
 
     It 'drains floating Terminal payloads before the shared host can consume final teardown' {
         $teardown = $floatingTerminal.IndexOf('if (message == WM_NCDESTROY)', [System.StringComparison]::Ordinal)
-        $sharedHost = $floatingTerminal.IndexOf('bool handled = false;', [System.StringComparison]::Ordinal)
+        $sharedHostMatch = [regex]::Match($floatingTerminal, 'bool\s+handled\s*=\s*false;')
+        $sharedHostMatch.Success | Should Be $true
+        $sharedHost = $sharedHostMatch.Index
         $teardown | Should BeGreaterThan -1
         $sharedHost | Should BeGreaterThan $teardown
         $floatingTerminal | Should Match 'DrainPostedPayloadsForWindow\(hwnd\)'

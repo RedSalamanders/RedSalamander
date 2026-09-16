@@ -132,20 +132,6 @@ function Get-RSRelativeTestSourcePath {
 }
 
 Describe 'Test harness source contracts' {
-    It 'rejects unknown DxUiTests switches instead of silently running every suite' {
-        $source = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.cpp'
-
-        $source | Should Match 'Unknown argument'
-        $source | Should Match 'arg\[0\]\s*==\s*L''-'''
-    }
-
-    It 'rejects empty DxUiTests option values with targeted diagnostics' {
-        $source = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.cpp'
-
-        $source | Should Match 'Missing suite name'
-        $source | Should Match 'Missing perf JSONL path'
-    }
-
     It 'documents and enforces bounded self-test timeout multipliers' {
         $source = Get-RSText -Path 'RedSalamander\RedSalamander.cpp'
 
@@ -767,8 +753,8 @@ Describe 'Test harness source contracts' {
         $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
 
         $source | Should Match 'WaitForPreviewPaneTextAndFocus'
-        $source | Should Match 'WaitForPreviewPaneTextAndFocus\(L"Name: mystery\.no-preview-props"'
-        $source | Should Match 'WaitForPreviewPaneTextAndFocus\(L"Name: folder-no-preview-props"'
+        $source | Should Match 'WaitForPreviewPaneTextAndFocus\(\s*L"Name: mystery\.no-preview-props"'
+        $source | Should Match 'WaitForPreviewPaneTextAndFocus\(\s*L"Name: folder-no-preview-props"'
         $source | Should Match 'g_folderWindow\.GetFocusedFolderViewHwnd\(\) == expectedFocus'
     }
 
@@ -1231,9 +1217,10 @@ Describe 'Test harness source contracts' {
 
         $historyBlock = $source.Substring($historyStart, $historyNext - $historyStart)
         $historyBlock | Should Match 'popupStateDeadline\s*=\s*std::chrono::steady_clock::now\(\)\s*\+\s*SelfTest::Scale\(3000ms\)'
-        $historyBlock | Should Match 'DebugGetContextMenuPopupState\(popup,\s*popupState\)\s*&&\s*popupState\.keyboardIndex\.has_value\(\)'
-        $historyBlock | Should Match 'popupResult\.popupStateCaptured\s*=\s*true'
-        $historyBlock | Should Not Match 'if\s*\(!\s*RedSalamander::DxUi::DebugGetContextMenuPopupState\(popup,\s*popupState\)'
+        $historyBlock | Should Match 'while\s*\(std::chrono::steady_clock::now\(\)\s*<\s*popupStateDeadline\)'
+        $historyBlock | Should Match 'const bool stateReadable\s*=\s*DxUi::DebugGetContextMenuPopupState\(popup,\s*popupState\)'
+        $historyBlock | Should Match 'if\s*\(stateReadable\s*&&\s*popupState\.keyboardIndex\.has_value\(\)\)\s*\{\s*popupResult\.popupStateCaptured\s*=\s*true;\s*break;'
+        $historyBlock | Should Not Match 'if\s*\(!\s*(?:RedSalamander::)?DxUi::DebugGetContextMenuPopupState\(popup,\s*popupState\)'
     }
 
     It 'makes the app Shortcuts navigation-shell fixture own its settings and window isolation' {
@@ -1537,32 +1524,6 @@ Describe 'Test harness source contracts' {
         $source | Should Not Match 'buildDir\s*/\s*L"Viewer(Web|ImgRaw|ImgRawPng|Text|Space|VLC)Tests"'
     }
 
-    It 'routes DxUiTests generated artifact defaults through the unified TestSandbox root' {
-        $main = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.cpp'
-        $helpers = Get-RSText -Path 'Tests\DxUiTests\DxUiTestHelpers.h'
-        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.h'
-        $animation = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.Animation.cpp'
-        $windowHost = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.WindowHost.cpp'
-
-        $helpers | Should Match 'GetDxUiTestArtifactPath'
-        $helpers | Should Match 'GetDxUiTestArtifactDirectory'
-        $helpers | Should Match 'TestSupport::AcquireTestDirectory'
-        $helpers | Should Match 'TestDirectoryKind::Artifacts'
-        $helpers | Should Match '\.includeLeafSegment\s*=\s*false'
-        $helpers | Should Match '\.cleanExisting\s*=\s*false'
-        $support | Should Match 'REDSALAMANDER_TEST_ROOT'
-        $support | Should Match 'REDSALAMANDER_TEST_RUN_ID'
-        $support | Should Match 'kRunsDirectoryName'
-        $support | Should Match 'kArtifactsDirectoryName'
-        $main | Should Match 'GetDxUiTestArtifactPath\(L"DxUiControlGallery\.png"\)'
-        $main | Should Match 'GetDxUiTestArtifactPath\(L"DxUiButtonContrast\.png"\)'
-        $animation | Should Match 'GetDxUiTestArtifactPath\(L"dxui_animation_scheduler_testlocal\.jsonl"\)'
-        $windowHost | Should Match 'GetDxUiTestArtifactPath\(L"dxui_windowhost_stage_metrics_testlocal\.jsonl"\)'
-        $main | Should Not Match 'Specs" / L"TestRuns" / L"DxUiGallery"'
-        $animation | Should Not Match 'Specs" / L"TestRuns" / L"local_scratch"'
-        $windowHost | Should Not Match 'Specs" / L"TestRuns" / L"local_scratch"'
-    }
-
     It 'keeps shared TestSupport sandbox and environment policies explicit' {
         $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.h'
 
@@ -1579,7 +1540,7 @@ Describe 'Test harness source contracts' {
         $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.h'
         $viewerPe = Get-RSText -Path 'Tests\ViewerPETests\ViewerPETests.cpp'
         $viewerSqlite = Get-RSText -Path 'Tests\ViewerSqliteTests\ViewerSqliteTests.cpp'
-        $windowHost = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.WindowHost.cpp'
+        $windowHost = Get-RSText -Path 'Tests\ProductUiTests\ProductUiTests.cpp'
 
         $support | Should Match 'size_t PumpPendingMessages\(size_t maxMessageCount = 1024u\)'
         $support | Should Match 'MessagePumpWaitResult PumpMessagesUntil'
@@ -1605,6 +1566,12 @@ Describe 'Test harness source contracts' {
         $source | Should Match 'L"mtp_journal_temp_retry"'
         $source | Should Match 'L"mtp_journal_no_temp_puid"'
         $source | Should Match 'L"mtp_overwrite_safety_matrix"'
+        $registrations = [regex]::Matches($source, 'SelfTest::RunCase\(\s*options,\s*suite,\s*L"(?<name>[^"]+)"').Count
+        $wrapped = [regex]::Matches($source, 'WithMtpJournalSandbox\(\s*L"(?<name>[^"]+)"').Count
+        $registrations | Should BeGreaterThan 0
+        $wrapped | Should Be $registrations
+        $source | Should Match '\+\+nextMtpJournalAttempt'
+        $source | Should Match 'wil::scope_exit\([\s\S]*?RestoreMtpJournalLocalAppDataSandbox\(previousLocalAppData\)'
         $source | Should Not Match 'GetEnvironmentVariableW\(L"LOCALAPPDATA"'
         $source | Should Not Match 'getLocalAppDataPath'
     }
@@ -1825,11 +1792,11 @@ Describe 'Test harness source contracts' {
         $enterEscapeEnd = $compareOptions.IndexOf('[[nodiscard]] bool TestCompareDirectoriesOptionsAccessKeysFocusExpectedControls', $enterEscapeStart)
         $enterEscapeBlock = $compareOptions.Substring($enterEscapeStart, $enterEscapeEnd - $enterEscapeStart)
         $enterEscapeBlock | Should Match 'PrepareMainWindowForIsolatedUiCase\(mainWindow,\s*state,\s*L"Compare Directories options Enter/Escape routing validation"\)'
-        $enterEscapeBlock | Should Match 'FocusCompareDirectoriesOptionsTargetAndWait\(compare,\s*CompareDirectoriesOptionsDebugFocusTarget::CompareSubdirectoriesToggle'
+        $enterEscapeBlock | Should Match 'FocusCompareDirectoriesOptionsTargetAndWait\(\s*compare,\s*CompareDirectoriesOptionsDebugFocusTarget::CompareSubdirectoriesToggle'
         $themeCycleStart = $compareOptions.IndexOf('[[nodiscard]] bool TestCompareDirectoriesOptionsThemeCycleKeepsSurfaceLegible')
         $themeCycleEnd = $compareOptions.IndexOf('[[nodiscard]] bool TestCompareDirectoriesOptionsPointerClickTogglesLiveDxInteraction', $themeCycleStart)
         $themeCycleBlock = $compareOptions.Substring($themeCycleStart, $themeCycleEnd - $themeCycleStart)
-        $themeCycleBlock | Should Match 'FocusCompareDirectoriesOptionsTargetAndWait\(compare,\s*CompareDirectoriesOptionsDebugFocusTarget::IgnoreFilesEdit'
+        $themeCycleBlock | Should Match 'FocusCompareDirectoriesOptionsTargetAndWait\(\s*compare,\s*CompareDirectoriesOptionsDebugFocusTarget::IgnoreFilesEdit'
 
         $viewCommands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
         $viewCommands | Should Match 'TestFolderViewPerfRelayoutChurnWhileScrolled[\s\S]{0,700}?PrepareMainWindowForIsolatedUiCase\(mainWindow,\s*state,\s*L"FolderView relayout churn performance validation"\)'
@@ -2502,7 +2469,7 @@ Specs\TestRuns\local_scratch
         $warning | Should Match 'GetMonitorInfoW'
         $warning | Should Match 'GetDpiForWindow'
         foreach ($path in @('RedSalamander\RedSalamander.cpp', 'RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp',
-                           'Tests\DxUiTests\DxUiTests.cpp', 'Tests\ViewerPETests\ViewerPETests.cpp',
+                           'Tests\ViewerPETests\ViewerPETests.cpp',
                            'Tests\ViewerSqliteTests\ViewerSqliteTests.cpp')) {
             $source = Get-RSText -Path $path
             $source | Should Match 'TestSupport/DirectedSelfTestInputWarning.h'
@@ -3476,6 +3443,202 @@ Specs\TestRuns\local_scratch
         $source | Should Not Match '_perf\.discoveryLockWaitUs\s*\+='
     }
 
+    It 'closes the discovery scope of every Local mutation entry point exactly once' {
+        $source = Get-RSText -Path 'Plugins\FileSystem\FileSystem.FileOps.cpp'
+
+        # One governed provider call is one discovery scope. A single-root entry point reports and
+        # closes its own root; a bulk entry point aggregates its roots and closes the call once.
+        # A mutation entry point that can leave a caller's scope open forever is the defect this
+        # guards, so each one must carry its closing construct.
+        $closureByEntryPoint = @{
+            'CopyItem'    = 'ReportTopLevelDiscovery'
+            'MoveItem'    = 'ReportTopLevelDiscovery'
+            'CopyItems'   = 'ReportCallDiscoveryClosed'
+            'MoveItems'   = 'ReportCallDiscoveryClosed'
+            'DeleteItem'  = 'ReportDeleteDiscoveryClosed'
+            'DeleteItems' = 'ReportDeleteDiscoveryClosed'
+        }
+
+        foreach ($entryPoint in $closureByEntryPoint.Keys) {
+            # The return type and the qualified name are sometimes split across lines.
+            $pattern = 'HRESULT STDMETHODCALLTYPE\s+FileSystem::' + $entryPoint + '\([\s\S]*?\n\}\r?\n'
+            $match = [regex]::Match($source, $pattern)
+            $match.Success | Should Be $true
+            $match.Value | Should Match $closureByEntryPoint[$entryPoint]
+        }
+
+        # The aggregate exists so several roots cannot each declare the call's totals final, and its
+        # report is emitted under the same lock that advances it: computing a total under the lock
+        # and emitting it afterwards lets concurrent roots deliver totals out of order.
+        $source | Should Match 'struct\s+CallDiscoveryAggregator\s+final'
+        $source | Should Match 'struct\s+RootDiscoveryTranslation\s+final'
+        $aggregateMatch = [regex]::Match($source, 'CallDiscoveryAggregator&\s+aggregate\s*=\s*\*translation->aggregator;[\s\S]*?\n\}\r?\n')
+        $aggregateMatch.Success | Should Be $true
+        $aggregateMatch.Value | Should Match 'std::scoped_lock\s+lock\(aggregate\.mutex\)[\s\S]*ReportRawDiscoveryProgress'
+
+        # Two deliberate silences, recorded so neither is mistaken for the defect above.
+        $source | Should Match 'The recursive copy walker owns the root and descendant cumulative totals'
+    }
+
+    It 'gives every provider mutation entry point on a direct route one discovery scope' {
+        # One governed provider call is one discovery scope (Plugins_VirtualFileSystem.md). A provider
+        # that mutates on a route the host calls directly, and never reports discovery, leaves the
+        # caller's card indeterminate for the whole transfer while the host hides the silence: it
+        # clamps a regressing cumulative value to a zero delta and counts late discovery without
+        # rejecting it. So the contract is enforced here, at the source: every mutation entry point
+        # carries the governed call's one scope, or delegates to a helper that does, and every
+        # provider reports through the shared Common::FileOperations::DiscoveryScope rather than a
+        # hand-rolled FileSystemReportDiscoveryProgress. The Local provider keeps its own aggregator
+        # by design and is guarded by the test above.
+        $providerDirectories = Get-ChildItem -LiteralPath (Join-Path $repoRoot 'Plugins') -Directory |
+            Where-Object { $_.Name -like 'FileSystem*' } |
+            ForEach-Object { $_.Name }
+
+        # Every mutation entry point of these providers is ERROR_NOT_SUPPORTED and the profile
+        # advertises neither Copy, Move nor Delete, so there is no governed call to describe.
+        $exempt = @('FileSystem7z')
+
+        # Per entry point: what its body must contain, either the scope itself or the call into the
+        # helper that carries it. A helper named here is checked for the scope in turn.
+        $scope = 'Common::FileOperations::DiscoveryScope\s+discovery'
+        $providers = @(
+            @{
+                Directory = 'FileSystem'
+                Guarded   = 'closes the discovery scope of every Local mutation entry point exactly once'
+            }
+            @{
+                Directory   = 'FileSystemCurl'
+                Source      = 'Plugins\FileSystemCurl\FileSystemCurl.CopyMove.cpp'
+                Class       = 'FileSystemCurl'
+                EntryPoints = @{
+                    'CopyItem'    = 'FileOperationProgress\s+progress\{\}'
+                    'MoveItem'    = 'FileOperationProgress\s+progress\{\}'
+                    'DeleteItem'  = 'FileOperationProgress\s+progress\{\}'
+                    'CopyItems'   = 'FileOperationProgress\s+progress\{\}'
+                    'MoveItems'   = 'FileOperationProgress\s+progress\{\}'
+                    'DeleteItems' = 'FileOperationProgress\s+progress\{\}'
+                }
+                Helpers     = @{
+                    # The progress object is one per governed call, so the scope lives on it.
+                    'Plugins\FileSystemCurl\FileSystemCurl.Internal.h' = 'std::optional<Common::FileOperations::DiscoveryScope>\s+discovery'
+                }
+            }
+            @{
+                Directory   = 'FileSystemDummy'
+                Source      = 'Plugins\FileSystemDummy\FileSystemDummy.cpp'
+                Class       = 'FileSystemDummy'
+                EntryPoints = @{
+                    'CopyItem'    = 'InitializeOperationContext\('
+                    'MoveItem'    = 'InitializeOperationContext\('
+                    'DeleteItem'  = 'InitializeOperationContext\('
+                    'CopyItems'   = 'InitializeOperationContext\('
+                    'MoveItems'   = 'InitializeOperationContext\('
+                    'DeleteItems' = 'InitializeOperationContext\('
+                }
+                Helpers     = @{
+                    'Plugins\FileSystemDummy\FileSystemDummy.cpp' = 'context\.discovery\.emplace\(context\.options\)'
+                }
+            }
+            @{
+                Directory   = 'FileSystemS3'
+                Source      = 'Plugins\FileSystemS3\FileSystemS3.Directory.cpp'
+                Class       = 'FileSystemS3'
+                EntryPoints = @{
+                    'CopyItem'    = $scope
+                    'MoveItem'    = $scope
+                    'DeleteItem'  = 'DeleteItemWithPinnedIdentity\('
+                    'CopyItems'   = $scope
+                    'MoveItems'   = $scope
+                    'DeleteItems' = $scope
+                }
+                Helpers     = @{
+                    'Plugins\FileSystemS3\FileSystemS3.Directory.cpp' = 'HRESULT\s+FileSystemS3::DeleteItemWithPinnedIdentity\([\s\S]*?' + $scope
+                }
+            }
+            @{
+                Directory   = 'FileSystemGoogleDrive'
+                Source      = 'Plugins\FileSystemGoogleDrive\FileSystemGoogleDrive.cpp'
+                Class       = 'FileSystemGoogleDrive'
+                EntryPoints = @{
+                    'CopyItem'    = $scope
+                    'MoveItem'    = $scope
+                    'DeleteItem'  = $scope
+                    'CopyItems'   = $scope
+                    'MoveItems'   = $scope
+                    'DeleteItems' = $scope
+                }
+                Helpers     = @{}
+            }
+            @{
+                Directory   = 'FileSystemMicrosoftDrive'
+                Source      = 'Plugins\FileSystemMicrosoftDrive\FileSystemMicrosoftDrive.cpp'
+                Class       = 'FileSystemMicrosoftDrive'
+                EntryPoints = @{
+                    # No same-provider Copy: the profile never advertises it and the entry points refuse.
+                    'CopyItem'    = 'return HRESULT_FROM_WIN32\(ERROR_NOT_SUPPORTED\);'
+                    'MoveItem'    = $scope
+                    'DeleteItem'  = $scope
+                    'MoveItems'   = $scope
+                    'DeleteItems' = $scope
+                }
+                Helpers     = @{}
+            }
+            @{
+                Directory   = 'FileSystemMtp'
+                Source      = 'Plugins\FileSystemMtp\FileSystemMtp.Core.cpp'
+                Class       = 'FileSystemMtp'
+                EntryPoints = @{
+                    'CopyItem'    = $scope
+                    'MoveItem'    = $scope
+                    'DeleteItem'  = $scope
+                    'CopyItems'   = 'CopyOrMoveItems\('
+                    'MoveItems'   = 'CopyOrMoveItems\('
+                    'DeleteItems' = $scope
+                }
+                Helpers     = @{
+                    'Plugins\FileSystemMtp\FileSystemMtp.Core.cpp' = 'HRESULT\s+FileSystemMtp::CopyOrMoveItems\([\s\S]*?' + $scope
+                }
+            }
+        )
+
+        # A provider directory that is neither described nor exempt is the gap this guard exists for.
+        $described = @($providers | ForEach-Object { $_.Directory }) + $exempt
+        foreach ($directory in $providerDirectories) {
+            ($described -contains $directory) | Should Be $true
+        }
+
+        foreach ($provider in $providers) {
+            if ($provider.ContainsKey('Guarded')) {
+                continue
+            }
+            $source = Get-RSText -Path $provider.Source
+            foreach ($entryPoint in $provider.EntryPoints.Keys) {
+                # The return type and the qualified name are sometimes split across lines.
+                $pattern = 'HRESULT STDMETHODCALLTYPE\s+' + $provider.Class + '::' + $entryPoint + '\([\s\S]*?\n\}\r?\n'
+                $match = [regex]::Match($source, $pattern)
+                $match.Success | Should Be $true
+                $match.Value | Should Match $provider.EntryPoints[$entryPoint]
+            }
+            foreach ($helperPath in $provider.Helpers.Keys) {
+                (Get-RSText -Path $helperPath) | Should Match $provider.Helpers[$helperPath]
+            }
+        }
+
+        # Reuse is mandatory: no provider assembles a discovery report by hand.
+        foreach ($provider in $providers) {
+            if ($provider.ContainsKey('Guarded')) {
+                continue
+            }
+            $providerSources = Get-ChildItem -LiteralPath (Join-Path $repoRoot (Join-Path 'Plugins' $provider.Directory)) -File |
+                Where-Object { $_.Extension -in @('.cpp', '.h') -and $_.Name -notmatch 'SelfTest' }
+            foreach ($file in $providerSources) {
+                $text = Get-RSText -Path (Join-Path 'Plugins' (Join-Path $provider.Directory $file.Name))
+                $text | Should Not Match '->FileSystemReportDiscoveryProgress\('
+            }
+        }
+        (Get-RSText -Path 'Common\FileSystemDiscoveryScope.h') | Should Match '_control->FileSystemReportDiscoveryProgress\('
+    }
+
     It 'keeps FileSystem dynamic scheduler cleanup explicit and recursive-copy queueing unbounded' {
         $source = Get-RSText -Path 'Plugins\FileSystem\FileSystem.FileOps.cpp'
 
@@ -3998,7 +4161,7 @@ Specs\TestRuns\local_scratch
         $enumeration | Should Match 'HasPossibleArtifactName\(item\.displayName\)[\s\S]{0,900}ProjectProviderChildObject'
         $enumeration | Should Match '_pendingEnumerationFileSystem\s*=\s*_fileSystem'
         $rendering | Should Match 'artifactProjection[\s\S]{0,120}Classification::Ordinary[\s\S]{0,900}FillEllipse'
-        $find | Should Match 'ProjectProviderObject\(_request\.context\.fileSystem\.get\(\)[\s\S]{0,700}record\.artifactProjection'
+        $find | Should Match 'ProjectProviderObject\(\s*_request\.context\.fileSystem\.get\(\)[\s\S]{0,700}record\.artifactProjection'
         $find | Should Not Match '_artifactRegistry|Registry::LoadDefault'
         $registry | Should Match 'ClassificationResult ClassifyCandidate\(const Candidate& candidate\) noexcept'
         $registry | Should Not Match 'class Registry|LoadDefault|records_read'
@@ -4328,50 +4491,9 @@ Specs\TestRuns\local_scratch
         $fairstream | Should Match 'robust dispatch'
     }
 
-    It 'keeps native DxUi text hosts compatible with Win32 edit text and selection messages' {
-        $windowHostSource = Get-RSText -Path 'Common\DxUi\DxUi.WindowHost.cpp'
-        $nativeTextInputSource = Get-RSText -Path 'Common\DxUi\DxUi.NativeTextInput.cpp'
-
-        $windowHostSource | Should Match 'case WM_GETTEXTLENGTH:'
-        $windowHostSource | Should Match 'case WM_GETTEXT:'
-        $windowHostSource | Should Match 'case WM_SETTEXT:'
-        $windowHostSource | Should Match 'case EM_GETSEL:'
-        $windowHostSource | Should Match 'case EM_SETSEL:'
-        $windowHostSource | Should Match 'case EM_REPLACESEL:'
-
-        $nativeTextInputSource | Should Match 'case WM_GETTEXTLENGTH:'
-        $nativeTextInputSource | Should Match 'case WM_GETTEXT:'
-        $nativeTextInputSource | Should Match 'case WM_SETTEXT:'
-        $nativeTextInputSource | Should Match 'case EM_GETSEL:'
-        $nativeTextInputSource | Should Match 'case EM_SETSEL:'
-        $nativeTextInputSource | Should Match 'case EM_REPLACESEL:'
-    }
-
-    It 'gates DxUi focus-sensitive Win32 assertions behind interactive desktop probes' {
-        $helpers = Get-RSText -Path 'Tests\DxUiTests\DxUiTestHelpers.h'
-        $nativeTextInput = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.NativeTextInput.cpp'
-        $menu = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.Menu.cpp'
-
-        $helpers | Should Match 'SkipDxUiTest'
-        $helpers | Should Match 'TryFocusDxUiTestWindow'
-        $helpers | Should Match 'TryActivateDxUiTestWindow'
-        $helpers | Should Match 'WaitForDxUiThreadFocus'
-
-        $nativeTextInput | Should Match 'TestNativeTextInputBackendFocusesHostWithoutBridgeChild[\s\S]{0,900}TryFocusDxUiTestWindow\(window\.Hwnd\(\)\)'
-        $nativeTextInput | Should Match 'TestNativeTextInputBackendOwnsSystemCaretOnHostHwnd[\s\S]{0,900}TryFocusDxUiTestWindow\(window\.Hwnd\(\)\)'
-        $nativeTextInput | Should Match 'SkipDxUiTest\("native text input requires an interactive desktop'
-
-        $menu | Should Match 'TryActivateDxUiTestWindow\(ownerWindow\.Hwnd\(\)\)'
-        $menu | Should Match 'SkipDxUiTest\("DxUi menu popup requires an interactive desktop'
-        $menu | Should Not Match 'static_cast<void>\(SetForegroundWindow\(ownerWindow\.Hwnd\(\)\)\)'
-    }
-
     It 'keeps focus-independent GUI coverage behind the shared no-activation guard' {
         $guard = Get-RSText -Path 'Common\TestWindowActivationGuard.h'
         $app = Get-RSText -Path 'RedSalamander\RedSalamander.cpp'
-        $dxUiMain = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.cpp'
-        $dxUiHelpers = Get-RSText -Path 'Tests\DxUiTests\DxUiTestHelpers.h'
-        $dxUiWindowHost = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.WindowHost.cpp'
         $viewerPe = Get-RSText -Path 'Tests\ViewerPETests\ViewerPETests.cpp'
         $viewerSqlite = Get-RSText -Path 'Tests\ViewerSqliteTests\ViewerSqliteTests.cpp'
         $monitor = Get-RSText -Path 'RedSalamanderMonitor\RedSalamanderMonitor.cpp'
@@ -4385,10 +4507,6 @@ Specs\TestRuns\local_scratch
         $app | Should Match 'selectedFocusSuite\s*=\s*hasArg\(L"--selftest"\)\s*\|\|\s*hasArg\(L"--commands-selftest"\)'
         $app | Should Match 'selectedSafeSuite\s*&&\s*!\s*selectedFocusSuite[\s\S]{0,250}selfTestActivationBlocker\.Start\(\)'
 
-        $dxUiMain | Should Match 'suiteCanActivate[\s\S]{0,300}"Menu"[\s\S]{0,100}"NativeTextInput"'
-        $dxUiMain | Should Match '--no-activate cannot run a DxUi suite whose contract requires real focus'
-        $dxUiHelpers | Should Match 'DxUiTestWindowsCanActivateFlag\(\)\s*\?\s*0u\s*:\s*WS_EX_NOACTIVATE'
-        $dxUiWindowHost | Should Match 'TestNoninteractiveWindowActivationBlockerRejectsFocusStealing'
 
         $viewerPe | Should Match 'enum class TestDesktopInteraction[\s\S]{0,200}Noninteractive[\s\S]{0,100}RequiresActivation'
         $viewerPe | Should Match 'desktopInteraction\s*==\s*TestDesktopInteraction::Noninteractive[\s\S]{0,150}--no-activate'
@@ -4399,10 +4517,7 @@ Specs\TestRuns\local_scratch
 
     It 'keeps new native focus calls inside reviewed focus-sensitive test adapters' {
         $reviewedFocusFiles = @(
-            'Tests\DxUiTests\DxUiTestHelpers.h',
-            'Tests\DxUiTests\DxUiTests.Menu.cpp',
-            'Tests\DxUiTests\DxUiTests.NativeTextInput.cpp',
-            'Tests\DxUiTests\DxUiTests.WindowHost.cpp',
+            'Tests\ProductUiTests\ProductUiTests.cpp',
             'Tests\PerformanceTests2\FolderViewInternal.Access.h',
             'Tests\ViewerPETests\ViewerPETests.cpp',
             'Tests\ViewerSqliteTests\ViewerSqliteTests.cpp'
@@ -4434,7 +4549,7 @@ Specs\TestRuns\local_scratch
         $body | Should Match 'void\s+OnNcDestroy\(HWND\s+hwnd\)\s+noexcept[\s\S]*?_hwnd\.release\(\)'
         $body | Should Match 'SetWindowLongPtrW\(hwnd,\s*GWLP_USERDATA,\s*0\)'
 
-        $hostIndex = $body.IndexOf('RedSalamander::DxUi::WindowHost _host;')
+        $hostIndex = $body.IndexOf('DxUi::WindowHost _host;')
         $hwndIndex = $body.IndexOf('wil::unique_hwnd _hwnd;')
         ($hostIndex -ge 0) | Should Be $true
         ($hwndIndex -ge 0) | Should Be $true
@@ -4600,7 +4715,7 @@ Specs\TestRuns\local_scratch
         $commands | Should Match 'sourceIsDirectory[\s\S]{0,220}IsSameOrDescendantNormalizedWindowsPath'
         $commands | Should Match 'IDS_MSG_ARCHIVE_OUTPUT_INSIDE_SOURCE'
         $commands | Should Match 'if\s*\(FAILED\(result\.hr\)\)[\s\S]{0,1600}if\s*\(deleteSourcesAfterPack\)'
-        $commands | Should Match 'deleteRequest\.operation\s*=\s*FILESYSTEM_DELETE[\s\S]{0,320}StartFileOperationFromFolderView\(pane,\s*std::move\(deleteRequest\)\)'
+        ($commands -replace '\s+', ' ') | Should Match 'deleteRequest\.operation\s*=\s*FILESYSTEM_DELETE[\s\S]{0,320}StartFileOperationFromFolderView\(pane,\s*std::move\(deleteRequest\)\)'
         $commands | Should Not Match 'DeletePackedSources\('
     }
 
@@ -4813,57 +4928,15 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps Observatory Track 9 DxUi identity, reentrancy, and text-input guards wired' {
-        $controls = Get-RSText -Path 'Common\DxUi\DxUi.Controls.cpp'
-        $accessibility = Get-RSText -Path 'Common\DxUi\DxUi.Accessibility.cpp'
-        $nativeMenu = Get-RSText -Path 'Common\DxUi\DxUiNativeMenuInterop.h'
-        $nativeTextInput = Get-RSText -Path 'Common\DxUi\DxUi.NativeTextInput.cpp'
-        $textInput = Get-RSText -Path 'Common\DxUi\DxUi.TextInput.cpp'
-        $tree = Get-RSText -Path 'Common\DxUi\DxUi.Tree.cpp'
         $navigationPopup = Get-RSText -Path 'RedSalamander\NavigationView.FullPathPopup.cpp'
-        $controlTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.Controls.cpp'
-        $menuTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.Menu.cpp'
-        $treeTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.Tree.cpp'
-        $textFieldTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.TextField.cpp'
-        $nativeTextInputTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.NativeTextInput.cpp'
-        $accessibilityTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.Accessibility.cpp'
         $commandTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
 
-        $controls | Should Match 'const auto openItem\s*=\s*_onOpenItem;[\s\S]{0,120}RequestInvalidate\(\);[\s\S]{0,80}openItem\('
 
-        $nativeMenu | Should Match 'SyncMenuModelInternal\(bool invokeRefresh\)[\s\S]{0,500}menuBarLifetime\.expired\(\)'
-        $nativeMenu | Should Match 'ContextMenu::Show\(ownerWindow[\s\S]{0,320}menuBarLifetime\.expired\(\)\s*\|\|\s*_menuBar\s*!=\s*menuBar'
-        $nativeMenu | Should Match 'message\s*!=\s*WM_NCDESTROY\s*&&\s*hadMenuBar\s*&&\s*menuBarLifetime\.expired\(\)'
 
-        $tree | Should Match 'OnTreeSelectionChanged\(item\.id\);[\s\S]{0,120}selfLifetime\.expired\(\)'
-        $tree | Should Match 'FindVisibleItemById\(hitItem\.id\)'
-        $tree | Should Match 'FindVisibleItemById\(item\.id\)\.has_value\(\)'
 
-        $accessibility | Should Match 'SetTreeItemRuntimeId\([\s\S]{0,500}itemId\s*&\s*0xFFFFFFFFull[\s\S]{0,200}itemId\s*>>\s*32u'
-        $accessibility | Should Match 'ResolveTreeVisibleIndex[\s\S]{0,500}FindVisibleItemById\(_treeItemId\)'
-        $accessibility | Should Match 'UIA_E_ELEMENTNOTAVAILABLE'
-        $accessibility | Should Match 'ExpandToEnclosingUnit\(TextUnit unit\)[\s\S]{0,4200}GetEnclosingTextRangeCharacterSpan[\s\S]{0,800}GetEnclosingTextRangeWordSpan[\s\S]{0,1200}TryGetEnclosingTextRangeVisualLineSpan'
 
-        $nativeTextInput | Should Match '_nativeTextInputImeComposing[\s\S]{0,500}ImportTextInputState\(\*this,\s*_nativeTextInputImeBaseState\.value\(\),\s*false\)[\s\S]{0,500}DeactivateNativeTextInputTsf\(\)'
-        $textInput | Should Match 'ReplaceSelectionAndNotify[\s\S]{0,1200}SyncTextInput\(this\)[\s\S]{0,160}RefreshAccessibilitySnapshot\(\)[\s\S]{0,160}RequestInvalidate\(\)[\s\S]{0,100}NotifyChanged\(\)'
-        $textInput | Should Match 'bool TextField::NotifyChanged\(\)[\s\S]{0,700}selfLifetime[\s\S]{0,200}onTextChanged\(textSnapshot\)[\s\S]{0,200}selfLifetime\.expired\(\)'
-        $textInput | Should Match 'ControlTextIndexToDisplayTextIndex'
-        $textInput | Should Match 'DisplayTextIndexToControlTextIndex'
-        $textInput | Should Match 'ControlTextRangeToDisplayTextRange'
-        $textInput | Should Match 'dxui\.textinput\.masked_index_map_rebuild_us'
 
         $navigationPopup | Should Match 'GetWindow\(activatingWindow,\s*GW_OWNER\)\s*==\s*popupHwnd'
-        $controlTests | Should Match 'TestMenuBarActivationCanReplaceRootSafely'
-        $menuTests | Should Match 'TestNativeMenuBarNestedPopupCanDestroyHostSafely'
-        $treeTests | Should Match 'TestTreeExpanderReResolvesStableItemAfterSelectionReorder'
-        $treeTests | Should Match 'TestTreeSelectionDelegateCanReplaceRootSafely'
-        $textFieldTests | Should Match 'TestTextFieldReplaceSelectionSynchronizesBeforeTerminalNotification'
-        $textFieldTests | Should Match 'TestMaskedTextFieldGeometryMapsUtf16SourceToDisplayElements'
-        $nativeTextInputTests | Should Match 'native ime window deactivation restores the pre-composition text'
-        $nativeTextInputTests | Should Match 'native ime app deactivation restores the pre-composition text'
-        $accessibilityTests | Should Match 'TestAccessibilityTreeItemProviderKeepsStableIdentityAcrossReorder'
-        $accessibilityTests | Should Match 'removed retained tree-item provider reports element-not-available'
-        $accessibilityTests | Should Match 'character expansion keeps the complete ZWJ emoji cluster'
-        $accessibilityTests | Should Match 'cross-thread TextRange line expansion normalizes to the visual line'
         $commandTests | Should Match 'cmd_pane_navigationView_full_path_popup_owned_window_activation'
     }
 
@@ -4876,7 +4949,7 @@ Specs\TestRuns\local_scratch
         $s3DirectoryOps = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.DirectoryOps.cpp'
         $s3 = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.S3.cpp'
         $s3Table = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.S3Table.cpp'
-        $themeTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.Theme.cpp'
+        $themeTests = Get-RSText -Path 'Tests\ProductUiTests\ProductUiTests.cpp'
         $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContractTests.cpp'
 
         $pager | Should Match 'class ContinuationGuard final'
@@ -4948,7 +5021,6 @@ Specs\TestRuns\local_scratch
         $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContractTests.cpp'
         $terminalConfig = Get-RSText -Path 'Plugins\Terminal\Terminal.cpp'
         $terminalVt = Get-RSText -Path 'Plugins\Terminal\TerminalVt.cpp'
-        $typography = Get-RSText -Path 'Common\DxUi\DxUi.Typography.h'
         $prefsPluginConfig = Get-RSText -Path 'RedSalamander\Preferences.Plugin.Configuration.cpp'
         $viewerManager = Get-RSText -Path 'RedSalamander\ViewerPluginManager.cpp'
         $fileSystemManager = Get-RSText -Path 'RedSalamander\FileSystemPluginManager.cpp'
@@ -4994,8 +5066,6 @@ Specs\TestRuns\local_scratch
         $terminalVt | Should Match 'drawFontNotice'
         $terminalVt | Should Match 'IDS_TERMINAL_FONT_UNAVAILABLE'
         $terminalVt | Should Match 'IDS_TERMINAL_FONT_MISSING_GLYPHS'
-        $typography | Should Match 'GetSystemFontCollection\(fontCollection\.put\(\), TRUE\)'
-        $typography | Should Match 'InvalidateFontFamilyAvailability'
 
         $curlRuntime | Should Match 'class ProcessLease final'
         $curlRuntime | Should Match 'final participant performs curl_global_cleanup outside loader lock'
@@ -5044,8 +5114,6 @@ Specs\TestRuns\local_scratch
         $navigationEdit = Get-RSText -Path 'RedSalamander\NavigationView.Edit.cpp'
         $navigationMenus = Get-RSText -Path 'RedSalamander\NavigationView.Menus.cpp'
         $navigationTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
-        $menu = Get-RSText -Path 'Common\DxUi\DxUi.Menu.cpp'
-        $menuTests = Get-RSText -Path 'Tests\DxUiTests\DxUiTests.Menu.cpp'
 
         $settings | Should Match 'enum class SettingsSaveShutdownState[\s\S]{0,220}Running[\s\S]{0,100}FinalSavePending[\s\S]{0,100}FinalSaveQueued[\s\S]{0,100}ShuttingDown'
         $settings | Should Match 'BeginProcessShutdown\(\)[\s\S]{0,180}_submissionMutex[\s\S]{0,220}FinalSavePending'
@@ -5061,12 +5129,6 @@ Specs\TestRuns\local_scratch
         $navigationMenus | Should Match 'kMaxSiblingItems\s*=\s*static_cast<size_t>\(ID_SIBLING_SEARCH\s*-\s*ID_SIBLING_BASE\)'
         $navigationHeader | Should Match 'ID_SIBLING_SEARCH\s*=\s*699'
 
-        $menu | Should Match 'std::vector<float> itemOffsetsDip'
-        ([regex]::Matches($menu, 'std::upper_bound\(popup(?:\.|->)itemOffsetsDip')).Count | Should BeGreaterThan 1
-        $menu | Should Match 'dxui\.menu\.popup\.visible_rows'
-        $menuTests | Should Match 'TestLargeMenuPaintsOnlyVisibleRowsWithCachedOffsets'
-        $menuTests | Should Match 'kItemCount\s*=\s*4096u'
-        $menuTests | Should Match 'lastPaintedItemCount\s*<=\s*32u'
     }
 
     It 'keeps production translation units independently compiled' {
@@ -5095,5 +5157,49 @@ Specs\TestRuns\local_scratch
         )
 
         $violations.Count | Should Be 0
+    }
+}
+
+
+Describe 'Product source policies retained from the extracted DxUi test target' {
+    It 'TestNavigationViewPointerRoutingHasNoSyntheticGenerationGate' {
+        foreach ($name in @('NavigationView.h', 'NavigationView.cpp', 'NavigationView.Interaction.cpp', 'NavigationView.Edit.cpp', 'NavigationView.Menus.cpp')) {
+            (Get-RSText -Path ('RedSalamander\' + $name)) | Should Not Match 'BumpInputGeneration|CurrentInputGeneration|_inputGeneration'
+        }
+        foreach ($path in @('Specs\UI\UI_NavigationView.md', 'Specs\Testing\Testing_TestCoverage.md')) {
+            (Get-RSText -Path $path) | Should Not Match 'InputGeneration'
+        }
+    }
+
+    It 'TestConnectionCredentialPromptDestroysWindowOnModalQuit' {
+        $source = Get-RSText -Path 'RedSalamander\ConnectionCredentialPromptDialog.cpp'
+        $quit = [regex]::Match($source, 'if\s*\(getMessageResult == 0\)[\s\S]*?break;')
+        $quit.Success | Should Be $true
+        $quit.Value | Should Match '_hWnd\.reset\(\);[\s\S]*PostQuitMessage'
+    }
+
+    It 'TestConnectionCredentialPromptTeardownDoesNotWipeThroughRawTextFieldPointers' {
+        $source = Get-RSText -Path 'RedSalamander\ConnectionCredentialPromptDialog.cpp'
+        $source | Should Not Match 'ControlTreeContains\(|SecureClearLiveSecretField|_(secret|user)Field->SecureClear'
+        $destructor = [regex]::Match($source, 'ConnectionCredentialPromptWindow::~ConnectionCredentialPromptWindow[\s\S]*?(?=\nvoid ConnectionCredentialPromptWindow::ClearControlPointers)')
+        $destructor.Success | Should Be $true
+        $destructor.Value | Should Not Match '_secretField|_userField|_dxHost\.Detach'
+        $teardown = [regex]::Match($source, 'if\s*\(message == WM_NCDESTROY\)[\s\S]*?return 0;')
+        $teardown.Success | Should Be $true
+        $teardown.Value | Should Match '_dxHost\.Detach\(\);[\s\S]*ClearControlPointers\(\);'
+        $clear = [regex]::Match($source, 'void ConnectionCredentialPromptWindow::ClearControlPointers\(\)[\s\S]*?\n\}')
+        $clear.Success | Should Be $true
+        $clear.Value | Should Match '_secretField\s*=\s*nullptr'
+        $clear.Value | Should Match '_userField\s*=\s*nullptr'
+    }
+
+    It 'TestConnectionCredentialPromptUiaPumpDoesNotDetachTimedOutWorkers' {
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Connections.cpp'
+        $helper = [regex]::Match($source, 'template <typename Task> \[\[nodiscard\]\] auto RunUiaTaskWithMessagePump\(std::wstring_view label[\s\S]*?(?=template <typename Task> \[\[nodiscard\]\] auto RunUiaTaskWithMessagePump\(Task&& task)')
+        $helper.Success | Should Be $true
+        $helper.Value | Should Not Match 'worker\.detach\(\)'
+        $helper.Value | Should Match 'worker\.request_stop\(\);[\s\S]*worker\.join\(\);'
+        $defaultReturn = $helper.Value.IndexOf('return Result{}')
+        if ($defaultReturn -ge 0) { $helper.Value.IndexOf('worker.join()') | Should BeLessThan $defaultReturn }
     }
 }

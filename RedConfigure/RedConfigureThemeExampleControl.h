@@ -4,12 +4,12 @@
 #define NOMINMAX
 #include <Windows.h>
 
-#include "DxUi.h"
 #include "Helpers.h"
 #include "RedConfigureApp.h"
 #include "RedConfigureUiHelpers.h"
 #include "Themes/ThemePreviewModel.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
 
 #include <algorithm>
 #include <array>
@@ -22,10 +22,10 @@
 
 namespace RedConfigure::Ui
 {
-using RedSalamander::DxUi::Control;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::ThemePalette;
-using RedSalamander::DxUi::WindowHost;
+using DxUi::Control;
+using DxUi::FontRole;
+using DxUi::ThemePalette;
+using DxUi::WindowHost;
 
 class ThemeExampleControl final : public Control
 {

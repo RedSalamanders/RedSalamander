@@ -1881,6 +1881,7 @@ std::wstring FolderView::DebugValidateRemovalFocusContractsForSelfTest()
     FileSystemPathIdentity sensitive = insensitive;
     sensitive.componentComparison = FileSystemPathComponentComparison::OrdinalCaseSensitive;
 
+    // FolderItem borrows each name; callers retaining items must keep the names alive through view teardown.
     const auto makeItems = [](const std::vector<std::wstring>& names)
     {
         std::vector<FolderItem> items(names.size());
@@ -2052,7 +2053,6 @@ std::wstring FolderView::DebugValidateRemovalFocusContractsForSelfTest()
     }
 
     {
-        FolderView view;
         constexpr size_t kBeginSnapshotCount = 4096u;
         std::vector<std::wstring> names;
         names.reserve(kBeginSnapshotCount);
@@ -2060,6 +2060,7 @@ std::wstring FolderView::DebugValidateRemovalFocusContractsForSelfTest()
         {
             names.push_back(std::format(L"removal-focus-snapshot-item-{:04}", index));
         }
+        FolderView view;
         view._displayedFolder = folder;
         view._currentFolder = folder;
         view._itemsFolder = folder;
@@ -2138,16 +2139,17 @@ std::wstring FolderView::DebugValidateRemovalFocusContractsForSelfTest()
         }
     }
     {
+        const std::vector<std::wstring> names{L"A", L"B", L"C"};
         FolderView view;
-        view._displayedFolder = folder;
-        view._currentFolder = folder;
-        view._itemsFolder = folder;
-        view._items = makeItems({L"A", L"B", L"C"});
-        view._focusedIndex = 1u;
-        view._anchorIndex = 1u;
-        view._items[1].focused = true;
-        view._items[0].selected = true;
-        view._items[2].selected = true;
+        view._displayedFolder              = folder;
+        view._currentFolder                = folder;
+        view._itemsFolder                  = folder;
+        view._items                        = makeItems(names);
+        view._focusedIndex                 = 1u;
+        view._anchorIndex                  = 1u;
+        view._items[1].focused             = true;
+        view._items[0].selected            = true;
+        view._items[2].selected            = true;
         view._selectionStats.selectedFiles = 2u;
         addCommitted(view, L"B", 1u, 10u);
         const uint64_t ownershipBeforeSelectionClear = view._removalFocusOwnershipEpoch;
@@ -2161,18 +2163,18 @@ std::wstring FolderView::DebugValidateRemovalFocusContractsForSelfTest()
         }
     }
     {
+        const std::vector<std::wstring> names{L"A", L"B", L"C"};
         FolderView view;
-        view._displayedFolder = folder;
-        view._currentFolder = folder;
-        view._itemsFolder = folder;
-        view._items = makeItems({L"A", L"B", L"C"});
-        view._focusedIndex = 1u;
-        view._anchorIndex = 1u;
+        view._displayedFolder  = folder;
+        view._currentFolder    = folder;
+        view._itemsFolder      = folder;
+        view._items            = makeItems(names);
+        view._focusedIndex     = 1u;
+        view._anchorIndex      = 1u;
         view._items[1].focused = true;
         addCommitted(view, L"B", 1u, 10u);
         view.FocusItem(2u, false);
-        if (view.ResolvePendingRemovalFocusForEnumeration(11u, folder, makeItems({L"A", L"C"})).has_value() ||
-            ! view._pendingRemovalFocus.empty())
+        if (view.ResolvePendingRemovalFocusForEnumeration(11u, folder, makeItems({L"A", L"C"})).has_value() || ! view._pendingRemovalFocus.empty())
         {
             return L"actual current-item ownership change did not invalidate a committed removal intent";
         }

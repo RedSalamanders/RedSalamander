@@ -20,13 +20,13 @@
 #include <utility>
 #include <vector>
 
-#include <windowsx.h>
-#include <wincrypt.h>
-#include <imm.h>
-#include <shlobj.h>
-#include <shellapi.h>
 #include <UIAutomation.h>
+#include <imm.h>
+#include <shellapi.h>
+#include <shlobj.h>
 #include <uxtheme.h>
+#include <wincrypt.h>
+#include <windowsx.h>
 
 #pragma comment(lib, "crypt32")
 #pragma comment(lib, "imm32")
@@ -37,14 +37,14 @@
 #include <yyjson.h>
 
 #include "Helpers.h"
-#include "DxUi/DxUi.h"
-#include "PathUtils.h"
 #include "PaneVisualState.h"
+#include "PathUtils.h"
 #include "ProcessCommandLine.h"
 #include "StringConversion.h"
 #include "UnicodeClipboard.h"
 #include "WindowMessages.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
 
 extern HINSTANCE g_hInstance;
 
@@ -52,10 +52,7 @@ using namespace TerminalPluginDetail;
 
 #include "TerminalSession.h"
 
-HRESULT Terminal::resolveShell(const TerminalLogicalLocation& location,
-                               std::wstring& executable,
-                               std::wstring& commandLine,
-                               ShellKind& kind) noexcept
+HRESULT Terminal::resolveShell(const TerminalLogicalLocation& location, std::wstring& executable, std::wstring& commandLine, ShellKind& kind) noexcept
 {
     if (location.kind == TerminalLocationKind::Wsl)
     {
@@ -65,13 +62,13 @@ HRESULT Terminal::resolveShell(const TerminalLogicalLocation& location,
             return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
         }
         const std::wstring distribution = copySpan(location.wslDistribution);
-        const std::wstring path = copySpan(location.wslAbsolutePath);
+        const std::wstring path         = copySpan(location.wslAbsolutePath);
         if (distribution.empty() || distribution.front() == L'-' || distribution.find_first_of(L"\\/") != std::wstring::npos || path.empty() ||
             path.front() != L'/' || ContainsCommandControl(distribution) || ContainsCommandControl(path))
         {
             return E_INVALIDARG;
         }
-        kind = ShellKind::Posix;
+        kind        = ShellKind::Posix;
         commandLine = std::format(L"{} --distribution {} --cd {}",
                                   Common::Process::QuoteWindowsCommandLineArgument(executable),
                                   Common::Process::QuoteWindowsCommandLineArgument(distribution),
@@ -95,7 +92,7 @@ HRESULT Terminal::resolveShell(const TerminalLogicalLocation& location,
         }
         if (! executable.empty())
         {
-            kind = ShellKind::PowerShell;
+            kind        = ShellKind::PowerShell;
             commandLine = Common::Process::QuoteWindowsCommandLineArgument(executable) + L" -NoLogo";
             return S_OK;
         }
@@ -110,7 +107,7 @@ HRESULT Terminal::resolveShell(const TerminalLogicalLocation& location,
     {
         return HRESULT_FROM_WIN32(ERROR_FILE_NOT_FOUND);
     }
-    kind = ShellKind::CommandPrompt;
+    kind        = ShellKind::CommandPrompt;
     commandLine = Common::Process::QuoteWindowsCommandLineArgument(executable) + L" /D /Q /V:OFF";
     return S_OK;
 }
@@ -120,19 +117,14 @@ HRESULT Terminal::startPseudoConsole(const TerminalLogicalLocation& location) no
     wil::unique_handle inputRead;
     wil::unique_handle outputRead;
     wil::unique_handle outputWrite;
-    if (CreatePipe(inputRead.put(), _ptyInputWrite.put(), nullptr, 0u) == FALSE ||
-        CreatePipe(outputRead.put(), outputWrite.put(), nullptr, 0u) == FALSE)
+    if (CreatePipe(inputRead.put(), _ptyInputWrite.put(), nullptr, 0u) == FALSE || CreatePipe(outputRead.put(), outputWrite.put(), nullptr, 0u) == FALSE)
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
 
-    _ptyClientSizeSynced = false;
+    _ptyClientSizeSynced   = false;
     HPCON rawPseudoConsole = nullptr;
-    HRESULT hr = CreatePseudoConsole(COORD{static_cast<SHORT>(_columns), static_cast<SHORT>(_rows)},
-                                     inputRead.get(),
-                                     outputWrite.get(),
-                                     0u,
-                                     &rawPseudoConsole);
+    HRESULT hr = CreatePseudoConsole(COORD{static_cast<SHORT>(_columns), static_cast<SHORT>(_rows)}, inputRead.get(), outputWrite.get(), 0u, &rawPseudoConsole);
     if (FAILED(hr))
     {
         return hr;
@@ -154,16 +146,10 @@ HRESULT Terminal::startPseudoConsole(const TerminalLogicalLocation& location) no
         return HRESULT_FROM_WIN32(GetLastError());
     }
     const auto deleteAttributes = wil::scope_exit([&] noexcept { DeleteProcThreadAttributeList(attributes); });
-    const HPCON pseudoConsole = _pseudoConsole.get();
+    const HPCON pseudoConsole   = _pseudoConsole.get();
     // This attribute takes the HPCON value itself. Passing &pseudoConsole gives
     // the hosted process an invalid pseudoconsole and produces 0xc0000142.
-    if (UpdateProcThreadAttribute(attributes,
-                                  0u,
-                                  PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE,
-                                  pseudoConsole,
-                                  sizeof(pseudoConsole),
-                                  nullptr,
-                                  nullptr) == FALSE)
+    if (UpdateProcThreadAttribute(attributes, 0u, PROC_THREAD_ATTRIBUTE_PSEUDOCONSOLE, pseudoConsole, sizeof(pseudoConsole), nullptr, nullptr) == FALSE)
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
@@ -186,8 +172,7 @@ HRESULT Terminal::startPseudoConsole(const TerminalLogicalLocation& location) no
         commandLine.append(L" -NoExit");
         // Keep an explicit interactive session after the bootstrap command.
         // Windows PowerShell 5.1 does not accept this switch.
-        if (executable.size() >= 8u &&
-            OrdinalString::EqualsNoCase(std::wstring_view(executable).substr(executable.size() - 8u), L"pwsh.exe"))
+        if (executable.size() >= 8u && OrdinalString::EqualsNoCase(std::wstring_view(executable).substr(executable.size() - 8u), L"pwsh.exe"))
         {
             commandLine.append(L" -Interactive");
         }
@@ -206,8 +191,7 @@ HRESULT Terminal::startPseudoConsole(const TerminalLogicalLocation& location) no
     }
     JOBOBJECT_EXTENDED_LIMIT_INFORMATION jobLimits{};
     jobLimits.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
-    if (SetInformationJobObject(
-            processJob.get(), JobObjectExtendedLimitInformation, &jobLimits, sizeof(jobLimits)) == FALSE)
+    if (SetInformationJobObject(processJob.get(), JobObjectExtendedLimitInformation, &jobLimits, sizeof(jobLimits)) == FALSE)
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
@@ -218,7 +202,7 @@ HRESULT Terminal::startPseudoConsole(const TerminalLogicalLocation& location) no
     // Otherwise Windows may duplicate redirected host handles even with
     // bInheritHandles=FALSE. CREATE_NO_WINDOW instead detaches console I/O.
     startup.StartupInfo.dwFlags = STARTF_USESTDHANDLES;
-    startup.lpAttributeList = attributes;
+    startup.lpAttributeList     = attributes;
     PROCESS_INFORMATION processInfo{};
     std::wstring ownedWorkingDirectory;
     if (location.kind == TerminalLocationKind::WindowsLocal || location.kind == TerminalLocationKind::WindowsUnc)
@@ -253,13 +237,7 @@ HRESULT Terminal::startPseudoConsole(const TerminalLogicalLocation& location) no
     }
 
     wil::unique_handle rootProcessForWatcher;
-    if (DuplicateHandle(GetCurrentProcess(),
-                        process.get(),
-                        GetCurrentProcess(),
-                        rootProcessForWatcher.put(),
-                        0u,
-                        FALSE,
-                        DUPLICATE_SAME_ACCESS) == FALSE)
+    if (DuplicateHandle(GetCurrentProcess(), process.get(), GetCurrentProcess(), rootProcessForWatcher.put(), 0u, FALSE, DUPLICATE_SAME_ACCESS) == FALSE)
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
@@ -270,11 +248,8 @@ HRESULT Terminal::startPseudoConsole(const TerminalLogicalLocation& location) no
         try
         {
             integrationThread = std::jthread(
-                [this, rootProcessId = processInfo.dwProcessId, pipeName = std::move(integrationPipeName)](
-                    std::stop_token stopToken) mutable noexcept
-                {
-                    integrationMain(stopToken, rootProcessId, std::move(pipeName));
-                });
+                [this, rootProcessId = processInfo.dwProcessId, pipeName = std::move(integrationPipeName)](std::stop_token stopToken) mutable noexcept
+            { integrationMain(stopToken, rootProcessId, std::move(pipeName)); });
         }
         catch (const std::bad_alloc&)
         {
@@ -295,18 +270,13 @@ HRESULT Terminal::startPseudoConsole(const TerminalLogicalLocation& location) no
     try
     {
         std::jthread readerThread([this, outputRead = std::move(outputRead)](std::stop_token stopToken) mutable noexcept
-        {
-            readerMain(stopToken, std::move(outputRead));
-        });
-        _integrationThread = std::move(integrationThread);
-        _readerThread = std::move(readerThread);
-        _processJob = std::move(processJob);
-        _process = std::move(process);
-        _processWatcherThread = std::jthread(
-            [this, rootProcess = std::move(rootProcessForWatcher)](std::stop_token stopToken) mutable noexcept
-            {
-                processWatcherMain(stopToken, std::move(rootProcess));
-            });
+        { readerMain(stopToken, std::move(outputRead)); });
+        _integrationThread    = std::move(integrationThread);
+        _readerThread         = std::move(readerThread);
+        _processJob           = std::move(processJob);
+        _process              = std::move(process);
+        _processWatcherThread = std::jthread([this, rootProcess = std::move(rootProcessForWatcher)](std::stop_token stopToken) mutable noexcept
+        { processWatcherMain(stopToken, std::move(rootProcess)); });
         terminateSuspendedProcess.release();
     }
     catch (const std::bad_alloc&)
@@ -391,9 +361,7 @@ void Terminal::integrationMain(std::stop_token stopToken, DWORD rootProcessId, s
         {
 #if defined(ENABLE_TESTS)
             _integrationDebugClientPid.store(clientProcessId, std::memory_order_release);
-            _integrationDebugResult.store(
-                clientProcessId != rootProcessId ? E_ACCESSDENIED : HRESULT_FROM_WIN32(GetLastError()),
-                std::memory_order_release);
+            _integrationDebugResult.store(clientProcessId != rootProcessId ? E_ACCESSDENIED : HRESULT_FROM_WIN32(GetLastError()), std::memory_order_release);
 #endif
             static_cast<void>(DisconnectNamedPipe(pipe.get()));
             continue;
@@ -431,8 +399,7 @@ void Terminal::integrationMain(std::stop_token stopToken, DWORD rootProcessId, s
         if (FAILED(parseHr) || _closing.load(std::memory_order_acquire))
         {
 #if defined(ENABLE_TESTS)
-            _integrationDebugResult.store(FAILED(parseHr) ? parseHr : HRESULT_FROM_WIN32(ERROR_CANCELLED),
-                                          std::memory_order_release);
+            _integrationDebugResult.store(FAILED(parseHr) ? parseHr : HRESULT_FROM_WIN32(ERROR_CANCELLED), std::memory_order_release);
 #endif
             continue;
         }
@@ -445,12 +412,9 @@ void Terminal::integrationMain(std::stop_token stopToken, DWORD rootProcessId, s
                                                        std::move(request.promptBuffer),
                                                        std::move(request.currentSessionHistory),
                                                        request.versioned);
-        const auto scrubReply = wil::scope_exit([&reply]() noexcept
-        {
-            SecureZeroMemory(reply.promptReplacement.data(), reply.promptReplacement.size() * sizeof(wchar_t));
-        });
-        const HRESULT writeHr = WriteIntegrationReply(
-            pipe.get(), stopToken, request.versioned, reply.followTarget, reply.promptReplacement);
+        const auto scrubReply =
+            wil::scope_exit([&reply]() noexcept { SecureZeroMemory(reply.promptReplacement.data(), reply.promptReplacement.size() * sizeof(wchar_t)); });
+        const HRESULT writeHr = WriteIntegrationReply(pipe.get(), stopToken, request.versioned, reply.followTarget, reply.promptReplacement);
         if (FAILED(writeHr))
         {
 #if defined(ENABLE_TESTS)
@@ -460,9 +424,9 @@ void Terminal::integrationMain(std::stop_token stopToken, DWORD rootProcessId, s
             {
                 {
                     std::scoped_lock stateLock(_stateMutex);
-                    _followState = TerminalFollowState::Failed;
+                    _followState         = TerminalFollowState::Failed;
                     _idleAtPrimaryPrompt = true;
-                    _commandSubmitted = false;
+                    _commandSubmitted    = false;
                     _stateGeneration.fetch_add(1u, std::memory_order_acq_rel);
                 }
             }
@@ -480,10 +444,7 @@ void Terminal::integrationMain(std::stop_token stopToken, DWORD rootProcessId, s
         {
             if (const HWND hwnd = _windowHandle.load(std::memory_order_acquire); hwnd != nullptr)
             {
-                static_cast<void>(PostMessageW(hwnd,
-                                               WndMsg::kTerminalSuggestionInsertionComplete,
-                                               reply.replacementAccepted ? TRUE : FALSE,
-                                               0));
+                static_cast<void>(PostMessageW(hwnd, WndMsg::kTerminalSuggestionInsertionComplete, reply.replacementAccepted ? TRUE : FALSE, 0));
             }
         }
         if (FAILED(writeHr))
@@ -507,18 +468,17 @@ Terminal::TrustedPromptReply Terminal::acceptTrustedPrompt(std::wstring path,
     {
         std::scoped_lock stateLock(_stateMutex);
         const TerminalFollowState previousFollowState = _followState;
-        const bool stateChanged = ! _integrationTrusted ||
-            _trustedHistoryProviderAvailable != supportsPromptReplacement || ! _idleAtPrimaryPrompt || _commandSubmitted ||
-            ! OrdinalString::EqualsNoCase(std::wstring_view(_trustedCurrentDirectory), std::wstring_view(path)) ||
-            ! OrdinalString::EqualsNoCase(std::wstring_view(_trustedHistoryPath), std::wstring_view(historyPath)) ||
-            _trustedPromptBuffer != promptBuffer || _trustedCurrentSessionHistory != currentSessionHistory;
-        _integrationTrusted = true;
+        const bool stateChanged = ! _integrationTrusted || _trustedHistoryProviderAvailable != supportsPromptReplacement || ! _idleAtPrimaryPrompt ||
+                                  _commandSubmitted || ! OrdinalString::EqualsNoCase(std::wstring_view(_trustedCurrentDirectory), std::wstring_view(path)) ||
+                                  ! OrdinalString::EqualsNoCase(std::wstring_view(_trustedHistoryPath), std::wstring_view(historyPath)) ||
+                                  _trustedPromptBuffer != promptBuffer || _trustedCurrentSessionHistory != currentSessionHistory;
+        _integrationTrusted     = true;
         _trustedHistoryProviderAvailable = supportsPromptReplacement;
-        _idleAtPrimaryPrompt = true;
-        _commandSubmitted = false;
-        _hasPendingUserInput = ! promptBuffer.empty();
-        _trustedCurrentDirectory = std::move(path);
-        _trustedHistoryPath = std::move(historyPath);
+        _idleAtPrimaryPrompt             = true;
+        _commandSubmitted                = false;
+        _hasPendingUserInput             = ! promptBuffer.empty();
+        _trustedCurrentDirectory         = std::move(path);
+        _trustedHistoryPath              = std::move(historyPath);
         SecureZeroMemory(_trustedPromptBuffer.data(), _trustedPromptBuffer.size() * sizeof(wchar_t));
         _trustedPromptBuffer = std::move(promptBuffer);
         ScrubStrings(_trustedCurrentSessionHistory);
@@ -529,32 +489,30 @@ Terminal::TrustedPromptReply Terminal::acceptTrustedPrompt(std::wstring path,
         {
             if (supportsPromptReplacement && _pendingPromptExpectedBuffer == _trustedPromptBuffer)
             {
-                reply.promptReplacement = _pendingPromptReplacement;
+                reply.promptReplacement   = _pendingPromptReplacement;
                 reply.replacementAccepted = true;
             }
             else
             {
                 reply.replacementRejected = true;
             }
-            SecureZeroMemory(
-                _pendingPromptExpectedBuffer.data(), _pendingPromptExpectedBuffer.size() * sizeof(wchar_t));
+            SecureZeroMemory(_pendingPromptExpectedBuffer.data(), _pendingPromptExpectedBuffer.size() * sizeof(wchar_t));
             SecureZeroMemory(_pendingPromptReplacement.data(), _pendingPromptReplacement.size() * sizeof(wchar_t));
             _pendingPromptExpectedBuffer.clear();
             _pendingPromptReplacement.clear();
         }
         if (followEnabled && ! _pendingFollowDirectory.empty() &&
-            OrdinalString::EqualsNoCase(
-                std::wstring_view(_trustedCurrentDirectory), std::wstring_view(_pendingFollowDirectory)))
+            OrdinalString::EqualsNoCase(std::wstring_view(_trustedCurrentDirectory), std::wstring_view(_pendingFollowDirectory)))
         {
             _followState = TerminalFollowState::Applied;
             _pendingFollowDirectory.clear();
         }
         else if (! replacementPending && followEnabled && ! _hasPendingUserInput && ! _pendingFollowDirectory.empty())
         {
-            reply.followTarget = _pendingFollowDirectory;
-            _followState = TerminalFollowState::Applying;
+            reply.followTarget   = _pendingFollowDirectory;
+            _followState         = TerminalFollowState::Applying;
             _idleAtPrimaryPrompt = false;
-            _commandSubmitted = true;
+            _commandSubmitted    = true;
         }
         else if (followEnabled && _pendingFollowDirectory.empty())
         {
@@ -624,8 +582,7 @@ void Terminal::readerMain(std::stop_token stopToken, wil::unique_handle outputRe
     const TerminalPngDecodeThreadContext pngDecodeContext;
     if (const HRESULT pngStatus = pngDecodeContext.Status(); FAILED(pngStatus))
     {
-        Debug::Warning(L"Terminal PNG decoder is unavailable on the VT reader thread (hr=0x{:08X}).",
-                       static_cast<uint32_t>(pngStatus));
+        Debug::Warning(L"Terminal PNG decoder is unavailable on the VT reader thread (hr=0x{:08X}).", static_cast<uint32_t>(pngStatus));
     }
     std::array<uint8_t, 16u * 1024u> buffer{};
     // During normal close this reader deliberately continues to EOF. Microsoft
@@ -635,7 +592,7 @@ void Terminal::readerMain(std::stop_token stopToken, wil::unique_handle outputRe
     // for the post-HPCON cancellation fallback.
     while (! stopToken.stop_requested())
     {
-        DWORD bytesRead = 0u;
+        DWORD bytesRead     = 0u;
         const HANDLE output = outputRead.get();
         if (output == nullptr || ReadFile(output, buffer.data(), static_cast<DWORD>(buffer.size()), &bytesRead, nullptr) == FALSE || bytesRead == 0u)
         {
@@ -668,8 +625,7 @@ void Terminal::notifyOutputReady() noexcept
     }
 
     bool expected = false;
-    if (! _outputNotificationPending.compare_exchange_strong(
-            expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
+    if (! _outputNotificationPending.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
     {
         return;
     }
@@ -679,20 +635,18 @@ void Terminal::notifyOutputReady() noexcept
 void Terminal::postOutputReadyWake() noexcept
 {
     const HWND hwnd = _windowHandle.load(std::memory_order_acquire);
-    auto payload = std::unique_ptr<ReadyWakePayload>(new (std::nothrow) ReadyWakePayload());
+    auto payload    = std::unique_ptr<ReadyWakePayload>(new (std::nothrow) ReadyWakePayload());
     if (hwnd == nullptr || _closing.load(std::memory_order_acquire) || ! payload)
     {
         bool expected = true;
-        static_cast<void>(_outputNotificationPending.compare_exchange_strong(
-            expected, false, std::memory_order_acq_rel, std::memory_order_acquire));
+        static_cast<void>(_outputNotificationPending.compare_exchange_strong(expected, false, std::memory_order_acq_rel, std::memory_order_acquire));
         return;
     }
     payload->sessionGeneration = _sessionGeneration.load(std::memory_order_acquire);
     if (! PostMessagePayload(hwnd, WndMsg::kTerminalOutputReady, 0u, std::move(payload)))
     {
         bool expected = true;
-        static_cast<void>(_outputNotificationPending.compare_exchange_strong(
-            expected, false, std::memory_order_acq_rel, std::memory_order_acquire));
+        static_cast<void>(_outputNotificationPending.compare_exchange_strong(expected, false, std::memory_order_acq_rel, std::memory_order_acquire));
     }
 }
 
@@ -709,8 +663,7 @@ void Terminal::consumeOutputReady() noexcept
     {
         bool expected = false;
         if (! _closing.load(std::memory_order_acquire) &&
-            _outputNotificationPending.compare_exchange_strong(
-                expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
+            _outputNotificationPending.compare_exchange_strong(expected, true, std::memory_order_acq_rel, std::memory_order_acquire))
         {
             postOutputReadyWake();
         }
@@ -734,16 +687,16 @@ void Terminal::publishFinalExitEvent() noexcept
     }
 
     TerminalEvent event{};
-    event.sizeBytes = sizeof(event);
-    event.kind = TerminalEventKind::RootSessionExited;
-    event.instanceId = _instanceId;
-    event.sessionGeneration = sessionGeneration;
-    event.stateGeneration = _stateGeneration.load(std::memory_order_acquire);
-    event.exitCodePresent = _exitCodePresent.load(std::memory_order_acquire) ? 1u : 0u;
-    event.exitCode = _exitCode.load(std::memory_order_acquire);
-    event.finalSnapshotComplete = 1u;
+    event.sizeBytes                   = sizeof(event);
+    event.kind                        = TerminalEventKind::RootSessionExited;
+    event.instanceId                  = _instanceId;
+    event.sessionGeneration           = sessionGeneration;
+    event.stateGeneration             = _stateGeneration.load(std::memory_order_acquire);
+    event.exitCodePresent             = _exitCodePresent.load(std::memory_order_acquire) ? 1u : 0u;
+    event.exitCode                    = _exitCode.load(std::memory_order_acquire);
+    event.finalSnapshotComplete       = 1u;
     event.rootExitObservedTimestampNs = _rootExitObservedTimestampNs.load(std::memory_order_acquire);
-    _eventDeliveredSessionGeneration = sessionGeneration;
+    _eventDeliveredSessionGeneration  = sessionGeneration;
     _eventCallback->OnTerminalEvent(&event, _eventCallbackCookie);
 }
 
@@ -751,8 +704,7 @@ void Terminal::GhosttyWritePty(GhosttyTerminal /*terminal*/, void* userData, con
 {
     if (userData != nullptr && data != nullptr && length != 0u)
     {
-        static_cast<void>(
-            static_cast<Terminal*>(userData)->writeInput(std::string_view(reinterpret_cast<const char*>(data), length)));
+        static_cast<void>(static_cast<Terminal*>(userData)->writeInput(std::string_view(reinterpret_cast<const char*>(data), length)));
     }
 }
 
@@ -768,8 +720,7 @@ bool Terminal::writeInput(std::string_view bytes) noexcept
     }
 
     std::unique_lock lock(_inputMutex);
-    if (_closing.load(std::memory_order_acquire) ||
-        _inputQueue.size() + _inputActiveRequests >= kMaximumInputRequests ||
+    if (_closing.load(std::memory_order_acquire) || _inputQueue.size() + _inputActiveRequests >= kMaximumInputRequests ||
         _inputQueuedBytes > kMaximumInputBytes - bytes.size())
     {
         return false;
@@ -786,8 +737,7 @@ bool Terminal::writeInput(std::string_view bytes) noexcept
     _inputDrainScheduled = true;
 
     wil::unique_hmodule modulePin = AcquireModuleReferenceFromAddress(&kTerminalModuleAnchor);
-    auto context = modulePin ?
-        std::unique_ptr<InputDrainContext>(new (std::nothrow) InputDrainContext(this, std::move(modulePin))) : nullptr;
+    auto context                  = modulePin ? std::unique_ptr<InputDrainContext>(new (std::nothrow) InputDrainContext(this, std::move(modulePin))) : nullptr;
     if (! context)
     {
         _inputDrainScheduled = false;
@@ -851,9 +801,8 @@ void Terminal::drainInput() noexcept
             while (_ptyInputWrite && offset < bytes.size())
             {
                 const size_t remaining = bytes.size() - offset;
-                const DWORD requested = static_cast<DWORD>(
-                    std::min<size_t>(remaining, (std::numeric_limits<DWORD>::max)()));
-                DWORD written = 0u;
+                const DWORD requested  = static_cast<DWORD>(std::min<size_t>(remaining, (std::numeric_limits<DWORD>::max)()));
+                DWORD written          = 0u;
                 if (WriteFile(_ptyInputWrite.get(), bytes.data() + offset, requested, &written, nullptr) == FALSE || written == 0u)
                 {
                     break;
@@ -897,16 +846,15 @@ void Terminal::markUserInput(std::string_view bytes) noexcept
         {
             return;
         }
-        const bool submitted = bytes.find_first_of("\r\n\x03") != std::string_view::npos;
-        const bool commandSubmitted = _commandSubmitted || submitted;
+        const bool submitted           = bytes.find_first_of("\r\n\x03") != std::string_view::npos;
+        const bool commandSubmitted    = _commandSubmitted || submitted;
         const bool idleAtPrimaryPrompt = submitted ? false : _idleAtPrimaryPrompt;
         const bool hasPendingUserInput = submitted ? false : true;
-        if (commandSubmitted == _commandSubmitted && idleAtPrimaryPrompt == _idleAtPrimaryPrompt &&
-            hasPendingUserInput == _hasPendingUserInput)
+        if (commandSubmitted == _commandSubmitted && idleAtPrimaryPrompt == _idleAtPrimaryPrompt && hasPendingUserInput == _hasPendingUserInput)
         {
             return;
         }
-        _commandSubmitted = commandSubmitted;
+        _commandSubmitted    = commandSubmitted;
         _idleAtPrimaryPrompt = idleAtPrimaryPrompt;
         _hasPendingUserInput = hasPendingUserInput;
         _stateGeneration.fetch_add(1u, std::memory_order_acq_rel);
@@ -962,9 +910,9 @@ void Terminal::retireCommandSurfaceWorker() noexcept
     }
 
     wil::unique_hmodule pin = AcquireModuleReferenceFromAddress(&kTerminalModuleAnchor);
-    auto context = pin ? std::unique_ptr<CommandSurfaceJoinContext>(new (std::nothrow) CommandSurfaceJoinContext(
-                             std::move(_commandSurfaceWorker), std::move(pin), this))
-                       : nullptr;
+    auto context =
+        pin ? std::unique_ptr<CommandSurfaceJoinContext>(new (std::nothrow) CommandSurfaceJoinContext(std::move(_commandSurfaceWorker), std::move(pin), this))
+            : nullptr;
     if (! context)
     {
         if (_commandSurfaceWorker.joinable())
@@ -1086,12 +1034,12 @@ void Terminal::prepareClose() noexcept
     _commandSurfaceStatusOverride.clear();
     ScrubFindRows(_commandSurfaceFindRows);
     ScrubSuggestionRows(_commandSurfaceSuggestionRows);
-    _commandSurfaceKind = CommandSurfaceKind::None;
-    _commandSurfaceInsertionPending = false;
-    _commandSurfaceHistoryTrusted = false;
-    _unsafePasteConfirmationVisible = false;
-    _hyperlinkConfirmationVisible = false;
-    _osc52ConfirmationVisible = false;
+    _commandSurfaceKind                    = CommandSurfaceKind::None;
+    _commandSurfaceInsertionPending        = false;
+    _commandSurfaceHistoryTrusted          = false;
+    _unsafePasteConfirmationVisible        = false;
+    _hyperlinkConfirmationVisible          = false;
+    _osc52ConfirmationVisible              = false;
     _translatedCharacterSuppressionPending = false;
     _osc52PostPending.store(false, std::memory_order_release);
     SecureZeroMemory(_pendingUnsafePaste.data(), _pendingUnsafePaste.size());
@@ -1190,7 +1138,7 @@ void Terminal::finishClose() noexcept
         _trustedHistoryPath.clear();
         ScrubStrings(_trustedCurrentSessionHistory);
         _trustedHistoryProviderAvailable = false;
-        _integrationTrusted = false;
+        _integrationTrusted              = false;
     }
     if (_readerThread.joinable())
     {
@@ -1213,7 +1161,7 @@ void Terminal::finishClose() noexcept
     _kittyPlacements.clear();
     _kittyImages.clear();
     _kittyTargetStorageGeneration = 0u;
-    _kittyCacheEpoch = 0u;
-    _kittyCachedBytes = 0u;
+    _kittyCacheEpoch              = 0u;
+    _kittyCachedBytes             = 0u;
     setLifecycle(TerminalLifecycleState::Exited);
 }

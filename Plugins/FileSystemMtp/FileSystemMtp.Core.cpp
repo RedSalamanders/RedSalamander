@@ -3587,13 +3587,84 @@ HRESULT STDMETHODCALLTYPE FileSystemMtp::GetDirectorySize(
     return hr;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystemMtp::CopyItem(const wchar_t* sourcePath,
-                                                  const wchar_t* destinationPath,
-                                                  FileSystemFlags flags,
-                                                  const FileSystemOptions* options,
-                                                  IFileSystemCallback* callback,
-                                                  void* cookie) noexcept
+void FileSystemMtp::ReportSourceDiscovery(std::wstring_view normalizedSource, Common::FileOperations::DiscoveryScope& discovery) noexcept
 {
+    if (! discovery.IsActive())
+    {
+        return;
+    }
+
+    // Results leave the command through shared state, never through this frame: a command the
+    // watchdog abandons keeps running on a detached worker after this function has returned.
+    struct SourceSummary final
+    {
+        SourceSummary() noexcept                       = default;
+        SourceSummary(const SourceSummary&)            = delete;
+        SourceSummary& operator=(const SourceSummary&) = delete;
+        SourceSummary(SourceSummary&&)                 = delete;
+        SourceSummary& operator=(SourceSummary&&)      = delete;
+
+        std::atomic_bool known{false};
+        std::atomic_bool servedFromCache{false};
+        std::atomic<unsigned long> attributes{0};
+        std::atomic<uint64_t> sizeBytes{0};
+    };
+    auto summary = std::make_shared<SourceSummary>();
+    const std::wstring commandPath(normalizedSource);
+    const auto startedAt = std::chrono::steady_clock::now();
+    const HRESULT hr     = RunBackendCommand(
+        [commandPath, summary](IMtpBackend& backend) noexcept
+    {
+        unsigned long attributes = 0;
+        uint64_t sizeBytes       = 0;
+        bool servedFromCache     = false;
+        const HRESULT lookupHr   = backend.GetCachedItemSummary(commandPath, attributes, sizeBytes, servedFromCache);
+        if (SUCCEEDED(lookupHr))
+        {
+            summary->attributes.store(attributes, std::memory_order_release);
+            summary->sizeBytes.store(sizeBytes, std::memory_order_release);
+            summary->servedFromCache.store(servedFromCache, std::memory_order_release);
+            summary->known.store(true, std::memory_order_release);
+        }
+        return lookupHr;
+    },
+        OverwriteJournalIdentityForPath(commandPath));
+    const bool known = SUCCEEDED(hr) && summary->known.load(std::memory_order_acquire);
+    // The measured cost of describing the source: one command dispatch, and whether the backend
+    // answered from its path cache or had to ask the device.
+    Debug::Perf::Emit(L"FileOps.Mtp.Discovery.SourceLookupUs",
+                      known && summary->servedFromCache.load(std::memory_order_acquire) ? L"served=cache" : (known ? L"served=device" : L"served=none"),
+                      Debug::Perf::ElapsedUs(startedAt),
+                      known ? 1u : 0u,
+                      known && summary->servedFromCache.load(std::memory_order_acquire) ? 1u : 0u,
+                      hr);
+
+    if (! known)
+    {
+        // The mutation will say why; the item is still this call's work, of a size nobody knows.
+        static_cast<void>(discovery.AddFileWithUnknownSize());
+        return;
+    }
+    if ((summary->attributes.load(std::memory_order_acquire) & FILE_ATTRIBUTE_DIRECTORY) != 0)
+    {
+        // The device copies or moves a directory as one object; nothing beneath it is visited here.
+        static_cast<void>(discovery.AddDirectory());
+        return;
+    }
+    static_cast<void>(discovery.AddFile(summary->sizeBytes.load(std::memory_order_acquire)));
+}
+
+HRESULT FileSystemMtp::CopyOrMoveSingleItem(bool move,
+                                            const wchar_t* sourcePath,
+                                            const wchar_t* destinationPath,
+                                            FileSystemFlags flags,
+                                            const FileSystemOptions* options,
+                                            IFileSystemCallback* callback,
+                                            void* cookie,
+                                            Common::FileOperations::DiscoveryScope& discovery,
+                                            bool closeDiscoveryWhenFinal) noexcept
+{
+    const FileSystemOperation operationType = move ? FILESYSTEM_MOVE : FILESYSTEM_COPY;
     HRESULT hr = FileSystemOptionsHaveValidHeader(options) ? CheckMutationAllowed() : E_INVALIDARG;
     Settings settings;
     {
@@ -3613,10 +3684,17 @@ HRESULT STDMETHODCALLTYPE FileSystemMtp::CopyItem(const wchar_t* sourcePath,
         }
         if (SUCCEEDED(hr))
         {
-            hr = ReportSingleItemStartAndCheckCancel(FILESYSTEM_COPY, sourcePath, destinationPath, options, callback, cookie);
+            hr = ReportSingleItemStartAndCheckCancel(operationType, sourcePath, destinationPath, options, callback, cookie);
         }
         if (SUCCEEDED(hr))
         {
+            // The source is the whole of this item's work, known before the device mutates.
+            ReportSourceDiscovery(source, discovery);
+            if (closeDiscoveryWhenFinal)
+            {
+                discovery.Close();
+            }
+
             const std::wstring commandSource        = source;
             const std::wstring commandDest          = dest;
             const std::string verifyLevel           = settings.byteVerifyOnOverwrite;
@@ -3625,14 +3703,15 @@ HRESULT STDMETHODCALLTYPE FileSystemMtp::CopyItem(const wchar_t* sourcePath,
                 .failWrites     = settings.failOverwriteJournalWrites,
                 .deviceIdentity = OverwriteJournalDeviceIdentity(settings.connectionDevicePuid, settings.connectionHost, commandDest),
             };
-            auto tempPuidMissing = std::make_shared<std::atomic_bool>(false);
-            auto tempPuidPresent = std::make_shared<std::atomic_bool>(false);
-            hr                   = RunBackendCommand(
-                [commandSource, commandDest, allowOverwrite, verifyLevel, createdObjectPuidUnsupported, journalContext, tempPuidMissing, tempPuidPresent](
+            const DeviceSourceOperation operation = move ? DeviceSourceOperation::Move : DeviceSourceOperation::Copy;
+            auto tempPuidMissing                  = std::make_shared<std::atomic_bool>(false);
+            auto tempPuidPresent                  = std::make_shared<std::atomic_bool>(false);
+            hr                                    = RunBackendCommand(
+                [commandSource, commandDest, operation, allowOverwrite, verifyLevel, createdObjectPuidUnsupported, journalContext, tempPuidMissing, tempPuidPresent](
                     IMtpBackend& backend) mutable noexcept
             {
                 return ExecuteDeviceSourceOperation(backend,
-                                                    DeviceSourceOperation::Copy,
+                                                    operation,
                                                     commandSource,
                                                     commandDest,
                                                     allowOverwrite,
@@ -3655,8 +3734,21 @@ HRESULT STDMETHODCALLTYPE FileSystemMtp::CopyItem(const wchar_t* sourcePath,
         }
     }
 
-    static_cast<void>(CompleteSingleItem(FILESYSTEM_COPY, 0, sourcePath, destinationPath, hr, options, callback, cookie));
+    static_cast<void>(CompleteSingleItem(operationType, 0, sourcePath, destinationPath, hr, options, callback, cookie));
     return hr;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystemMtp::CopyItem(const wchar_t* sourcePath,
+                                                  const wchar_t* destinationPath,
+                                                  FileSystemFlags flags,
+                                                  const FileSystemOptions* options,
+                                                  IFileSystemCallback* callback,
+                                                  void* cookie) noexcept
+{
+    // One governed call is one discovery scope. The header is validated before the scope reads
+    // it; the core still answers an invalid header with the E_INVALIDARG it always did.
+    Common::FileOperations::DiscoveryScope discovery(FileSystemOptionsHaveValidHeader(options) ? options : nullptr);
+    return CopyOrMoveSingleItem(false, sourcePath, destinationPath, flags, options, callback, cookie, discovery, true);
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemMtp::MoveItem(const wchar_t* sourcePath,
@@ -3666,73 +3758,17 @@ HRESULT STDMETHODCALLTYPE FileSystemMtp::MoveItem(const wchar_t* sourcePath,
                                                   IFileSystemCallback* callback,
                                                   void* cookie) noexcept
 {
-    HRESULT hr = FileSystemOptionsHaveValidHeader(options) ? CheckMutationAllowed() : E_INVALIDARG;
-    Settings settings;
-    {
-        std::lock_guard lock(_stateMutex);
-        settings = _settings;
-    }
-
-    if (SUCCEEDED(hr))
-    {
-        std::wstring source;
-        std::wstring dest;
-        const bool allowOverwrite = (flags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) != 0;
-        hr                        = NormalizeInputPath(sourcePath, source);
-        if (SUCCEEDED(hr))
-        {
-            hr = NormalizeInputPath(destinationPath, dest);
-        }
-        if (SUCCEEDED(hr))
-        {
-            hr = ReportSingleItemStartAndCheckCancel(FILESYSTEM_MOVE, sourcePath, destinationPath, options, callback, cookie);
-        }
-        if (SUCCEEDED(hr))
-        {
-            const std::wstring commandSource        = source;
-            const std::wstring commandDest          = dest;
-            const std::string verifyLevel           = settings.byteVerifyOnOverwrite;
-            const bool createdObjectPuidUnsupported = CreatedObjectPuidUnsupported();
-            const OverwriteJournalContext journalContext{
-                .failWrites     = settings.failOverwriteJournalWrites,
-                .deviceIdentity = OverwriteJournalDeviceIdentity(settings.connectionDevicePuid, settings.connectionHost, commandDest),
-            };
-            auto tempPuidMissing = std::make_shared<std::atomic_bool>(false);
-            auto tempPuidPresent = std::make_shared<std::atomic_bool>(false);
-            hr                   = RunBackendCommand(
-                [commandSource, commandDest, allowOverwrite, verifyLevel, createdObjectPuidUnsupported, journalContext, tempPuidMissing, tempPuidPresent](
-                    IMtpBackend& backend) mutable noexcept
-            {
-                return ExecuteDeviceSourceOperation(backend,
-                                                    DeviceSourceOperation::Move,
-                                                    commandSource,
-                                                    commandDest,
-                                                    allowOverwrite,
-                                                    verifyLevel,
-                                                    createdObjectPuidUnsupported,
-                                                    journalContext,
-                                                    tempPuidMissing,
-                                                    tempPuidPresent);
-            },
-                journalContext.deviceIdentity,
-                MtpBackendCommandKind::Mutating);
-            if (tempPuidPresent->load(std::memory_order_acquire))
-            {
-                RecordCreatedObjectPuidProbe(true);
-            }
-            if (tempPuidMissing->load(std::memory_order_acquire))
-            {
-                RecordCreatedObjectPuidProbe(false);
-            }
-        }
-    }
-
-    static_cast<void>(CompleteSingleItem(FILESYSTEM_MOVE, 0, sourcePath, destinationPath, hr, options, callback, cookie));
-    return hr;
+    Common::FileOperations::DiscoveryScope discovery(FileSystemOptionsHaveValidHeader(options) ? options : nullptr);
+    return CopyOrMoveSingleItem(true, sourcePath, destinationPath, flags, options, callback, cookie, discovery, true);
 }
 
-HRESULT STDMETHODCALLTYPE
-FileSystemMtp::DeleteItem(const wchar_t* path, FileSystemFlags flags, const FileSystemOptions* options, IFileSystemCallback* callback, void* cookie) noexcept
+HRESULT FileSystemMtp::DeleteSingleItem(const wchar_t* path,
+                                        FileSystemFlags flags,
+                                        const FileSystemOptions* options,
+                                        IFileSystemCallback* callback,
+                                        void* cookie,
+                                        Common::FileOperations::DiscoveryScope& discovery,
+                                        bool closeDiscoveryWhenFinal) noexcept
 {
     HRESULT hr = FileSystemOptionsHaveValidHeader(options) ? CheckMutationAllowed() : E_INVALIDARG;
     if (SUCCEEDED(hr))
@@ -3751,6 +3787,12 @@ FileSystemMtp::DeleteItem(const wchar_t* path, FileSystemFlags flags, const File
             }
             else
             {
+                // The device removes a directory as one object, so the item is the whole total.
+                ReportSourceDiscovery(normalized, discovery);
+                if (closeDiscoveryWhenFinal)
+                {
+                    discovery.Close();
+                }
                 const std::wstring commandPath = normalized;
                 const bool recursive           = (flags & FILESYSTEM_FLAG_RECURSIVE) != 0;
                 hr = RunBackendCommand([commandPath, recursive](IMtpBackend& backend) noexcept { return backend.DeleteItem(commandPath, recursive); },
@@ -3762,6 +3804,13 @@ FileSystemMtp::DeleteItem(const wchar_t* path, FileSystemFlags flags, const File
 
     static_cast<void>(CompleteSingleItem(FILESYSTEM_DELETE, 0, path, nullptr, hr, options, callback, cookie));
     return hr;
+}
+
+HRESULT STDMETHODCALLTYPE
+FileSystemMtp::DeleteItem(const wchar_t* path, FileSystemFlags flags, const FileSystemOptions* options, IFileSystemCallback* callback, void* cookie) noexcept
+{
+    Common::FileOperations::DiscoveryScope discovery(FileSystemOptionsHaveValidHeader(options) ? options : nullptr);
+    return DeleteSingleItem(path, flags, options, callback, cookie, discovery, true);
 }
 
 HRESULT STDMETHODCALLTYPE FileSystemMtp::RenameItem(const wchar_t* sourcePath,
@@ -3882,12 +3931,15 @@ HRESULT STDMETHODCALLTYPE FileSystemMtp::DeleteItems(const wchar_t* const* paths
         return E_INVALIDARG;
     }
 
+    // One governed call is one discovery scope for every selected root; it closes once, after
+    // the last root, when this frame ends.
+    Common::FileOperations::DiscoveryScope discovery(options);
     HRESULT finalHr = S_OK;
     for (unsigned long index = 0; index < count; ++index)
     {
         SingleItemIndexCallback indexedCallback(callback, index);
         IFileSystemCallback* itemCallback = callback ? &indexedCallback : nullptr;
-        const HRESULT hr                  = DeleteItem(paths[index], flags, options, itemCallback, cookie);
+        const HRESULT hr                  = DeleteSingleItem(paths[index], flags, options, itemCallback, cookie, discovery, false);
         if (FAILED(hr) && SUCCEEDED(finalHr))
         {
             finalHr = hr;
@@ -4446,6 +4498,9 @@ HRESULT FileSystemMtp::CopyOrMoveItems(bool move,
         return finalHr;
     }
 
+    // One governed call is one discovery scope for every selected root; it closes once, after
+    // the last root, when this frame ends. The callers validated the options header.
+    Common::FileOperations::DiscoveryScope discovery(options);
     for (unsigned long index = 0; index < count; ++index)
     {
         std::wstring source;
@@ -4456,8 +4511,7 @@ HRESULT FileSystemMtp::CopyOrMoveItems(bool move,
             dest = FileSystemMtpInternal::JoinPath(destFolder, LeafName(source));
             SingleItemIndexCallback indexedCallback(callback, index);
             IFileSystemCallback* itemCallback = callback ? &indexedCallback : nullptr;
-            hr                                = move ? MoveItem(source.c_str(), dest.c_str(), flags, options, itemCallback, cookie)
-                                                     : CopyItem(source.c_str(), dest.c_str(), flags, options, itemCallback, cookie);
+            hr = CopyOrMoveSingleItem(move, source.c_str(), dest.c_str(), flags, options, itemCallback, cookie, discovery, false);
         }
 
         if (FAILED(hr) && SUCCEEDED(finalHr))

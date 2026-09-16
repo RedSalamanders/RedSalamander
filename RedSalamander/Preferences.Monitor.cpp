@@ -10,24 +10,24 @@
 #include <string>
 #include <vector>
 
-#include "DxUi/DxUi.h"
 #include "Helpers.h"
 #include "UiMetrics.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
 
 namespace
 {
+using DxUi::Button;
+using DxUi::ButtonVariant;
+using DxUi::CardPanel;
+using DxUi::ComboBox;
+using DxUi::ComboBoxVariant;
+using DxUi::FontRole;
+using DxUi::Label;
+using DxUi::ThemePalette;
+using DxUi::Toggle;
 using PrefsMonitor::EnsureWorkingMonitorSettings;
 using PrefsMonitor::GetMonitorSettingsOrDefault;
-using RedSalamander::DxUi::Button;
-using RedSalamander::DxUi::ButtonVariant;
-using RedSalamander::DxUi::CardPanel;
-using RedSalamander::DxUi::ComboBox;
-using RedSalamander::DxUi::ComboBoxVariant;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::ThemePalette;
-using RedSalamander::DxUi::Toggle;
 
 constexpr std::array<UINT, 11> kMonitorToggleLabelStringIds = {{
     IDS_PREFS_ADV_LABEL_TOOLBAR,
@@ -300,6 +300,10 @@ bool MonitorPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noex
         card.presetLabel       = root->AddChild<Label>();
         card.presetDescription = root->AddChild<Label>();
         card.presetCombo       = root->AddChild<ComboBox>();
+        if (card.presetCombo)
+        {
+            card.presetCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+        }
 
         card.presetLabel->SetFontRole(FontRole::Body);
         card.presetDescription->SetFontRole(FontRole::Small);
@@ -385,7 +389,7 @@ bool MonitorPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noex
 
     {
         MonitorDxPage& page = dxState->page;
-        std::vector<RedSalamander::DxUi::Control*> orderedChildren;
+        std::vector<DxUi::Control*> orderedChildren;
         orderedChildren.reserve(_pageContentRoot->DebugChildCount());
 
         const auto appendDisplayToggleCard = [&](const size_t index) noexcept
@@ -674,11 +678,10 @@ void MonitorPane::LayoutDxPage(
     const int stateTextWidth = std::max(onWidth, offWidth);
 
     const int measuredToggleWidth = std::max(minToggleWidth, (2 * paddingX) + stateTextWidth + gapX + trackWidth);
-    const int toggleWidth =
-        static_cast<int>(std::lround(RedSalamander::DxUi::ResolveConstrainedExtent({.minExtent       = static_cast<float>(minToggleWidth),
-                                                                                    .preferredExtent = static_cast<float>(measuredToggleWidth),
-                                                                                    .maxExtent       = static_cast<float>(measuredToggleWidth)},
-                                                                                   static_cast<float>(std::max(0, width - 2 * cardPaddingX - cardGapX)))));
+    const int toggleWidth = static_cast<int>(std::lround(DxUi::ResolveConstrainedExtent({.minExtent       = static_cast<float>(minToggleWidth),
+                                                                                         .preferredExtent = static_cast<float>(measuredToggleWidth),
+                                                                                         .maxExtent       = static_cast<float>(measuredToggleWidth)},
+                                                                                        static_cast<float>(std::max(0, width - 2 * cardPaddingX - cardGapX)))));
 
     auto layoutToggleCard =
         [&](std::wstring_view labelText, std::wstring_view descText, CardPanel* dxCard, Label* dxLabel, Label* dxDescription, Toggle* dxToggle) noexcept
@@ -730,11 +733,11 @@ void MonitorPane::LayoutDxPage(
 
     auto layoutFilterCard = [&](MonitorFilterCardPageDx& dxCard) noexcept
     {
-        const int comboWidth = static_cast<int>(
-            std::lround(RedSalamander::DxUi::ResolveConstrainedExtent({.minExtent       = static_cast<float>(UiMetrics::ScaleDip(dpi, kMinEditWidthDip)),
-                                                                       .preferredExtent = static_cast<float>(UiMetrics::ScaleDip(dpi, kMinEditWidthDip)),
-                                                                       .maxExtent       = static_cast<float>(UiMetrics::ScaleDip(dpi, kMaxEditWidthDip))},
-                                                                      static_cast<float>(std::max(0, width - 2 * cardPaddingX)))));
+        const int comboWidth =
+            static_cast<int>(std::lround(DxUi::ResolveConstrainedExtent({.minExtent       = static_cast<float>(UiMetrics::ScaleDip(dpi, kMinEditWidthDip)),
+                                                                         .preferredExtent = static_cast<float>(UiMetrics::ScaleDip(dpi, kMinEditWidthDip)),
+                                                                         .maxExtent       = static_cast<float>(UiMetrics::ScaleDip(dpi, kMaxEditWidthDip))},
+                                                                        static_cast<float>(std::max(0, width - 2 * cardPaddingX)))));
         const int rowGapY = cardSpacingY;
 
         const auto measureRowHeight = [&](const int controlWidth, std::wstring_view descText) noexcept

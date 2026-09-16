@@ -4,12 +4,12 @@
 #define NOMINMAX
 #include <Windows.h>
 
-#include "DxUi.h"
 #include "RedConfigureSession.h"
-#include "RedConfigureWorkflow.h"
 #include "RedConfigureUiHelpers.h"
+#include "RedConfigureWorkflow.h"
 #include "SettingsStore.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
 
 #include <algorithm>
 #include <cstdint>
@@ -22,12 +22,12 @@
 
 namespace RedConfigure::Ui
 {
-using RedSalamander::DxUi::GridCellData;
-using RedSalamander::DxUi::GridColumnDesc;
-using RedSalamander::DxUi::GridColumnKind;
-using RedSalamander::DxUi::GridRowStyle;
-using RedSalamander::DxUi::GridRowTone;
-using RedSalamander::DxUi::IDxGridModel;
+using DxUi::GridCellData;
+using DxUi::GridColumnDesc;
+using DxUi::GridColumnKind;
+using DxUi::GridRowStyle;
+using DxUi::GridRowTone;
+using DxUi::IDxGridModel;
 
 [[nodiscard]] inline uint64_t StableLocalizationReviewRowId(std::wstring_view ownerName, std::wstring_view id) noexcept
 {
@@ -633,9 +633,8 @@ public:
             return;
         }
 
-        const std::wstring& key = _keys[rowIndex];
-        const RedConfigure::Workflow::ThemeTokenMetadata metadata =
-            RedConfigure::Workflow::BuildThemeTokenMetadata(_session.GetThemePreviewModel(), key);
+        const std::wstring& key                                   = _keys[rowIndex];
+        const RedConfigure::Workflow::ThemeTokenMetadata metadata = RedConfigure::Workflow::BuildThemeTokenMetadata(_session.GetThemePreviewModel(), key);
         switch (columnIndex)
         {
             case 0u: outCell.text = key; break;
@@ -651,25 +650,22 @@ public:
             case 3u: outCell.text = _session.GetThemePreviewModel().GetAuthoredColorText(key); break;
             case 4u:
             {
-                const UINT sourceId = static_cast<UINT>(metadata.sourceKind == RedConfigure::Workflow::ThemeTokenSourceKind::Inherited
-                                                            ? IDS_REDCONFIGURE_SOURCE_BASE
-                                                        : metadata.sourceKind == RedConfigure::Workflow::ThemeTokenSourceKind::Literal
-                                                            ? IDS_REDCONFIGURE_SOURCE_LITERAL
-                                                        : metadata.sourceKind == RedConfigure::Workflow::ThemeTokenSourceKind::Reference
-                                                            ? IDS_REDCONFIGURE_SOURCE_TOKEN_REFERENCE
-                                                            : IDS_REDCONFIGURE_SOURCE_FUNCTION);
+                const UINT sourceId =
+                    static_cast<UINT>(metadata.sourceKind == RedConfigure::Workflow::ThemeTokenSourceKind::Inherited   ? IDS_REDCONFIGURE_SOURCE_BASE
+                                      : metadata.sourceKind == RedConfigure::Workflow::ThemeTokenSourceKind::Literal   ? IDS_REDCONFIGURE_SOURCE_LITERAL
+                                      : metadata.sourceKind == RedConfigure::Workflow::ThemeTokenSourceKind::Reference ? IDS_REDCONFIGURE_SOURCE_TOKEN_REFERENCE
+                                                                                                                       : IDS_REDCONFIGURE_SOURCE_FUNCTION);
                 outCell.text = LoadAppString(_instance, sourceId);
                 break;
             }
             case 5u: outCell.text = std::to_wstring(metadata.usageCount); break;
             case 6u:
                 outCell.text = metadata.contrastKnown
-                                   ? FormatStringResource(_instance,
-                                                          IDS_REDCONFIGURE_FMT_CONTRAST_VALUE,
-                                                          metadata.contrastRatio,
-                                                          LoadAppString(_instance,
-                                                                        metadata.contrastPass ? IDS_REDCONFIGURE_CONTRAST_PASS
-                                                                                              : IDS_REDCONFIGURE_CONTRAST_FAIL))
+                                   ? FormatStringResource(
+                                         _instance,
+                                         IDS_REDCONFIGURE_FMT_CONTRAST_VALUE,
+                                         metadata.contrastRatio,
+                                         LoadAppString(_instance, metadata.contrastPass ? IDS_REDCONFIGURE_CONTRAST_PASS : IDS_REDCONFIGURE_CONTRAST_FAIL))
                                    : L"—";
                 break;
             default: break;

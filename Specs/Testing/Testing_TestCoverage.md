@@ -19,6 +19,10 @@ The live inventory authorities are:
 
 `Testing_SelfTests.md` owns result, skip, repeat, shuffle, sandbox, and runner aggregation semantics. `Testing_PerformanceValidation.md` owns metrics, sample quality, budgets, baselines, and archived performance evidence. `Testing_SelfTestRemoteCredentials.md` owns opt-in live remote prerequisites.
 
+Named documentation galleries such as `FileOps_VisualGallery` are explicit opt-in rendering fixtures.
+They are excluded from broad behavioral phase totals and phase-order integrity requirements, while
+remaining selectable by their exact case name. Their screenshot count is not a behavioral test count.
+
 ## Trusted validation coverage contract
 
 The live source/runtime inventory and the canonical Full plan remain authoritative after
@@ -59,6 +63,13 @@ Every durable behavior change must have a test disposition before closeout:
 6. Performance-sensitive changes require the instrumentation, deterministic scenario, before/after evidence, and archive rules in `Testing_PerformanceValidation.md` from the start.
 
 A passing case proves only its named contract and inputs. A source search, build success, manual observation, or historical green run cannot substitute for relevant current behavioral evidence.
+
+Commands clipboard setup must account for desktop listeners notified by fixture clears and seeds.
+The shared fixture quiet-point helper waits for an unchanged sequence and no open owner for 250 ms,
+with a final availability probe and a three-second scaled deadline. Product copy/cut/paste commands
+still execute once, and their exact text/format assertions remain mandatory. A setup timeout remains
+visible; neither command retries nor a cached fallback establish a native clipboard success.
+Retain failed attempts and compare repeated same-source runs before attributing external contention.
 
 ## Required risk coverage
 
@@ -113,7 +124,7 @@ which lacks private-use (Nerd Font) glyph coverage, reaches the user as the non-
 in-grid notice rather than degrading silently: the monospace-only fallback chain, the
 one-shot glyph probe that fires only once such a codepoint is painted, banner dismissal
 and re-arming when the configured family changes, and the accessibility snapshot text.
-`Tests/DxUiTests` covers the shared typography side: availability memoization, the
+DxUi's standalone Foundation suite covers the shared typography side: availability memoization, the
 `checkForUpdates` rescan, and `InvalidateFontFamilyAvailability` dropping cached answers
 for one factory.
 
@@ -181,3 +192,28 @@ Use these commands for review:
 .\.build\x64\Debug\RedSalamander.exe --selftest-list-cases
 .\Tools\Run-AllTests.ps1 -Suite Full
 ```
+
+## I19 product UI regressions
+
+`ProductUiTests` is the active CI/Full consumer target for all 23 product-owned cases
+in the I19 gap analysis, plus viewer adapter mapping/polarity regressions. It links
+the pinned archive through public headers. The legacy library source/suite is retired;
+its old results are not candidate coverage. Shared control/embedded tests belong to DxUi. Commands,
+viewer tests, RedConfigure and Monitor continue to establish product behavior.
+
+Compare's low-hardening smoke keeps the Find checkbox repaint contract as an
+interaction with the pinned public library. Left on an unchecked mixed checkbox
+and Right on a checked mixed checkbox must clear the mixed glyph and request
+repaint while leaving the Boolean value unchanged. Consumer qualification must
+not depend on reading a retired shared-library source file for that behavior.
+
+The Preferences category-churn regression obtains current item rectangles through the
+product debug adapter and clips them to the visible client area. It must not
+assume content-space row coordinates remain client coordinates after scrolling.
+The adapter only reads geometry; actual input still selects the category, and
+the existing focus, retained-host and invalidation-budget assertions remain.
+
+The extracted control target does not own product source policies. `Tools/Tests/TestHarnessSourceContracts.Tests.ps1`
+retains the NavigationView delivered-input generation prohibition and the credential prompt modal-quit, raw-child
+teardown and joined-UIA-worker policies. These four checks remain in the product tooling suite alongside runtime
+Commands coverage when the old DxUiTests executable is retired.

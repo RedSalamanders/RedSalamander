@@ -106,14 +106,18 @@ SelfTest::RunCase(options,
 
         std::mutex mutex;
         std::condition_variable cv;
+        const auto waitBudget = std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(20'000))};
+        bool releaseContent   = false;
+        bool workerAtGate     = false;
+        bool gateTimedOut     = false;
         bool contentDone      = false;
         uint64_t lastPending  = 0;
         uint64_t lastTotal    = 0;
         uint64_t lastComplete = 0;
 
-        session->SetContentProgressCallback([&](uint32_t /*workerIndex*/,
+        session->SetContentProgressCallback([&](uint32_t workerIndex,
                                                 const std::filesystem::path& /*relativeFolder*/,
-                                                std::wstring_view /*entryName*/,
+                                                std::wstring_view entryName,
                                                 uint64_t /*fileTotalBytes*/,
                                                 uint64_t /*fileCompletedBytes*/,
                                                 uint64_t /*overallTotalBytes*/,
@@ -122,18 +126,45 @@ SelfTest::RunCase(options,
                                                 uint64_t totalContentCompares,
                                                 uint64_t completedContentCompares) noexcept
         {
-            std::lock_guard guard(mutex);
+            std::unique_lock lock(mutex);
             lastPending  = pendingContentCompares;
-            lastTotal    = totalContentCompares;
-            lastComplete = completedContentCompares;
+            lastTotal    = std::max(lastTotal, totalContentCompares);
+            lastComplete = std::max(lastComplete, completedContentCompares);
             if (pendingContentCompares == 0u && totalContentCompares != 0u && completedContentCompares == totalContentCompares)
             {
                 contentDone = true;
             }
             cv.notify_all();
+            // Hold real workers at their starting callback until the pending snapshot is checked.
+            // Queue notifications use the sentinel index and must never block the calling thread.
+            if (! releaseContent && workerIndex != std::numeric_limits<uint32_t>::max() && ! entryName.empty())
+            {
+                workerAtGate = true;
+                cv.notify_all();
+                if (! cv.wait_for(lock, waitBudget, [&] { return releaseContent; }))
+                {
+                    gateTimedOut = true;
+                }
+            }
+        });
+        const auto stopSession = wil::scope_exit([&]() noexcept
+        {
+            {
+                std::lock_guard guard(mutex);
+                releaseContent = true;
+            }
+            cv.notify_all();
+            session->SetContentProgressCallback({});
+            // Join callbacks before their captured synchronization state is destroyed, including on failure.
+            session.reset();
         });
 
         const auto decisionInitial = session->GetOrComputeDecision(std::filesystem::path{});
+        {
+            std::unique_lock lock(mutex);
+            state.Require(cv.wait_for(lock, waitBudget, [&] { return workerAtGate; }), L"content_pending_elided: no worker reached the pending-state gate.");
+            state.Require(! gateTimedOut, L"content_pending_elided: worker gate timed out before the pending snapshot was checked.");
+        }
         state.Require(static_cast<bool>(decisionInitial), L"content_pending_elided: decision missing.");
         if (decisionInitial)
         {
@@ -145,18 +176,19 @@ SelfTest::RunCase(options,
             state.Require(decisionInitial->anyPending, L"content_pending_elided: expected anyPending=true while compares are queued.");
         }
 
-        const auto deadline =
-            std::chrono::steady_clock::now() + std::chrono::milliseconds{static_cast<std::chrono::milliseconds::rep>(SelfTest::ScaleTimeout(20'000))};
         {
             std::unique_lock lock(mutex);
-            cv.wait_until(lock, deadline, [&] { return contentDone; });
+            releaseContent = true;
+            cv.notify_all();
+            cv.wait_for(lock, waitBudget, [&] { return contentDone; });
+            state.Require(! gateTimedOut, L"content_pending_elided: worker gate timed out.");
+            state.Require(
+                contentDone,
+                std::format(
+                    L"content_pending_elided: content compares did not complete. pending={} total={} completed={}", lastPending, lastTotal, lastComplete));
+            state.Require(lastTotal == static_cast<uint64_t>(kFileCount), L"content_pending_elided: unexpected totalContentCompares.");
+            state.Require(lastComplete == static_cast<uint64_t>(kFileCount), L"content_pending_elided: unexpected completedContentCompares.");
         }
-
-        state.Require(
-            contentDone,
-            std::format(L"content_pending_elided: content compares did not complete. pending={} total={} completed={}", lastPending, lastTotal, lastComplete));
-        state.Require(lastTotal == static_cast<uint64_t>(kFileCount), L"content_pending_elided: unexpected totalContentCompares.");
-        state.Require(lastComplete == static_cast<uint64_t>(kFileCount), L"content_pending_elided: unexpected completedContentCompares.");
 
         const auto decisionFinal = session->GetOrComputeDecision(std::filesystem::path{});
         state.Require(static_cast<bool>(decisionFinal), L"content_pending_elided: final decision missing.");

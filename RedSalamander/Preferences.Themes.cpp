@@ -37,23 +37,23 @@
 
 namespace
 {
-using RedSalamander::DxUi::Button;
-using RedSalamander::DxUi::ColorSwatch;
-using RedSalamander::DxUi::ComboBox;
-using RedSalamander::DxUi::ComboBoxVariant;
-using RedSalamander::DxUi::Control;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Grid;
-using RedSalamander::DxUi::GridCellData;
-using RedSalamander::DxUi::GridCellKind;
-using RedSalamander::DxUi::GridColumnDesc;
-using RedSalamander::DxUi::GridSelectionMode;
-using RedSalamander::DxUi::IDxGridModel;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::TextField;
-using RedSalamander::DxUi::ThemePalette;
-using RedSalamander::DxUi::WindowHost;
+using DxUi::Button;
+using DxUi::ColorSwatch;
+using DxUi::ComboBox;
+using DxUi::ComboBoxVariant;
+using DxUi::Control;
+using DxUi::FontRole;
+using DxUi::Grid;
+using DxUi::GridCellData;
+using DxUi::GridCellKind;
+using DxUi::GridColumnDesc;
+using DxUi::GridSelectionMode;
+using DxUi::IDxGridModel;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::TextField;
+using DxUi::ThemePalette;
+using DxUi::WindowHost;
 
 #ifdef ENABLE_TESTS
 enum class DebugThemeBrowseResultKind
@@ -133,7 +133,8 @@ void DrawRoundedColorSwatch(HDC hdc, RECT rc, UINT dpi, const AppTheme& theme, C
     const int height = std::max(0l, rc.bottom - rc.top);
     const int radius = std::max(1, std::min(UiMetrics::ScaleDip(dpi, 4), std::min(width, height) / 2));
 
-    COLORREF border = theme.systemHighContrast ? GetSysColor(COLOR_WINDOWTEXT) : UiMetrics::BlendColorRefWeightedTruncate(background, theme.menu.text, theme.dark ? 70 : 50, 255);
+    COLORREF border = theme.systemHighContrast ? GetSysColor(COLOR_WINDOWTEXT)
+                                               : UiMetrics::BlendColorRefWeightedTruncate(background, theme.menu.text, theme.dark ? 70 : 50, 255);
     COLORREF fill   = background;
     if (argb.has_value())
     {
@@ -204,9 +205,9 @@ public:
     ThemesGridModel()
     {
         _columns = {
-            {L"key", LoadStringResource(nullptr, IDS_PREFS_THEMES_COL_KEY), 260.0f, 120.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
-            {L"value", LoadStringResource(nullptr, IDS_PREFS_THEMES_COL_VALUE), 140.0f, 96.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false},
-            {L"swatch", L"", 44.0f, 36.0f, RedSalamander::DxUi::GridColumnKind::Text, false, false, DWRITE_TEXT_ALIGNMENT_CENTER},
+            {L"key", LoadStringResource(nullptr, IDS_PREFS_THEMES_COL_KEY), 260.0f, 120.0f, DxUi::GridColumnKind::Text, false, false},
+            {L"value", LoadStringResource(nullptr, IDS_PREFS_THEMES_COL_VALUE), 140.0f, 96.0f, DxUi::GridColumnKind::Text, false, false},
+            {L"swatch", L"", 44.0f, 36.0f, DxUi::GridColumnKind::Text, false, false, DWRITE_TEXT_ALIGNMENT_CENTER},
         };
     }
 
@@ -267,7 +268,7 @@ public:
                 if (row.overridden)
                 {
                     outCell.badgeText = L"*";
-                    outCell.badgeTone = RedSalamander::DxUi::AdornmentTone::Accent;
+                    outCell.badgeTone = DxUi::AdornmentTone::Accent;
                 }
                 break;
             case 1: outCell.text = row.value; break;
@@ -1048,13 +1049,13 @@ constexpr std::array<std::wstring_view, 67> kKnownColorKeys = {{
         return rows;
     }
 
-    const std::wstring_view themeId     = themeIdOpt.value();
-    bool editable                       = false;
-    const auto* def                     = FindThemeDefinitionForDisplay(state, themeId, editable);
-    const std::wstring_view baseThemeId = (def && ! def->baseThemeId.empty()) ? std::wstring_view(def->baseThemeId) : themeId;
-    AppThemeSelectionResolution resolution = ResolveAppThemeSelection(themeId, def, L"RedSalamander");
-    const auto* overrides = resolution.resolvedColors.has_value() ? &resolution.resolvedColors->colors : nullptr;
-    AppTheme appTheme     = std::move(resolution.theme);
+    const std::wstring_view themeId         = themeIdOpt.value();
+    bool editable                           = false;
+    const auto* def                         = FindThemeDefinitionForDisplay(state, themeId, editable);
+    const std::wstring_view baseThemeId     = (def && ! def->baseThemeId.empty()) ? std::wstring_view(def->baseThemeId) : themeId;
+    AppThemeSelectionResolution resolution  = ResolveAppThemeSelection(themeId, def, L"RedSalamander");
+    const auto* overrides                   = resolution.resolvedColors.has_value() ? &resolution.resolvedColors->colors : nullptr;
+    AppTheme appTheme                       = std::move(resolution.theme);
     const MonitorTextViewTheme monitorTheme = ResolveMonitorThemeForDisplay(baseThemeId, overrides);
 
     const std::wstring_view filter = PrefsUi::TrimWhitespace(state.themesSearchText);
@@ -2052,9 +2053,12 @@ void ApplyThemeToPreferencesDialog(HWND dlg, PreferencesDialogState& state, cons
     state.inputDisabledBrush.reset();
     state.cardBrush.reset();
 
-    state.inputBackgroundColor         = UiMetrics::BlendColorRefWeightedTruncate(state.cardBackgroundColor, state.theme.windowBackground, state.theme.dark ? 50 : 30, 255);
-    state.inputFocusedBackgroundColor  = UiMetrics::BlendColorRefWeightedTruncate(state.inputBackgroundColor, state.theme.menu.text, state.theme.dark ? 20 : 16, 255);
-    state.inputDisabledBackgroundColor = UiMetrics::BlendColorRefWeightedTruncate(state.theme.windowBackground, state.inputBackgroundColor, state.theme.dark ? 70 : 40, 255);
+    state.inputBackgroundColor =
+        UiMetrics::BlendColorRefWeightedTruncate(state.cardBackgroundColor, state.theme.windowBackground, state.theme.dark ? 50 : 30, 255);
+    state.inputFocusedBackgroundColor =
+        UiMetrics::BlendColorRefWeightedTruncate(state.inputBackgroundColor, state.theme.menu.text, state.theme.dark ? 20 : 16, 255);
+    state.inputDisabledBackgroundColor =
+        UiMetrics::BlendColorRefWeightedTruncate(state.theme.windowBackground, state.inputBackgroundColor, state.theme.dark ? 70 : 40, 255);
     if (! state.theme.systemHighContrast)
     {
         state.cardBrush.reset(CreateSolidBrush(state.cardBackgroundColor));
@@ -2203,12 +2207,20 @@ bool ThemesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noexc
     _pageContentRoot->ClearChildren();
     auto* root = _pageContentRoot;
 
-    dxState->page.themeLabel        = root->AddChild<Label>();
-    dxState->page.themeCombo        = root->AddChild<ComboBox>();
-    dxState->page.nameLabel         = root->AddChild<Label>();
-    dxState->page.nameEdit          = root->AddChild<TextField>();
-    dxState->page.baseLabel         = root->AddChild<Label>();
-    dxState->page.baseCombo         = root->AddChild<ComboBox>();
+    dxState->page.themeLabel = root->AddChild<Label>();
+    dxState->page.themeCombo = root->AddChild<ComboBox>();
+    if (dxState->page.themeCombo)
+    {
+        dxState->page.themeCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+    }
+    dxState->page.nameLabel = root->AddChild<Label>();
+    dxState->page.nameEdit  = root->AddChild<TextField>();
+    dxState->page.baseLabel = root->AddChild<Label>();
+    dxState->page.baseCombo = root->AddChild<ComboBox>();
+    if (dxState->page.baseCombo)
+    {
+        dxState->page.baseCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+    }
     dxState->page.loadFromFile      = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_LOAD_FROM_FILE));
     dxState->page.duplicateTheme    = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_DUPLICATE));
     dxState->page.resetTheme        = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_KEYBOARD_BUTTON_RESET_DEFAULTS));
@@ -2218,14 +2230,18 @@ bool ThemesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noexc
     dxState->page.searchLabel       = root->AddChild<Label>();
     dxState->page.searchEdit        = root->AddChild<TextField>();
     dxState->page.colorsListControl = root->AddChild<Grid>();
-    dxState->page.keyLabel          = root->AddChild<Label>();
-    dxState->page.keyEdit           = root->AddChild<TextField>();
-    dxState->page.colorLabel        = root->AddChild<Label>();
-    dxState->page.colorSwatch       = root->AddChild<ColorSwatch>();
-    dxState->page.colorEdit         = root->AddChild<TextField>();
-    dxState->page.pickColor         = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_PICK));
-    dxState->page.setOverride       = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_SET));
-    dxState->page.removeOverride    = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_CLEAR));
+    if (dxState->page.colorsListControl)
+    {
+        dxState->page.colorsListControl->SetEmptyStateText(LoadStringResource(nullptr, IDS_DXUI_NO_DATA));
+    }
+    dxState->page.keyLabel       = root->AddChild<Label>();
+    dxState->page.keyEdit        = root->AddChild<TextField>();
+    dxState->page.colorLabel     = root->AddChild<Label>();
+    dxState->page.colorSwatch    = root->AddChild<ColorSwatch>();
+    dxState->page.colorEdit      = root->AddChild<TextField>();
+    dxState->page.pickColor      = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_PICK));
+    dxState->page.setOverride    = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_SET));
+    dxState->page.removeOverride = root->AddChild<Button>(LoadStringResource(nullptr, IDS_PREFS_THEMES_BUTTON_CLEAR));
 
     dxState->page.note->SetFontRole(FontRole::Small);
     dxState->page.note->SetMultiline(true);
@@ -3124,9 +3140,9 @@ void ThemesPane::UpdateEditorFromSelection(HWND host, PreferencesDialogState& st
         const auto* def                     = FindThemeDefinitionForDisplay(state, themeIdOpt.value(), editable);
         const std::wstring_view baseThemeId = (def && ! def->baseThemeId.empty()) ? std::wstring_view(def->baseThemeId) : themeIdOpt.value();
 
-        AppThemeSelectionResolution resolution = ResolveAppThemeSelection(themeIdOpt.value(), def, L"RedSalamander");
-        const auto* overrides = resolution.resolvedColors.has_value() ? &resolution.resolvedColors->colors : nullptr;
-        AppTheme appTheme     = std::move(resolution.theme);
+        AppThemeSelectionResolution resolution  = ResolveAppThemeSelection(themeIdOpt.value(), def, L"RedSalamander");
+        const auto* overrides                   = resolution.resolvedColors.has_value() ? &resolution.resolvedColors->colors : nullptr;
+        AppTheme appTheme                       = std::move(resolution.theme);
         const MonitorTextViewTheme monitorTheme = ResolveMonitorThemeForDisplay(baseThemeId, overrides);
 
         const auto colorOpt = TryGetEffectiveThemeColorArgb(appTheme, monitorTheme, overrides, selectedKey);
@@ -3191,7 +3207,7 @@ size_t ThemesPane::DebugListRowCount() const noexcept
     return _dxState->page.colorsListModel->GetRowCount();
 }
 
-RedSalamander::DxUi::GridVisibleWorkMetrics ThemesPane::DebugListVisibleWorkMetrics() const noexcept
+DxUi::GridVisibleWorkMetrics ThemesPane::DebugListVisibleWorkMetrics() const noexcept
 {
     if (! _dxState || ! _dxState->page.colorsListControl)
     {
@@ -3250,7 +3266,7 @@ PreferencesThemesDebugFocusTarget ThemesPane::DebugGetFocusTarget() const noexce
         return PreferencesThemesDebugFocusTarget::None;
     }
 
-    RedSalamander::DxUi::Control* const focusedControl = _pageHostDx->GetFocusControl();
+    DxUi::Control* const focusedControl = _pageHostDx->GetFocusControl();
     if (! focusedControl)
     {
         return PreferencesThemesDebugFocusTarget::None;

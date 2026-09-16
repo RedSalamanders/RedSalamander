@@ -694,7 +694,7 @@ draws. Neither condition may degrade silently.
 
 - Resolution walks a monospace-only chain: the configured family, then `Cascadia Mono`,
   then `Consolas`. Availability is decided by
-  `RedSalamander::DxUi::Typography::IsFontFamilyAvailable`. The shared
+  `DxUi::Typography::IsFontFamilyAvailable`. The shared
   `Typography::CreateTextFormat` is deliberately **not** used, because its fallback
   resolves an unknown family to the proportional `Segoe UI`, which cannot hold a
   character grid.
@@ -713,6 +713,9 @@ draws. Neither condition may degrade silently.
   changes. Its text is appended to the accessibility snapshot. The fatal `setDiagnostic` channel
   is reserved for runtime-load failures and MUST NOT be used, because a non-empty diagnostic
   replaces the entire grid.
+- The two font notices and `IDS_TERMINAL_FONT_NOTICE_DISMISS` are localized in
+  every shipped Terminal satellite. Translations preserve the source format tokens;
+  missing satellite entries are rejected by the resource-localization contract suite.
 
 ## Dependency identity and upgrade procedure
 

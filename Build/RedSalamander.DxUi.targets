@@ -1,0 +1,15 @@
+<Project>
+  <Import Project="$(DxUiRoot)\Build\DxUi.Consumer.targets" Condition="'$(DxUiRoot)'!=''" />
+  <!-- Locally evaluated MSBuild properties are not inherited by project references. Keep the
+       archive compiler host equal to the consumer and the restore fingerprint, including overrides. -->
+  <ItemGroup Condition="'$(DxUiRoot)'!=''">
+    <ProjectReference Update="$(DxUiResolvedRoot)src\DxUi.vcxproj">
+      <AdditionalProperties>%(ProjectReference.AdditionalProperties);PreferredToolArchitecture=$(PreferredToolArchitecture)</AdditionalProperties>
+    </ProjectReference>
+  </ItemGroup>
+  <!-- Directory.Build.targets adds Common for generated version headers. Keep the canonical
+       public directory first, including while the legacy tree remains for other process families. -->
+  <ItemDefinitionGroup>
+    <ClCompile><AdditionalIncludeDirectories>$(DxUiResolvedRoot)include;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories></ClCompile>
+  </ItemDefinitionGroup>
+</Project>

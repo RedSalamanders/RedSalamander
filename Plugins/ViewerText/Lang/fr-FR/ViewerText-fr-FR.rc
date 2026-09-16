@@ -406,3 +406,8 @@ IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_TOO_LARGE "[lignes inchangées masquées : le 
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_BINARY "[lignes inchangées masquées : le fichier référencé est binaire]"
 IDS_VIEWERTEXT_MSG_HEX_COPY_TRUNCATED "La sélection était trop volumineuse. Seuls les 256 premiers Kio ont été copiés."
 END
+
+STRINGTABLE
+BEGIN
+    IDS_DXUI_NO_MATCHES "Aucun résultat"
+END

@@ -555,7 +555,22 @@ Describe 'Operation Startrail build receipt records' {
         (Test-RSActionThrows { & $import @goodArgs }) | Should Be $true
     }
 
-    It 'keeps portable publication and verification ordered in CI and nightly workflows' {
+    It 'stops the workflow after a failed build before another native command can replace its exit status' {
+        $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\build-reusable.yml') -Raw
+        $start = $workflow.IndexOf('& $buildScript @buildArgs', [StringComparison]::Ordinal)
+        $end = $workflow.IndexOf('$pin = Get-Content Dependencies/DxUi.lock.json', $start, [StringComparison]::Ordinal)
+        $invocation = [scriptblock]::Create($workflow.Substring($start, $end - $start))
+        $buildScript = Join-Path $TestDrive 'failed-build.ps1'
+        [IO.File]::WriteAllText($buildScript, 'exit 23')
+        $buildArgs = @{}
+        $failure = ''
+        try { & $invocation } catch { $failure = $_.Exception.Message }
+        $failure | Should Be 'Solution build failed with exit code 23.'
+        [IO.File]::WriteAllText($buildScript, 'exit 0')
+        (Test-RSActionThrows { & $invocation }) | Should Be $false
+    }
+
+    It 'keeps same-job CI receipt verification and cross-job nightly attestation ordered' {
         $reusable = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\build-reusable.yml') -Raw
         $reusable | Should Match 'portable_attestation_id:\s*\r?\n\s+description:'
         $reusable | Should Match 'id: portable_attestation'
@@ -566,7 +581,10 @@ Describe 'Operation Startrail build receipt records' {
         $reusable | Should Match 'attestation_id=.*GITHUB_OUTPUT'
         $reusable.IndexOf('Create portable same-workflow build attestation') | Should BeLessThan $reusable.IndexOf('Upload build output')
 
-        foreach ($relative in @('.github\workflows\ci.yml', '.github\workflows\nightly-flake.yml')) {
+        $reusable | Should Match 'Run-AllTests.ps1 -Suite Full -ValidationMode Fresh -SkipBuild'
+        $reusable.IndexOf('Build solution') | Should BeLessThan $reusable.IndexOf('Run native Fresh Full suite')
+
+        foreach ($relative in @('.github\workflows\nightly-flake.yml')) {
             $workflow = Get-Content -LiteralPath (Join-Path $repoRoot $relative) -Raw
             $workflow | Should Match 'Import-RSPortableBuildAttestation'
             $workflow | Should Match 'ToolchainIdentity\.schema\.json'

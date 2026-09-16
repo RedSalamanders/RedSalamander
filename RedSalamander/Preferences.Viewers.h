@@ -20,7 +20,7 @@ public:
 #ifdef ENABLE_TESTS
     [[nodiscard]] size_t DebugListRowCount() const noexcept;
     [[nodiscard]] size_t DebugActionRowCount() const noexcept;
-    [[nodiscard]] RedSalamander::DxUi::GridVisibleWorkMetrics DebugListVisibleWorkMetrics() const noexcept;
+    [[nodiscard]] DxUi::GridVisibleWorkMetrics DebugListVisibleWorkMetrics() const noexcept;
     [[nodiscard]] uint64_t DebugListRenderCount() const noexcept;
     [[nodiscard]] uint64_t DebugListResizeCount() const noexcept;
     [[nodiscard]] uint64_t DebugListResizeFailureCount() const noexcept;

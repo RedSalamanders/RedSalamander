@@ -1,10 +1,10 @@
 #include "RedConfigureSplashScreen.h"
 
-#include "DxUi.h"
 #include "Helpers.h"
 #include "WindowMessages.h"
 #include "WindowSizing.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
 
 #include <algorithm>
 #include <atomic>
@@ -26,12 +26,12 @@ namespace RedConfigure::SplashScreen
 {
 namespace
 {
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::MakeDefaultThemePalette;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::ProgressBar;
-using RedSalamander::DxUi::WindowHost;
+using DxUi::FontRole;
+using DxUi::Label;
+using DxUi::MakeDefaultThemePalette;
+using DxUi::Panel;
+using DxUi::ProgressBar;
+using DxUi::WindowHost;
 
 constexpr wchar_t kSplashWindowClassName[] = L"RedConfigure.SplashWindow";
 constexpr int kSplashWidthDip              = 520;

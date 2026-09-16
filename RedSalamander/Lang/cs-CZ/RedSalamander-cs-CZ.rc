@@ -987,6 +987,7 @@ BEGIN
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_LABEL "Konfigurace"
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_UNAVAILABLE "Konfigurace není pro tento plugin k dispozici."
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_DEFAULT "Pro tento plugin není uložena žádná konfigurace (s použitím výchozích hodnot)."
+    IDS_PREFS_PLUGINS_DETAILS_CONFIG_REJECTED "Plugin tato nastavení odmítl (chyba 0x{0:08X}), a proto nebyla uložena. Zkontrolujte zvýrazněné hodnoty a zkuste to znovu."
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_BROWSE_ELLIPSIS "Procházet..."
     IDS_PREFS_PLUGINS_DETAILS_SCHEMA_UNAVAILABLE "🧩\r\nTento plugin neposkytuje konfigurační editor."
     IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NOT_LOADABLE "🚧\r\nTento plugin momentálně nelze načíst, takže jeho konfigurační editor je nedostupný."

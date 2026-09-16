@@ -121,3 +121,11 @@ post-release check.
 `Tools/Tests/BuildReproducibility.Tests.ps1` owns the source and behavior contracts for the manifest, missing-file
 failure, clean extraction, vcpkg identity, ARM64 gate, and ASan workflow. A real x64 package closeout must also run
 the packaged app and `PluginContractTests.exe --package-smoke` from the fresh extraction.
+
+Each shipped module linked to DxUi includes its `<module>.DxUi.json` sidecar. Staging
+validates the exact product pin and module hash against the attested source receipt;
+non-shipped test/standalone artifacts do not cause extra package contents.
+
+The extracted smoke harness must run without repository discovery. Its explicit governed test root is validated
+independently of executable placement; missing or unmarked roots still fail closed. The local-writer probe must
+create its scratch through TestSupport within that root, never beside the extracted executable.

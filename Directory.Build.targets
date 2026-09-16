@@ -1,5 +1,20 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Project>
+  <PropertyGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(Configuration)'=='ASan Debug'">
+    <EnableASAN>true</EnableASAN>
+    <UseDebugLibraries>true</UseDebugLibraries>
+    <WholeProgramOptimization>false</WholeProgramOptimization>
+    <LinkIncremental>false</LinkIncremental>
+  </PropertyGroup>
+  <ItemDefinitionGroup Condition="'$(RSIsFirstPartyProject)'=='true' and '$(MSBuildProjectExtension)'=='.vcxproj' and '$(Configuration)'=='ASan Debug'">
+    <ClCompile>
+      <ForcedIncludeFiles>$(SolutionDir)Common\RequireAddressSanitizer.h;%(ForcedIncludeFiles)</ForcedIncludeFiles>
+      <RuntimeLibrary>MultiThreadedDebugDLL</RuntimeLibrary>
+      <Optimization>Disabled</Optimization>
+      <BasicRuntimeChecks>Default</BasicRuntimeChecks>
+      <DebugInformationFormat>ProgramDatabase</DebugInformationFormat>
+    </ClCompile>
+  </ItemDefinitionGroup>
   <!--
     MSVC materializes LibraryPath as the process-wide LIB variable before
     RoslynCodeTaskFactory compiles inline build tasks. Optional ATL/.NET SDK
@@ -196,7 +211,7 @@
   <Target Name="RSWarnMissingAsanRuntime"
           AfterTargets="Build"
           Condition="'$(MSBuildProjectExtension)'=='.vcxproj' and '$(EnableASAN)'=='true' and '$(ConfigurationType)'=='Application' and '$(RSAsanRuntimeFileName)'!='' and '$(RSAsanRuntimeSourcePath)'==''">
-    <Warning Text="AddressSanitizer runtime '$(RSAsanRuntimeFileName)' was not found under '$(VCToolsInstallDir)bin'. ASan executables in '$(TargetDir)' may fail to launch until the runtime DLL is available on PATH." />
+    <Error Text="AddressSanitizer runtime '$(RSAsanRuntimeFileName)' was not found under '$(VCToolsInstallDir)bin'. ASan executables in '$(TargetDir)' cannot qualify without the matching app-local runtime." />
   </Target>
 
   <Target Name="RSPrepareTerminalRuntime"
@@ -254,6 +269,8 @@
       <_RSBuildArtifactManifestLine Include="target=$(TargetPath)" />
       <_RSBuildArtifactManifestLine Include="tests_enabled=$(RSBuildEnableTests)" />
       <_RSBuildArtifactManifestLine Include="vcpkg_tlog=$(TLogLocation)$(ProjectName).write.1u.tlog" />
+      <_RSBuildArtifactManifestLine Include="dxui_link_tlog=$(TLogLocation)link.command.1.tlog" Condition="'$(RSDxUiConsumer)'=='true'" />
+      <_RSBuildArtifactManifestLine Include="runtime=$(TargetPath).DxUi.json" Condition="'$(RSDxUiConsumer)'=='true'" />
       <_RSBuildArtifactManifestLine Include="@(NativeReferenceCopyLocalPaths->'runtime=%(FullDestinationPath)')"
                                     Condition="'%(NativeReferenceCopyLocalPaths.FullDestinationPath)'!=''" />
       <_RSBuildArtifactManifestLine Include="runtime=$(TargetDir)$(RSAsanRuntimeFileName)"

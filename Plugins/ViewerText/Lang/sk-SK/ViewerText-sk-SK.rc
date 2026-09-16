@@ -406,3 +406,8 @@ IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_TOO_LARGE "[nezmenené riadky sú skryté: odk
 IDS_VIEWERTEXT_MSG_DIFF_UNCHANGED_BINARY "[nezmenené riadky skryté: odkazovaný súbor je binárny]"
 IDS_VIEWERTEXT_MSG_HEX_COPY_TRUNCATED "Výber bol príliš veľký. Skopírovalo sa iba prvých 256 KiB."
 END
+
+STRINGTABLE
+BEGIN
+    IDS_DXUI_NO_MATCHES "Žiadne zhody"
+END

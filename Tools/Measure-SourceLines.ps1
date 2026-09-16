@@ -159,7 +159,6 @@ function Classify-File {
     if ($p -match '^RedSalamanderMonitor/')       { return [PSCustomObject]@{ Category = 'Production'; Project = 'RedSalamanderMonitor' } }
     if ($p -match '^RedSalamanderSearchService/') { return [PSCustomObject]@{ Category = 'Production'; Project = 'SearchService' } }
     if ($p -match '^Common/Common/')              { return [PSCustomObject]@{ Category = 'Production'; Project = 'Common' } }
-    if ($p -match '^Common/DxUi/')                { return [PSCustomObject]@{ Category = 'Production'; Project = 'DxUi' } }
     if ($p -match '^Common/PlugInterfaces/' -or $p -match '^Common/[^/]+\.(h|cpp)$') {
         return [PSCustomObject]@{ Category = 'Production'; Project = 'Common' }
     }

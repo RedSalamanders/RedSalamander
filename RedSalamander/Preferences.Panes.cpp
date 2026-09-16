@@ -10,24 +10,24 @@
 #include <optional>
 #include <string>
 
-#include "DxUi/DxUi.h"
 #include "Helpers.h"
 #include "UiMetrics.h"
 #include "WindowMessages.h"
+#include <DxUi/DxUi.h>
 
 #include "resource.h"
 
 namespace
 {
-using RedSalamander::DxUi::CardPanel;
-using RedSalamander::DxUi::ComboBox;
-using RedSalamander::DxUi::ComboBoxVariant;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::TextField;
-using RedSalamander::DxUi::ThemePalette;
-using RedSalamander::DxUi::Toggle;
+using DxUi::CardPanel;
+using DxUi::ComboBox;
+using DxUi::ComboBoxVariant;
+using DxUi::FontRole;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::TextField;
+using DxUi::ThemePalette;
+using DxUi::Toggle;
 // Re-landed on the stabilized one-host page pattern.
 
 enum class PanesComboSlot : size_t
@@ -291,6 +291,10 @@ bool PanesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noexce
     const auto addDisplayCombo = [&](ComboBox*& outCombo, bool& syncFlag, const std::wstring_view slot) noexcept
     {
         outCombo = root->AddChild<ComboBox>();
+        if (outCombo)
+        {
+            outCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+        }
         outCombo->SetVariant(ComboBoxVariant::Window);
         populateDisplayCombo(outCombo);
         outCombo->SetOnSelectionChanged([host = parent, &syncFlag, slot](size_t itemIndex) noexcept
@@ -334,6 +338,10 @@ bool PanesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noexce
     const auto addSortByCombo = [&](ComboBox*& outCombo, bool& syncFlag, const std::wstring_view slot) noexcept
     {
         outCombo = root->AddChild<ComboBox>();
+        if (outCombo)
+        {
+            outCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+        }
         outCombo->SetVariant(ComboBoxVariant::Window);
         populateSortByCombo(outCombo);
         outCombo->SetOnSelectionChanged([this, host = parent, &syncFlag, slot](size_t itemIndex) noexcept
@@ -381,6 +389,10 @@ bool PanesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& state) noexce
     const auto addSortDirCombo = [&](ComboBox*& outCombo, bool& syncFlag, const std::wstring_view slot) noexcept
     {
         outCombo = root->AddChild<ComboBox>();
+        if (outCombo)
+        {
+            outCombo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+        }
         outCombo->SetVariant(ComboBoxVariant::Window);
         populateSortDirCombo(outCombo);
         outCombo->SetOnSelectionChanged([host = parent, &syncFlag, slot](size_t itemIndex) noexcept
@@ -828,9 +840,9 @@ void PanesPane::LayoutDxPage(
         const int measuredSwitchWidth =
             std::max(UiMetrics::ScaleDip(dpi, kMinToggleWidthDip), (2 * paddingX) + stateTextWidth + stateGapX + trackWidth + toggleSlackWidth);
         const int maxControlWidth    = std::max(0, width - 2 * cardPaddingX);
-        const int compactSwitchWidth = static_cast<int>(RedSalamander::DxUi::ResolveConstrainedExtent(
+        const int compactSwitchWidth = static_cast<int>(DxUi::ResolveConstrainedExtent(
             {.preferredExtent = static_cast<float>(std::max(UiMetrics::ScaleDip(dpi, 44), trackWidth + (2 * paddingX)))}, static_cast<float>(maxControlWidth)));
-        const int switchWidth        = static_cast<int>(RedSalamander::DxUi::ResolveConstrainedExtent(
+        const int switchWidth        = static_cast<int>(DxUi::ResolveConstrainedExtent(
             {.minExtent = static_cast<float>(UiMetrics::ScaleDip(dpi, kMinToggleWidthDip)), .preferredExtent = static_cast<float>(measuredSwitchWidth)},
             static_cast<float>(maxControlWidth)));
 
@@ -1037,8 +1049,8 @@ void PanesPane::LayoutDxPage(
             {
                 directionCard.title->SetVisible(true);
                 directionCard.title->SetText(directionLabelText);
-                directionCard.title->SetMnemonicTarget(state.theme.systemHighContrast ? static_cast<RedSalamander::DxUi::Control*>(directionCard.combo)
-                                                                                      : static_cast<RedSalamander::DxUi::Control*>(directionCard.toggle));
+                directionCard.title->SetMnemonicTarget(state.theme.systemHighContrast ? static_cast<DxUi::Control*>(directionCard.combo)
+                                                                                      : static_cast<DxUi::Control*>(directionCard.toggle));
                 directionCard.title->SetBounds(D2D1::RectF(pxToDip(x + cardPaddingX),
                                                            pxToDip(directionRowY + (rowHeight - titleHeight) / 2),
                                                            pxToDip(x + cardPaddingX + textWidth),
@@ -1240,7 +1252,7 @@ PreferencesPanesDebugFocusTarget PanesPane::DebugGetFocusTarget() const noexcept
         return PreferencesPanesDebugFocusTarget::None;
     }
 
-    const RedSalamander::DxUi::Control* const focusedControl = _pageHostDx->GetFocusControl();
+    const DxUi::Control* const focusedControl = _pageHostDx->GetFocusControl();
     if (! focusedControl)
     {
         return PreferencesPanesDebugFocusTarget::None;
@@ -1297,7 +1309,7 @@ bool PanesPane::DebugFocusLeftDisplayToggle() noexcept
         return false;
     }
 
-    RedSalamander::DxUi::Control* focusTarget = nullptr;
+    DxUi::Control* focusTarget = nullptr;
     if (_dxState->leftDisplay.toggle && _dxState->leftDisplay.toggle->IsVisible())
     {
         focusTarget = _dxState->leftDisplay.toggle;

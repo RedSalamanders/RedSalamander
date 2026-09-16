@@ -54,7 +54,6 @@
 #include "PlugInterfaces/Informations.h"
 #include "Ui/AlertOverlay.h"
 
-#include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "FileMetadataFormatting.h"
 #include "FolderViewAccess.h"
@@ -66,6 +65,7 @@
 #include "WindowMessages.h"
 #include "WindowSizing.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
 
 #ifndef GET_X_LPARAM
 #define GET_X_LPARAM(lp) ((int)(short)LOWORD(lp))
@@ -244,9 +244,9 @@ bool ConfirmNonRevertableFileOperation(HWND owner,
     const UINT messageId = operation == FILESYSTEM_COPY ? static_cast<UINT>(IDS_FMT_FILEOPS_CONFIRM_COPY) : static_cast<UINT>(IDS_FMT_FILEOPS_CONFIRM_MOVE);
     const std::wstring message = FormatStringResource(nullptr, messageId, what, fromText, toText);
 
-    const bool isCopy = operation == FILESYSTEM_COPY;
-    const UINT operationLabelId = isCopy ? static_cast<UINT>(IDS_FILEOP_OPERATION_COPY) : static_cast<UINT>(IDS_FILEOP_OPERATION_MOVE);
-    const std::wstring caption = LoadStringResource(nullptr, operationLabelId);
+    const bool isCopy                         = operation == FILESYSTEM_COPY;
+    const UINT operationLabelId               = isCopy ? static_cast<UINT>(IDS_FILEOP_OPERATION_COPY) : static_cast<UINT>(IDS_FILEOP_OPERATION_MOVE);
+    const std::wstring caption                = LoadStringResource(nullptr, operationLabelId);
     const HostPromptPresentation presentation = isCopy ? HOST_PROMPT_PRESENTATION_COPY : HOST_PROMPT_PRESENTATION_MOVE;
     HostPromptRequest prompt{};
     prompt.sizeBytes     = sizeof(prompt);
@@ -398,8 +398,8 @@ std::wstring PadLeftToWidth(std::wstring_view text, size_t width)
 
 std::wstring BuildDetailsText(bool isDirectory, uint64_t sizeBytes, int64_t lastWriteTime, DWORD fileAttributes, size_t sizeSlotChars)
 {
-    const auto fields = Common::FileMetadata::FormatDisplayFields(
-        {.lastWriteTime100nsSince1601 = lastWriteTime, .fileAttributes = fileAttributes}, Common::FileMetadata::DisplayProfile::CompactDetails);
+    const auto fields = Common::FileMetadata::FormatDisplayFields({.lastWriteTime100nsSince1601 = lastWriteTime, .fileAttributes = fileAttributes},
+                                                                  Common::FileMetadata::DisplayProfile::CompactDetails);
 
     if (isDirectory)
     {
@@ -678,7 +678,7 @@ private:
             return;
         }
 
-        using namespace RedSalamander::DxUi;
+        using namespace DxUi;
 
         _rootStorage = std::make_unique<Panel>();
         _root        = _rootStorage.get();
@@ -842,16 +842,16 @@ private:
     HWND _ownerWindow = nullptr;
     std::wstring _initialText;
     AppTheme _theme{};
-    RedSalamander::DxUi::ThemePalette _palette{};
+    DxUi::ThemePalette _palette{};
     wil::unique_hwnd _hWnd;
-    RedSalamander::DxUi::WindowHost _dxHost;
-    std::unique_ptr<RedSalamander::DxUi::Panel> _rootStorage;
-    RedSalamander::DxUi::Panel* _root          = nullptr;
-    RedSalamander::DxUi::Label* _label         = nullptr;
-    RedSalamander::DxUi::TextField* _field     = nullptr;
-    RedSalamander::DxUi::Button* _okButton     = nullptr;
-    RedSalamander::DxUi::Button* _cancelButton = nullptr;
-    bool _done                                 = false;
+    DxUi::WindowHost _dxHost;
+    std::unique_ptr<DxUi::Panel> _rootStorage;
+    DxUi::Panel* _root          = nullptr;
+    DxUi::Label* _label         = nullptr;
+    DxUi::TextField* _field     = nullptr;
+    DxUi::Button* _okButton     = nullptr;
+    DxUi::Button* _cancelButton = nullptr;
+    bool _done                  = false;
     std::optional<std::wstring> _acceptedText;
 };
 

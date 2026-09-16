@@ -28,8 +28,6 @@
 
 #include "ConnectionProfileUtils.h"
 #include "ConnectionSecrets.h"
-#include "DxUi/DxUi.Typography.h"
-#include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "FileSystemPluginManager.h"
 #include "FolderWindow.h"
@@ -43,6 +41,8 @@
 #include "WindowSizing.h"
 #include "WindowsHello.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
+#include <DxUi/Typography.h>
 
 // Single-canvas DxUi Connection Manager window.
 //
@@ -62,28 +62,28 @@ namespace RedSalamander::ConnectionManager::SingleCanvas
 
 namespace
 {
-using RedSalamander::DxUi::Button;
-using RedSalamander::DxUi::CardPanel;
-using RedSalamander::DxUi::ComboBox;
-using RedSalamander::DxUi::Control;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Grid;
-using RedSalamander::DxUi::GridCellData;
-using RedSalamander::DxUi::GridColumnDesc;
-using RedSalamander::DxUi::GridColumnKind;
-using RedSalamander::DxUi::GridDebugRowVisualState;
-using RedSalamander::DxUi::GridRowStyle;
-using RedSalamander::DxUi::GridSelectionMode;
-using RedSalamander::DxUi::GridVisibleWorkMetrics;
-using RedSalamander::DxUi::IDxGridDelegate;
-using RedSalamander::DxUi::IDxGridModel;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::ScrollPanel;
-using RedSalamander::DxUi::TextField;
-using RedSalamander::DxUi::ThemePalette;
-using RedSalamander::DxUi::Toggle;
-using RedSalamander::DxUi::WindowHost;
+using DxUi::Button;
+using DxUi::CardPanel;
+using DxUi::ComboBox;
+using DxUi::Control;
+using DxUi::FontRole;
+using DxUi::Grid;
+using DxUi::GridCellData;
+using DxUi::GridColumnDesc;
+using DxUi::GridColumnKind;
+using DxUi::GridDebugRowVisualState;
+using DxUi::GridRowStyle;
+using DxUi::GridSelectionMode;
+using DxUi::GridVisibleWorkMetrics;
+using DxUi::IDxGridDelegate;
+using DxUi::IDxGridModel;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::ScrollPanel;
+using DxUi::TextField;
+using DxUi::ThemePalette;
+using DxUi::Toggle;
+using DxUi::WindowHost;
 
 constexpr wchar_t kWindowClassName[]  = L"RedSalamander.ConnectionManagerWindow";
 constexpr wchar_t kWindowSettingsId[] = L"ConnectionManagerWindow";
@@ -926,7 +926,7 @@ public:
     using IDxGridDelegate::OnGridSortRequested;
     void OnGridSelectionChanged(Grid& sender) override;
     void OnGridRowActivated(Grid& sender, size_t rowIndex) override;
-    void OnGridSortRequested(const RedSalamander::DxUi::GridSortSpec& sortSpec) override;
+    void OnGridSortRequested(const DxUi::GridSortSpec& sortSpec) override;
 
 #ifdef ENABLE_TESTS
     void DebugFillSnapshot(::ConnectionManagerDebugSnapshot& out) const noexcept;
@@ -1093,20 +1093,20 @@ private:
     WindowHost _dxHost;
     HWND _restoreFolderViewWindow = nullptr;
 
-    Panel* _root                                          = nullptr;
-    Panel* _listPane                                      = nullptr;
-    ScrollPanel* _editorPane                              = nullptr;
-    Panel* _footerPane                                    = nullptr;
-    Grid* _list                                           = nullptr;
-    Button* _newButton                                    = nullptr;
-    Button* _renameButton                                 = nullptr;
-    Button* _removeButton                                 = nullptr;
-    RedSalamander::DxUi::CardPanel* _connectionCard       = nullptr;
-    RedSalamander::DxUi::CardPanel* _authCard             = nullptr;
-    RedSalamander::DxUi::CardPanel* _s3Card               = nullptr;
-    RedSalamander::DxUi::CardPanel* _sshCard              = nullptr;
-    RedSalamander::DxUi::CardPanel* _s3EndpointCard       = nullptr;
-    RedSalamander::DxUi::SortDirection _listSortDirection = RedSalamander::DxUi::SortDirection::Ascending;
+    Panel* _root                           = nullptr;
+    Panel* _listPane                       = nullptr;
+    ScrollPanel* _editorPane               = nullptr;
+    Panel* _footerPane                     = nullptr;
+    Grid* _list                            = nullptr;
+    Button* _newButton                     = nullptr;
+    Button* _renameButton                  = nullptr;
+    Button* _removeButton                  = nullptr;
+    DxUi::CardPanel* _connectionCard       = nullptr;
+    DxUi::CardPanel* _authCard             = nullptr;
+    DxUi::CardPanel* _s3Card               = nullptr;
+    DxUi::CardPanel* _sshCard              = nullptr;
+    DxUi::CardPanel* _s3EndpointCard       = nullptr;
+    DxUi::SortDirection _listSortDirection = DxUi::SortDirection::Ascending;
 
     // Section headers (4: Connection / Auth / S3 / SSH).
     Label* _sectionConnection = nullptr;
@@ -1327,14 +1327,18 @@ void WindowImpl::BuildUi()
     // List pane: the "Connections" heading lives inside the grid's column
     // header (see `ConnectionListGridModel` - `col.title`/`col.sortable=true`).
     _list = _listPane->AddChild<Grid>();
+    if (_list)
+    {
+        _list->SetEmptyStateText(LoadStringResource(nullptr, IDS_DXUI_NO_DATA));
+    }
     _list->SetSelectionMode(GridSelectionMode::Single);
     _list->SetRowHeightDip(kListGridRowHeight);
     _list->SetModel(&_listModel);
     _list->SetDelegate(this);
     {
-        RedSalamander::DxUi::GridSortSpec spec{};
+        DxUi::GridSortSpec spec{};
         spec.columnIndex = 0u;
-        spec.direction   = RedSalamander::DxUi::SortDirection::Ascending;
+        spec.direction   = DxUi::SortDirection::Ascending;
         _list->SetSortSpec(spec);
     }
 
@@ -1411,6 +1415,10 @@ void WindowImpl::BuildEditorForm()
     auto addCombo = [this](ComboBox*& slot, bool editable)
     {
         slot = _editorPane->AddChild<ComboBox>();
+        if (slot)
+        {
+            slot->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+        }
         slot->SetEditable(editable);
     };
     auto addActionButton = [this](Button*& slot, std::wstring caption) { slot = _editorPane->AddChild<Button>(std::move(caption)); };
@@ -3645,7 +3653,7 @@ void WindowImpl::RebuildList(bool refreshEditor) noexcept
 
     // Sort case-insensitively; Quick Connect is always pinned to the top
     // regardless of direction.
-    using SortDirection = RedSalamander::DxUi::SortDirection;
+    using SortDirection = DxUi::SortDirection;
     if (_listSortDirection != SortDirection::None)
     {
         std::stable_sort(rows.begin(),
@@ -3716,7 +3724,7 @@ void WindowImpl::RebuildList(bool refreshEditor) noexcept
     }
 }
 
-void WindowImpl::OnGridSortRequested(const RedSalamander::DxUi::GridSortSpec& sortSpec)
+void WindowImpl::OnGridSortRequested(const DxUi::GridSortSpec& sortSpec)
 {
     // Honor the grid's 3-state cycle: Ascending -> Descending -> None -> ...
     _listSortDirection = sortSpec.direction;

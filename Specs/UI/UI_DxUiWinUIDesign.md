@@ -3,9 +3,13 @@
 **Author:** Ripley (Lead / Reviewer)
 **Date:** 2026-04-04
 **Last Updated:** 2026-07-21
-**Status:** Authoritative design and behavior contract for `DxUi`; rollout closure and archived validation history live in `Specs/Plans/Done/UI_DxUiWinUIDesignAlignmentPlan.md`
+**Status:** Product design and acceptance contract for RedSalamander surfaces using pinned `DxUi.lib`; shared implementation contracts belong to the [DxUi repository](https://github.com/RedSalamanders/DxUi/tree/main/Specs). Rollout closure and archived validation history live in `Specs/Plans/Done/UI_DxUiWinUIDesignAlignmentPlan.md`.
 **Scope:** Design system tokens, control specifications, retained-host behavior, and verification requirements
 **Inspiration:** WinUI 3 / Windows 11 Fluent Design System
+
+I19 adopts the standalone library's Slider behavior and diagnostics/scheduling mechanisms (G5/G6).
+This document does not require the retired in-tree implementation or its private API/metric spellings.
+Product validation and the I19 checklist distinguish required behavior from completed qualification.
 
 ---
 
@@ -65,7 +69,7 @@ helper instead of hardcoding `Segoe UI`, `CreateFontW`,
 
 Current implementation contract:
 
-- `Common/DxUi/DxUi.Typography.h` owns role-to-family/size/weight mapping,
+- the public `<DxUi/Typography.h>` owns role-to-family/size/weight mapping,
   cached DirectWrite formats and HFONT-free measurement.
 - Preferences, `ConnectionManagerWindow`, Manage Plugins, Compare Directories,
   NavigationView, Function Bar and viewer chrome use their documented
@@ -136,7 +140,7 @@ uses the shared `Segoe UI Emoji` helper rather than a `FontRole` enum value.
 | Borders | `border`, `borderDefault`, `borderStrong` | Use strength by semantic hierarchy, not local literals. |
 | Focus | `focusStroke`, `focusStrokeOuter`, `focusStrokeInner` | Two-stroke focus remains visible across themes; system colors win in high contrast. |
 
-`Common/DxUi/DxUi.h` and `DxUi.Theme.cpp` own the exact default numeric values and derivation. Duplicating those mutable constants in this prose is forbidden.
+the public `<DxUi/DxUi.h>` and `DxUi.Theme.cpp` own the exact default numeric values and derivation. Duplicating those mutable constants in this prose is forbidden.
 
 #### 2.3.2 Accent Color Principles
 
@@ -264,7 +268,7 @@ Current DxUI timings (140ms button, 240ms tree expand) are close to WinUI. Forma
 
 **Reduced motion affects all controls:** Any control that defines an auto-hide behavior (scrollbar §3.7: 1500ms auto-hide delay) must remain permanently visible when `reducedMotion` is true. Any control with animated size changes (toggle switch knob, radio button inner dot) should transition instantly.
 
-**Easing implementation:** DxUI's `AnimationDispatcher` derives animation time from `DxUi::FrameClock`, uses an 8ms fallback timer cadence with an 8,333us synthetic 120Hz target, clamps large virtual callback-time hitches through `FrameBudget`, and emits `dxui.animation.tick_delta_us`, `dxui.animation.jitter_us`, `dxui.animation.active_count`, plus the legacy `dxui.animation.tick_gap_ms` / `dxui.animation.tick_overrun` diagnostics. Implement cubic-bezier easing as a per-frame evaluation: given elapsed fraction `t` (0->1), evaluate the cubic polynomial using De Casteljau's algorithm or a pre-sampled lookup table (64 entries is sufficient). Expose as:
+**Easing implementation:** use the pinned library's clock and scheduling contract. Shared diagnostics and scheduling are library-owned; the retired application dispatcher API and metric spellings are not compatibility requirements. Keep easing work bounded and validate visible motion in the owning product window.
 
 ```cpp
 float EvaluateEasing(EasingCurve curve, float t); // t in [0,1] → eased value
@@ -473,7 +477,7 @@ Windows that still source commands from a resource `HMENU` MAY keep that `HMENU`
 #### Menu Diagnostics
 
 - Cross-thread debug state probes use a heap-owned request whose result storage outlives the caller's bounded wait. A wedged popup thread must return within the diagnostic timeout without writing through caller stack storage after the timeout.
-- Persistent DxUI menu file tracing is compiled out of retail builds. To reactivate it for a support build, define `ENABLE_DXUI_MENU_DIAGNOSTICS` at compile time and set `REDSALAMANDER_DXUI_MENU_TRACE=1` at runtime. Debug/test builds also keep it available while `NDEBUG` is not defined. By default it writes UTF-16 text to `%TEMP%\RedSalamander-DxUiMenuTrace-<pid>.log`; `REDSALAMANDER_DXUI_MENU_TRACE_FILE=<absolute path>` overrides the destination.
+- Shared menu diagnostics use the optional borrowed, UI-thread-local `DxUi::Diagnostics::sink` from the pinned library. DxUi opens no trace file and consumes no legacy environment-variable or support-define switch for this path. A product support adapter or test that installs a sink owns output paths, buffering and enablement; the callback must be `noexcept`, consume borrowed string views synchronously, and not re-enter controls. The sink must be reset before its owner is destroyed. Without a sink, shared menu diagnostics are disabled. Legacy file formats and switches are not compatibility requirements of the static-library adoption.
 - The trace is diagnostic only and must not change input behavior. It records menu show/create/end, popup WndProc routing, popup surface/window geometry, initial-frame readiness, modal-loop messages with numeric message IDs, idle and owner-flood input resync, pointer hit-testing/hover indices, keyboard routing, invocation, dismissal, capture, focus, active window, and foreground window state. Repeated non-input modal-loop messages may be coalesced into `menu.loop-message-repeat` records so live repro logs remain readable under owner-window floods.
 - Callers that own deferred menu entry points may add domain events through `TraceContextMenuDiagnostics(...)` so a live repro can be correlated across caller handoff and shared `ContextMenu::Show(...)` routing.
 
@@ -941,14 +945,20 @@ Grid hosts MAY set an effective row height when their row cadence must match an 
 
 ### 3.17 Slider
 
-Implemented in DxUI for framework/application use such as Preferences (font size, opacity). Key requirements:
-- Horizontal and vertical orientation
-- Track: 2 DIP height, `border` @ 40% fill, 4 DIP corner radius
-- Filled track (left of thumb): `accent` fill
-- Thumb: 20 DIP diameter circle, white fill, `accent` border (checked style)
-- Thumb hover: 22 DIP. Pressed: 18 DIP.
-- Range: min/max values, optional tick marks
-- Keyboard: Left/Right (or Up/Down for vertical) change by step, Page Up/Down by large step
+The pinned standalone Slider behavior is authoritative (accepted I19 G6). Product uses such as
+Preferences font size and opacity validate their bindings against the library's controls and input
+contracts. Horizontal and vertical orientation, ranges, optional ticks, and configured keyboard
+steps remain supported.
+
+- Paint a 6 DIP capsule track, inset 12 DIP at each end, with an accent filled portion.
+- Paint a fixed 20 DIP gray chrome disc beneath the accent inner thumb. The inner thumb is 6 DIP
+  at rest, 16 DIP on hover and 12 DIP while pressed; the outer disc does not grow or shrink.
+- Keep the unpainted pointer band 48 DIP across the track, clipped to control bounds. A contact
+  within 24 DIP of the thumb center drags from the current value; other track contacts seek.
+- Keyboard steps and `RequestValue` animate to the committed value; pointer drags and `SetValue`
+  snap. Reduced motion snaps all visuals. `SetValue` does not emit an input callback.
+- `SetOnChange` reports drag Preview, one accepted-release Commit, or Cancel with the initial
+  value restored on capture loss, Escape, hiding or detach. Keyboard steps report Commit.
 
 ### 3.18 Tracking Tooltip
 
@@ -1138,11 +1148,11 @@ Several controls define both default and compact heights (Button: 32/24, Menu it
 - Verify light theme, dark theme, high-contrast (black and white), and rainbow mode
 - Verify at 100%, 125%, 150%, 200% DPI scales
 - Verify reduced-motion mode (all animations should be instant or ≤83ms)
-- **Automated baseline comparison:** Implemented in `DxUiTests.Rendering.cpp` via `AttachedHostWindow` + `WindowHost::DebugCaptureBitmap(...)`, with golden PNGs stored in `Tests/DxUiTests/Baselines/`. Current acceptance threshold: ≤2% differing pixels with per-channel tolerance 8 to absorb subpixel variation.
+- **Automated baseline comparison:** Implemented in `DxUiTests.Rendering.cpp` via `AttachedHostWindow` + `WindowHost::DebugCaptureBitmap(...)`, with golden PNGs stored in DxUi `Tests/Controls/Baselines/`. Current acceptance threshold: ≤2% differing pixels with per-channel tolerance 8 to absorb subpixel variation.
 
 ### Performance Verification
 
-- **Frame runtime:** Shared DxUi frame timing lives in `Common/DxUi` as host-owned runtime state. It owns monotonic frame clocking, frame budget clamping, frame-stage telemetry helpers, animation scheduling policy, and debug render-stage guards. It must not own app swap chains, D2D/D3D/DXGI devices, dirty-region policy, or renderer-specific resources.
+- **Frame runtime:** Shared DxUi frame timing lives in the canonical DxUi repository as host-owned runtime state. It owns monotonic frame clocking, frame budget clamping, frame-stage telemetry helpers, animation scheduling policy, and debug render-stage guards. It must not own app swap chains, D2D/D3D/DXGI devices, dirty-region policy, or renderer-specific resources.
 - **Frame budget:** All control rendering must complete within **16ms** (60fps target). Measure via ETW TraceLogging events in `WindowHost::Paint()` and JSONL metrics emitted from the shared frame runtime.
 - **Frame-stage metrics:** DxUi hosts must emit per-frame aggregates, not per-control hot-path rows: `dxui.frame.total_us`, `dxui.frame.update_us`, `dxui.frame.render_us`, `dxui.frame.present_us`, `dxui.frame.dirty_rect_count`, and `dxui.frame.dirty_rect_area_px`. Scenario-level `DxUI::Paint` rows remain valid for compatibility.
 - **Debug render-stage guard:** Debug/test builds must detect layout or retained-tree mutation during a render stage. Capture-only render paths use the same guard as normal paint so tests cannot hide render-time mutation.
@@ -1151,7 +1161,7 @@ Several controls define both default and compact heights (Button: 32/24, Menu it
   end-scrolled paints must touch only viewport rows. The durable metrics are
   `dxui.menu.selftest.large_open_to_first_paint_us`, `dxui.menu.selftest.large_end_to_visible_us`,
   `dxui.menu.popup.paint`, and `dxui.menu.popup.visible_rows`.
-- **Animation smoothness:** No frame drops during standard animations (hover transitions, tree expand). Monitor via `AnimationDispatcher` tick timing: `dxui.animation.tick_delta_us`, `dxui.animation.jitter_us`, `dxui.animation.active_count`, plus the legacy `dxui.animation.tick_gap_ms` / `dxui.animation.tick_overrun` rows. The dispatcher keeps the existing subscription API and message-only-window timer fallback. When `WM_SIZE` restores a visible host from minimized or hidden animation suspension, the host must clear the suspended state and request the next tick immediately rather than waiting for unrelated input or paint traffic.
+- **Animation smoothness:** validate motion and idle/hidden behavior using the pinned library's diagnostics and paired resource evidence. Restoring a visible host from minimized or hidden animation suspension must resume required animation promptly. Do not require the retired application dispatcher or legacy metric names.
 - **Text layout caching:** `IDWriteTextLayout` objects must be cached and reused. Re-creation only on text change, font change, or DPI change. Verify via a layout-creation counter in debug builds.
 - **Hot-path layout/data caches:** Shared single-line text layout caches, MenuBar item-layout caches, TabControl header/title caches, Tree badge/tooltip caches, Grid visible-cell scratch storage, and shared Typography format/family caches are part of the standard DxUi performance contract. They must rebuild only on relevant text, font, DPI, theme, density, flow-direction, bounds, model, or host-attachment changes, and tests must prove hit-test/accessibility/paint rectangles recompute after each invalidation trigger. Shared cache helpers must carry a secure-clear flag for failure-path clears: secret-bearing TextField callers pass it, while non-secret controls such as editable ComboBox may use the default plain clear. Cache additions require same-machine archived evidence when they change a hot path.
 - **Add ETW TraceLogging events** for: `DxUI::Paint` (per-frame), component/window layout scopes, `DxUI::PopupShow`, and `DxUI::FocusChange`. Per-control `SetBounds` instrumentation and per-hit-test/per-pointer-move instrumentation are intentionally forbidden on hot paths because they can flood ETW/JSONL during first-layout, hover, and scroll interactions without explaining user-visible latency. Prefer scenario-level latency/counter metrics such as `preferences.page_host.*`, popup-open latency, paint duration, queue drain/coalescing counts, or explicitly thresholded slow-path diagnostics.
@@ -1212,7 +1222,7 @@ High contrast: all colors from system HC tokens, no hardcoded values. Focus indi
 
 ### Regression
 
-- Run existing DxUI test suite (`Tests/DxUiTests/` — 14 test modules), including submenu delayed close/replacement and child-submenu hover timer regressions.
+- Run existing DxUI test suite in the DxUi repository (`test.ps1`), including submenu delayed close/replacement and child-submenu hover timer regressions.
 - Run self-test commands that exercise Preferences pages (already DxUI)
 - Run RedSalamander self-tests (`Tools/Run-AllTests.ps1` — Commands/309, Compare/141, FileOps/68 cases)
 - Manual smoke test of all migrated dialogs

@@ -6,7 +6,7 @@
 #include <limits>
 #include <memory>
 
-#include "DxUi/DxUi.h"
+#include <DxUi/DxUi.h>
 
 class FileOperationsIssuesPane final
 {
@@ -21,7 +21,7 @@ public:
         uint64_t primarySelectedRowId  = 0;
         uint64_t primarySelectedTaskId = 0;
         uint64_t refreshGeneration     = 0;
-        RedSalamander::DxUi::GridVisibleWorkMetrics visibleWork{};
+        DxUi::GridVisibleWorkMetrics visibleWork{};
         bool themeDark                    = false;
         bool themeHighContrast            = false;
         bool themeRainbow                 = false;

@@ -5,7 +5,7 @@ param(
     [string]$Platform,
 
     [Parameter(Mandatory = $true)]
-    [ValidateSet('Release', 'ASan Debug')]
+    [ValidateSet('Debug', 'Release', 'ASan Debug')]
     [string]$Configuration,
 
     [Parameter(Mandatory = $true)]

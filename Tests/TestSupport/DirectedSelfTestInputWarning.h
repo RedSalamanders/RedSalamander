@@ -107,6 +107,35 @@ public:
         return window && ::IsWindow(window) && IsWindowVisible(window);
     }
 
+    // Documentation interaction cases need the Commands activation technique,
+    // but must fail closed unless the shared warning is visible and the target
+    // belongs to this UI thread. Borrow the foreground queue only for activation.
+    [[nodiscard]] static bool TryActivateOwnedWindow(HWND target) noexcept
+    {
+        const HWND warning   = _activeWindow.load(std::memory_order_acquire);
+        DWORD processId      = 0u;
+        const DWORD threadId = GetWindowThreadProcessId(target, &processId);
+        if (! warning || ! IsWindowVisible(warning) || ! target || processId != GetCurrentProcessId() || threadId != GetCurrentThreadId())
+            return false;
+        const HWND foreground        = GetForegroundWindow();
+        const DWORD foregroundThread = foreground ? GetWindowThreadProcessId(foreground, nullptr) : 0u;
+        const bool attached          = foregroundThread != 0u && foregroundThread != threadId && AttachThreadInput(foregroundThread, threadId, TRUE) != FALSE;
+        auto detach                  = wil::scope_exit([&]() noexcept
+        {
+            if (attached)
+                AttachThreadInput(foregroundThread, threadId, FALSE);
+        });
+        ShowWindow(target, SW_SHOWNORMAL);
+        BringWindowToTop(target);
+        SetActiveWindow(target);
+        SetForegroundWindow(target);
+        SetFocus(target);
+        SetWindowPos(target, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        SetWindowPos(target, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW);
+        UpdateWindow(target);
+        return GetForegroundWindow() == target;
+    }
+
     [[nodiscard]] static bool IsWarningWindow(HWND window) noexcept
     {
         return window && window == _activeWindow.load(std::memory_order_acquire);

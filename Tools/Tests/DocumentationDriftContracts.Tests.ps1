@@ -26,9 +26,9 @@ Describe 'Visible native audit contracts' {
         $audit = Get-RSText -Path 'Tools\Audit-RemainingWin32UiDependencies.ps1'
 
         $audit | Should Match '\\vcpkg_installed\\'
-        $audit | Should Match 'Common\\DxUi\\DxUi\.cpp'
+        $audit | Should Not Match 'Common\\DxUi\\'
         $audit | Should Match 'Tests\\TestSupport\\DirectedSelfTestInputWarning\.h'
-        $audit | Should Match 'Tests\\DxUiTests\\DxUiTests\.WindowHost\.cpp'
+        $audit | Should Not Match 'Tests\\DxUiTests\\'
         { & (Join-Path $repoRoot 'Tools\Audit-ComctlReportSurfaces.ps1') | Out-Null } | Should Not Throw
         { & (Join-Path $repoRoot 'Tools\Audit-VisibleNativeSurfaces.ps1') | Out-Null } | Should Not Throw
         { & (Join-Path $repoRoot 'Tools\Audit-RemainingWin32UiDependencies.ps1') -FailOnFindings | Out-Null } | Should Not Throw

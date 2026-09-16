@@ -18,6 +18,9 @@
     The runner uses exact X:\RedSalamander.Perf on the repository drive by default.
     X: may be replaced by any fixed local drive through -TestRoot or
     REDSALAMANDER_TEST_ROOT. No test-generated local data is written outside it.
+    Each FileOperations child process, including classification retries, receives
+    a fresh LOCALAPPDATA directory under the selected run's scratch root so fake
+    MTP recovery journals cannot reuse or change the caller's profile state.
 
 .PARAMETER Suite
     Which suite(s) to run:
@@ -101,7 +104,8 @@
     Target platform. Default: x64.
 
 .PARAMETER Configuration
-    Build configuration. Default: Debug (self-tests require Debug builds).
+    Debug, Release or ASan Debug on x64 or ARM64. Default: Debug.
+    Native self-tests use test-enabled binaries for the selected profile.
 
 .PARAMETER ExePath
     Compatibility spelling for explicitly naming the selected profile's canonical
@@ -246,10 +250,6 @@ if ($ApplyLegacySandboxCleanup) {
 if ($Configuration -notin @('Debug', 'Release', 'ASan Debug')) {
     Exit-RSInvalidRunnerInvocation "Unsupported configuration '$Configuration'."
 }
-if ($Platform -eq 'ARM64' -and $Configuration -eq 'ASan Debug') {
-    Exit-RSInvalidRunnerInvocation 'ASan Debug is supported only for x64.'
-}
-
 # --- Helpers ---
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $MyInvocation.MyCommand.Path)
@@ -938,6 +938,14 @@ function Invoke-RSSelfTestProcess {
     $startInfo.WorkingDirectory = $Entry.WorkingDirectory
     $startInfo.UseShellExecute = $false
     $startInfo.CreateNoWindow = $true
+    if ($Arguments -contains '--fileops-selftest') {
+        # Fake MTP persists its recovery journal below LOCALAPPDATA. Each contained
+        # process (including classification retries) needs independent state; keep
+        # the caller environment and journals untouched for the process lifetime.
+        $localData = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot `
+            -Harness 'fileops-profile' -Case ([Guid]::NewGuid().ToString('N'))
+        $startInfo.EnvironmentVariables['LOCALAPPDATA'] = $localData
+    }
     if ($startInfo.PSObject.Properties['ArgumentList'] -and $null -ne $startInfo.ArgumentList) {
         foreach ($argument in $Arguments) {
             [void]$startInfo.ArgumentList.Add($argument)

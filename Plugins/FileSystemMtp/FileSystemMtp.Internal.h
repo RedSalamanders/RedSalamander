@@ -84,6 +84,11 @@ public:
     virtual HRESULT GetAttributes(std::wstring_view path, unsigned long& attributes) noexcept                                 = 0;
     virtual HRESULT GetBasicInformation(std::wstring_view path, FileSystemBasicInformation& info) noexcept                    = 0;
     virtual HRESULT GetFileSize(std::wstring_view path, uint64_t& sizeBytes) noexcept                                         = 0;
+    // The item a path names as the backend already holds it: its kind and, for a file, the size as
+    // last listed. Served from the path cache when it is warm, so a mutation can describe its source
+    // before it touches the device; `servedFromCache` says whether it did. The live committed size
+    // stays with GetFileSize, which deliberately refreshes first.
+    virtual HRESULT GetCachedItemSummary(std::wstring_view path, unsigned long& attributes, uint64_t& sizeBytes, bool& servedFromCache) noexcept = 0;
     virtual HRESULT CreateFileReader(std::wstring_view path, std::shared_ptr<IMtpBackendFileReader>& reader) noexcept        = 0;
     virtual HRESULT ReadFile(std::wstring_view path, std::vector<std::byte>& bytes) noexcept                                  = 0;
     virtual HRESULT WriteFile(std::wstring_view path, std::span<const std::byte> bytes, bool allowOverwrite) noexcept         = 0;

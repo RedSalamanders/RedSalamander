@@ -15,10 +15,10 @@
 #include "PlugInterfaces/FileSystem.h"
 #include "WindowMessages.h"
 
-#include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "Helpers.h"
 #include "PathUtils.h"
+#include <DxUi/DxUi.h>
 
 #include <algorithm>
 #include <array>
@@ -41,8 +41,8 @@
 struct NavigationDxTextHost
 {
     wil::unique_hwnd hwnd;
-    RedSalamander::DxUi::WindowHost host;
-    RedSalamander::DxUi::TextField* field = nullptr;
+    DxUi::WindowHost host;
+    DxUi::TextField* field = nullptr;
 
     NavigationDxTextHost()                                       = default;
     NavigationDxTextHost(const NavigationDxTextHost&)            = delete;
@@ -101,7 +101,7 @@ struct NavigationDxTextHost
 
 namespace
 {
-[[nodiscard]] RedSalamander::DxUi::ThemePalette MakeNavigationDxEditPalette(const AppTheme& theme, const NavigationViewTheme& viewTheme) noexcept
+[[nodiscard]] DxUi::ThemePalette MakeNavigationDxEditPalette(const AppTheme& theme, const NavigationViewTheme& viewTheme) noexcept
 {
     auto palette              = MakeAppThemeDxPalette(theme, ColorToCOLORREF(viewTheme.background));
     palette.windowBackground  = viewTheme.background;
@@ -159,14 +159,14 @@ constexpr wchar_t kHistoryText[]          = L"⩔";
 
 template <typename... Args> void TraceNavigationViewMenuDiagnostics(std::wstring_view eventName, std::wformat_string<Args...> format, Args&&... args) noexcept
 {
-    if (! RedSalamander::DxUi::IsContextMenuDiagnosticsEnabled())
+    if (! DxUi::IsContextMenuDiagnosticsEnabled())
     {
         return;
     }
 
     try
     {
-        RedSalamander::DxUi::TraceContextMenuDiagnostics(eventName, std::format(format, std::forward<Args>(args)...));
+        DxUi::TraceContextMenuDiagnostics(eventName, std::format(format, std::forward<Args>(args)...));
     }
     catch (const std::bad_alloc&)
     {
@@ -175,7 +175,7 @@ template <typename... Args> void TraceNavigationViewMenuDiagnostics(std::wstring
     catch (const std::format_error&)
     {
         // Navigation tracing is diagnostic only; formatting failure must not change input behavior.
-        RedSalamander::DxUi::TraceContextMenuDiagnostics(eventName, L"formatting failed");
+        DxUi::TraceContextMenuDiagnostics(eventName, L"formatting failed");
     }
 }
 

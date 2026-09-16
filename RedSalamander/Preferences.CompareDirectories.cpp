@@ -11,10 +11,10 @@
 #include <string>
 #include <vector>
 
-#include "DxUi/DxUi.h"
 #include "Helpers.h"
 #include "UiMetrics.h"
 #include "resource.h"
+#include <DxUi/DxUi.h>
 
 // Local convenience aliases for frequently-used shared utilities
 namespace
@@ -23,15 +23,15 @@ using PrefsCompareDirectories::EnsureWorkingCompareDirectoriesSettings;
 using PrefsCompareDirectories::GetCompareDirectoriesSettingsOrDefault;
 using PrefsCompareDirectories::MaybeResetWorkingCompareDirectoriesSettingsIfEmpty;
 
-using RedSalamander::DxUi::CardPanel;
-using RedSalamander::DxUi::ComboBox;
-using RedSalamander::DxUi::ComboBoxVariant;
-using RedSalamander::DxUi::FontRole;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::TextField;
-using RedSalamander::DxUi::ThemePalette;
-using RedSalamander::DxUi::Toggle;
+using DxUi::CardPanel;
+using DxUi::ComboBox;
+using DxUi::ComboBoxVariant;
+using DxUi::FontRole;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::TextField;
+using DxUi::ThemePalette;
+using DxUi::Toggle;
 constexpr std::array<UINT, 5> kCompareHeaderStringIds = {{
     IDS_PREFS_ADV_HEADER_COMPARE_DIRECTORIES,
     IDS_COMPARE_OPTIONS_SECTION_SUBDIRS,
@@ -85,7 +85,7 @@ constexpr std::array<UINT, 11> kCompareToggleCommandIds = {{
 constexpr size_t kCompareIgnoreFilesIndex       = 9u;
 constexpr size_t kCompareIgnoreDirectoriesIndex = 10u;
 
-void ReorderPanelChildren(Panel* root, std::span<RedSalamander::DxUi::Control* const> orderedControls)
+void ReorderPanelChildren(Panel* root, std::span<DxUi::Control* const> orderedControls)
 {
     if (! root)
     {
@@ -98,10 +98,10 @@ void ReorderPanelChildren(Panel* root, std::span<RedSalamander::DxUi::Control* c
         return;
     }
 
-    std::vector<std::unique_ptr<RedSalamander::DxUi::Control>> reordered;
+    std::vector<std::unique_ptr<DxUi::Control>> reordered;
     reordered.reserve(children.size());
 
-    auto moveChild = [&](RedSalamander::DxUi::Control* wanted) noexcept
+    auto moveChild = [&](DxUi::Control* wanted) noexcept
     {
         if (! wanted)
         {
@@ -118,7 +118,7 @@ void ReorderPanelChildren(Panel* root, std::span<RedSalamander::DxUi::Control* c
         }
     };
 
-    for (RedSalamander::DxUi::Control* const control : orderedControls)
+    for (DxUi::Control* const control : orderedControls)
     {
         moveChild(control);
     }
@@ -283,9 +283,8 @@ bool CompareDirectoriesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& 
             DeferredFocusTarget focusAfterLayout = DeferredFocusTarget::None;
             if (_pageHostDx && _dxState)
             {
-                const RedSalamander::DxUi::Control* const focused = _pageHostDx->GetFocusControl();
-                if (commandId == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE &&
-                    focused == _dxState->page.toggleCards[kCompareIgnoreFilesIndex].toggle)
+                const DxUi::Control* const focused = _pageHostDx->GetFocusControl();
+                if (commandId == IDC_PREFS_ADV_COMPARE_IGNORE_FILES_TOGGLE && focused == _dxState->page.toggleCards[kCompareIgnoreFilesIndex].toggle)
                 {
                     focusAfterLayout = DeferredFocusTarget::IgnoreFilesToggle;
                 }
@@ -406,6 +405,10 @@ bool CompareDirectoriesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& 
     dxState->page.contentWorkers.description->SetFontRole(FontRole::Small);
     dxState->page.contentWorkers.description->SetMultiline(true);
     dxState->page.contentWorkers.combo = root->AddChild<ComboBox>();
+    if (dxState->page.contentWorkers.combo)
+    {
+        dxState->page.contentWorkers.combo->SetNoMatchesText(LoadStringResource(nullptr, IDS_DXUI_NO_MATCHES));
+    }
     dxState->page.contentWorkers.combo->SetVariant(ComboBoxVariant::Window);
 
     {
@@ -445,7 +448,7 @@ bool CompareDirectoriesPane::EnsureDxHosts(HWND parent, PreferencesDialogState& 
 
     {
         CompareDxPage& page = dxState->page;
-        std::vector<RedSalamander::DxUi::Control*> orderedChildren;
+        std::vector<DxUi::Control*> orderedChildren;
         orderedChildren.reserve(_pageContentRoot->DebugChildCount());
 
         const auto appendHeader = [&](const size_t index) noexcept { orderedChildren.push_back(page.headers[index]); };
@@ -717,11 +720,10 @@ void CompareDirectoriesPane::LayoutDxPage(
     const int stateTextWidth = std::max(onWidth, offWidth);
 
     const int measuredToggleWidth = std::max(minToggleWidth, (2 * paddingX) + stateTextWidth + gapX + trackWidth);
-    const int toggleWidth =
-        static_cast<int>(std::lround(RedSalamander::DxUi::ResolveConstrainedExtent({.minExtent       = static_cast<float>(minToggleWidth),
-                                                                                    .preferredExtent = static_cast<float>(measuredToggleWidth),
-                                                                                    .maxExtent       = static_cast<float>(measuredToggleWidth)},
-                                                                                   static_cast<float>(std::max(0, width - 2 * cardPaddingX)))));
+    const int toggleWidth         = static_cast<int>(std::lround(DxUi::ResolveConstrainedExtent({.minExtent       = static_cast<float>(minToggleWidth),
+                                                                                                 .preferredExtent = static_cast<float>(measuredToggleWidth),
+                                                                                                 .maxExtent       = static_cast<float>(measuredToggleWidth)},
+                                                                                                static_cast<float>(std::max(0, width - 2 * cardPaddingX)))));
 
     if (! _dxState || ! _pageHostDx || ! _pageContentRoot)
     {
@@ -847,11 +849,11 @@ void CompareDirectoriesPane::LayoutDxPage(
 
     auto layoutComboCard = [&](std::wstring_view labelText, std::wstring_view descText) noexcept
     {
-        const int desiredWidth = static_cast<int>(
-            std::lround(RedSalamander::DxUi::ResolveConstrainedExtent({.minExtent       = static_cast<float>(UiMetrics::ScaleDip(dpi, kMinEditWidthDip)),
-                                                                       .preferredExtent = static_cast<float>(UiMetrics::ScaleDip(dpi, kMinEditWidthDip)),
-                                                                       .maxExtent       = static_cast<float>(UiMetrics::ScaleDip(dpi, kMaxEditWidthDip))},
-                                                                      static_cast<float>(std::max(0, width - 2 * cardPaddingX)))));
+        const int desiredWidth =
+            static_cast<int>(std::lround(DxUi::ResolveConstrainedExtent({.minExtent       = static_cast<float>(UiMetrics::ScaleDip(dpi, kMinEditWidthDip)),
+                                                                         .preferredExtent = static_cast<float>(UiMetrics::ScaleDip(dpi, kMinEditWidthDip)),
+                                                                         .maxExtent       = static_cast<float>(UiMetrics::ScaleDip(dpi, kMaxEditWidthDip))},
+                                                                        static_cast<float>(std::max(0, width - 2 * cardPaddingX)))));
         const int textWidth  = std::max(0, width - 2 * cardPaddingX - cardGapX - desiredWidth);
         const int descHeight = PrefsUi::MeasureWrappedTextHeightPx(typography, typography.caption, textWidth, descText);
         const int cardHeight = std::max(rowHeight + 2 * cardPaddingY, titleHeight + cardGapY + descHeight + 2 * cardPaddingY);
@@ -923,8 +925,7 @@ void CompareDirectoriesPane::LayoutDxPage(
             {
                 dxCard.title->SetVisible(true);
                 dxCard.title->SetText(std::wstring(labelText));
-                dxCard.title->SetMnemonicTarget(showEdit ? static_cast<RedSalamander::DxUi::Control*>(dxCard.edit)
-                                                         : static_cast<RedSalamander::DxUi::Control*>(dxCard.toggle));
+                dxCard.title->SetMnemonicTarget(showEdit ? static_cast<DxUi::Control*>(dxCard.edit) : static_cast<DxUi::Control*>(dxCard.toggle));
                 dxCard.title->SetBounds(D2D1::RectF(pxToDip(card.left + cardPaddingX),
                                                     pxToDip(card.top + cardPaddingY),
                                                     pxToDip(card.left + cardPaddingX + textWidth),
@@ -1029,7 +1030,7 @@ bool CompareDirectoriesPane::HandleDeferredAction(HWND host, PreferencesDialogSt
 
     if (_deferredFocusAfterLayout == DeferredFocusTarget::None && _pageHostDx && _dxState)
     {
-        const RedSalamander::DxUi::Control* const focused = _pageHostDx->GetFocusControl();
+        const DxUi::Control* const focused = _pageHostDx->GetFocusControl();
         if (focused == _dxState->page.toggleCards[kCompareIgnoreFilesIndex].toggle)
         {
             _deferredFocusAfterLayout = DeferredFocusTarget::IgnoreFilesToggle;
@@ -1049,7 +1050,7 @@ bool CompareDirectoriesPane::HandleDeferredAction(HWND host, PreferencesDialogSt
 void CompareDirectoriesPane::RestoreDeferredFocusAfterLayout() noexcept
 {
     const DeferredFocusTarget target = _deferredFocusAfterLayout;
-    _deferredFocusAfterLayout       = DeferredFocusTarget::None;
+    _deferredFocusAfterLayout        = DeferredFocusTarget::None;
     RestoreDeferredFocusTarget(target);
 }
 
@@ -1060,7 +1061,7 @@ void CompareDirectoriesPane::RestoreDeferredFocusTarget(const DeferredFocusTarge
         return;
     }
 
-    RedSalamander::DxUi::Control* focusControl = nullptr;
+    DxUi::Control* focusControl = nullptr;
     switch (target)
     {
         case DeferredFocusTarget::IgnoreFilesToggle: focusControl = _dxState->page.toggleCards[kCompareIgnoreFilesIndex].toggle; break;
@@ -1144,8 +1145,8 @@ bool CompareDirectoriesPane::DebugFocusTarget(const PreferencesCompareDirectorie
         return false;
     }
 
-    RedSalamander::DxUi::Control* focusControl = nullptr;
-    auto& page                                 = _dxState->page;
+    DxUi::Control* focusControl = nullptr;
+    auto& page                  = _dxState->page;
     switch (target)
     {
         case PreferencesCompareDirectoriesDebugFocusTarget::CompareSubdirectoriesToggle: focusControl = page.toggleCards[0].toggle; break;

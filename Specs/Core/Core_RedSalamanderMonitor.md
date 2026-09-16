@@ -1,5 +1,15 @@
 # RedSalamanderMonitor Contract
 
+## Shared UI dependency
+
+Monitor builds against the exact external `DxUi.lib` pin through the product MSBuild
+imports. `MakeMonitorDxPalette` remains the application adapter for resolved Monitor
+colors and density. Toolbar/status hosts and the neutral frame clock use public DxUi
+headers; no shared implementation sources are compiled in this application. Existing
+Monitor append, scrollback, filter, focus and resource selftests qualify the consumer.
+Library diagnostics follow the standalone contract, with no legacy logging requirement.
+The generated module sidecar is part of the build receipt.
+
 ## Architecture: Append-Only Log Viewer
 
 **RedSalamanderMonitor is a HIGH-THROUGHPUT, APPEND-ONLY log viewer optimized for real-time log streaming.**

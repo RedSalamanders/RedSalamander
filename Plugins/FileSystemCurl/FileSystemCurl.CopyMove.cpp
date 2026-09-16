@@ -1943,6 +1943,9 @@ struct CopyFilePhaseTimings final
             popFrame();
             continue;
         }
+        // Discovery happens here, on the single-threaded enumeration, not on the worker that later
+        // transfers the item: this is the moment the call learns the work exists.
+        progress.NoteDiscoveredEntry(entry);
         CopyFileWorkItem child{JoinPluginPath(frame.paths.sourceRemotePath, entry.name),
                                JoinDisplayPath(frame.paths.sourceDisplayPath, entry.name),
                                JoinPluginPath(frame.paths.destinationRemotePath, entry.name),
@@ -2296,10 +2299,13 @@ struct DeleteTreeWorkItem final
         if (allowedMembers != nullptr && ! allowedMembers->Contains(childRemote))
         {
             // A late writer created this name after Move preflight. Do not delete
-            // an object this operation never copied.
+            // an object this operation never copied. It is not this call's work, so it is not
+            // this call's discovery either.
             rememberPartial();
             continue;
         }
+        // A delete discovers what it is about to remove, on this single-threaded enumeration.
+        progress.NoteDiscoveredEntry(entry);
         if ((entry.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
         {
             if (! HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
@@ -2574,6 +2580,8 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItem(const wchar_t* sourcePath,
 
     if ((sourceInfo.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
     {
+        // The selected root itself; the walk below reports each descendant as it finds it.
+        progress.NoteDiscoveredEntry(sourceInfo);
         if (! HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
         {
             hr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
@@ -2608,6 +2616,9 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItem(const wchar_t* sourcePath,
     }
     else
     {
+        // A known leaf: its exact size is already in hand, so the call's total is complete here.
+        progress.NoteDiscoveredEntry(sourceInfo);
+        progress.CloseDiscovery();
         hr = CopyFileViaTemp(sourceResolved.connection,
                              sourceResolved.remotePath,
                              sourceDisplay,
@@ -2713,6 +2724,15 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
         hr                            = GetEntryInfo(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
         sourceObservedWithoutMutation = SUCCEEDED(hr);
         const bool isSelfRename       = IsCaseSensitiveSelfRename(sourceResolved.remotePath, destinationResolved.remotePath);
+        if (SUCCEEDED(hr))
+        {
+            // A server-side rename relocates the object itself, so a directory discovers one
+            // directory and none of its descendants: none of them are visited. When the destination
+            // is an existing directory the host continues the item as a rename merge and stages the
+            // closure itself; the provider still reports its own truth here.
+            progress.NoteDiscoveredEntry(sourceInfo);
+            progress.CloseDiscovery();
+        }
         if (SUCCEEDED(hr) && ! isSelfRename)
         {
             const CurlPublicationResult renameResult = RenameWithOverwriteRollback(
@@ -2732,6 +2752,13 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItem(const wchar_t* sourcePath,
         sourceObservedWithoutMutation = SUCCEEDED(hr);
         if (SUCCEEDED(hr))
         {
+            // The copy-then-delete fallback: the selected root, with the walk below adding each
+            // descendant it finds. A leaf is the whole total already.
+            progress.NoteDiscoveredEntry(sourceInfo);
+            if ((sourceInfo.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+            {
+                progress.CloseDiscovery();
+            }
             if (nativeMoveOnly)
             {
                 hr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
@@ -2902,6 +2929,13 @@ FileSystemCurl::DeleteItem(const wchar_t* path, FileSystemFlags flags, const Fil
     const bool sourceObserved = SUCCEEDED(hr);
     if (SUCCEEDED(hr))
     {
+        // The selected root; a recursive walk below adds whatever it finds underneath, while a
+        // leaf is the whole total already.
+        progress.NoteDiscoveredEntry(info);
+        if ((info.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
+        {
+            progress.CloseDiscovery();
+        }
         if ((info.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0)
         {
             if (HasFlag(flags, FILESYSTEM_FLAG_RECURSIVE))
@@ -3016,6 +3050,15 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItem(const wchar_t* sourcePath,
         hr                            = GetEntryInfo(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
         sourceObservedWithoutMutation = SUCCEEDED(hr);
         const bool isSelfRename       = IsCaseSensitiveSelfRename(sourceResolved.remotePath, destinationResolved.remotePath);
+        if (SUCCEEDED(hr))
+        {
+            // A server-side rename relocates the object itself, so a directory discovers one
+            // directory and none of its descendants: none of them are visited. When the destination
+            // is an existing directory the host continues the item as a rename merge and stages the
+            // closure itself; the provider still reports its own truth here.
+            progress.NoteDiscoveredEntry(sourceInfo);
+            progress.CloseDiscovery();
+        }
         if (SUCCEEDED(hr) && ! isSelfRename)
         {
             const CurlPublicationResult renameResult = RenameWithOverwriteRollback(
@@ -3188,6 +3231,10 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::CopyItems(const wchar_t* const* source
 
             continue;
         }
+
+        // The selected root, discovered on this sequential pre-pass; a directory root's descendants
+        // are added by the walk that later transfers it.
+        progress.NoteDiscoveredEntry(sourceInfo);
 
         CopyTask task{};
         task.index                  = index;
@@ -3523,6 +3570,11 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::MoveItems(const wchar_t* const* source
 
             continue;
         }
+
+        // The selected root, discovered on this sequential pre-pass. A server-side rename relocates
+        // a directory without visiting its descendants; the copy-then-delete fallback's walk adds
+        // each descendant it finds.
+        progress.NoteDiscoveredEntry(sourceInfo);
 
         MoveTask task{};
         task.index                  = index;
@@ -3867,6 +3919,9 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::DeleteItems(const wchar_t* const* path
                                                  : GetEntryInfo(resolved.connection, resolved.remotePath, info);
             if (SUCCEEDED(itemHr))
             {
+                // The selected root; a recursive walk later adds whatever it finds underneath.
+                progress.NoteDiscoveredEntry(info);
+
                 DeleteTask task{};
                 task.index      = index;
                 task.connection = std::move(resolved.connection);
@@ -4160,6 +4215,13 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::RenameItems(const FileSystemRenamePair
                         FilesInformationCurl::Entry sourceInfo{};
                         itemHr                        = GetEntryInfo(sourceResolved.connection, sourceResolved.remotePath, sourceInfo);
                         sourceObservedWithoutMutation = SUCCEEDED(itemHr);
+                        if (SUCCEEDED(itemHr))
+                        {
+                            // A rename relocates the object itself, so a directory discovers one
+                            // directory and none of its descendants. Emission is serialized inside
+                            // the scope, so the rename workers may report concurrently.
+                            progress.NoteDiscoveredEntry(sourceInfo);
+                        }
                     }
                     if (SUCCEEDED(itemHr))
                     {

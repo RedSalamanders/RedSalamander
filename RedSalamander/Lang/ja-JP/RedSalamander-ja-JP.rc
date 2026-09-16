@@ -987,6 +987,7 @@ BEGIN
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_LABEL "構成"
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_UNAVAILABLE "このプラグインでは構成を使用できません。"
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_DEFAULT "このプラグインの構成は保存されません (デフォルトを使用)。"
+    IDS_PREFS_PLUGINS_DETAILS_CONFIG_REJECTED "プラグインがこれらの設定を拒否したため（エラー 0x{0:08X}）、保存されませんでした。強調表示された値を確認して、もう一度お試しください。"
     IDS_PREFS_PLUGINS_DETAILS_CONFIG_BROWSE_ELLIPSIS "閲覧する..."
     IDS_PREFS_PLUGINS_DETAILS_SCHEMA_UNAVAILABLE "🧩\r\nこのプラグインは構成エディターを提供しません。"
     IDS_PREFS_PLUGINS_DETAILS_SCHEMA_NOT_LOADABLE "🚧\r\nこのプラグインは現在ロードできないため、構成エディターは使用できません。"

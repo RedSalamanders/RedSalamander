@@ -1,7 +1,6 @@
 #include "FolderWindow.h"
 
 #include "AppTheme.h"
-#include "DxUi/DxUi.h"
 #include "DxUiThemePalette.h"
 #include "FileOperationArtifactRegistry.h"
 #include "Resource.h"
@@ -9,6 +8,7 @@
 #include "WindowMessages.h"
 #include "WindowPlacementPersistence.h"
 #include "WindowSizing.h"
+#include <DxUi/DxUi.h>
 
 #include "Helpers.h"
 #include "PlugInterfaces/Informations.h"
@@ -79,12 +79,12 @@ enum class ItemPropertiesArtifactObjectState : uint8_t
 
 struct ItemPropertiesArtifactExplanation
 {
-    bool possibleNameShape = false;
+    bool possibleNameShape                        = false;
     ItemPropertiesArtifactObjectState objectState = ItemPropertiesArtifactObjectState::NotApplicable;
-    uint32_t classifierQueryCount = 0u;
+    uint32_t classifierQueryCount                 = 0u;
 };
 
-using ItemPropertiesOpenStreamCallback = std::function<HRESULT(std::wstring_view streamName)>;
+using ItemPropertiesOpenStreamCallback    = std::function<HRESULT(std::wstring_view streamName)>;
 using ItemPropertiesMutationGuardCallback = std::function<HRESULT()>;
 
 struct ItemPropertiesLoadResult
@@ -803,9 +803,9 @@ void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc)
     return wrapped;
 }
 
-[[nodiscard]] float MeasureItemPropertiesWrappedTextHeightDip(const RedSalamander::DxUi::WindowHost& host,
+[[nodiscard]] float MeasureItemPropertiesWrappedTextHeightDip(const DxUi::WindowHost& host,
                                                               std::wstring_view text,
-                                                              RedSalamander::DxUi::FontRole role,
+                                                              DxUi::FontRole role,
                                                               float widthDip) noexcept
 {
     constexpr float kFallbackHeightDip = 20.0f;
@@ -837,16 +837,14 @@ void NormalizeItemPropertiesSectionOrder(ItemPropertiesDocument& doc)
     return (std::max)(kFallbackHeightDip, std::ceil(metrics.height));
 }
 
-void AppendItemPropertiesArtifactExplanation(ItemPropertiesDocument& doc,
-                                             const ItemPropertiesArtifactExplanation& explanation)
+void AppendItemPropertiesArtifactExplanation(ItemPropertiesDocument& doc, const ItemPropertiesArtifactExplanation& explanation)
 {
     if (! explanation.possibleNameShape)
     {
         return;
     }
 
-    const auto text = [](UINT id, std::wstring_view fallback)
-    { return LoadItemPropertiesString(id, fallback); };
+    const auto text                = [](UINT id, std::wstring_view fallback) { return LoadItemPropertiesString(id, fallback); };
     const std::wstring unavailable = text(IDS_ITEM_PROPERTIES_ARTIFACT_VALUE_UNAVAILABLE, L"Unavailable");
 
     ItemPropertiesSection section{
@@ -854,8 +852,7 @@ void AppendItemPropertiesArtifactExplanation(ItemPropertiesDocument& doc,
     };
     const auto append = [&](UINT keyId, std::wstring_view keyFallback, std::wstring value)
     { section.fields.push_back(ItemPropertiesField{.key = text(keyId, keyFallback), .value = std::move(value)}); };
-    const auto appendUnavailable = [&](UINT keyId, std::wstring_view keyFallback)
-    { append(keyId, keyFallback, unavailable); };
+    const auto appendUnavailable = [&](UINT keyId, std::wstring_view keyFallback) { append(keyId, keyFallback, unavailable); };
 
     append(IDS_ITEM_PROPERTIES_ARTIFACT_FIELD_CLASSIFICATION,
            L"Classification",
@@ -1009,7 +1006,7 @@ void AppendItemPropertiesArtifactExplanation(ItemPropertiesDocument& doc,
 }
 #endif
 
-class ItemPropertiesRootPanel final : public RedSalamander::DxUi::Panel
+class ItemPropertiesRootPanel final : public DxUi::Panel
 {
 public:
     explicit ItemPropertiesRootPanel(const std::wstring* contentText) noexcept : _contentText(contentText)
@@ -1017,7 +1014,7 @@ public:
         SetFocusable(true);
     }
 
-    bool OnKeyDown(RedSalamander::DxUi::WindowHost& host, UINT virtualKey, UINT modifiers) override
+    bool OnKeyDown(DxUi::WindowHost& host, UINT virtualKey, UINT modifiers) override
     {
         if ((modifiers & MK_CONTROL) != 0u)
         {
@@ -1031,15 +1028,15 @@ public:
             }
         }
 
-        return RedSalamander::DxUi::Panel::OnKeyDown(host, virtualKey, modifiers);
+        return DxUi::Panel::OnKeyDown(host, virtualKey, modifiers);
     }
 
-    bool OnCopy(RedSalamander::DxUi::WindowHost& host) override
+    bool OnCopy(DxUi::WindowHost& host) override
     {
         return _contentText != nullptr && host.CopyTextToClipboard(*_contentText);
     }
 
-    bool OnSelectAll(RedSalamander::DxUi::WindowHost& /*host*/) override
+    bool OnSelectAll(DxUi::WindowHost& /*host*/) override
     {
         return true;
     }
@@ -1050,24 +1047,24 @@ private:
 
 struct ItemPropertiesFieldRowControls
 {
-    RedSalamander::DxUi::Label* key   = nullptr;
-    RedSalamander::DxUi::Label* value = nullptr;
+    DxUi::Label* key   = nullptr;
+    DxUi::Label* value = nullptr;
 };
 
 struct ItemPropertiesSectionControls
 {
-    RedSalamander::DxUi::CardPanel* card = nullptr;
-    RedSalamander::DxUi::Label* title    = nullptr;
-    bool compact                         = false;
+    DxUi::CardPanel* card = nullptr;
+    DxUi::Label* title    = nullptr;
+    bool compact          = false;
     std::vector<ItemPropertiesFieldRowControls> fields;
 };
 
 struct ItemPropertiesStreamRowControls
 {
-    RedSalamander::DxUi::Label* name    = nullptr;
-    RedSalamander::DxUi::Label* size    = nullptr;
-    RedSalamander::DxUi::Button* view   = nullptr;
-    RedSalamander::DxUi::Button* remove = nullptr;
+    DxUi::Label* name    = nullptr;
+    DxUi::Label* size    = nullptr;
+    DxUi::Button* view   = nullptr;
+    DxUi::Button* remove = nullptr;
 };
 
 [[nodiscard]] bool EnsureItemPropertiesWindowClassRegistered() noexcept;
@@ -1211,16 +1208,16 @@ public:
 #ifdef ENABLE_TESTS
     [[nodiscard]] bool DebugGetSnapshot(ItemPropertiesWindowDebugSnapshot& out) const noexcept
     {
-        const HWND hwnd             = _hWnd.get();
-        out.usesDxUiHost            = hwnd && ::IsWindow(hwnd) != FALSE;
-        out.visibleChildWindowCount = hwnd ? CountVisibleItemPropertiesChildWindows(hwnd) : 0u;
-        out.sectionCount            = _doc.sections.size();
-        out.fieldCount              = _fieldCount;
-        out.streamCount             = _doc.streams.size();
-        out.removableStreamCount    = _removableStreamCount;
-        out.viewableStreamCount     = _viewableStreamCount;
-        out.loading                 = _loading;
-        out.loadFailed              = _loadFailed;
+        const HWND hwnd                  = _hWnd.get();
+        out.usesDxUiHost                 = hwnd && ::IsWindow(hwnd) != FALSE;
+        out.visibleChildWindowCount      = hwnd ? CountVisibleItemPropertiesChildWindows(hwnd) : 0u;
+        out.sectionCount                 = _doc.sections.size();
+        out.fieldCount                   = _fieldCount;
+        out.streamCount                  = _doc.streams.size();
+        out.removableStreamCount         = _removableStreamCount;
+        out.viewableStreamCount          = _viewableStreamCount;
+        out.loading                      = _loading;
+        out.loadFailed                   = _loadFailed;
         out.artifactClassifierQueryCount = _artifactExplanation.classifierQueryCount;
         if (_contentScroll)
         {
@@ -1437,18 +1434,18 @@ private:
         auto root = std::make_unique<ItemPropertiesRootPanel>(&_contentText);
         _root     = root.get();
 
-        _titleLabel = root->AddChild<RedSalamander::DxUi::Label>(LoadStringResource(nullptr, IDS_CAPTION_PROPERTIES));
-        _titleLabel->SetFontRole(RedSalamander::DxUi::FontRole::Title);
+        _titleLabel = root->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_CAPTION_PROPERTIES));
+        _titleLabel->SetFontRole(DxUi::FontRole::Title);
 
-        _contentScroll = root->AddChild<RedSalamander::DxUi::ScrollPanel>();
+        _contentScroll = root->AddChild<DxUi::ScrollPanel>();
         _contentScroll->SetScrollStepDip(48.0f);
         RebuildCards();
 
-        _copyHintLabel = root->AddChild<RedSalamander::DxUi::Label>(LoadStringResource(nullptr, IDS_PROPERTIES_COPY_HINT));
-        _copyHintLabel->SetFontRole(RedSalamander::DxUi::FontRole::Small);
+        _copyHintLabel = root->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_PROPERTIES_COPY_HINT));
+        _copyHintLabel->SetFontRole(DxUi::FontRole::Small);
         _copyHintLabel->SetTextColor(_dxHost.GetTheme().subduedText);
 
-        _closeButton = root->AddChild<RedSalamander::DxUi::Button>(LoadStringResource(nullptr, IDS_PROPERTIES_BTN_CLOSE));
+        _closeButton = root->AddChild<DxUi::Button>(LoadStringResource(nullptr, IDS_PROPERTIES_BTN_CLOSE));
         _closeButton->SetPrimary(true);
         _closeButton->SetMnemonic(L'o');
         _closeButton->SetOnClick([this]()
@@ -1531,12 +1528,12 @@ private:
 
         if (_loading || _loadFailed)
         {
-            _loadingCard = _contentScroll->AddChild<RedSalamander::DxUi::CardPanel>();
+            _loadingCard = _contentScroll->AddChild<DxUi::CardPanel>();
             _loadingCard->SetCornerRadius(6.0f);
-            _loadingSpinnerLabel = _loadingCard->AddChild<RedSalamander::DxUi::Label>(_loading ? CurrentLoadingSpinnerText() : L"!");
-            _loadingSpinnerLabel->SetFontRole(RedSalamander::DxUi::FontRole::BodyLarge);
+            _loadingSpinnerLabel = _loadingCard->AddChild<DxUi::Label>(_loading ? CurrentLoadingSpinnerText() : L"!");
+            _loadingSpinnerLabel->SetFontRole(DxUi::FontRole::BodyLarge);
             _loadingSpinnerLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_CENTER);
-            _loadingMessageLabel = _loadingCard->AddChild<RedSalamander::DxUi::Label>(_loadingMessageText);
+            _loadingMessageLabel = _loadingCard->AddChild<DxUi::Label>(_loadingMessageText);
             _loadingMessageLabel->SetMultiline(true);
             if (_loadFailed)
             {
@@ -1552,19 +1549,19 @@ private:
         {
             ItemPropertiesSectionControls controls{};
             controls.compact = IsCompactItemPropertiesSection(section.title);
-            controls.title   = _contentScroll->AddChild<RedSalamander::DxUi::Label>(section.title);
-            controls.title->SetFontRole(RedSalamander::DxUi::FontRole::BodyLarge);
+            controls.title   = _contentScroll->AddChild<DxUi::Label>(section.title);
+            controls.title->SetFontRole(DxUi::FontRole::BodyLarge);
 
-            controls.card = _contentScroll->AddChild<RedSalamander::DxUi::CardPanel>();
+            controls.card = _contentScroll->AddChild<DxUi::CardPanel>();
             controls.card->SetCornerRadius(6.0f);
 
             controls.fields.reserve(section.fields.size());
             for (const ItemPropertiesField& field : section.fields)
             {
                 ItemPropertiesFieldRowControls row{};
-                row.key = controls.card->AddChild<RedSalamander::DxUi::Label>(field.key);
-                row.key->SetFontRole(RedSalamander::DxUi::FontRole::BodyStrong);
-                row.value = controls.card->AddChild<RedSalamander::DxUi::Label>(MakeItemPropertiesWrapFriendlyText(field.value));
+                row.key = controls.card->AddChild<DxUi::Label>(field.key);
+                row.key->SetFontRole(DxUi::FontRole::BodyStrong);
+                row.value = controls.card->AddChild<DxUi::Label>(MakeItemPropertiesWrapFriendlyText(field.value));
                 row.value->SetAccessibleName(field.value);
                 row.value->SetMultiline(true);
                 controls.fields.emplace_back(row);
@@ -1578,10 +1575,10 @@ private:
             return;
         }
 
-        _streamTitle = _contentScroll->AddChild<RedSalamander::DxUi::Label>(LoadStringResource(nullptr, IDS_PROPERTIES_STREAMS_TITLE));
-        _streamTitle->SetFontRole(RedSalamander::DxUi::FontRole::BodyLarge);
+        _streamTitle = _contentScroll->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_PROPERTIES_STREAMS_TITLE));
+        _streamTitle->SetFontRole(DxUi::FontRole::BodyLarge);
 
-        _streamCard = _contentScroll->AddChild<RedSalamander::DxUi::CardPanel>();
+        _streamCard = _contentScroll->AddChild<DxUi::CardPanel>();
         _streamCard->SetCornerRadius(6.0f);
 
         _streamRows.reserve(_doc.streams.size());
@@ -1591,14 +1588,14 @@ private:
         {
             const ItemPropertiesStream& stream = _doc.streams[index];
             ItemPropertiesStreamRowControls row{};
-            row.name = _streamCard->AddChild<RedSalamander::DxUi::Label>(MakeItemPropertiesWrapFriendlyText(stream.name));
+            row.name = _streamCard->AddChild<DxUi::Label>(MakeItemPropertiesWrapFriendlyText(stream.name));
             row.name->SetAccessibleName(stream.name);
-            row.name->SetFontRole(RedSalamander::DxUi::FontRole::BodyStrong);
+            row.name->SetFontRole(DxUi::FontRole::BodyStrong);
             row.name->SetMultiline(true);
-            row.size = _streamCard->AddChild<RedSalamander::DxUi::Label>(stream.displaySize);
-            row.view = _streamCard->AddChild<RedSalamander::DxUi::Button>(viewText);
+            row.size = _streamCard->AddChild<DxUi::Label>(stream.displaySize);
+            row.view = _streamCard->AddChild<DxUi::Button>(viewText);
             row.view->SetEnabled(static_cast<bool>(_openStream));
-            row.remove = _streamCard->AddChild<RedSalamander::DxUi::Button>(removeText);
+            row.remove = _streamCard->AddChild<DxUi::Button>(removeText);
             row.remove->SetEnabled(_streamOps != nullptr && stream.canRemove);
 
             std::wstring viewStreamName = stream.name;
@@ -1689,8 +1686,7 @@ private:
                 for (const ItemPropertiesFieldRowControls& row : controls.fields)
                 {
                     const float valueH =
-                        row.value ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost, row.value->GetText(), RedSalamander::DxUi::FontRole::Body, valueW)
-                                  : kRowH;
+                        row.value ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost, row.value->GetText(), DxUi::FontRole::Body, valueW) : kRowH;
                     height += stacked ? (kRowH + (std::max)(kRowH, valueH) + 4.0f) : (std::max)(kRowH, valueH + 4.0f);
                 }
                 return height;
@@ -1710,8 +1706,7 @@ private:
                 for (ItemPropertiesFieldRowControls& row : controls.fields)
                 {
                     const float valueH =
-                        row.value ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost, row.value->GetText(), RedSalamander::DxUi::FontRole::Body, valueW)
-                                  : kRowH;
+                        row.value ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost, row.value->GetText(), DxUi::FontRole::Body, valueW) : kRowH;
                     const float rowH = stacked ? (kRowH + (std::max)(kRowH, valueH) + 4.0f) : (std::max)(kRowH, valueH + 4.0f);
                     if (stacked)
                     {
@@ -1780,9 +1775,7 @@ private:
                 for (const ItemPropertiesStreamRowControls& row : _streamRows)
                 {
                     const float nameH =
-                        row.name
-                            ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost, row.name->GetText(), RedSalamander::DxUi::FontRole::BodyStrong, streamNameW)
-                            : kRowH;
+                        row.name ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost, row.name->GetText(), DxUi::FontRole::BodyStrong, streamNameW) : kRowH;
                     streamRowsHeight += stackStreams ? ((std::max)(kRowH, nameH + 4.0f) + kRowH + 4.0f) : (std::max)(kRowH, nameH + 4.0f);
                 }
 
@@ -1800,9 +1793,7 @@ private:
                 for (ItemPropertiesStreamRowControls& row : _streamRows)
                 {
                     const float nameH =
-                        row.name
-                            ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost, row.name->GetText(), RedSalamander::DxUi::FontRole::BodyStrong, streamNameW)
-                            : kRowH;
+                        row.name ? MeasureItemPropertiesWrappedTextHeightDip(_dxHost, row.name->GetText(), DxUi::FontRole::BodyStrong, streamNameW) : kRowH;
                     if (stackStreams)
                     {
                         const float nameRowH = (std::max)(kRowH, nameH + 4.0f);
@@ -1915,14 +1906,14 @@ private:
             return;
         }
 
-        work->hwnd        = _hWnd.get();
-        work->window      = this;
-        work->windowToken = _windowToken;
-        work->generation  = _loadGeneration;
-        work->itemPath    = _itemPath;
-        work->itemIo      = _itemIo;
-        work->fileSystem  = _fileSystem;
-        work->pluginId    = _pluginId;
+        work->hwnd            = _hWnd.get();
+        work->window          = this;
+        work->windowToken     = _windowToken;
+        work->generation      = _loadGeneration;
+        work->itemPath        = _itemPath;
+        work->itemIo          = _itemIo;
+        work->fileSystem      = _fileSystem;
+        work->pluginId        = _pluginId;
         work->instanceContext = _instanceContext;
 #ifdef ENABLE_TESTS
         work->delayMs = g_nextItemPropertiesLoadDelayMs.exchange(0u, std::memory_order_relaxed);
@@ -1956,15 +1947,11 @@ private:
 
             if (FileOperationArtifacts::HasPossibleArtifactName(workItem->itemPath.filename().native()))
             {
-                result->artifact.possibleNameShape = true;
+                result->artifact.possibleNameShape    = true;
                 result->artifact.classifierQueryCount = 1u;
                 FileOperationArtifacts::Candidate candidate{};
                 const HRESULT artifactHr = FileOperationArtifacts::CaptureProviderObjectCandidate(
-                    workItem->fileSystem.get(),
-                    workItem->itemPath.native(),
-                    workItem->pluginId,
-                    workItem->instanceContext,
-                    candidate);
+                    workItem->fileSystem.get(), workItem->itemPath.native(), workItem->pluginId, workItem->instanceContext, candidate);
                 if (artifactHr == S_FALSE)
                 {
                     result->artifact.objectState = ItemPropertiesArtifactObjectState::Missing;
@@ -2049,7 +2036,7 @@ private:
             return 0;
         }
 
-        _doc        = doc.value();
+        _doc = doc.value();
         AppendItemPropertiesArtifactExplanation(_doc, _artifactExplanation);
         _loading    = false;
         _loadFailed = false;
@@ -2095,7 +2082,7 @@ private:
 
         const float viewportRight = _contentScroll->GetBounds().right;
         float maxRight            = viewportRight;
-        const auto includeControl = [&](const RedSalamander::DxUi::Control* control) noexcept
+        const auto includeControl = [&](const DxUi::Control* control) noexcept
         {
             if (! control)
             {
@@ -2317,18 +2304,18 @@ private:
     bool _loadFailed             = false;
     UINT _dpi                    = USER_DEFAULT_SCREEN_DPI;
     wil::unique_hbrush _backgroundBrush;
-    RedSalamander::DxUi::WindowHost _dxHost;
-    RedSalamander::DxUi::Panel* _root                = nullptr;
-    RedSalamander::DxUi::Label* _titleLabel          = nullptr;
-    RedSalamander::DxUi::ScrollPanel* _contentScroll = nullptr;
-    RedSalamander::DxUi::Label* _copyHintLabel       = nullptr;
-    RedSalamander::DxUi::Button* _closeButton        = nullptr;
-    RedSalamander::DxUi::CardPanel* _loadingCard     = nullptr;
-    RedSalamander::DxUi::Label* _loadingSpinnerLabel = nullptr;
-    RedSalamander::DxUi::Label* _loadingMessageLabel = nullptr;
+    DxUi::WindowHost _dxHost;
+    DxUi::Panel* _root                = nullptr;
+    DxUi::Label* _titleLabel          = nullptr;
+    DxUi::ScrollPanel* _contentScroll = nullptr;
+    DxUi::Label* _copyHintLabel       = nullptr;
+    DxUi::Button* _closeButton        = nullptr;
+    DxUi::CardPanel* _loadingCard     = nullptr;
+    DxUi::Label* _loadingSpinnerLabel = nullptr;
+    DxUi::Label* _loadingMessageLabel = nullptr;
     std::vector<ItemPropertiesSectionControls> _sectionControls;
-    RedSalamander::DxUi::CardPanel* _streamCard = nullptr;
-    RedSalamander::DxUi::Label* _streamTitle    = nullptr;
+    DxUi::CardPanel* _streamCard = nullptr;
+    DxUi::Label* _streamTitle    = nullptr;
     std::vector<ItemPropertiesStreamRowControls> _streamRows;
 };
 
@@ -2599,19 +2586,19 @@ bool FolderWindow::ShowPreviewPropertiesForPath(Pane sourcePane, Pane hostPane, 
 
         PreviewPropertiesSectionControls section{};
         section.compact = IsCompactItemPropertiesSection(sourceSection.title);
-        section.title   = host.previewPropertiesScroll->AddChild<RedSalamander::DxUi::Label>(sourceSection.title);
-        section.title->SetFontRole(RedSalamander::DxUi::FontRole::BodyLarge);
+        section.title   = host.previewPropertiesScroll->AddChild<DxUi::Label>(sourceSection.title);
+        section.title->SetFontRole(DxUi::FontRole::BodyLarge);
 
-        section.card = host.previewPropertiesScroll->AddChild<RedSalamander::DxUi::CardPanel>();
+        section.card = host.previewPropertiesScroll->AddChild<DxUi::CardPanel>();
         section.card->SetCornerRadius(6.0f);
         section.fields.reserve(sourceSection.fields.size());
 
         for (const ItemPropertiesField& field : sourceSection.fields)
         {
             PreviewPropertiesFieldControls row{};
-            row.key = section.card->AddChild<RedSalamander::DxUi::Label>(field.key);
-            row.key->SetFontRole(RedSalamander::DxUi::FontRole::BodyStrong);
-            row.value = section.card->AddChild<RedSalamander::DxUi::Label>(MakeItemPropertiesWrapFriendlyText(field.value));
+            row.key = section.card->AddChild<DxUi::Label>(field.key);
+            row.key->SetFontRole(DxUi::FontRole::BodyStrong);
+            row.value = section.card->AddChild<DxUi::Label>(MakeItemPropertiesWrapFriendlyText(field.value));
             row.value->SetAccessibleName(field.value);
             row.value->SetMultiline(true);
             section.fields.emplace_back(row);
@@ -2624,21 +2611,21 @@ bool FolderWindow::ShowPreviewPropertiesForPath(Pane sourcePane, Pane hostPane, 
     if (! doc->streams.empty())
     {
         PreviewPropertiesSectionControls streamsSection{};
-        streamsSection.title = host.previewPropertiesScroll->AddChild<RedSalamander::DxUi::Label>(LoadStringResource(nullptr, IDS_PROPERTIES_STREAMS_TITLE));
-        streamsSection.title->SetFontRole(RedSalamander::DxUi::FontRole::BodyLarge);
+        streamsSection.title = host.previewPropertiesScroll->AddChild<DxUi::Label>(LoadStringResource(nullptr, IDS_PROPERTIES_STREAMS_TITLE));
+        streamsSection.title->SetFontRole(DxUi::FontRole::BodyLarge);
 
-        streamsSection.card = host.previewPropertiesScroll->AddChild<RedSalamander::DxUi::CardPanel>();
+        streamsSection.card = host.previewPropertiesScroll->AddChild<DxUi::CardPanel>();
         streamsSection.card->SetCornerRadius(6.0f);
         streamsSection.fields.reserve(doc->streams.size());
 
         for (const ItemPropertiesStream& stream : doc->streams)
         {
             PreviewPropertiesFieldControls row{};
-            row.key = streamsSection.card->AddChild<RedSalamander::DxUi::Label>(MakeItemPropertiesWrapFriendlyText(stream.name));
+            row.key = streamsSection.card->AddChild<DxUi::Label>(MakeItemPropertiesWrapFriendlyText(stream.name));
             row.key->SetAccessibleName(stream.name);
-            row.key->SetFontRole(RedSalamander::DxUi::FontRole::BodyStrong);
+            row.key->SetFontRole(DxUi::FontRole::BodyStrong);
             row.key->SetMultiline(true);
-            row.value = streamsSection.card->AddChild<RedSalamander::DxUi::Label>(stream.displaySize);
+            row.value = streamsSection.card->AddChild<DxUi::Label>(stream.displaySize);
             row.value->SetAccessibleName(stream.displaySize);
             streamsSection.fields.emplace_back(row);
             ++host.previewPropertiesFieldCount;
@@ -2712,14 +2699,12 @@ void FolderWindow::LayoutPreviewProperties(Pane hostPane) noexcept
             float height = kPreviewPropertiesPadTop + kPreviewPropertiesPadBottom;
             for (const PreviewPropertiesFieldControls& row : section.fields)
             {
-                const float keyH = row.key
-                                       ? MeasureItemPropertiesWrappedTextHeightDip(
-                                             host.previewContentHost, row.key->GetText(), RedSalamander::DxUi::FontRole::BodyStrong, stacked ? innerW : keyW)
-                                       : kPreviewPropertiesRowH;
+                const float keyH = row.key ? MeasureItemPropertiesWrappedTextHeightDip(
+                                                 host.previewContentHost, row.key->GetText(), DxUi::FontRole::BodyStrong, stacked ? innerW : keyW)
+                                           : kPreviewPropertiesRowH;
                 const float valueH =
-                    row.value
-                        ? MeasureItemPropertiesWrappedTextHeightDip(host.previewContentHost, row.value->GetText(), RedSalamander::DxUi::FontRole::Body, valueW)
-                        : kPreviewPropertiesRowH;
+                    row.value ? MeasureItemPropertiesWrappedTextHeightDip(host.previewContentHost, row.value->GetText(), DxUi::FontRole::Body, valueW)
+                              : kPreviewPropertiesRowH;
                 height += stacked ? ((std::max)(kPreviewPropertiesRowH, keyH) + (std::max)(kPreviewPropertiesRowH, valueH) + 4.0f)
                                   : (std::max)(kPreviewPropertiesRowH, (std::max)(keyH, valueH) + 4.0f);
             }
@@ -2743,14 +2728,12 @@ void FolderWindow::LayoutPreviewProperties(Pane hostPane) noexcept
             float rowY = cardRect.top + kPreviewPropertiesPadTop;
             for (PreviewPropertiesFieldControls& row : section.fields)
             {
-                const float keyH = row.key
-                                       ? MeasureItemPropertiesWrappedTextHeightDip(
-                                             host.previewContentHost, row.key->GetText(), RedSalamander::DxUi::FontRole::BodyStrong, stacked ? innerW : keyW)
-                                       : kPreviewPropertiesRowH;
+                const float keyH = row.key ? MeasureItemPropertiesWrappedTextHeightDip(
+                                                 host.previewContentHost, row.key->GetText(), DxUi::FontRole::BodyStrong, stacked ? innerW : keyW)
+                                           : kPreviewPropertiesRowH;
                 const float valueH =
-                    row.value
-                        ? MeasureItemPropertiesWrappedTextHeightDip(host.previewContentHost, row.value->GetText(), RedSalamander::DxUi::FontRole::Body, valueW)
-                        : kPreviewPropertiesRowH;
+                    row.value ? MeasureItemPropertiesWrappedTextHeightDip(host.previewContentHost, row.value->GetText(), DxUi::FontRole::Body, valueW)
+                              : kPreviewPropertiesRowH;
                 const float rowH = stacked ? ((std::max)(kPreviewPropertiesRowH, keyH) + (std::max)(kPreviewPropertiesRowH, valueH) + 4.0f)
                                            : (std::max)(kPreviewPropertiesRowH, (std::max)(keyH, valueH) + 4.0f);
                 if (stacked)
@@ -2928,10 +2911,9 @@ HRESULT FolderWindow::ShowItemPropertiesFromFolderView(Pane pane, std::filesyste
         return OpenViewerWithPlugin(L"builtin/viewer-text", context);
     };
 
-    const std::wstring pluginId = state.pluginId;
-    const std::wstring instanceContext = state.instanceContext;
-    ItemPropertiesMutationGuardCallback mutationGuard =
-        [this, fileSystem, pluginId, instanceContext, itemPath = path]() noexcept -> HRESULT
+    const std::wstring pluginId                       = state.pluginId;
+    const std::wstring instanceContext                = state.instanceContext;
+    ItemPropertiesMutationGuardCallback mutationGuard = [this, fileSystem, pluginId, instanceContext, itemPath = path]() noexcept -> HRESULT
     {
         EnsureFileOperations();
         if (! _fileOperations)
@@ -2939,8 +2921,7 @@ HRESULT FolderWindow::ShowItemPropertiesFromFolderView(Pane pane, std::filesyste
             return E_UNEXPECTED;
         }
         const std::array paths{itemPath};
-        return ConfirmExternalArtifactTouchForProvider(
-            fileSystem.get(), pluginId, instanceContext, paths);
+        return ConfirmExternalArtifactTouchForProvider(fileSystem.get(), pluginId, instanceContext, paths);
     };
 
     return ShowItemPropertiesWindow(_hWnd.get(),

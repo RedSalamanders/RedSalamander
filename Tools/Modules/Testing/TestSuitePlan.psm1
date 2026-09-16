@@ -135,7 +135,7 @@ function Get-RSTestRunPlan {
     }
 
     foreach ($selfTest in $selfTests) {
-        $requiresInteractiveDesktop = $selfTest.Name -eq 'Commands'
+        $requiresInteractiveDesktop = $selfTest.Name -eq 'Commands' -or ($selfTest.Name -eq 'FileOperations' -and $CaseFilter -eq 'FileOps_VisualGalleryInteraction')
         $plan += New-RSTestRunPlanEntry `
             -Id $selfTest.Id `
             -Name $selfTest.Name `
@@ -148,19 +148,12 @@ function Get-RSTestRunPlan {
     }
 
     if ($Suite -eq 'CI') {
-        foreach ($dxUiSuite in @(Get-RSDxUiTestSuites)) {
-            $dxUiId = ($dxUiSuite.Name -creplace '([a-z0-9])([A-Z])', '$1-$2').ToLowerInvariant()
-            $dxUiArguments = @("--suite=$($dxUiSuite.Name)")
-            if (-not $dxUiSuite.AllowsActivation) { $dxUiArguments += '--no-activate' }
-            $plan += New-RSTestRunPlanEntry `
-                -Id "dxui.$dxUiId" `
-                -Name "DxUiTests.$($dxUiSuite.Name)" `
-                -Kind 'Executable' `
-                -Path (Join-Path $buildOutputDir 'DxUiTests.exe') `
-                -Arguments $dxUiArguments `
-                -WorkingDirectory $buildOutputDir `
-                -RequiresInteractiveDesktop:$dxUiSuite.RequiresInteractiveDesktop
-        }
+        $plan += New-RSTestRunPlanEntry `
+            -Id 'standalone.product-ui' `
+            -Name 'ProductUiTests' `
+            -Kind 'Executable' `
+            -Path (Join-Path $buildOutputDir 'ProductUiTests.exe') `
+            -WorkingDirectory $buildOutputDir
 
         $plan += New-RSTestRunPlanEntry `
             -Id 'standalone.filesystem-curl' `
@@ -249,19 +242,12 @@ function Get-RSTestRunPlan {
                 -Arguments @('-Tag', 'RequiresBuildToolchain') `
                 -WorkingDirectory $RepoRoot)) + @($plan)
 
-        foreach ($dxUiSuite in @(Get-RSDxUiTestSuites)) {
-            $dxUiId = ($dxUiSuite.Name -creplace '([a-z0-9])([A-Z])', '$1-$2').ToLowerInvariant()
-            $dxUiArguments = @("--suite=$($dxUiSuite.Name)")
-            if (-not $dxUiSuite.AllowsActivation) { $dxUiArguments += '--no-activate' }
-            $plan += New-RSTestRunPlanEntry `
-                -Id "dxui.$dxUiId" `
-                -Name "DxUiTests.$($dxUiSuite.Name)" `
-                -Kind 'Executable' `
-                -Path (Join-Path $buildOutputDir 'DxUiTests.exe') `
-                -Arguments $dxUiArguments `
-                -WorkingDirectory $buildOutputDir `
-                -RequiresInteractiveDesktop:$dxUiSuite.RequiresInteractiveDesktop
-        }
+        $plan += New-RSTestRunPlanEntry `
+            -Id 'standalone.product-ui' `
+            -Name 'ProductUiTests' `
+            -Kind 'Executable' `
+            -Path (Join-Path $buildOutputDir 'ProductUiTests.exe') `
+            -WorkingDirectory $buildOutputDir
 
         foreach ($viewerGroup in @(Get-RSViewerTestGroups)) {
             $plan += New-RSTestRunPlanEntry `

@@ -26,8 +26,8 @@
 #include "NavigationViewInternal.h"
 
 #include "D2DHdcPaint.h"
-#include "DxUi/DxUi.Typography.h"
 #include "NavigationLocation.h"
+#include <DxUi/Typography.h>
 
 #include "DirectoryInfoCache.h"
 #include "Helpers.h"
@@ -151,7 +151,7 @@ namespace
 void TraceNavigationWindowRaw(
     HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, std::wstring_view phase, std::optional<LRESULT> result = std::nullopt) noexcept
 {
-    if (! RedSalamander::DxUi::IsContextMenuDiagnosticsEnabled())
+    if (! DxUi::IsContextMenuDiagnosticsEnabled())
     {
         return;
     }
@@ -273,7 +273,7 @@ NavigationView::~NavigationView()
     Destroy();
 }
 
-bool NavigationView::ShouldAcceptPointerEvent(const RedSalamander::DxUi::PointerInputEvent& event) const noexcept
+bool NavigationView::ShouldAcceptPointerEvent(const DxUi::PointerInputEvent& event) const noexcept
 {
     const HWND hwnd = _hWnd.get();
     if (! hwnd || ! event.targetHwnd || (event.targetHwnd != hwnd && IsChild(hwnd, event.targetHwnd) == FALSE))
@@ -408,11 +408,11 @@ ATOM NavigationView::RegisterDxHostWndClass(HINSTANCE instance)
 
 LRESULT CALLBACK NavigationView::DxHostWndProcThunk(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 {
-    auto* host = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
+    auto* host = reinterpret_cast<DxUi::WindowHost*>(GetWindowLongPtrW(hwnd, GWLP_USERDATA));
     if (msg == WM_NCCREATE)
     {
         auto* cs = reinterpret_cast<CREATESTRUCTW*>(lp);
-        host     = reinterpret_cast<RedSalamander::DxUi::WindowHost*>(cs->lpCreateParams);
+        host     = reinterpret_cast<DxUi::WindowHost*>(cs->lpCreateParams);
         if (! host || ! host->Attach(hwnd))
         {
             return FALSE;
@@ -589,7 +589,7 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WM_CTLCOLOREDIT: return OnCtlColorEdit(reinterpret_cast<HDC>(wp), reinterpret_cast<HWND>(lp));
         case WM_LBUTTONDOWN:
         {
-            if (auto event = RedSalamander::DxUi::TryBuildPointerInputEvent(hwnd, msg, wp, lp); event.has_value())
+            if (auto event = DxUi::TryBuildPointerInputEvent(hwnd, msg, wp, lp); event.has_value())
             {
                 OnLButtonDown(event.value());
             }
@@ -597,7 +597,7 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         case WM_LBUTTONDBLCLK:
         {
-            if (auto event = RedSalamander::DxUi::TryBuildPointerInputEvent(hwnd, msg, wp, lp); event.has_value())
+            if (auto event = DxUi::TryBuildPointerInputEvent(hwnd, msg, wp, lp); event.has_value())
             {
                 OnLButtonDblClk(event.value());
             }
@@ -605,7 +605,7 @@ LRESULT NavigationView::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         }
         case WM_MOUSEMOVE:
         {
-            if (auto event = RedSalamander::DxUi::TryBuildPointerInputEvent(hwnd, msg, wp, lp); event.has_value())
+            if (auto event = DxUi::TryBuildPointerInputEvent(hwnd, msg, wp, lp); event.has_value())
             {
                 OnMouseMove(event.value());
             }
@@ -1687,7 +1687,7 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
     {
         out.currentEditHostHwnd            = textHost.hwnd.get();
         out.currentEditInputHwnd           = textHost.GetTextInputHwnd();
-        out.currentEditUsesNativeTextInput = textHost.host.GetTextInputBackend() == RedSalamander::DxUi::TextInputBackend::Native;
+        out.currentEditUsesNativeTextInput = textHost.host.GetTextInputBackend() == DxUi::TextInputBackend::Native;
         if (textHost.field)
         {
             out.currentEditHelpText.assign(textHost.field->GetAccessibleHelpText());
@@ -1701,7 +1701,7 @@ bool NavigationView::DebugGetSnapshot(NavigationViewDebugSnapshot& out) const no
             out.currentEditCaretScreenRect      = caretScreenRectPx;
         }
 
-        RedSalamander::DxUi::NativeTextInputState nativeState{};
+        DxUi::NativeTextInputState nativeState{};
         if (textHost.host.DebugGetNativeTextInputState(nativeState) && nativeState.compositionStartIndex.has_value() &&
             nativeState.compositionEndIndex.has_value())
         {

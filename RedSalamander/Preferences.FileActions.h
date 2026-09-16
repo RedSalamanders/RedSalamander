@@ -1,8 +1,8 @@
 #pragma once
 
-#include "DxUi/DxUi.h"
 #include "Preferences.Internal.h"
 #include "Preferences.h"
+#include <DxUi/DxUi.h>
 
 class FileActionGridModel;
 
@@ -12,10 +12,10 @@ enum class FileActionPreferencesFamily : uint8_t
     Editors,
 };
 
-class FileActionPreferencesPage final : public RedSalamander::DxUi::IDxGridDelegate
+class FileActionPreferencesPage final : public DxUi::IDxGridDelegate
 {
 public:
-    using RedSalamander::DxUi::IDxGridDelegate::OnGridSelectionChanged;
+    using DxUi::IDxGridDelegate::OnGridSelectionChanged;
 
     explicit FileActionPreferencesPage(FileActionPreferencesFamily family) noexcept;
     ~FileActionPreferencesPage();
@@ -31,14 +31,14 @@ public:
         HWND host, PreferencesDialogState& state, int x, int& y, int width, int margin, int gapY, const PreferencesTypographyContext& typography) noexcept;
     [[nodiscard]] bool HandleDeferredAction(HWND host, PreferencesDialogState& state, PreferencesDeferredActionKind action) noexcept;
 
-    void OnGridSortRequested(const RedSalamander::DxUi::GridSortSpec& sortSpec) override;
-    void OnGridSelectionChanged(RedSalamander::DxUi::Grid& sender) override;
+    void OnGridSortRequested(const DxUi::GridSortSpec& sortSpec) override;
+    void OnGridSelectionChanged(DxUi::Grid& sender) override;
     void OnGridSelectionChanged() override;
 
 #ifdef ENABLE_TESTS
     [[nodiscard]] size_t DebugAssociationRowCount() const noexcept;
     [[nodiscard]] size_t DebugActionRowCount() const noexcept;
-    [[nodiscard]] RedSalamander::DxUi::GridVisibleWorkMetrics DebugAssociationVisibleWorkMetrics() const noexcept;
+    [[nodiscard]] DxUi::GridVisibleWorkMetrics DebugAssociationVisibleWorkMetrics() const noexcept;
     [[nodiscard]] uint64_t DebugAssociationRenderCount() const noexcept;
     [[nodiscard]] uint64_t DebugAssociationResizeCount() const noexcept;
     [[nodiscard]] uint64_t DebugAssociationResizeFailureCount() const noexcept;
@@ -105,57 +105,57 @@ private:
     [[nodiscard]] PrefCategory Category() const noexcept;
     [[nodiscard]] const wchar_t* MetricFamilyText() const noexcept;
 
-    FileActionPreferencesFamily _family           = FileActionPreferencesFamily::Viewers;
-    RedSalamander::DxUi::WindowHost* _pageHost    = nullptr;
-    RedSalamander::DxUi::Panel* _pageContentRoot  = nullptr;
-    RedSalamander::DxUi::TabControl* _tabs        = nullptr;
-    RedSalamander::DxUi::Panel* _associationsPage = nullptr;
-    RedSalamander::DxUi::Panel* _actionsPage      = nullptr;
+    FileActionPreferencesFamily _family = FileActionPreferencesFamily::Viewers;
+    DxUi::WindowHost* _pageHost         = nullptr;
+    DxUi::Panel* _pageContentRoot       = nullptr;
+    DxUi::TabControl* _tabs             = nullptr;
+    DxUi::Panel* _associationsPage      = nullptr;
+    DxUi::Panel* _actionsPage           = nullptr;
 
-    RedSalamander::DxUi::Label* _searchLabel              = nullptr;
-    RedSalamander::DxUi::TextField* _searchField          = nullptr;
-    RedSalamander::DxUi::Grid* _associationsGrid          = nullptr;
-    RedSalamander::DxUi::Label* _matchKindLabel           = nullptr;
-    RedSalamander::DxUi::ComboBox* _matchKindCombo        = nullptr;
-    RedSalamander::DxUi::Label* _matchValueLabel          = nullptr;
-    RedSalamander::DxUi::TextField* _matchValueField      = nullptr;
-    RedSalamander::DxUi::Label* _computerLabel            = nullptr;
-    RedSalamander::DxUi::TextField* _computerField        = nullptr;
-    RedSalamander::DxUi::Label* _primaryActionLabel       = nullptr;
-    RedSalamander::DxUi::ComboBox* _primaryActionCombo    = nullptr;
-    RedSalamander::DxUi::Label* _alternateActionLabel     = nullptr;
-    RedSalamander::DxUi::ComboBox* _alternateActionCombo  = nullptr;
-    RedSalamander::DxUi::Label* _editNewActionLabel       = nullptr;
-    RedSalamander::DxUi::ComboBox* _editNewActionCombo    = nullptr;
-    RedSalamander::DxUi::Label* _testFileLabel            = nullptr;
-    RedSalamander::DxUi::TextField* _testFileField        = nullptr;
-    RedSalamander::DxUi::Label* _previewLabel             = nullptr;
-    RedSalamander::DxUi::Button* _associationSaveButton   = nullptr;
-    RedSalamander::DxUi::Button* _associationRemoveButton = nullptr;
-    RedSalamander::DxUi::Button* _associationResetButton  = nullptr;
+    DxUi::Label* _searchLabel              = nullptr;
+    DxUi::TextField* _searchField          = nullptr;
+    DxUi::Grid* _associationsGrid          = nullptr;
+    DxUi::Label* _matchKindLabel           = nullptr;
+    DxUi::ComboBox* _matchKindCombo        = nullptr;
+    DxUi::Label* _matchValueLabel          = nullptr;
+    DxUi::TextField* _matchValueField      = nullptr;
+    DxUi::Label* _computerLabel            = nullptr;
+    DxUi::TextField* _computerField        = nullptr;
+    DxUi::Label* _primaryActionLabel       = nullptr;
+    DxUi::ComboBox* _primaryActionCombo    = nullptr;
+    DxUi::Label* _alternateActionLabel     = nullptr;
+    DxUi::ComboBox* _alternateActionCombo  = nullptr;
+    DxUi::Label* _editNewActionLabel       = nullptr;
+    DxUi::ComboBox* _editNewActionCombo    = nullptr;
+    DxUi::Label* _testFileLabel            = nullptr;
+    DxUi::TextField* _testFileField        = nullptr;
+    DxUi::Label* _previewLabel             = nullptr;
+    DxUi::Button* _associationSaveButton   = nullptr;
+    DxUi::Button* _associationRemoveButton = nullptr;
+    DxUi::Button* _associationResetButton  = nullptr;
 
-    RedSalamander::DxUi::Grid* _actionsGrid                = nullptr;
-    RedSalamander::DxUi::Label* _actionIdLabel             = nullptr;
-    RedSalamander::DxUi::TextField* _actionIdField         = nullptr;
-    RedSalamander::DxUi::Label* _actionNameLabel           = nullptr;
-    RedSalamander::DxUi::TextField* _actionNameField       = nullptr;
-    RedSalamander::DxUi::Label* _actionKindLabel           = nullptr;
-    RedSalamander::DxUi::ComboBox* _actionKindCombo        = nullptr;
-    RedSalamander::DxUi::Checkbox* _actionEnabledCheckbox  = nullptr;
-    RedSalamander::DxUi::Label* _pluginIdLabel             = nullptr;
-    RedSalamander::DxUi::ComboBox* _pluginIdCombo          = nullptr;
-    RedSalamander::DxUi::Label* _executableLabel           = nullptr;
-    RedSalamander::DxUi::TextField* _executableField       = nullptr;
-    RedSalamander::DxUi::Label* _argumentsLabel            = nullptr;
-    RedSalamander::DxUi::TextField* _argumentsField        = nullptr;
-    RedSalamander::DxUi::Label* _workingDirectoryLabel     = nullptr;
-    RedSalamander::DxUi::TextField* _workingDirectoryField = nullptr;
-    RedSalamander::DxUi::Label* _appliesToLabel            = nullptr;
-    RedSalamander::DxUi::TextField* _appliesToField        = nullptr;
-    RedSalamander::DxUi::Label* _computersLabel            = nullptr;
-    RedSalamander::DxUi::TextField* _computersField        = nullptr;
-    RedSalamander::DxUi::Button* _actionSaveButton         = nullptr;
-    RedSalamander::DxUi::Button* _actionRemoveButton       = nullptr;
+    DxUi::Grid* _actionsGrid                = nullptr;
+    DxUi::Label* _actionIdLabel             = nullptr;
+    DxUi::TextField* _actionIdField         = nullptr;
+    DxUi::Label* _actionNameLabel           = nullptr;
+    DxUi::TextField* _actionNameField       = nullptr;
+    DxUi::Label* _actionKindLabel           = nullptr;
+    DxUi::ComboBox* _actionKindCombo        = nullptr;
+    DxUi::Checkbox* _actionEnabledCheckbox  = nullptr;
+    DxUi::Label* _pluginIdLabel             = nullptr;
+    DxUi::ComboBox* _pluginIdCombo          = nullptr;
+    DxUi::Label* _executableLabel           = nullptr;
+    DxUi::TextField* _executableField       = nullptr;
+    DxUi::Label* _argumentsLabel            = nullptr;
+    DxUi::TextField* _argumentsField        = nullptr;
+    DxUi::Label* _workingDirectoryLabel     = nullptr;
+    DxUi::TextField* _workingDirectoryField = nullptr;
+    DxUi::Label* _appliesToLabel            = nullptr;
+    DxUi::TextField* _appliesToField        = nullptr;
+    DxUi::Label* _computersLabel            = nullptr;
+    DxUi::TextField* _computersField        = nullptr;
+    DxUi::Button* _actionSaveButton         = nullptr;
+    DxUi::Button* _actionRemoveButton       = nullptr;
 
     std::unique_ptr<FileActionGridModel> _associationsModel;
     std::unique_ptr<FileActionGridModel> _actionsModel;

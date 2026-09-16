@@ -67,18 +67,26 @@
 #include "ConnectionProfileUtils.h"
 #include "ContentDigest.h"
 #include "DirectoryInfoCache.h"
+#include "FileSystemPluginManager.h"
 #include "FileSystemRouteContract.h"
 #include "FileSystemRouteProviderBase.h"
-#include "FileSystemPluginManager.h"
 #include "FluentIcons.h"
 #include "FolderView.h"
 #include "FolderWindow.FileOperations.Popup.h"
+#include "FolderWindow.FileOperations.IssuesPane.h"
+#include "LocalizationManager.h"
+#include "Ui/AlertOverlayWindow.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindow.h"
 #include "HostServices.h"
 #include "RedSalamander.h"
 #include "SplashScreen.h"
+#include "StringConversion.h"
 #include "TestSandboxPath.h"
+#include "TestSupport/TestSupport.h"
+#include "TestSupport/DirectedSelfTestInputWarning.h"
+#include "TestSupport/WindowScreenshot.h"
+#include "TestWindowActivationGuard.h"
 #include "WindowMessages.h"
 #pragma warning(push)
 #pragma warning(disable : 4625 4626 5026 5027 4514) // Common/Helpers.h uses WIL types and triggers /Wall noise in this TU
@@ -543,6 +551,8 @@ struct CompletedTaskInfo
     uint64_t discoveryFirstMutationUs = (std::numeric_limits<uint64_t>::max)();
     uint64_t discoveryBytesCompletedWhileOpen = (std::numeric_limits<uint64_t>::max)();
     uint64_t discoveryMutationsCompletedWhileOpen = (std::numeric_limits<uint64_t>::max)();
+    // Must stay 0: discovery closure is one-way and means the totals are final.
+    uint64_t discoveryGrowthAfterCloseCount = (std::numeric_limits<uint64_t>::max)();
     uint64_t progressCallbackCount             = 0;
     bool started                          = false;
     unsigned long progressTotalItems      = 0;
@@ -633,6 +643,8 @@ struct SelfTestState
     {
         Idle,
         Setup,
+        FileOps_VisualGallery,
+        FileOps_VisualGalleryInteraction,
         FileOps_CopyMergeIntoExistingFolder,
         FileOps_MoveMergeIntoExistingFolderSameVolume,
         Beeline_RenameMergeSkipKeepsSourceFolder,
@@ -831,6 +843,19 @@ struct SelfTestState
         Phase16_RemoteOneDriveBusinessSandbox,
         Phase16_RemoteSharePointSecret,
         Phase16_RemoteSharePointSandbox,
+        DiscoveryScope_LeafCopy,
+        DiscoveryScope_LeafMove,
+        DiscoveryScope_ManagedDirectory,
+        DiscoveryScope_NativeRenameMerge,
+        DiscoveryScope_MixedRoots,
+        DiscoveryScope_ZeroByteAndVerifiedLeaf,
+        DiscoveryScope_LocalDirectApi,
+        DiscoveryScope_DummyDirectApi,
+        DiscoveryScope_CurlDirectApi,
+        DiscoveryScope_S3DirectApi,
+        DiscoveryScope_GDriveDirectApi,
+        DiscoveryScope_GraphDirectApi,
+        DiscoveryScope_MtpDirectApi,
         Cleanup_RestorePluginConfig,
         Done,
         Failed,
@@ -1117,6 +1142,8 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
     {
         case SelfTestState::Step::Idle: return L"Idle";
         case SelfTestState::Step::Setup: return L"Setup";
+        case SelfTestState::Step::FileOps_VisualGallery: return L"FileOps_VisualGallery";
+        case SelfTestState::Step::FileOps_VisualGalleryInteraction: return L"FileOps_VisualGalleryInteraction";
         case SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder: return L"FileOps_CopyMergeIntoExistingFolder";
         case SelfTestState::Step::FileOps_MoveMergeIntoExistingFolderSameVolume: return L"FileOps_MoveMergeIntoExistingFolderSameVolume";
         case SelfTestState::Step::Beeline_RenameMergeSkipKeepsSourceFolder: return L"Beeline_RenameMergeSkipKeepsSourceFolder";
@@ -1332,6 +1359,19 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
         case SelfTestState::Step::Phase16_RemoteOneDriveBusinessSandbox: return L"Phase16_RemoteOneDriveBusinessSandbox";
         case SelfTestState::Step::Phase16_RemoteSharePointSecret: return L"Phase16_RemoteSharePointSecret";
         case SelfTestState::Step::Phase16_RemoteSharePointSandbox: return L"Phase16_RemoteSharePointSandbox";
+        case SelfTestState::Step::DiscoveryScope_LeafCopy: return L"DiscoveryScope_LeafCopy";
+        case SelfTestState::Step::DiscoveryScope_LeafMove: return L"DiscoveryScope_LeafMove";
+        case SelfTestState::Step::DiscoveryScope_ManagedDirectory: return L"DiscoveryScope_ManagedDirectory";
+        case SelfTestState::Step::DiscoveryScope_NativeRenameMerge: return L"DiscoveryScope_NativeRenameMerge";
+        case SelfTestState::Step::DiscoveryScope_MixedRoots: return L"DiscoveryScope_MixedRoots";
+        case SelfTestState::Step::DiscoveryScope_ZeroByteAndVerifiedLeaf: return L"DiscoveryScope_ZeroByteAndVerifiedLeaf";
+        case SelfTestState::Step::DiscoveryScope_LocalDirectApi: return L"DiscoveryScope_LocalDirectApi";
+        case SelfTestState::Step::DiscoveryScope_DummyDirectApi: return L"DiscoveryScope_DummyDirectApi";
+        case SelfTestState::Step::DiscoveryScope_CurlDirectApi: return L"DiscoveryScope_CurlDirectApi";
+        case SelfTestState::Step::DiscoveryScope_S3DirectApi: return L"DiscoveryScope_S3DirectApi";
+        case SelfTestState::Step::DiscoveryScope_GDriveDirectApi: return L"DiscoveryScope_GDriveDirectApi";
+        case SelfTestState::Step::DiscoveryScope_GraphDirectApi: return L"DiscoveryScope_GraphDirectApi";
+        case SelfTestState::Step::DiscoveryScope_MtpDirectApi: return L"DiscoveryScope_MtpDirectApi";
         case SelfTestState::Step::Cleanup_RestorePluginConfig: return L"Cleanup_RestorePluginConfig";
         case SelfTestState::Step::Done: return L"Done";
         case SelfTestState::Step::Failed: return L"Failed";
@@ -1416,6 +1456,19 @@ constexpr auto kFileOpsPhaseOrder = std::to_array<SelfTestState::Step>({
     SelfTestState::Step::R4A19_DiscoveryMeasurementFacts,                 // R4-A19 - observation-only discovery baseline facts
     SelfTestState::Step::R4A19_DiscoveryProviderControls,                 // R4-A19 - delayed Dummy and serialized fake-MTP controls
     SelfTestState::Step::R4A19_DiscoveryIndependentVolumes,               // R4-A19 - marked C/D independent task overlap
+    SelfTestState::Step::DiscoveryScope_LeafCopy,                        // I21 - a known leaf closes its exact total before payload work
+    SelfTestState::Step::DiscoveryScope_LeafMove,                        // I21 - the same leaf rule holds through exact Move source cleanup
+    SelfTestState::Step::DiscoveryScope_ManagedDirectory,                // I21 - nested bound cleanup cannot close the walker's root
+    SelfTestState::Step::DiscoveryScope_NativeRenameMerge,               // I21 - a refused Native rename hands discovery to the merge walk
+    SelfTestState::Step::DiscoveryScope_MixedRoots,                      // I21 - the aggregate closes once on exact summed totals
+    SelfTestState::Step::DiscoveryScope_ZeroByteAndVerifiedLeaf,        // I21 - a known empty file is a known zero total; verification admits the same-endpoint bridge
+    SelfTestState::Step::DiscoveryScope_LocalDirectApi,                 // I23 - one governed provider call is one discovery scope with one closure
+    SelfTestState::Step::DiscoveryScope_DummyDirectApi,                 // I22 - Dummy reports every direct route before it mutates
+    SelfTestState::Step::DiscoveryScope_CurlDirectApi,                  // I22 - Curl reports on its enumeration, singular and bulk
+    SelfTestState::Step::DiscoveryScope_S3DirectApi,                    // I22 - S3 reports its exact plan total before object work
+    SelfTestState::Step::DiscoveryScope_GDriveDirectApi,                // I22 - Google Drive reports the leaf exactly and the tree per child
+    SelfTestState::Step::DiscoveryScope_GraphDirectApi,                 // I22 - Microsoft Drive Native Move is one closed item-based record
+    SelfTestState::Step::DiscoveryScope_MtpDirectApi,                   // I22 - MTP reports the leaf from the listing it already holds
     SelfTestState::Step::R0fSmb_BlockedSynchronousCallCancelReturns,      // R0f-SMB - a wedged synchronous provider call returns on cancel
     SelfTestState::Step::R0fSmb_LoopbackReadWriteCreateDelete,            // R0f-SMB - read/write/create/rename/delete on a loopback share
     SelfTestState::Step::R0fCurl_FakeFtpReadWriteCreateDelete,            // R0f-Curl - cross-provider copy both ways, create/rename/delete on fake FTP
@@ -1711,6 +1764,22 @@ constexpr std::array<SelfTestState::Step, 3> kFileOpsFamilyR4A19DiscoveryBaselin
     SelfTestState::Step::R4A19_DiscoveryIndependentVolumes,
 }};
 
+constexpr std::array<SelfTestState::Step, 13> kFileOpsFamilyDiscoveryScope{{
+    SelfTestState::Step::DiscoveryScope_LeafCopy,
+    SelfTestState::Step::DiscoveryScope_LeafMove,
+    SelfTestState::Step::DiscoveryScope_ManagedDirectory,
+    SelfTestState::Step::DiscoveryScope_NativeRenameMerge,
+    SelfTestState::Step::DiscoveryScope_MixedRoots,
+    SelfTestState::Step::DiscoveryScope_ZeroByteAndVerifiedLeaf,
+    SelfTestState::Step::DiscoveryScope_LocalDirectApi,
+    SelfTestState::Step::DiscoveryScope_DummyDirectApi,
+    SelfTestState::Step::DiscoveryScope_CurlDirectApi,
+    SelfTestState::Step::DiscoveryScope_S3DirectApi,
+    SelfTestState::Step::DiscoveryScope_GDriveDirectApi,
+    SelfTestState::Step::DiscoveryScope_GraphDirectApi,
+    SelfTestState::Step::DiscoveryScope_MtpDirectApi,
+}};
+
 constexpr std::array<SelfTestState::Step, 5> kFileOpsFamilyR1dPreparing{{
     SelfTestState::Step::R1d_PreparingLifecycle,
     SelfTestState::Step::C1_ExitCloseDeferredUntilTasksQuiet,
@@ -1858,6 +1927,7 @@ constexpr auto kFileOpsFamilyDefinitions = std::to_array<FileOpsFamilyDefinition
     FileOpsFamilyDefinition{L"FileOpsFamily_ClearflowPhase07_ProviderMatrix", {kFileOpsFamilyClearflowPhase07}},
     FileOpsFamilyDefinition{L"FileOpsFamily_Phase05_Discovery", {kFileOpsFamilyPhase05}},
     FileOpsFamilyDefinition{L"FileOpsFamily_R4A19DiscoveryBaseline", {kFileOpsFamilyR4A19DiscoveryBaseline}},
+    FileOpsFamilyDefinition{L"FileOpsFamily_DiscoveryScope", {kFileOpsFamilyDiscoveryScope}},
     FileOpsFamilyDefinition{L"FileOpsFamily_R0fSmbContainment", {kFileOpsFamilyR0fSmbContainment}},
     FileOpsFamilyDefinition{L"FileOpsFamily_R0fCurlContainment", {kFileOpsFamilyR0fCurlContainment}},
     FileOpsFamilyDefinition{L"FileOpsFamily_C0MutationReceipts", {kFileOpsFamilyC0MutationReceipts}},
@@ -1972,6 +2042,13 @@ struct RunSelection
 [[nodiscard]] RunSelection ResolveRunSelection(std::wstring_view filter)
 {
     RunSelection selection{};
+    // Opt-in documentation fixture; not added to broad runtime/performance qualification.
+    if (EqualsIgnoreCase(filter, L"FileOps_VisualGallery") || EqualsIgnoreCase(filter, L"FileOps_VisualGalleryInteraction"))
+    {
+        selection.reportedPhases = {EqualsIgnoreCase(filter, L"FileOps_VisualGalleryInteraction") ? SelfTestState::Step::FileOps_VisualGalleryInteraction : SelfTestState::Step::FileOps_VisualGallery};
+        selection.activePhases   = selection.reportedPhases;
+        return selection;
+    }
 
     if (filter.empty())
     {
@@ -6115,6 +6192,427 @@ struct DummyReentrantWatchCallback final : public IFileSystemDirectoryWatchCallb
     }
 };
 
+// Records every discovery report one governed provider call makes, so a fixture can judge the
+// stream itself rather than the host's view of it: the host clamps a regressing cumulative value
+// to a zero delta and counts late discovery without rejecting either, so a provider that reports
+// out of order, or never closes, passes any test that only checks return codes.
+struct DirectApiDiscoveryRecorder final : IFileSystemOperationControl
+{
+    struct Event final
+    {
+        uint64_t bytes       = 0;
+        uint64_t files       = 0;
+        uint64_t directories = 0;
+        bool closed          = false;
+    };
+
+    std::mutex mutex;
+    std::vector<Event> events;
+
+    HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void* /*cookie*/) noexcept override
+    {
+        if (abort != nullptr)
+        {
+            *abort = FALSE;
+        }
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE FileSystemGetDiscoveryMode(FileSystemDiscoveryMode* mode, void* /*cookie*/) noexcept override
+    {
+        if (mode != nullptr)
+        {
+            *mode = FILESYSTEM_DISCOVERY_AHEAD;
+        }
+        return S_OK;
+    }
+
+    HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress* progress, void* /*cookie*/) noexcept override
+    {
+        if (progress == nullptr || progress->sizeBytes != sizeof(FileSystemDiscoveryProgress))
+        {
+            return E_INVALIDARG;
+        }
+        std::scoped_lock lock(mutex);
+        events.push_back(Event{progress->discoveredBytes, progress->discoveredFiles, progress->discoveredDirectories, progress->traversalClosed != FALSE});
+        return S_OK;
+    }
+};
+
+struct ExpectedDiscoveryTotals final
+{
+    uint64_t bytes = 0;
+    uint64_t files = 0;
+    // Left unset when the provider's directory accounting is not part of the claim under test.
+    std::optional<uint64_t> directories;
+};
+
+// Returns a failure description, or an empty string when the call's scope is well formed: the
+// cumulative stream never decreases, exactly one report closes it, that closure is the last
+// event, and it closed on the exact expected totals.
+[[nodiscard]] std::wstring DescribeDiscoveryScopeDefect(std::wstring_view callName,
+                                                       const DirectApiDiscoveryRecorder& recorder,
+                                                       const ExpectedDiscoveryTotals& expected) noexcept
+{
+    if (recorder.events.empty())
+    {
+        return std::format(L"{} reported no discovery at all.", callName);
+    }
+
+    size_t closedCount      = 0;
+    size_t firstClosedIndex = recorder.events.size();
+    uint64_t previousBytes  = 0;
+    uint64_t previousFiles  = 0;
+    uint64_t previousDirs   = 0;
+    for (size_t index = 0; index < recorder.events.size(); ++index)
+    {
+        const auto& event = recorder.events[index];
+        if (event.bytes < previousBytes || event.files < previousFiles || event.directories < previousDirs)
+        {
+            return std::format(L"{} cumulative totals went backwards at report {} ({}/{}/{} after {}/{}/{}).",
+                               callName,
+                               index,
+                               event.bytes,
+                               event.files,
+                               event.directories,
+                               previousBytes,
+                               previousFiles,
+                               previousDirs);
+        }
+        previousBytes = event.bytes;
+        previousFiles = event.files;
+        previousDirs  = event.directories;
+        if (event.closed)
+        {
+            ++closedCount;
+            firstClosedIndex = (std::min)(firstClosedIndex, index);
+        }
+    }
+
+    if (closedCount != 1u)
+    {
+        return std::format(L"{} closed its governed scope {} times; a call owns exactly one closure.", callName, closedCount);
+    }
+    if (firstClosedIndex + 1u != recorder.events.size())
+    {
+        return std::format(L"{} kept discovering after it closed: closure at report {} of {}.", callName, firstClosedIndex, recorder.events.size());
+    }
+
+    const auto& final = recorder.events.back();
+    if (final.bytes != expected.bytes || final.files != expected.files ||
+        (expected.directories.has_value() && final.directories != expected.directories.value()))
+    {
+        return std::format(L"{} closed on wrong totals (bytes={}/{} files={}/{} directories={}/{}).",
+                           callName,
+                           final.bytes,
+                           expected.bytes,
+                           final.files,
+                           expected.files,
+                           final.directories,
+                           expected.directories.has_value() ? std::to_wstring(expected.directories.value()) : std::wstring(L"any"));
+    }
+    return {};
+}
+
+// Drives one provider call under a fresh recorder and returns its defect description, or an empty
+// string. A failed call is a defect in its own right: the fixture never learns what a call that
+// did not run would have reported.
+template<typename Invoke>
+[[nodiscard]] std::wstring RunDirectApiDiscoveryCall(std::wstring_view callName, const ExpectedDiscoveryTotals& expected, Invoke&& invoke) noexcept
+{
+    DirectApiDiscoveryRecorder recorder{};
+    FileSystemOptions options{};
+    options.sizeBytes              = sizeof(FileSystemOptions);
+    options.operationControl       = &recorder;
+    options.operationControlCookie = nullptr;
+    const HRESULT hr               = invoke(options);
+    if (FAILED(hr))
+    {
+        return std::format(L"{} failed (hr=0x{:08X}).", callName, static_cast<unsigned long>(hr));
+    }
+    return DescribeDiscoveryScopeDefect(callName, recorder, expected);
+}
+
+// A provider instance over a fake backend the plugin starts through its own self-test export. The
+// fake stops and the module unloads with this object, so a step with several exits cannot leak
+// either.
+struct FakeBackendProvider final
+{
+    FakeBackendProvider() noexcept = default;
+    FakeBackendProvider(const FakeBackendProvider&)            = delete;
+    FakeBackendProvider& operator=(const FakeBackendProvider&) = delete;
+    FakeBackendProvider(FakeBackendProvider&&)                 = delete;
+    FakeBackendProvider& operator=(FakeBackendProvider&&)      = delete;
+    ~FakeBackendProvider()
+    {
+        Stop();
+    }
+
+    wil::unique_hmodule module;
+    void* endpoint    = nullptr;
+    unsigned int port = 0u;
+    std::string stopExport;
+    std::string logExport;
+    wil::com_ptr<IFileSystem> fileSystem;
+    wil::com_ptr<IFileSystemIO> io;
+
+    // The fake's own request log, for a failure message that says what the provider actually
+    // asked of the backend. Empty when the fake keeps none.
+    [[nodiscard]] std::wstring RequestLog() const noexcept
+    {
+        using RequestLogFn = HRESULT(__stdcall*)(void*, wchar_t*, unsigned int) noexcept;
+        if (endpoint == nullptr || ! module || logExport.empty())
+        {
+            return {};
+        }
+        const FARPROC logAddress = GetProcAddress(module.get(), logExport.c_str());
+        if (logAddress == nullptr)
+        {
+            return {};
+        }
+        wchar_t buffer[4096]{};
+#pragma warning(push)
+#pragma warning(disable : 4191) // The named self-test export fixes the typed ABI.
+        const HRESULT hr = reinterpret_cast<RequestLogFn>(logAddress)(endpoint, buffer, static_cast<unsigned int>(std::size(buffer)));
+#pragma warning(pop)
+        return SUCCEEDED(hr) ? std::wstring(buffer) : std::wstring{};
+    }
+
+    void Stop() noexcept
+    {
+        io.reset();
+        fileSystem.reset();
+        if (endpoint != nullptr && module && ! stopExport.empty())
+        {
+            using StopFakeFn = void(__stdcall*)(void*) noexcept;
+            if (const FARPROC stopAddress = GetProcAddress(module.get(), stopExport.c_str()))
+            {
+#pragma warning(push)
+#pragma warning(disable : 4191) // The named self-test export fixes the typed ABI.
+                reinterpret_cast<StopFakeFn>(stopAddress)(endpoint);
+#pragma warning(pop)
+            }
+        }
+        endpoint = nullptr;
+        port     = 0u;
+    }
+};
+
+// Starts the plugin's fake backend, creates a provider instance over it, and applies the
+// configuration the caller builds from the fake's port. On failure `detail` says which step.
+template<typename BuildConfiguration>
+[[nodiscard]] HRESULT StartFakeBackendProvider(std::wstring_view pluginId,
+                                               std::string_view startExport,
+                                               std::string_view stopExport,
+                                               BuildConfiguration&& buildConfiguration,
+                                               FakeBackendProvider& provider,
+                                               std::wstring& detail,
+                                               std::string_view logExport = {}) noexcept
+{
+    using StartFakeFn = HRESULT(__stdcall*)(unsigned int*, void**) noexcept;
+    using CreateFn    = HRESULT(__stdcall*)(REFIID, const FactoryOptions*, IHost*, const wchar_t*, void**);
+
+    provider.Stop();
+    provider.stopExport.assign(stopExport);
+    provider.logExport.assign(logExport);
+    FARPROC startAddress = nullptr;
+    HRESULT hr           = SelfTest::LoadPluginSelfTestExport(pluginId, startExport, provider.module, startAddress);
+    if (FAILED(hr) || startAddress == nullptr)
+    {
+        detail = std::format(L"the fake backend export is unavailable (hr=0x{:08X})", static_cast<unsigned long>(FAILED(hr) ? hr : E_FAIL));
+        return FAILED(hr) ? hr : E_FAIL;
+    }
+    const FARPROC createAddress = GetProcAddress(provider.module.get(), "RedSalamanderCreate");
+    if (createAddress == nullptr)
+    {
+        detail = L"the plugin factory export is unavailable";
+        return HRESULT_FROM_WIN32(ERROR_PROC_NOT_FOUND);
+    }
+#pragma warning(push)
+#pragma warning(disable : 4191) // The named self-test exports fix the typed ABI.
+    hr = reinterpret_cast<StartFakeFn>(startAddress)(&provider.port, &provider.endpoint);
+#pragma warning(pop)
+    if (FAILED(hr) || provider.endpoint == nullptr || provider.port == 0u)
+    {
+        detail = std::format(L"the fake backend did not start (hr=0x{:08X})", static_cast<unsigned long>(hr));
+        return FAILED(hr) ? hr : E_FAIL;
+    }
+    FactoryOptions factoryOptions{};
+    factoryOptions.debugLevel = DEBUG_LEVEL_NONE;
+#pragma warning(push)
+#pragma warning(disable : 4191)
+    hr = reinterpret_cast<CreateFn>(createAddress)(__uuidof(IFileSystem), &factoryOptions, GetHostServices(), pluginId.data(), provider.fileSystem.put_void());
+#pragma warning(pop)
+    if (FAILED(hr) || ! provider.fileSystem)
+    {
+        detail = std::format(L"the provider instance was not created (hr=0x{:08X})", static_cast<unsigned long>(hr));
+        return FAILED(hr) ? hr : E_FAIL;
+    }
+    wil::com_ptr<IInformations> information;
+    const std::string configuration = buildConfiguration(provider.port);
+    if (FAILED(provider.fileSystem->QueryInterface(__uuidof(IInformations), information.put_void())) || ! information ||
+        FAILED(information->SetConfiguration(configuration.c_str())))
+    {
+        detail = L"the provider did not accept the fixture configuration";
+        return E_FAIL;
+    }
+    if (FAILED(provider.fileSystem->QueryInterface(__uuidof(IFileSystemIO), provider.io.put_void())) || ! provider.io)
+    {
+        detail = L"the provider lacks IFileSystemIO";
+        return E_NOINTERFACE;
+    }
+    return S_OK;
+}
+
+// The selection every provider discovery fixture drives: three plain leaves of distinct known
+// sizes and one flat directory of four equal children, seeded through the provider's own writer
+// so the fixture only depends on the routes under test. Sizes are odd on purpose so a total that
+// merely looks plausible cannot match by accident.
+struct DiscoveryFixtureSelection final
+{
+    static constexpr uint64_t kLeafBytesA     = 1024u + 7u;
+    static constexpr uint64_t kLeafBytesB     = 2048u + 11u;
+    static constexpr uint64_t kLeafBytesC     = 3072u + 13u;
+    static constexpr uint64_t kTreeChildBytes = 512u + 3u;
+    static constexpr uint64_t kTreeChildCount = 4u;
+    static constexpr uint64_t kLeafBytes      = kLeafBytesA + kLeafBytesB + kLeafBytesC;
+    static constexpr uint64_t kTreeBytes      = kTreeChildCount * kTreeChildBytes;
+
+    std::wstring root;
+    std::wstring source;
+    std::wstring copyDestination;
+    std::wstring bulkCopyDestination;
+    std::wstring moveDestination;
+    std::wstring leafA;
+    std::wstring leafB;
+    std::wstring leafC;
+    std::wstring tree;
+
+    [[nodiscard]] std::wstring Under(std::wstring_view folder, std::wstring_view leaf) const
+    {
+        std::wstring joined(folder);
+        if (joined.empty() || joined.back() != L'/')
+        {
+            joined.push_back(L'/');
+        }
+        joined.append(leaf);
+        return joined;
+    }
+};
+
+// Seeds (or re-seeds) the selection under `root`, which must already be a valid location on the
+// provider. Existing fixture content is removed first so a step can reuse the same root between
+// calls that consume it. `createTreeMarker` is false for a provider whose directories are only
+// prefixes and whose transfer of an explicit marker object is a separate, known defect.
+[[nodiscard]] bool SeedDiscoveryFixtureSelection(IFileSystem* fileSystem,
+                                                 std::wstring_view root,
+                                                 DiscoveryFixtureSelection& selection,
+                                                 bool createTreeMarker = true) noexcept
+{
+    if (fileSystem == nullptr || root.empty())
+    {
+        return false;
+    }
+    selection.root            = std::wstring(root);
+    selection.source          = selection.Under(root, L"src");
+    selection.copyDestination = selection.Under(root, L"copy-dst");
+    selection.bulkCopyDestination = selection.Under(root, L"copy-bulk-dst");
+    selection.moveDestination = selection.Under(root, L"move-dst");
+    selection.leafA           = selection.Under(selection.source, L"leaf-a.bin");
+    selection.leafB           = selection.Under(selection.source, L"leaf-b.bin");
+    selection.leafC           = selection.Under(selection.source, L"leaf-c.bin");
+    selection.tree            = selection.Under(selection.source, L"tree");
+
+    if (! EnsureDummyFolderExists(fileSystem, selection.root))
+    {
+        return false;
+    }
+    constexpr FileSystemFlags kRemoveFlags = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR);
+    for (const std::wstring* folder : {&selection.source, &selection.copyDestination, &selection.bulkCopyDestination, &selection.moveDestination})
+    {
+        // A missing folder is the normal first-run state; anything else is reported by the seed below.
+        static_cast<void>(fileSystem->DeleteItem(folder->c_str(), kRemoveFlags, nullptr, nullptr, nullptr));
+        if (! EnsureDummyFolderExists(fileSystem, *folder))
+        {
+            return false;
+        }
+    }
+    if (createTreeMarker && ! EnsureDummyFolderExists(fileSystem, selection.tree))
+    {
+        return false;
+    }
+
+    const auto write = [&](const std::wstring& path, uint64_t bytes) noexcept
+    {
+        const std::string contents(static_cast<size_t>(bytes), 'd');
+        return DummyWriteTextFile(fileSystem, path, contents);
+    };
+    if (! write(selection.leafA, DiscoveryFixtureSelection::kLeafBytesA) || ! write(selection.leafB, DiscoveryFixtureSelection::kLeafBytesB) ||
+        ! write(selection.leafC, DiscoveryFixtureSelection::kLeafBytesC))
+    {
+        return false;
+    }
+    for (uint64_t index = 0u; index < DiscoveryFixtureSelection::kTreeChildCount; ++index)
+    {
+        if (! write(selection.Under(selection.tree, std::format(L"child-{:02}.bin", index)), DiscoveryFixtureSelection::kTreeChildBytes))
+        {
+            return false;
+        }
+    }
+    return true;
+}
+
+[[nodiscard]] std::wstring JoinDiscoveryDefects(const std::vector<std::wstring>& defects, std::wstring_view fakeRequestLog = {})
+{
+    std::wstring joined;
+    for (const std::wstring& defect : defects)
+    {
+        if (! joined.empty())
+        {
+            joined.append(L" | ");
+        }
+        joined.append(defect);
+    }
+    if (! fakeRequestLog.empty())
+    {
+        joined.append(L" fixture:");
+        joined.append(fakeRequestLog);
+    }
+    return joined;
+}
+
+// What the host must see after a same-endpoint leaf Copy on a provider's direct route: the
+// provider closed the scope on the leaf's exact size before the transfer, so no mutation completed
+// while discovery was still open and nothing grew after closure. Empty when the task is right.
+[[nodiscard]] std::wstring DescribeHostLeafDiscoveryDefect(std::wstring_view label, const CompletedTaskInfo& info, uint64_t expectedBytes) noexcept
+{
+    if (FAILED(info.hr))
+    {
+        return std::format(L"{}: the host leaf task failed (hr=0x{:08X}).", label, static_cast<unsigned long>(info.hr));
+    }
+    if (info.bridgeFileAdmissionCount != 0ull)
+    {
+        // The bridge owns its own exact leaf record, so a task that took it proves nothing about the provider.
+        return std::format(L"{}: the host leaf task took the bridge instead of the provider's direct route (bridge admissions={}).",
+                           label,
+                           info.bridgeFileAdmissionCount);
+    }
+    if (! info.discoveryClosed || info.discoveredTotalBytes != expectedBytes || info.discoveredFiles != 1ul ||
+        info.discoveryMutationsCompletedWhileOpen != 0ull || info.discoveryGrowthAfterCloseCount != 0ull)
+    {
+        return std::format(L"{}: the host leaf task did not see a closed exact record before the transfer (closed={} bytes={}/{} files={} "
+                           L"mutationsWhileOpen={} growthAfterClose={}).",
+                           label,
+                           info.discoveryClosed ? 1 : 0,
+                           info.discoveredTotalBytes,
+                           expectedBytes,
+                           info.discoveredFiles,
+                           info.discoveryMutationsCompletedWhileOpen,
+                           info.discoveryGrowthAfterCloseCount);
+    }
+    return {};
+}
+
 } // namespace
 
 std::vector<std::wstring> FileOperationsSelfTest::BuildRunFilters(const SelfTest::SelfTestOptions& options)
@@ -6276,12 +6774,14 @@ void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOpti
     AppendLog(L"Start: initialize phase order");
     state.activePhaseOrder    = selection.activePhases;
     state.reportedPhaseOrder  = selection.reportedPhases;
-    state.step                = SelfTestState::Step::Setup;
+    state.step = EqualsIgnoreCase(options.caseFilter, L"FileOps_VisualGallery") ? SelfTestState::Step::FileOps_VisualGallery : SelfTestState::Step::Setup;
+    if (EqualsIgnoreCase(options.caseFilter, L"FileOps_VisualGalleryInteraction"))
+        state.step = SelfTestState::Step::FileOps_VisualGalleryInteraction;
     state.runStartTick        = GetTickCount64();
     state.stepStartTick       = static_cast<ULONGLONG>(state.runStartTick);
     state.markerTick          = 0;
     state.baselineThreadCount = 0;
-    BeginPhase(state, SelfTestState::Step::Setup);
+    BeginPhase(state, state.step);
     AppendLog(L"Start: setup ready");
     AppendLog(L"Start");
     Debug::Info(L"FileOpsSelfTest: started");
@@ -6290,6 +6790,8 @@ void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOpti
 namespace
 {
 using TickResult = std::optional<bool>;
+
+#include "FolderWindow.FileOperations.SelfTest.VisualGallery.cpp"
 
 #pragma warning(push)
 #pragma warning(disable : 4061) // Each helper intentionally owns only its phase subset; unmatched steps return nullopt.
@@ -6390,6 +6892,19 @@ using TickResult = std::optional<bool>;
 #define FILEOPS_SELFTEST_INCLUDE_PHASE6
 #include "FolderWindow.FileOperations.SelfTest.Phases05_06.cpp"
 #undef FILEOPS_SELFTEST_INCLUDE_PHASE6
+        default: return std::nullopt;
+    }
+}
+
+// The provider discovery-parity fixtures start fake backends and hold them across ticks, so they
+// keep their frame out of the Phase 5 dispatcher like the other large corpora.
+[[nodiscard]] TickResult TickDiscoveryProviders(SelfTestState& state) noexcept
+{
+    switch (state.step)
+    {
+#define FILEOPS_SELFTEST_INCLUDE_DISCOVERY_PROVIDERS
+#include "FolderWindow.FileOperations.SelfTest.DiscoveryProviders.cpp"
+#undef FILEOPS_SELFTEST_INCLUDE_DISCOVERY_PROVIDERS
         default: return std::nullopt;
     }
 }
@@ -6540,6 +7055,10 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
     {
         return result.value();
     }
+    if (const TickResult result = dispatchPhase(TickDiscoveryProviders); result.has_value())
+    {
+        return result.value();
+    }
     if (const TickResult result = dispatchPhase(TickPhase7); result.has_value())
     {
         return result.value();
@@ -6575,6 +7094,26 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
 
     switch (state.step)
     {
+        case SelfTestState::Step::FileOps_VisualGallery:
+        case SelfTestState::Step::FileOps_VisualGalleryInteraction:
+        {
+            static bool captureInProgress = false;
+            if (captureInProgress)
+                return false;
+            if (! TryGetFolderWindow(state.mainWindow))
+                return false;
+            captureInProgress   = true;
+            auto resetCapture   = wil::scope_exit([] { captureInProgress = false; });
+            const bool captured = CaptureFileOpsVisualGallery(state);
+            RecordCurrentPhase(state,
+                               captured ? SelfTest::SelfTestCaseResult::Status::passed : SelfTest::SelfTestCaseResult::Status::failed,
+                               captured ? L"" : L"Scenario capture failed; see trace.");
+            state.failed.store(! captured, std::memory_order_release);
+            state.step = SelfTestState::Step::Done;
+            state.running.store(false, std::memory_order_release);
+            state.done.store(true, std::memory_order_release);
+            return true;
+        }
         case SelfTestState::Step::Setup:
         {
             const ULONGLONG nowTick = GetTickCount64();
@@ -6857,7 +7396,8 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 const std::filesystem::path preA                    = state.tempRoot / L"discovery-a";
                 const std::filesystem::path preB                    = state.tempRoot / L"discovery-b";
                 const bool needsDeleteTree                          = IsPhaseSelected(state, SelfTestState::Step::Phase6_DeleteBytesMeaningful);
-                const bool needsDiscoverySwitchTrees                  = IsPhaseSelected(state, SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery) ||
+                const bool needsDiscoverySwitchTrees                  = IsPhaseSelected(state, SelfTestState::Step::Phase5_DiscoverySkipContinues) ||
+                                                                      IsPhaseSelected(state, SelfTestState::Step::Phase5_SwitchParallelToWaitDuringDiscovery) ||
                                                                       IsPhaseSelected(state, SelfTestState::Step::Phase5_SwitchWaitToParallelResume);
 
                 std::error_code ec;
@@ -7034,6 +7574,7 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
                 info.discoveryFirstMutationUs = task->_discoveryFirstMutationUs.load(std::memory_order_acquire);
                 info.discoveryBytesCompletedWhileOpen = task->_discoveryCompletedBytesWhileOpen.load(std::memory_order_acquire);
                 info.discoveryMutationsCompletedWhileOpen = task->_discoveryCompletedMutationsWhileOpen.load(std::memory_order_acquire);
+                info.discoveryGrowthAfterCloseCount = task->_discoveryGrowthAfterCloseCount.load(std::memory_order_acquire);
                 info.progressCallbackCount          = task->_progressCallbackCount.load(std::memory_order_acquire);
                 info.started                        = task->HasStarted();
                 info.conflictWaitUs                 = task->_perf.conflictWaitUs;

@@ -97,7 +97,7 @@ LRESULT NavigationView::OnFullPathPopupNcDestroy(HWND hwnd)
     // before native destruction finishes clearing the retiring window's focus.
     if (_debugFullPathPopupDestroyProbe)
     {
-        auto probe = std::move(_debugFullPathPopupDestroyProbe);
+        auto probe                      = std::move(_debugFullPathPopupDestroyProbe);
         _debugFullPathPopupDestroyProbe = {};
         probe();
     }
@@ -301,8 +301,8 @@ LRESULT NavigationView::OnFullPathPopupActivate(WORD state, HWND activatingWindo
             return 0;
         }
         const HWND popupHwnd = _fullPathPopup.get();
-        if (popupHwnd && activatingWindow && (activatingWindow == popupHwnd || IsChild(popupHwnd, activatingWindow) != FALSE ||
-                                               GetWindow(activatingWindow, GW_OWNER) == popupHwnd))
+        if (popupHwnd && activatingWindow &&
+            (activatingWindow == popupHwnd || IsChild(popupHwnd, activatingWindow) != FALSE || GetWindow(activatingWindow, GW_OWNER) == popupHwnd))
         {
             return 0;
         }
@@ -450,7 +450,7 @@ void NavigationView::ShowFullPathPopupSiblingsDropdown(HWND popupHwnd, size_t se
         return;
     }
 
-    std::vector<RedSalamander::DxUi::MenuFlyoutItem> items;
+    std::vector<DxUi::MenuFlyoutItem> items;
     items.reserve(siblings.size() + (siblingsTruncated ? 2u : 0u));
 
     const std::filesystem::path normalizedCurrentPath = NormalizeDirectoryPath(segment.fullPath);
@@ -460,8 +460,8 @@ void NavigationView::ShowFullPathPopupSiblingsDropdown(HWND popupHwnd, size_t se
     for (size_t i = 0; i < siblings.size(); ++i)
     {
         const std::filesystem::path normalizedSiblingPath = NormalizeDirectoryPath(siblings[i]);
-        RedSalamander::DxUi::MenuFlyoutItem item{};
-        item.kind      = RedSalamander::DxUi::MenuItemKind::Radio;
+        DxUi::MenuFlyoutItem item{};
+        item.kind      = DxUi::MenuItemKind::Radio;
         item.text      = FilenameOrPath(normalizedSiblingPath);
         item.commandId = static_cast<int>(ID_SIBLING_BASE + i);
         item.checked   = wil::compare_string_ordinal(normalizedSiblingPath.wstring(), currentPathText, true) == wistd::weak_ordering::equivalent;
@@ -474,10 +474,9 @@ void NavigationView::ShowFullPathPopupSiblingsDropdown(HWND popupHwnd, size_t se
 
     if (siblingsTruncated)
     {
-        items.push_back(RedSalamander::DxUi::MenuFlyoutItem{.kind = RedSalamander::DxUi::MenuItemKind::Separator});
-        items.push_back(RedSalamander::DxUi::MenuFlyoutItem{.text = LoadStringResource(nullptr, IDS_CMD_NAVIGATE_PATH),
-                                                            .iconGlyph = L"\uE721",
-                                                            .commandId = ID_SIBLING_SEARCH});
+        items.push_back(DxUi::MenuFlyoutItem{.kind = DxUi::MenuItemKind::Separator});
+        items.push_back(
+            DxUi::MenuFlyoutItem{.text = LoadStringResource(nullptr, IDS_CMD_NAVIGATE_PATH), .iconGlyph = L"\uE721", .commandId = ID_SIBLING_SEARCH});
     }
 
     _fullPathPopupActiveSeparatorIndex            = static_cast<int>(separatorIndex);
@@ -505,12 +504,12 @@ void NavigationView::ShowFullPathPopupSiblingsDropdown(HWND popupHwnd, size_t se
     POINT pt = {static_cast<LONG>(separator.bounds.left), static_cast<LONG>(separator.bounds.bottom - _fullPathPopupScrollY)};
     ClientToScreen(popupHwnd, &pt);
 
-    RedSalamander::DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
+    DxUi::ContextMenuSessionCallbacks sessionCallbacks{};
     sessionCallbacks.ignoreInitialLeftButtonUp = true;
 
     const auto startedAt = std::chrono::steady_clock::now();
     const auto selectedId =
-        RedSalamander::DxUi::ContextMenu::Show(popupHwnd, pt, items, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
+        DxUi::ContextMenu::Show(popupHwnd, pt, items, MakeAppThemeDxPalette(_appTheme, ColorToCOLORREF(_theme.background)), sessionCallbacks);
     Debug::Perf::Emit(L"navigation.ui.dropdown_popup_us",
                       L"fullpath-siblings",
                       Debug::Perf::ElapsedUs(startedAt),
@@ -1121,10 +1120,10 @@ void NavigationView::EnterFullPathPopupEditMode()
         }
 
         hostState->hwnd.reset(hwnd);
-        hostState->host.SetTextInputBackend(RedSalamander::DxUi::TextInputBackend::Native);
+        hostState->host.SetTextInputBackend(DxUi::TextInputBackend::Native);
         hostState->host.SetTheme(MakeNavigationDxEditPalette(_appTheme, _theme));
 
-        auto field       = std::make_unique<RedSalamander::DxUi::TextField>();
+        auto field       = std::make_unique<DxUi::TextField>();
         hostState->field = field.get();
         hostState->field->SetMultiline(false);
         hostState->field->SetClearButtonEnabled(false);

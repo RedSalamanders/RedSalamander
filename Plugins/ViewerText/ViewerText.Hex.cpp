@@ -570,7 +570,7 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
     _allowEraseBkgndHexView   = false;
     static_cast<void>(hdc);
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
     _debugHexRenderCount += 1u;
     _debugHexVisibleRowCount        = 0u;
     _debugHexVisibleByteCount       = 0u;
@@ -1121,7 +1121,7 @@ LRESULT ViewerText::OnHexViewPaint(HWND hwnd) noexcept
                 Debug::Perf::EmitValue(L"viewer.hex.high_contrast_fallback_count", paintMetrics.highContrastFallback ? 1u : 0u);
             }
 
-#ifdef _DEBUG
+#ifdef ENABLE_TESTS
             _debugHexVisibleRowCount        = paintMetrics.visibleRows;
             _debugHexVisibleByteCount       = paintMetrics.visibleBytes;
             _debugHexColorizedByteCount     = paintMetrics.colorizedBytes;

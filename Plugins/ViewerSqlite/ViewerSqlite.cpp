@@ -1,4 +1,5 @@
 #include "ViewerSqlite.h"
+#include "ViewerDxUiTheme.h"
 
 #include <algorithm>
 #include <cstring>
@@ -19,8 +20,8 @@
 #pragma comment(lib, "Dwmapi.lib")
 
 #include "Helpers.h"
-#include "WindowMessages.h"
 #include "ViewerTitleBarTheme.h"
+#include "WindowMessages.h"
 #include "WindowSizing.h"
 #include "resource.h"
 
@@ -28,21 +29,21 @@ extern HINSTANCE g_hInstance;
 
 namespace
 {
-using RedSalamander::DxUi::Button;
-using RedSalamander::DxUi::ComboBox;
-using RedSalamander::DxUi::ComboBoxVariant;
-using RedSalamander::DxUi::Grid;
-using RedSalamander::DxUi::GridCellData;
-using RedSalamander::DxUi::GridColumnDesc;
-using RedSalamander::DxUi::GridRowStyle;
-using RedSalamander::DxUi::GridSortSpec;
-using RedSalamander::DxUi::IDxGridModel;
-using RedSalamander::DxUi::Label;
-using RedSalamander::DxUi::Panel;
-using RedSalamander::DxUi::SortDirection;
-using RedSalamander::DxUi::StatusStrip;
-using RedSalamander::DxUi::TextField;
-using RedSalamander::DxUi::ThemePalette;
+using DxUi::Button;
+using DxUi::ComboBox;
+using DxUi::ComboBoxVariant;
+using DxUi::Grid;
+using DxUi::GridCellData;
+using DxUi::GridColumnDesc;
+using DxUi::GridRowStyle;
+using DxUi::GridSortSpec;
+using DxUi::IDxGridModel;
+using DxUi::Label;
+using DxUi::Panel;
+using DxUi::SortDirection;
+using DxUi::StatusStrip;
+using DxUi::TextField;
+using DxUi::ThemePalette;
 
 constexpr UINT kAsyncOpenCompleteMessage  = WndMsg::kViewerSqliteAsyncOpenComplete;
 constexpr UINT kAsyncQueryCompleteMessage = WndMsg::kViewerSqliteAsyncQueryComplete;
@@ -194,11 +195,9 @@ struct ViewerSqliteAsyncWorkItem final
         g_hInstance, page.hasMore ? IDS_VIEWERSQLITE_STATUS_TABLE_PAGE_MORE_FMT : IDS_VIEWERSQLITE_STATUS_TABLE_PAGE_FMT, tableName, firstRow, lastRow);
 }
 
-[[nodiscard]] std::wstring_view FindTableDisplayName(const std::vector<ViewerSqliteEngine::TableInfo>& tables,
-                                                     const std::wstring_view tableName) noexcept
+[[nodiscard]] std::wstring_view FindTableDisplayName(const std::vector<ViewerSqliteEngine::TableInfo>& tables, const std::wstring_view tableName) noexcept
 {
-    const auto match = std::find_if(tables.begin(), tables.end(),
-                                    [&](const ViewerSqliteEngine::TableInfo& table) noexcept { return table.name == tableName; });
+    const auto match = std::find_if(tables.begin(), tables.end(), [&](const ViewerSqliteEngine::TableInfo& table) noexcept { return table.name == tableName; });
     return match != tables.end() ? std::wstring_view(match->displayName) : std::wstring_view{};
 }
 
@@ -336,9 +335,8 @@ private:
             }
             else
             {
-                column.title = (columnCount == 1u)
-                                   ? LoadStringResource(g_hInstance, IDS_VIEWERSQLITE_COLUMN_RESULT)
-                                   : FormatStringResource(g_hInstance, IDS_VIEWERSQLITE_COLUMN_FORMAT, columnIndex + 1u);
+                column.title = (columnCount == 1u) ? LoadStringResource(g_hInstance, IDS_VIEWERSQLITE_COLUMN_RESULT)
+                                                   : FormatStringResource(g_hInstance, IDS_VIEWERSQLITE_COLUMN_FORMAT, columnIndex + 1u);
             }
 
             column.widthDip    = (columnIndex == 0u) ? 180.0f : 160.0f;
@@ -677,7 +675,7 @@ LRESULT ViewerSqlite::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
                 if (const auto selectedRow = _resultGrid->GetPrimarySelectedRow(); selectedRow.has_value())
                 {
                     snapshot->primarySelectedRowId = _gridModel ? _gridModel->GetStableRowId(selectedRow.value()) : 0u;
-                    RedSalamander::DxUi::GridDebugRowVisualState rowVisualState{};
+                    DxUi::GridDebugRowVisualState rowVisualState{};
                     if (_resultGrid->DebugGetRowVisualState(_dxHost.GetTheme(), selectedRow.value(), rowVisualState))
                     {
                         snapshot->selectedRowFillArgb    = rowVisualState.fillArgb;
@@ -689,7 +687,7 @@ LRESULT ViewerSqlite::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
             snapshot->renderCount        = _dxHost.DebugGetRenderCount();
             snapshot->resizeCount        = _dxHost.DebugGetResizeCount();
             snapshot->resizeFailureCount = _dxHost.DebugGetResizeFailureCount();
-            if (RedSalamander::DxUi::Control* const focusedControl = _dxHost.GetFocusControl(); focusedControl != nullptr)
+            if (DxUi::Control* const focusedControl = _dxHost.GetFocusControl(); focusedControl != nullptr)
             {
                 if (focusedControl == _fileCombo)
                 {
@@ -832,8 +830,7 @@ LRESULT ViewerSqlite::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
 
             GridSortSpec nextSort{};
             nextSort.columnIndex = columnIndex;
-            nextSort.direction =
-                (_tableSortSpec.columnIndex == columnIndex) ? RedSalamander::DxUi::NextSortDirection(_tableSortSpec.direction) : SortDirection::Ascending;
+            nextSort.direction   = (_tableSortSpec.columnIndex == columnIndex) ? DxUi::NextSortDirection(_tableSortSpec.direction) : SortDirection::Ascending;
             OnGridSortRequested(nextSort);
             return TRUE;
         }
@@ -909,8 +906,8 @@ LRESULT ViewerSqlite::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
 
 HRESULT STDMETHODCALLTYPE ViewerSqlite::Open(const ViewerOpenContext* context) noexcept
 {
-    if (context == nullptr || context->sizeBytes < sizeof(ViewerOpenContext) || context->fileSystem == nullptr ||
-        context->focusedPath == nullptr || context->focusedPath[0] == L'\0')
+    if (context == nullptr || context->sizeBytes < sizeof(ViewerOpenContext) || context->fileSystem == nullptr || context->focusedPath == nullptr ||
+        context->focusedPath[0] == L'\0')
     {
         return E_INVALIDARG;
     }
@@ -1250,6 +1247,11 @@ void ViewerSqlite::BuildUi() noexcept
     _fileLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 
     _fileCombo = _root->AddChild<ComboBox>();
+
+    if (_fileCombo)
+    {
+        _fileCombo->SetNoMatchesText(LoadStringResource(g_hInstance, IDS_DXUI_NO_MATCHES));
+    }
     _fileCombo->SetVariant(ComboBoxVariant::Window);
     _fileCombo->SetOnSelectionChanged([this](size_t index)
     {
@@ -1266,6 +1268,11 @@ void ViewerSqlite::BuildUi() noexcept
     _tableLabel->SetAlignment(DWRITE_TEXT_ALIGNMENT_LEADING);
 
     _tableCombo = _root->AddChild<ComboBox>();
+
+    if (_tableCombo)
+    {
+        _tableCombo->SetNoMatchesText(LoadStringResource(g_hInstance, IDS_DXUI_NO_MATCHES));
+    }
     _tableCombo->SetVariant(ComboBoxVariant::Window);
     _tableCombo->SetOnSelectionChanged([this](size_t /*index*/)
     {
@@ -1307,6 +1314,10 @@ void ViewerSqlite::BuildUi() noexcept
     _tableButton->SetOnClick([this] { StartSelectedTablePreview(true); });
 
     _resultGrid = _root->AddChild<Grid>();
+    if (_resultGrid)
+    {
+        _resultGrid->SetEmptyStateText(LoadStringResource(g_hInstance, IDS_DXUI_NO_DATA));
+    }
     _resultGrid->SetDelegate(this);
     _resultGrid->SetModel(_gridModel.get());
     _resultGrid->SetHeaderHeightDip(30.0f);
@@ -1314,7 +1325,7 @@ void ViewerSqlite::BuildUi() noexcept
     _resultGrid->SetLineClamp(2u);
 
     _statusStrip = _root->AddChild<StatusStrip>(ReadStatusText(IDS_VIEWERSQLITE_STATUS_READY));
-    _statusStrip->SetFontRole(RedSalamander::DxUi::FontRole::Small);
+    _statusStrip->SetFontRole(DxUi::FontRole::Small);
 
     _dxHost.SetRoot(std::move(root));
     _dxHost.SetDefaultButton(_runButton);
@@ -1334,7 +1345,7 @@ void ViewerSqlite::BuildUi() noexcept
 
 void ViewerSqlite::ApplyTheme(HWND hwnd) noexcept
 {
-    ThemePalette palette = _hasTheme ? RedSalamander::DxUi::MakeThemePaletteFromViewerTheme(_theme) : RedSalamander::DxUi::MakeDefaultThemePalette(false);
+    ThemePalette palette = _hasTheme ? RedSalamander::MakeThemePaletteFromViewerTheme(_theme) : DxUi::MakeDefaultThemePalette(false);
     _dxHost.SetTheme(palette);
     if (! _embeddedMode)
     {
@@ -1685,7 +1696,7 @@ void ViewerSqlite::QueueOpenCurrentPath() noexcept
         result->path      = path;
 
         const ViewerSqliteEngine::QueryCancellation cancellation{&_requestId, requestId};
-        auto opened = ViewerSqliteEngine::OpenFromViewerContext(fileSystem.get(), path, config.directOpenLocalFiles, cancellation);
+        auto opened       = ViewerSqliteEngine::OpenFromViewerContext(fileSystem.get(), path, config.directOpenLocalFiles, cancellation);
         result->hr        = opened.hr;
         result->errorText = std::move(opened.errorText);
 
@@ -1705,12 +1716,8 @@ void ViewerSqlite::QueueOpenCurrentPath() noexcept
                 }
 
                 result->initialTable = selectedTableIt->name;
-                auto page = result->source->LoadTablePage(result->initialTable,
-                                                          config.pageSize,
-                                                          0,
-                                                          ViewerSqliteEngine::kNoSortColumn,
-                                                          ViewerSqliteEngine::TableSortDirection::None,
-                                                          cancellation);
+                auto page            = result->source->LoadTablePage(
+                    result->initialTable, config.pageSize, 0, ViewerSqliteEngine::kNoSortColumn, ViewerSqliteEngine::TableSortDirection::None, cancellation);
                 if (FAILED(page.hr))
                 {
                     result->hr        = page.hr;
@@ -1808,7 +1815,7 @@ void ViewerSqlite::QueueTablePreview(std::wstring tableName, uint64_t rowOffset)
         result->rowOffset    = rowOffset;
 
         const ViewerSqliteEngine::QueryCancellation cancellation{&_requestId, requestId};
-        auto page = source->LoadTablePage(result->tableName, pageSize, rowOffset, sortColumnIndex, sortDirection, cancellation);
+        auto page         = source->LoadTablePage(result->tableName, pageSize, rowOffset, sortColumnIndex, sortDirection, cancellation);
         result->hr        = page.hr;
         result->errorText = std::move(page.errorText);
         result->page      = std::move(page.page);
@@ -1899,7 +1906,7 @@ void ViewerSqlite::QueueCustomQuery(std::wstring sql) noexcept
         result->sql          = sql;
 
         const ViewerSqliteEngine::QueryCancellation cancellation{&_requestId, requestId};
-        auto query = source->ExecuteReadOnlyQuery(result->sql, rowCap, cancellation);
+        auto query        = source->ExecuteReadOnlyQuery(result->sql, rowCap, cancellation);
         result->hr        = query.hr;
         result->errorText = std::move(query.errorText);
         result->page      = std::move(query.page);

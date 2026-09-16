@@ -4,7 +4,10 @@ Last updated: 2026-06-21
 
 ## Purpose
 
-This document is the authoritative behavior and UI contract for the shared `DxUi` toolkit and `DxGrid`.
+This document governs RedSalamander's use of the shared `DxUi` toolkit and `DxUi::Grid`.
+Shared implementation and control contracts belong to the pinned [DxUi repository](https://github.com/RedSalamanders/DxUi/tree/main/Specs).
+Product requirements below remain acceptance requirements; the I19 checklist records qualification.
+The library's Slider and diagnostics/scheduling behavior are authoritative under the accepted G5/G6 decisions.
 
 The completed closeout record for this migration wave lives at `Specs/Plans/Done/UI_DxUiRemainingMigrationCloseoutPlan.md`. WIP plans are not the source of truth for required behavior.
 
@@ -12,7 +15,7 @@ The completed closeout record for this migration wave lives at `Specs/Plans/Done
 
 This specification applies to:
 
-- `Common/DxUi/`
+- product adapters consuming public `<DxUi/...>` headers and the pinned `DxUi.lib`
 - full-window DirectX migrations that use `DxUi::WindowHost`
 - the shared virtualized `DxUi::Grid`
 - the WinUI-like focus, hover, keyboard, popup, and animation behavior expected from migrated windows
@@ -157,7 +160,15 @@ Related specs:
 - Shared keyboard/accessibility-visible strings such as shortcut conflict markers and unassigned-shortcut labels MUST come from resources, not hardcoded literals.
 - Device, swap-chain, DirectWrite, Direct2D, and fallback-resource creation failures MUST log with `Debug::Error(...)` or `Debug::Warning(...)` once enough context exists to diagnose the failure.
 - Brush acquisition failures MUST prefer a logged fallback path over silent failure so unexpected D2D resource exhaustion does not fail invisibly.
-- Shared clipboard reads and writes used by DX-hosted text controls MUST tolerate short-lived clipboard contention by retrying `OpenClipboard(...)` for a bounded period before failing.
+- Shared clipboard reads and writes used by DX-hosted text controls MUST use the pinned library's
+  single `OpenClipboard(...)` attempt, with an explicit failure result and no UI-thread retry sleeps
+  (accepted I19 G4). Native transport supports valid selections of 100,000 UTF-16 units and larger,
+  subject to representable allocation size and available memory. Reads honor allocation bounds,
+  require a terminator and validate UTF-16; writes reject embedded NUL and check allocation
+  arithmetic and ownership transfer. A failed copy MUST NOT delete the selected text. The separate
+  embedded edit/snapshot ceiling remains 65,536 units, rejecting oversized paste without truncation
+  or document mutation. Application copy-as-text commands using `Common::Clipboard` retain their
+  separate contract in `UI_CommandMenuKeyboard.md`.
 - `DxUi::WindowHost` MUST clear the previous Direct2D target before calling swap-chain `ResizeBuffers(...)` so repeated relayout or resize traffic does not spam `DXGI_ERROR_INVALID_CALL` failures while old back-buffer references are still held by the D2D context. After clearing the target, it MUST NOT call `ID2D1DeviceContext::Flush(...)`; menu and Preferences resize paths rely on the Direct3D context flush to release the swap-chain buffer without putting the Direct2D context into `D2DERR_WRONG_STATE`.
 - Hidden or redraw-suppressed DX child hosts MUST defer swap-chain creation and swap-chain resize work until they are visible again; batched shell redraw suppression MUST NOT cause invisible hosts to allocate or resize live swap chains.
 - `DxUi::WindowHost` MUST treat `ResizeBuffers(...)` failure as size-dependent-resource invalidation and retry on a later visible render instead of immediately constructing a fresh swap chain on the same resize path.
@@ -353,7 +364,7 @@ The control stack MUST support:
 - DX modal prompts with nested Win32 pumps MUST route through `RunDxUiModalLoop(...)`.
   The helper owns the `GetMessageW`/`TranslateMessage`/`DispatchMessageW` pump,
   emits one shared diagnostic on `GetMessageW` failure, and MUST repost
-  `WM_QUIT` with the observed quit code before returning `DxUiModalLoopResult::Quit`
+  `WM_QUIT` with the observed quit code before returning `DxUi::ModalLoopResult::Quit`
   so the outer application loop still observes shutdown. Archive Pack and Unpack
   prompts are the reference migrated prompt loops; other hand-rolled modal loops
   migrate opportunistically as they are touched.
@@ -618,8 +629,8 @@ The following items are outside the current completed contract and remain tracke
 Before marking work complete against this specification:
 
 - test-only accessibility/debug hooks MUST be gated by `ENABLE_TESTS`; Debug and ASan Debug builds define it by default, while Release test builds that validate the shared DX surface MUST opt in explicitly
-- `Common/DxUi/DxUi.vcxproj` MUST build
-- `Tests/DxUiTests/DxUiTests.vcxproj` MUST build and pass
+- the pinned external `DxUi.lib` MUST build through the consumer imports in every required profile
+- `Tests/ProductUiTests/ProductUiTests.vcxproj` MUST build and pass; shared control suites run in DxUi
 - any app or plugin project directly affected by the `DxUi` change MUST build
 - pilot full-window migrations MUST add targeted self-test, real-window plugin-test, or equivalent validation coverage proving the migrated window is attached to `DxUi::WindowHost` and does not regress to visible child-control fallback
 - later-wave DX-hosted viewer migrations that replace visible Win32 combo chrome MUST add real-window plugin coverage proving the viewer no longer exposes a visible legacy `ComboBox`

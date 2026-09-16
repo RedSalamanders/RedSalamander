@@ -26,10 +26,10 @@ Describe 'Build project selection helper' {
         $selection = Get-RSBuildSelection `
             -SolutionPath $solutionPath `
             -SolutionDir $repoRoot `
-            -ProjectName 'DxUiTests'
+            -ProjectName 'ProductUiTests'
 
         $selection.BuildProjectDirectly | Should Be $true
-        $selection.BuildInput | Should Match ([Regex]::Escape('Tests\DxUiTests\DxUiTests.vcxproj') + '$')
+        $selection.BuildInput | Should Match ([Regex]::Escape('Tests\ProductUiTests\ProductUiTests.vcxproj') + '$')
         $selection.MSBuildTarget | Should Be 'Build'
         $selection.CleanTarget | Should Be 'Clean'
     }
