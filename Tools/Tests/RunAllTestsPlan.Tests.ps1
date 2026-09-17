@@ -564,9 +564,22 @@ Describe 'Run-AllTests plan helper' {
             -Message 'Monitor ETW latency should remain Full-only.'
 
         $workflow = Get-Content -Path (Join-Path $repoRoot '.github\workflows\ci.yml') -Raw
-        Assert-RSEqual -Actual ([regex]::Matches($workflow, 'platform: ARM64, runner: windows-11-vs2026-arm').Count) -Expected 3 -Message 'All ARM64 profiles use a native runner.'
-        Assert-RSEqual -Actual ([regex]::Matches($workflow, 'platform: x64, runner: windows-2025-vs2026').Count) -Expected 3 -Message 'All x64 profiles use a native runner.'
-        Assert-RSEqual -Actual ($workflow -match 'run_full_tests: true') -Expected $true -Message 'Every profile uses Fresh Full qualification.'
+        # The native matrix is one fromJSON expression: the pull-request branch first, then the push branch.
+        $matrixBranches = [System.Collections.Generic.List[object]]::new()
+        foreach ($match in [regex]::Matches($workflow, "'(\[\{[^']*\}\])'")) {
+            $matrixBranches.Add(@(ConvertFrom-Json -InputObject $match.Groups[1].Value | ForEach-Object { "$($_.platform)|$($_.configuration)|$($_.runner)" }))
+        }
+        Assert-RSEqual -Actual $matrixBranches.Count -Expected 2 -Message 'ci.yml selects the native matrix by event.'
+        $pullRequestProfiles = @($matrixBranches[0])
+        $pushProfiles = @($matrixBranches[1])
+        Assert-RSSequenceEqual -Actual $pullRequestProfiles `
+            -Expected @('x64|Debug|windows-2025-vs2026', 'ARM64|Debug|windows-11-vs2026-arm') `
+            -Message 'Pull requests build and test one Debug profile per architecture on native runners.'
+        Assert-RSSequenceEqual -Actual $pushProfiles `
+            -Expected @('x64|Debug|windows-2025-vs2026', 'x64|Release|windows-2025-vs2026', 'ARM64|Debug|windows-11-vs2026-arm', 'ARM64|Release|windows-11-vs2026-arm') `
+            -Message 'Pushes to main add both Release profiles on native runners.'
+        Assert-RSEqual -Actual ($workflow -match 'run_full_tests: true') -Expected $true -Message 'Every profile runs the receipt-verified native suite.'
+        Assert-RSEqual -Actual ($workflow -match 'test_suite: CI') -Expected $true -Message 'The quick gate runs Suite CI; Suite Full stays the local closeout gate.'
 
     }
 

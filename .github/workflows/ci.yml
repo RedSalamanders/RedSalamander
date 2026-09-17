@@ -10,6 +10,11 @@ name: CI
 permissions:
   contents: read
 
+# A newer push to the same PR or branch supersedes the running gate.
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
 jobs:
   migration-guards:
     runs-on: windows-latest
@@ -36,7 +41,7 @@ jobs:
         run: .\Tools\Audit-VisibleNativeSurfaces.ps1
 
   format:
-    runs-on: windows-2025-vs2026
+    runs-on: windows-latest
     steps:
       - name: Enable long Windows checkout paths
         shell: pwsh
@@ -81,22 +86,26 @@ jobs:
           Write-Host "Formatting passes for $($sources.Count) changed native files; archived evidence is excluded."
           $global:LASTEXITCODE = 0
 
+  # Pull requests build and test one Debug profile per architecture on native runners.
+  # Pushes to main add both Release profiles. ASan Debug runs from asan.yml (weekly, on
+  # dispatch, and on PRs that touch native sources), never as part of every push.
   native:
     strategy:
       fail-fast: false
       matrix:
-        include:
-          - { platform: x64, runner: windows-2025-vs2026, configuration: Debug }
-          - { platform: x64, runner: windows-2025-vs2026, configuration: Release }
-          - { platform: x64, runner: windows-2025-vs2026, configuration: 'ASan Debug' }
-          - { platform: ARM64, runner: windows-11-vs2026-arm, configuration: Debug }
-          - { platform: ARM64, runner: windows-11-vs2026-arm, configuration: Release }
-          - { platform: ARM64, runner: windows-11-vs2026-arm, configuration: 'ASan Debug' }
+        include: >-
+          ${{ fromJSON(github.event_name == 'pull_request'
+          && '[{"platform": "x64", "runner": "windows-2025-vs2026", "configuration": "Debug"},
+          {"platform": "ARM64", "runner": "windows-11-vs2026-arm", "configuration": "Debug"}]'
+          || '[{"platform": "x64", "runner": "windows-2025-vs2026", "configuration": "Debug"},
+          {"platform": "x64", "runner": "windows-2025-vs2026", "configuration": "Release"},
+          {"platform": "ARM64", "runner": "windows-11-vs2026-arm", "configuration": "Debug"},
+          {"platform": "ARM64", "runner": "windows-11-vs2026-arm", "configuration": "Release"}]') }}
     uses: ./.github/workflows/build-reusable.yml
     with:
       configuration: ${{ matrix.configuration }}
       platform: ${{ matrix.platform }}
       native_runner: ${{ matrix.runner }}
       run_full_tests: true
-      run_asan_plugin_contracts: ${{ matrix.configuration == 'ASan Debug' }}
+      test_suite: CI
       upload_build_output: false

@@ -4519,6 +4519,9 @@ Specs\TestRuns\local_scratch
         $reviewedFocusFiles = @(
             'Tests\ProductUiTests\ProductUiTests.cpp',
             'Tests\PerformanceTests2\FolderViewInternal.Access.h',
+            # TryActivateOwnedWindow: the shared foreground-queue activation adapter
+            # documented in Specs/Core/Core_SharedHelpers.md.
+            'Tests\TestSupport\DirectedSelfTestInputWarning.h',
             'Tests\ViewerPETests\ViewerPETests.cpp',
             'Tests\ViewerSqliteTests\ViewerSqliteTests.cpp'
         )

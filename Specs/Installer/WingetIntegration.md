@@ -158,21 +158,57 @@ three-part versions; release events require the lowercase `v` tag. Two automatio
 version cannot run concurrently.
 
 `Tools/Modules/Packaging/WingetPrPublication.psm1` owns the fail-closed publication state machine. It computes a stable publication
-identity from the package, version, exact three manifest paths, and their SHA256 hashes. WingetCreate 1.12.8.0
-chooses a GUID-suffixed branch, so the workflow supplies an initial title containing the stable identity marker;
-the shared PATCH path moves that marker into the finalized body. A PR is adoptable only when all of these match:
+identity from the package, version, exact three manifest paths, and the SHA256 of each manifest's canonical content.
+WingetCreate 1.12.8.0 chooses a GUID-suffixed branch, so the workflow supplies an initial title containing the stable
+identity marker; the shared PATCH path moves that marker into the finalized body. A PR is adoptable only when all of
+these match:
 
 - the token owner's exact GitHub login and `<login>/winget-pkgs` fork;
 - WingetCreate's reviewed exact `<package>-<version>-<GUID>` head-branch shape;
 - the open state and the stable publication marker in the initial title or finalized body;
 - exactly the three expected upstream manifest paths, with only added/modified statuses;
-- byte-exact SHA256 content for every generated local manifest.
+- identical canonical content for every generated local manifest.
+
+Canonical content, not bytes, because `wingetcreate submit` re-serializes manifests before committing them: it
+prepends `# Created using wingetcreate <version>`, writes CRLF, re-indents sequences to column zero, and reorders
+keys (`ReleaseDate` moves after `Installers`). `ConvertTo-RSWingetCanonicalManifest` drops comment lines, blank
+lines, indentation, `- ` sequence markers, and line endings, then sorts the remaining lines ordinally;
+`Get-RSWingetManifestContentHash` hashes that form after stripping a UTF-8 BOM. Every scalar line survives, so a
+changed installer URL or SHA256, version, alias, date, or a missing line still changes the hash, while the generated
+file and its committed re-serialization hash identically (verified against the v7.0.59 manifests committed in
+[winget-pkgs#436389](https://github.com/microsoft/winget-pkgs/pull/436389)). The workflow's `GetManifestContentHash`
+operation applies the same helper to the PR head's file contents.
+
+The identity marker embeds those hashes, so the generated manifests must be identical across reruns. The manifest
+`ReleaseDate` therefore comes from the GitHub release's `published_at` date (UTC, `yyyy-MM-dd`), which the workflow
+passes to `generate-manifest.ps1 -ReleaseDate`; the generator validates the format and stamps today's date only
+when no date is supplied (bare local runs). Release tags whose generator predates `-ReleaseDate` fall back to today
+with a workflow warning, and a rerun of such a tag on a later day cannot resume its earlier PR. Marker mismatches on
+the token owner's own exact-version PR stop as `not owned`; the earlier PR must be closed or finalized by hand.
 
 The state machine creates only when the bounded direct upstream list proves there is no exact-version PR. Exactly
 one automation-owned open match resumes through the same idempotent PATCH-and-verify path. External, ambiguous,
 multiple, closed, extra-file, or content-mismatched candidates stop without mutation. A submit failure or malformed
 WingetCreate output is not authoritative: bounded direct-list retries recover a newly created exact PR after GitHub
 eventual consistency. If stable ownership cannot be proven, publication stops; titles are never fuzzy-searched.
+
+Each state check lists the 100 most recently updated upstream PRs (two pages of 50), but it reads a changed-file list
+(one request per PR) only for candidate PRs: those authored by the token owner, those carrying the publication marker,
+and those naming the package identifier (case-insensitive) in their title, body, or head branch. Every WingetCreate,
+Komac, and bot submission names the package in at least its head branch, so exact-version conflicts from other
+submitters are still inspected, while the ~100 unrelated PRs that dominate the list cost nothing beyond the listing.
+Ownership and conflict decisions are unchanged: a candidate is still adoptable only under the exact rules above, and
+the token owner's PRs are always inspected even when a maintainer renamed the title or branch, in which case they
+stop as not owned rather than being resumed. Before this filter a single check cost about 100 requests and a stopped
+publication about 700.
+
+Because a check no longer takes most of a minute, the visibility waits carry GitHub's eventual-consistency window
+instead: the workflow and the module default sleep 15, 30, 45, 60, and 60 seconds between the six attempts (about
+3.5 minutes in total). A fresh PR's file list and `contents?ref=<sha>` reads can lag its creation by minutes; the
+v7.0.59 rerun created [winget-pkgs#436389](https://github.com/microsoft/winget-pkgs/pull/436389) and then stopped
+because the manifest content stayed unreadable for all six attempts. A `Pending` reason for an unreadable file list
+or manifest content therefore names the pull request, the path and head commit, and the upstream exception message,
+so a 404 that never clears and a 403 rate limit are distinguishable in the final failure.
 
 Every paged upstream read enumerates each page before counting it. `Invoke-RestMethod` returns a JSON array as a
 single object, so a page collected without enumeration looks like one unusable result: paging stops after the first
@@ -183,16 +219,33 @@ When publication stops because no exact automation-owned pull request became vis
 state kind and reason and states whether submission ever ran. A state that stays unreadable must not be reported as
 a bare visibility timeout, because that hides the upstream error that actually blocked the release.
 
+For the same reason, a failed submission must not be reported as a bare `wingetcreate submit` exit code. When
+submission ran and publication still stops, the failure carries WingetCreate's captured output as diagnostics:
+blank lines are dropped, token-shaped values (`ghp_`/`gho_`/`ghu_`/`ghs_`/`ghr_` and `github_pat_` tokens, and any
+`Bearer`/`token`/`password` credential value) are redacted to `***`, each line is capped at 500 characters, and only
+the last 40 lines are kept with a count of the omitted earlier lines. The output is never parsed for the PR URL or
+used to decide state; the direct-list state machine remains the only authority. The workflow itself never echoes the
+raw output. Because the v7.0.59 release stopped with only `wingetcreate submit failed with exit code 1` while the
+automation fork was 25,181 commits behind `microsoft/winget-pkgs`, the fork-sync error that actually blocked the
+release was invisible; this contract exists so that cannot recur.
+
 The workflow:
 
 1. Resolves the release version from `Common/Version.h` plus `GITHUB_RUN_NUMBER`.
 2. Checks out the matching release tag.
 3. Reads the GitHub release asset list through the GitHub API.
 4. Fails with the available asset names if either `RedSalamander-<version>-x64-Portable.zip` or `RedSalamander-<version>-ARM64-Portable.zip` is missing.
-5. Downloads both ZIPs and computes their SHA256 values through `Installer/winget/generate-manifest.ps1`.
+5. Downloads both ZIPs, records the release's `published_at` date, and computes the ZIP SHA256 values through
+   `Installer/winget/generate-manifest.ps1 -ReleaseDate <published date>` when the release tag's generator accepts
+   that parameter.
 6. Runs a self-contained `winget validate --manifest` wrapper in the workflow. It is intentionally inline because the workflow checks out the release tag before generating the manifest, and older release tags may not contain helper scripts added later. The wrapper treats the known `winget.exe v1.11.x` schema-header warning for `ManifestVersion: 1.12.0` as non-fatal, but only when the manifest otherwise reports validation success and all warnings are that exact legacy schema-header warning.
 7. Enables Winget `LocalManifestFiles`, runs `winget install --manifest .build\AppPackages\winget-manifest` on the disposable runner, checks that `RedSalamander` appears in `winget list`, and then uninstalls it with `winget uninstall --id RedSalamanders.RedSalamander --purge`. That cleanup always runs, including when an earlier step failed before installing, so it first lists the package and reports nothing to clean up when it is absent rather than failing the job on a `winget uninstall` that found no match. Only Winget's no-match result (`0x8A150014`) counts as absent; any other `winget list` failure fails the step, so a source or service error can never silently leave an installed package behind.
-8. For direct release calls or manual runs where `submit=true`, resolves the token owner, computes the manifest-bound publication marker, and directly lists upstream PRs and changed files to classify the exact-version state.
+8. For direct release calls or manual runs where `submit=true`, resolves the token owner and logs its login, its
+   `<login>/winget-pkgs` head repository, and the classic scope names reported by `X-OAuth-Scopes` (never the token
+   value). WingetCreate needs a classic token carrying `public_repo` (or `repo`); a fine-grained token reports no
+   classic scopes and is unsupported by winget-create 1.12.8.0, so a missing scope is named in a warning before
+   submission instead of surfacing later as an opaque submit failure. It then computes the manifest-bound publication
+   marker and directly lists upstream PRs and changed files to classify the exact-version state.
 9. Installs the reviewed WingetCreate package version `1.12.8.0`, resolves its absolute
    executable path, and verifies the executable version before the publication secret
    is exposed. Verification reads the version from the `WingetCreateCLI <version>+<commit>`
@@ -206,7 +259,8 @@ The workflow:
    It then submits the generated manifest directory with
    `wingetcreate submit` using Winget's
    `Update: RedSalamanders.RedSalamander to <version>` title format plus the stable creation marker. It does not
-   trust or log WingetCreate's PR URL output; the bounded direct-list state machine finds and verifies the PR.
+   trust WingetCreate's PR URL output; the bounded direct-list state machine finds and verifies the PR. WingetCreate's
+   output is kept only as redacted, bounded diagnostics for a publication that stops.
 10. Creates or resumes exactly one automation-owned PR, then uses the same idempotent PATCH-and-verify path to set
     the normal title and a marker-bearing completed Winget checklist plus the release URL, installer type,
     architectures, commands, minimum OS, manifest schema, and validation/install/list/uninstall evidence. The

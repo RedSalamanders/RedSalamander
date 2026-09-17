@@ -172,7 +172,7 @@ Describe 'Winget release workflow' {
 
     It 'uses one guarded manifest root and exact versioned portable inputs end to end' {
         $workflow | Should Match '(?m)^\s+WINGET_MANIFEST_ROOT: \.build\\AppPackages\\winget-manifest\r?$'
-        $workflow | Should Match '-OutputDir \$env:WINGET_MANIFEST_ROOT'
+        $workflow | Should Match 'OutputDir = \$env:WINGET_MANIFEST_ROOT'
         $workflow | Should Match 'Get-ChildItem \$env:WINGET_MANIFEST_ROOT'
         $workflow | Should Match 'winget validate --manifest \$env:WINGET_MANIFEST_ROOT'
         $workflow | Should Match 'winget install[\s\S]+?--manifest \$env:WINGET_MANIFEST_ROOT'
@@ -224,6 +224,69 @@ Describe 'Winget release workflow' {
         $verifyIndex = $workflow.IndexOf('Resolved winget-create version')
         $secretIndex = $workflow.IndexOf('WINGET_CREATE_GITHUB_TOKEN:')
         ($verifyIndex -ge 0 -and $verifyIndex -lt $secretIndex) | Should Be $true
+    }
+
+    It 'names the token scopes and redacted WingetCreate output instead of a bare submit exit code' {
+        # Scope names are safe to log and make an unsupported token shape visible before submission.
+        $workflow | Should Match 'api\.github\.com/user" -ResponseHeadersVariable tokenResponseHeaders'
+        $workflow | Should Match "-ieq 'X-OAuth-Scopes'"
+        $workflow | Should Match "notcontains 'public_repo'"
+        $workflow | Should Not Match 'Write-Host[^\n]*\$env:WINGET_CREATE_GITHUB_TOKEN'
+        $workflow | Should Not Match 'Write-Host[^\n]*\$tokenResponseHeaders\b'
+
+        # The raw output stays out of the workflow; the module redacts it and bounds it before it can
+        # travel with the failure that stops publication.
+        $publicationModule | Should Match 'function Get-RSWingetSubmitDiagnostics'
+        $publicationModule | Should Match 'gh\[pousr\]_'
+        $publicationModule | Should Match 'github_pat_'
+        $publicationModule | Should Match 'WingetCreate output \(token-shaped values redacted\)'
+        $publicationModule | Should Match '\$submitDiagnostics = @\(Get-RSWingetSubmitDiagnostics -SubmitResult \$submitResult\)'
+        $publicationModule | Should Not Match "'Get-RSWingetSubmitDiagnostics'"
+    }
+
+    It 'reads changed files only for candidate pull requests' {
+        # One changed-file request per listed upstream PR turned each state check into ~100 calls; the
+        # scan now inspects only the token owner's PRs and PRs naming the package or carrying the marker.
+        $publicationModule | Should Match 'function Test-RSWingetPullRequestCandidate'
+        $publicationModule | Should Match "@\(@\('title'\), @\('body'\), @\('head', 'ref'\)\)"
+        $publicationModule | Should Match '(?s)-not \$hasMarker -and\s+-not \(Test-RSWingetPullRequestCandidate[^\n]*\)\) \{\s+continue'
+        $publicationModule | Should Not Match "'Test-RSWingetPullRequestCandidate'"
+
+        # The waits, not the scan, now carry GitHub's eventual-consistency window for a fresh PR.
+        $workflow | Should Match 'Start-Sleep -Seconds \(\[Math\]::Min\(15 \* \$Attempt, 60\)\)'
+        $publicationModule | Should Match 'Start-Sleep -Seconds \(\[Math\]::Min\(15 \* \$Attempt, 60\)\)'
+        $publicationModule | Should Match "manifest content is not yet visible: '\`$path' at"
+        $publicationModule | Should Match 'files are not yet visible: \$\(\$candidate\.FileListFailure\)'
+    }
+
+    It 'compares canonical manifest content and stamps a deterministic ReleaseDate so reruns resume' {
+        # wingetcreate re-serializes the committed manifests, so byte hashes never match the generated files.
+        $workflow | Should Match 'GetManifestContentHash = \$getManifestContentHash'
+        $workflow | Should Match '(?s)\$getManifestContentHash = \{.+?return Get-RSWingetManifestContentHash -Bytes \$bytes'
+        $workflow | Should Not Match 'GetFileSha256'
+        $workflow | Should Not Match 'ToHexString\(\[Security\.Cryptography\.SHA256\]::HashData\(\$bytes\)\)'
+        $publicationModule | Should Match 'function ConvertTo-RSWingetCanonicalManifest'
+        $publicationModule | Should Match 'function Get-RSWingetManifestContentHash'
+        $publicationModule | Should Match "'Get-RSWingetManifestContentHash'"
+        $publicationModule | Should Match '\$manifestHashes\[\$remotePath\] = Get-RSWingetManifestContentHash -Bytes'
+        $publicationModule | Should Match "-Name 'GetManifestContentHash'"
+        $publicationModule | Should Not Match 'GetFileSha256'
+
+        # The identity marker embeds the manifest hashes, so ReleaseDate must not drift with the rerun day.
+        $workflow | Should Match '\$publishedAt = \[string\]\$release\.published_at'
+        $workflow | Should Match '"release_date=\$releaseDate" >> \$env:GITHUB_OUTPUT'
+        $workflow | Should Match 'RELEASE_DATE:\s*\$\{\{ steps\.portable\.outputs\.release_date \}\}'
+        $workflow | Should Match '\(Get-Command \$generator\)\.Parameters\.ContainsKey\(''ReleaseDate''\)'
+        $workflow | Should Match '\$generatorArguments\.ReleaseDate = \$env:RELEASE_DATE'
+        $workflow | Should Match '& \$generator @generatorArguments'
+
+        $generator = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\winget\generate-manifest.ps1') -Raw
+        $generator | Should Match '(?m)^\s+\[string\]\$ReleaseDate = ''''\r?$'
+        $generator | Should Match 'function Resolve-WingetReleaseDate'
+        $generator | Should Match "TryParseExact\(\s*\`$CandidateDate,\s*'yyyy-MM-dd'"
+        $generator | Should Match '\$ReleaseDate = Resolve-WingetReleaseDate -CandidateDate \$ReleaseDate'
+        $generator | Should Not Match '\$ReleaseDate = Get-Date -Format "yyyy-MM-dd"'
+        $generator | Should Match '(?m)^\.PARAMETER ReleaseDate\r?$'
     }
 
     It 'supports a serialized direct release handoff' {

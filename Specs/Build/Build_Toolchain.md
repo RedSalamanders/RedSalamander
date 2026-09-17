@@ -559,12 +559,22 @@ DxUi is public: exact-pin HTTPS source restore requires no PAT or Actions secret
 public Actions API access were verified on 2026-09-09. CI can use its automatic read-only job token
 for advisory API rate limits; unavailable/rate-limited advisory queries never change or reject the pin.
 
-The PR native matrix selects x64 and ARM64 runners for all three configurations. Each
+The native matrix is selected per event: pull requests build x64 Debug and ARM64 Debug,
+pushes to `main` add both Release profiles, and ASan Debug runs from `asan.yml`. Each
 job builds the test-enabled solution, verifies the ASAN defect probe where selected,
-then uses the existing receipt-gated Fresh Full runner in that same job. Cross-job
-nightly/package handoffs still require portable attestation. Runtime execution is
-rejected if host architecture differs from the selected target. No custom DxUi secret
-is required; the public pin restores through HTTPS.
+then uses the receipt-gated runner in that same job with the suite named by the
+reusable workflow's `test_suite` input (`CI` by default; `Full` remains the local
+closeout gate). Cross-job nightly/package handoffs still require portable attestation.
+Runtime execution is rejected if host architecture differs from the selected target.
+No custom DxUi secret is required; the public pin restores through HTTPS.
+
+The reusable workflow restores the vcpkg and pinned Terminal runtime caches with
+`actions/cache/restore` and saves them with explicit `actions/cache/save` steps placed
+right after the dependency install and the solution build. The combined `actions/cache`
+action saves only when the whole job succeeds, so a failing test step used to discard a
+successful 25-minute dependency build on every red run. Release builds on the native
+ARM64 host use one MSBuild node: with two nodes each fanning out `/MP` compiles, the
+optimizer ran out of heap (C1002) on the largest self-test translation unit.
 
 Windows CI enables Git `core.longpaths` before checkout: retained test evidence includes repository paths beyond
 the default Windows Git path limit. This setup runs on the disposable runner before any project validation.

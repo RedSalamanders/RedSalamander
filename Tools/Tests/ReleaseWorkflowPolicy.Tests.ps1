@@ -247,8 +247,11 @@ Describe 'Release workflow source contracts' {
         $workflow | Should Match 'Install-Module Pester -RequiredVersion 3\.4\.0'
         $workflow | Should Match 'GetEnvironmentVariable\(\$name, ''Process''\)'
         $workflow | Should Match '>> \$env:GITHUB_ENV'
-        $workflow | Should Match 'Native Fresh Full failed with exit code'
-        $workflow | Should Match 'MaxCpuCount\s*=\s*2'
+        $workflow | Should Match 'Native \$env:RS_TEST_SUITE suite failed with exit code'
+        # Two MSBuild nodes by default; one on the native ARM64 host for Release, where the
+        # optimizer has run out of heap on the largest self-test translation unit.
+        $workflow | Should Match '\$buildWorkers = if \(\$isNativeArm64Host -and "\$\{\{ inputs\.configuration \}\}" -eq "Release"\) \{ 1 \} else \{ 2 \}'
+        $workflow | Should Match 'MaxCpuCount\s*=\s*\$buildWorkers'
         $evidence = [regex]::Match($workflow, '(?s)- name: Upload native qualification evidence(.*?)(?=      - name:)').Groups[1].Value
         $evidence | Should Match 'steps\.test_root\.outputs\.path'
         $evidence | Should Not Match '\.build/'
