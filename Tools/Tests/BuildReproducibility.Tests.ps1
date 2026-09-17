@@ -659,6 +659,19 @@ Describe 'Pinned build-tool and CI identity' {
         $ci.IndexOf('$env:VcpkgXUseBuiltInApplocalDeps') | Should BeLessThan $ci.IndexOf('& $buildScript @buildArgs')
         $ci.IndexOf('Resolve canonical toolchain identity') | Should BeLessThan $ci.IndexOf('Cache vcpkg')
 
+        # Restore and save are separate so a successful dependency build is cached even when the
+        # build or tests fail; the combined action saved only on job success and left red runs
+        # rebuilding vcpkg and the Terminal runtime every time.
+        $ci | Should Match 'id:\s*vcpkg_cache\s*\r?\n\s+uses:\s*actions/cache/restore@'
+        $ci | Should Match 'id:\s*terminal_runtime_cache\s*\r?\n\s+uses:\s*actions/cache/restore@'
+        $ci | Should Not Match 'uses:\s*actions/cache@'
+        $ci | Should Match "(?ms)- name: Save vcpkg cache\s+if: steps\.vcpkg_cache\.outputs\.cache-hit != 'true'\s+uses: actions/cache/save@.+?key: \`$\{\{ steps\.vcpkg_cache\.outputs\.cache-primary-key \}\}"
+        $ci | Should Match "(?ms)- name: Save pinned Terminal runtime cache\s+if: steps\.terminal_runtime_cache\.outputs\.cache-hit != 'true'\s+uses: actions/cache/save@.+?key: \`$\{\{ steps\.terminal_runtime_cache\.outputs\.cache-primary-key \}\}"
+        $ci.IndexOf('Normalize vcpkg install root') | Should BeLessThan $ci.IndexOf('Save vcpkg cache')
+        $ci.IndexOf('Save vcpkg cache') | Should BeLessThan $ci.IndexOf('- name: Build solution')
+        $ci.IndexOf('- name: Build solution') | Should BeLessThan $ci.IndexOf('Save pinned Terminal runtime cache')
+        $ci.IndexOf('Save pinned Terminal runtime cache') | Should BeLessThan $ci.IndexOf('Run native validation suite')
+
         $buildScript = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
         $buildScript | Should Match '(?s)Get-RSBuildIdentityBundle.+?-Platform\s+\$Platform\s+-Configuration\s+\$Configuration'
         $buildScript | Should Match '(?s)GITHUB_ACTIONS.+?MSBUILD_EXE_PATH.+?GetFullPath.+?return\s+@\{.+?Method\s*=\s*"MSBUILD_EXE_PATH"'
@@ -682,10 +695,13 @@ Describe 'Pinned build-tool and CI identity' {
         $subclassGuard | Should Match "Get-Command 'rg' -ErrorAction SilentlyContinue"
         $subclassGuard | Should Match 'Select-String -SimpleMatch -Pattern \$pattern'
         $subclassGuard | Should Match '\$global:LASTEXITCODE\s*=\s*0\s*$'
-        $ci | Should Match 'platform:\s*ARM64'
-        $ci | Should Match 'configuration:\s*Debug'
-        $selfTests | Should Match 'PluginContractTests, SettingsSchemaTests, and CrashHandlingTests'
+        $ci | Should Match '"platform": "ARM64", "runner": "windows-11-vs2026-arm", "configuration": "Debug"'
+        $selfTests | Should Match 'Suite CI covers .*PluginContractTests, SettingsSchemaTests, CrashHandlingTests'
         $ci | Should Match 'run_full_tests:\s*true'
+        # The quick gate runs the receipt-verified CI suite; Full stays the local closeout gate.
+        $ci | Should Match 'test_suite:\s*CI'
+        $ci | Should Not Match '"configuration": "ASan Debug"'
+        $ci | Should Match '(?ms)^concurrency:\s+group:\s*ci-\$\{\{ github\.event\.pull_request\.number \|\| github\.ref \}\}\s+cancel-in-progress:\s*true'
     }
 
     It 'runs scheduled and high-risk ASan with a seeded detector proof before green contracts' {
@@ -693,9 +709,13 @@ Describe 'Pinned build-tool and CI identity' {
         $reusable = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\build-reusable.yml') -Raw
         $harness = Get-Content -LiteralPath (Join-Path $repoRoot 'Tests\PluginContractTests\PluginContractTests.cpp') -Raw
         $asan | Should Match 'schedule:'
-        $asan | Should Match 'pull_request:'
+        $asan | Should Match 'pull_request:\s*\r?\n\s*branches:\s*\[main, master\]'
         $asan | Should Match '\*\*/\*\.cpp'
         $asan | Should Match 'configuration:\s*ASan Debug'
+        $asan | Should Match 'run_asan_plugin_contracts:\s*true'
+        $asan | Should Match 'run_full_tests:\s*true'
+        $asan | Should Match 'test_suite:\s*CI'
+        $asan | Should Match '"platform": "ARM64", "runner": "windows-11-vs2026-arm"'
         $reusable | Should Match '--asan-seed-heap-overflow'
         $reusable | Should Match 'not rejected by AddressSanitizer'
         $reusable | Should Match 'AddressSanitizer diagnostic'

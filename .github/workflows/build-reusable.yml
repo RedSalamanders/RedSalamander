@@ -15,6 +15,11 @@ name: Build (reusable)
       run_full_tests:
         type: boolean
         default: false
+      test_suite:
+        # Run-AllTests suite for the native validation step: CI is the quick PR/main gate;
+        # Full adds the artifact-mutating build-toolchain lane and ETW latency diagnostics.
+        type: string
+        default: CI
       build_number:
         type: string
         default: ""
@@ -192,8 +197,12 @@ jobs:
 
       # ── Restore dependencies ─────────────────────────────────────────
 
+      # Restore and save are split so a dependency build that succeeded is cached even when a
+      # later build or test step fails; actions/cache's combined form saves only on job success,
+      # which kept every red run paying the full vcpkg and Terminal runtime rebuilds.
       - name: Cache vcpkg
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: vcpkg_cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: |
             ${{ env.VCPKG_INSTALLED_DIR }}
@@ -201,7 +210,8 @@ jobs:
           key: ${{ runner.os }}-vcpkg-${{ env.VCPKG_DEFAULT_TRIPLET }}-${{ steps.toolchain_identity.outputs.digest }}-${{ hashFiles('vcpkg.json', 'vcpkg-tool.json') }}
 
       - name: Cache pinned Terminal runtime inputs and product
-        uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        id: terminal_runtime_cache
+        uses: actions/cache/restore@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
         with:
           path: .build/TerminalEngine
           # Keep this list equal to the active builder, its direct module imports,
@@ -376,6 +386,15 @@ jobs:
             throw "Expected WIL header not found after sync: $expected"
           }
 
+      - name: Save vcpkg cache
+        if: steps.vcpkg_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: |
+            ${{ env.VCPKG_INSTALLED_DIR }}
+            .build/vcpkg-tool/downloads
+          key: ${{ steps.vcpkg_cache.outputs.cache-primary-key }}
+
       # ── Build ────────────────────────────────────────────────────────
 
       - name: Build solution
@@ -439,10 +458,15 @@ jobs:
           $buildScript = Join-Path $env:GITHUB_WORKSPACE "build.ps1"
           if (-not (Test-Path $buildScript)) { throw "build.ps1 not found at: $buildScript" }
 
+          # Native ARM64 runners have run the Release optimizer out of heap (C1002) on the largest
+          # self-test translation unit with two MSBuild nodes each fanning out /MP compiles, so
+          # Release builds on the ARM64 host use one node.
+          $isNativeArm64Host = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [Runtime.InteropServices.Architecture]::Arm64
+          $buildWorkers = if ($isNativeArm64Host -and "${{ inputs.configuration }}" -eq "Release") { 1 } else { 2 }
           $buildArgs = @{
             Configuration = "${{ inputs.configuration }}"
             Platform      = "${{ inputs.platform }}"
-            MaxCpuCount   = 2
+            MaxCpuCount   = $buildWorkers
           }
           if ("${{ inputs.build_number }}" -ne "") {
             $buildArgs.BuildNumber = "${{ inputs.build_number }}"
@@ -456,6 +480,13 @@ jobs:
           $pin = Get-Content Dependencies/DxUi.lock.json -Raw | ConvertFrom-Json
           python ".build/dependencies/DxUi/source/$($pin.commit)/Tools/validate_build_matrix.py" --root .
           if ($LASTEXITCODE -ne 0) { throw 'First-party six-profile matrix validation failed.' }
+
+      - name: Save pinned Terminal runtime cache
+        if: steps.terminal_runtime_cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+        with:
+          path: .build/TerminalEngine
+          key: ${{ steps.terminal_runtime_cache.outputs.cache-primary-key }}
 
       - name: Create portable same-workflow build attestation
         id: portable_attestation
@@ -529,9 +560,11 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "ASan PluginContractTests failed with exit code $LASTEXITCODE." }
           }
 
-      - name: Run native Fresh Full suite
+      - name: Run native validation suite
         if: ${{ inputs.run_full_tests }}
         shell: pwsh
+        env:
+          RS_TEST_SUITE: ${{ inputs.test_suite }}
         run: |
           $ErrorActionPreference = 'Stop'
           # These suites use Pester 3 assertion and setup semantics.
@@ -542,8 +575,14 @@ jobs:
           if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ine '${{ inputs.platform }}') {
             throw 'Runtime qualification requires a native runner for the target architecture.'
           }
-          ./Tools/Run-AllTests.ps1 -Suite Full -ValidationMode Fresh -SkipBuild -Configuration '${{ inputs.configuration }}' -Platform '${{ inputs.platform }}' -TestRoot $env:REDSALAMANDER_TEST_ROOT -TimeoutMultiplier 2.0 -AllowAlternateVolumeTestRoot
-          if ($LASTEXITCODE -ne 0) { throw "Native Fresh Full failed with exit code $LASTEXITCODE." }
+          if ($env:RS_TEST_SUITE -notin @('CI', 'Full')) {
+            throw "test_suite must be CI or Full; received '$env:RS_TEST_SUITE'."
+          }
+          # Suite CI is the quick receipt-verified gate. Suite Full adds the artifact-mutating
+          # build-toolchain lane (a single-node targeted rebuild plus a full re-attestation build)
+          # and ETW latency diagnostics; it remains the local closeout gate.
+          ./Tools/Run-AllTests.ps1 -Suite $env:RS_TEST_SUITE -ValidationMode Fresh -SkipBuild -Configuration '${{ inputs.configuration }}' -Platform '${{ inputs.platform }}' -TestRoot $env:REDSALAMANDER_TEST_ROOT -TimeoutMultiplier 2.0 -AllowAlternateVolumeTestRoot
+          if ($LASTEXITCODE -ne 0) { throw "Native $env:RS_TEST_SUITE suite failed with exit code $LASTEXITCODE." }
 
       - name: Upload native qualification evidence
         if: ${{ always() && inputs.run_full_tests && steps.test_root.outputs.path != '' }}

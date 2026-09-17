@@ -5,7 +5,7 @@ name: AddressSanitizer
   schedule:
     - cron: "30 4 * * 2"
   pull_request:
-    branches: [master]
+    branches: [main, master]
     paths:
       - "**/*.cpp"
       - "**/*.h"
@@ -20,11 +20,29 @@ name: AddressSanitizer
 permissions:
   contents: read
 
+concurrency:
+  group: asan-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+# ASan Debug is the slowest profile, so it runs here instead of in every CI push:
+# x64 on native-source pull requests, both architectures weekly and on dispatch.
+# Each job proves the seeded detector before the ordinary contracts and the CI suite.
 jobs:
-  x64-asan-plugin-contracts:
+  asan:
+    strategy:
+      fail-fast: false
+      matrix:
+        include: >-
+          ${{ fromJSON(github.event_name == 'pull_request'
+          && '[{"platform": "x64", "runner": "windows-2025-vs2026"}]'
+          || '[{"platform": "x64", "runner": "windows-2025-vs2026"},
+          {"platform": "ARM64", "runner": "windows-11-vs2026-arm"}]') }}
     uses: ./.github/workflows/build-reusable.yml
     with:
       configuration: ASan Debug
-      platform: x64
-      upload_build_output: false
+      platform: ${{ matrix.platform }}
+      native_runner: ${{ matrix.runner }}
+      run_full_tests: true
+      test_suite: CI
       run_asan_plugin_contracts: true
+      upload_build_output: false

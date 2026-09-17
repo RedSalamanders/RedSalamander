@@ -581,8 +581,11 @@ Describe 'Operation Startrail build receipt records' {
         $reusable | Should Match 'attestation_id=.*GITHUB_OUTPUT'
         $reusable.IndexOf('Create portable same-workflow build attestation') | Should BeLessThan $reusable.IndexOf('Upload build output')
 
-        $reusable | Should Match 'Run-AllTests.ps1 -Suite Full -ValidationMode Fresh -SkipBuild'
-        $reusable.IndexOf('Build solution') | Should BeLessThan $reusable.IndexOf('Run native Fresh Full suite')
+        $reusable | Should Match 'Run-AllTests.ps1 -Suite \$env:RS_TEST_SUITE -ValidationMode Fresh -SkipBuild'
+        $reusable | Should Match "if \(\`$env:RS_TEST_SUITE -notin @\('CI', 'Full'\)\)"
+        $reusable | Should Match 'RS_TEST_SUITE:\s*\$\{\{ inputs\.test_suite \}\}'
+        $reusable | Should Match '(?ms)test_suite:\s*(?:#[^\n]*\n\s*)*type:\s*string\s+default:\s*CI'
+        $reusable.IndexOf('Build solution') | Should BeLessThan $reusable.IndexOf('Run native validation suite')
 
         foreach ($relative in @('.github\workflows\nightly-flake.yml')) {
             $workflow = Get-Content -LiteralPath (Join-Path $repoRoot $relative) -Raw
