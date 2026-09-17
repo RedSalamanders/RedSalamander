@@ -121,16 +121,38 @@ jobs:
             Get-ChildItem $outFile | ForEach-Object { Write-Host "Downloaded $($_.Name) - $($_.Length) bytes" }
           }
 
+          # The manifest ReleaseDate comes from the release itself so that reruns on later days
+          # generate identical manifests and keep the same publication identity.
+          $publishedAt = [string]$release.published_at
+          if ($publishedAt -notmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$') {
+            throw "Release '$tag' did not report a valid published_at timestamp: '$publishedAt'"
+          }
+          $releaseDate = $publishedAt.Substring(0, 10)
+          "release_date=$releaseDate" >> $env:GITHUB_OUTPUT
+          Write-Host "Release date: $releaseDate"
+
       - name: Generate Winget manifest
         shell: pwsh
+        env:
+          RELEASE_DATE: ${{ steps.portable.outputs.release_date }}
         run: |
           $ErrorActionPreference = "Stop"
           $version = "${{ steps.version.outputs.version }}"
-          .\Installer\winget\generate-manifest.ps1 `
-            -Version $version `
-            -ZipPath "RedSalamander-$version-x64-Portable.zip" `
-            -Arm64ZipPath "RedSalamander-$version-ARM64-Portable.zip" `
-            -OutputDir $env:WINGET_MANIFEST_ROOT
+          $generator = ".\Installer\winget\generate-manifest.ps1"
+          $generatorArguments = @{
+            Version = $version
+            ZipPath = "RedSalamander-$version-x64-Portable.zip"
+            Arm64ZipPath = "RedSalamander-$version-ARM64-Portable.zip"
+            OutputDir = $env:WINGET_MANIFEST_ROOT
+          }
+          # The generator runs from the release tag; tags older than the -ReleaseDate parameter fall
+          # back to its own default, which stamps the generation day and makes reruns non-identical.
+          if ((Get-Command $generator).Parameters.ContainsKey('ReleaseDate')) {
+            $generatorArguments.ReleaseDate = $env:RELEASE_DATE
+          } else {
+            Write-Warning "This release tag's generate-manifest.ps1 has no -ReleaseDate parameter; the manifest ReleaseDate will be today's date and a rerun on another day will not resume this publication."
+          }
+          & $generator @generatorArguments
           Get-ChildItem $env:WINGET_MANIFEST_ROOT | ForEach-Object { Write-Host "Generated $($_.Name)" }
 
       - name: Install winget-create
@@ -325,12 +347,23 @@ jobs:
             "X-GitHub-Api-Version" = "2022-11-28"
           }
 
-          $tokenUser = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/user"
+          $tokenUser = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/user" -ResponseHeadersVariable tokenResponseHeaders
           $expectedAuthor = [string]$tokenUser.login
           if ($expectedAuthor -notmatch '^[A-Za-z0-9](?:[A-Za-z0-9-]{0,37}[A-Za-z0-9])?$') {
             throw "The Winget token owner could not be resolved to a valid GitHub login."
           }
           $expectedHeadRepository = "$expectedAuthor/winget-pkgs"
+
+          # Scope names are not secrets. WingetCreate needs a classic token with public_repo (fine-grained
+          # tokens report no classic scopes and are unsupported), so a wrong token shape is named here
+          # instead of surfacing later as an opaque submit failure.
+          $scopeHeader = $tokenResponseHeaders.Keys | Where-Object { $_ -ieq 'X-OAuth-Scopes' } | Select-Object -First 1
+          $tokenScopes = if ($scopeHeader) { [string](@($tokenResponseHeaders[$scopeHeader]) -join ', ') } else { '' }
+          $scopeList = @($tokenScopes -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ })
+          Write-Host "Winget token owner: $expectedAuthor; head repository: $expectedHeadRepository; classic scopes: $(if ($scopeList.Count -gt 0) { $scopeList -join ', ' } else { '(none reported)' })"
+          if ($scopeList -notcontains 'public_repo' -and $scopeList -notcontains 'repo') {
+            Write-Warning "WINGET_TOKEN does not report the classic 'public_repo' scope that WingetCreate requires to fork microsoft/winget-pkgs and open a pull request; a fine-grained token is not supported by winget-create 1.12.8.0."
+          }
 
           $identity = New-RSWingetPublicationIdentity `
             -PackageIdentifier "RedSalamanders.RedSalamander" `
@@ -350,7 +383,7 @@ jobs:
               -Headers $headers `
               -Uri "https://api.github.com/repos/microsoft/winget-pkgs/pulls/$Number/files?per_page=$PageSize&page=$Page"
           }.GetNewClosure()
-          $getFileSha256 = {
+          $getManifestContentHash = {
             param([string]$RepositoryFullName, [string]$Path, [string]$Ref)
             if ($RepositoryFullName -notmatch '^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$' -or $Ref -notmatch '^[0-9a-fA-F]{40}$') {
               throw "The Winget pull request returned an invalid head repository or commit."
@@ -361,7 +394,8 @@ jobs:
               -Headers $headers `
               -Uri "https://api.github.com/repos/$RepositoryFullName/contents/$encodedPath?ref=$encodedRef"
             $bytes = [Convert]::FromBase64String(([string]$content.content -replace '\s', ''))
-            return [Convert]::ToHexString([Security.Cryptography.SHA256]::HashData($bytes)).ToLowerInvariant()
+            # wingetcreate re-serializes manifests before committing, so compare the canonical form.
+            return Get-RSWingetManifestContentHash -Bytes $bytes
           }.GetNewClosure()
           $patchPullRequest = {
             param([int]$Number, [string]$Title, [string]$Body)
@@ -376,7 +410,7 @@ jobs:
           $repository = @{
             ListPullRequests = $listPullRequests
             ListPullRequestFiles = $listPullRequestFiles
-            GetFileSha256 = $getFileSha256
+            GetManifestContentHash = $getManifestContentHash
             PatchPullRequest = $patchPullRequest
           }
 
@@ -431,7 +465,9 @@ jobs:
           }
           $wait = {
             param([int]$Attempt)
-            Start-Sleep -Seconds ([Math]::Min($Attempt, 5))
+            # 15, 30, 45, 60, 60 s: GitHub can take minutes to expose a fresh PR's file list and
+            # contents, and the state check itself no longer spends that time scanning.
+            Start-Sleep -Seconds ([Math]::Min(15 * $Attempt, 60))
           }
           $publication = Invoke-RSWingetPublication `
             -Identity $identity `

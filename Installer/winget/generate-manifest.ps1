@@ -18,6 +18,9 @@
 .PARAMETER OutputDir
     Output directory for manifest files. It must resolve beneath the repository's
     .build\AppPackages root. Default: .build\AppPackages\winget-manifest.
+.PARAMETER ReleaseDate
+    Manifest ReleaseDate as yyyy-MM-dd. The release workflow passes the GitHub
+    release's published date so reruns generate identical manifests. Default: today.
 .EXAMPLE
     .\Installer\winget\generate-manifest.ps1 -Version 7.0.183 -ZipPath .\.build\AppPackages\RedSalamander-7.0.183-x64-Portable.zip -Arm64ZipPath .\.build\AppPackages\RedSalamander-7.0.183-ARM64-Portable.zip
 .OUTPUTS
@@ -33,10 +36,35 @@ param(
     [int]$BuildNumber = 0,
     [string]$ZipPath,
     [string]$Arm64ZipPath,
-    [string]$OutputDir = ".build\AppPackages\winget-manifest"
+    [string]$OutputDir = ".build\AppPackages\winget-manifest",
+    [string]$ReleaseDate = ''
 )
 
 $ErrorActionPreference = 'Stop'
+
+function Resolve-WingetReleaseDate {
+    param(
+        [AllowEmptyString()]
+        [string]$CandidateDate
+    )
+
+    if ([string]::IsNullOrWhiteSpace($CandidateDate)) {
+        return (Get-Date -Format 'yyyy-MM-dd')
+    }
+
+    $parsed = [datetime]::MinValue
+    if ($CandidateDate -notmatch '^\d{4}-\d{2}-\d{2}$' -or
+        -not [datetime]::TryParseExact(
+            $CandidateDate,
+            'yyyy-MM-dd',
+            [Globalization.CultureInfo]::InvariantCulture,
+            [Globalization.DateTimeStyles]::None,
+            [ref]$parsed)) {
+        throw "Winget ReleaseDate must be a calendar date formatted yyyy-MM-dd: $CandidateDate"
+    }
+
+    return $CandidateDate
+}
 
 function Assert-WingetManifestVersion {
     param(
@@ -159,6 +187,8 @@ if (-not $Version) {
 }
 
 Assert-WingetManifestVersion -CandidateVersion $Version
+# The release workflow passes the GitHub release's published date; a bare local run stamps today.
+$ReleaseDate = Resolve-WingetReleaseDate -CandidateDate $ReleaseDate
 $ZipPath = Resolve-WingetPortableZip `
     -CandidatePath $ZipPath `
     -ExpectedLeaf "RedSalamander-$Version-x64-Portable.zip" `
@@ -180,9 +210,6 @@ Write-Host "  Calculating x64 ZIP SHA256..." -ForegroundColor Gray
 $ZipSha256 = (Get-FileHash -LiteralPath $ZipPath -Algorithm SHA256).Hash
 Write-Host "  Calculating ARM64 ZIP SHA256..." -ForegroundColor Gray
 $Arm64ZipSha256 = (Get-FileHash -LiteralPath $Arm64ZipPath -Algorithm SHA256).Hash
-
-# Release date (today)
-$ReleaseDate = Get-Date -Format "yyyy-MM-dd"
 
 # Template substitutions
 $Replacements = @{
