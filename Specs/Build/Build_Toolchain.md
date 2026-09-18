@@ -572,9 +572,14 @@ The reusable workflow restores the vcpkg and pinned Terminal runtime caches with
 `actions/cache/restore` and saves them with explicit `actions/cache/save` steps placed
 right after the dependency install and the solution build. The combined `actions/cache`
 action saves only when the whole job succeeds, so a failing test step used to discard a
-successful 25-minute dependency build on every red run. Release builds on the native
-ARM64 host use one MSBuild node: with two nodes each fanning out `/MP` compiles, the
-optimizer ran out of heap (C1002) on the largest self-test translation unit.
+successful 25-minute dependency build on every red run.
+
+On an ARM64 host, `Directory.Build.props` selects the native ARM64-hosted tools
+(`PreferredToolArchitecture=arm64`) for ARM64 targets, mirroring the x64-host rule. Left
+unset, the toolset fell back to the 32-bit x86-hosted cross tools (`HostX86\arm64`), whose
+heap could not optimize the largest Release self-test translation units: the hosted ARM64
+Release builds failed with C1002 and the 32-bit linker restarted as 64-bit. Toolchain
+receipts and the DxUi consumer identity record the selected host.
 
 Windows CI enables Git `core.longpaths` before checkout: retained test evidence includes repository paths beyond
 the default Windows Git path limit. This setup runs on the disposable runner before any project validation.
