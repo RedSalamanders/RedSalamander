@@ -184,7 +184,13 @@ matches, required artifacts exist, the outcome is a non-flaky pass, and the rece
 contract is bound. The terminal normalizer fails closed on a missing or malformed result,
 wrong suite selection, no discovered cases/tests, invalid case status, count/aggregate
 mismatch, incomplete coverage, all-skipped or unallowed-skipped outcomes, missing required
-artifacts, nonzero exit, or blocking classification. Failed,
+artifacts, nonzero exit, or blocking classification. A self-test skip is allowed only under
+the entry's outcome contract (declared-capability skips; `unclassified` and `unexpected`
+classes are forbidden). A Pester skip is allowed only when the runner reports named case
+results and the skipped case is one of the environment-bound contracts listed by
+`Get-RSPesterEnvironmentBoundSkipCases` (the Pester entries' `static_skip_cases`): archive
+and history contracts that need gitignored evidence or unsquashed history. A skip count
+without named cases, or any other skipped Pester case, is `UNALLOWED_SKIP`. Failed,
 flaky, crashed, timed-out, partial, source-mutating, and interrupted entries do not
 promote. A dead `running`/`provisional-passed` checkpoint repairs to `interrupted`.
 

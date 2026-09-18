@@ -1714,47 +1714,11 @@ void ScanResourceLineForFormatFields(const std::filesystem::path& path,
 
 [[nodiscard]] std::filesystem::path TryFindResourceAuditRepoRoot() noexcept
 {
-    const auto probe = [](std::filesystem::path cursor) noexcept -> std::filesystem::path
-    {
-        std::error_code ec;
-        while (! cursor.empty())
-        {
-            if (std::filesystem::exists(cursor / L"RedSalamander.sln", ec) && ! ec && std::filesystem::exists(cursor / L"Specs" / L"TestRuns", ec) && ! ec)
-            {
-                return cursor;
-            }
-
-            const std::filesystem::path parent = cursor.parent_path();
-            if (parent == cursor)
-            {
-                break;
-            }
-            cursor = parent;
-            ec.clear();
-        }
-
-        return {};
-    };
-
-    std::error_code ec;
-    const std::filesystem::path cwd = std::filesystem::current_path(ec);
-    if (! ec)
-    {
-        const std::filesystem::path root = probe(cwd);
-        if (! root.empty())
-        {
-            return root;
-        }
-    }
-
-    std::array<wchar_t, 32768> modulePath{};
-    const DWORD length = GetModuleFileNameW(nullptr, modulePath.data(), static_cast<DWORD>(modulePath.size()));
-    if (length > 0 && length < modulePath.size())
-    {
-        return probe(std::filesystem::path(std::wstring_view(modulePath.data(), length)).parent_path());
-    }
-
-    return {};
+    // The audits read tracked sources and resources only, so the shared checkout-layout rule
+    // (.git, RedSalamander.sln, or RedSalamander/RedSalamander.vcxproj) is sufficient. Requiring the
+    // gitignored Specs/TestRuns evidence archive here left every fresh clone, including the
+    // hosted runners, with "Repository root unavailable".
+    return SelfTest::TryFindRepoRoot();
 }
 
 [[nodiscard]] bool TestResourceFormatPlaceholdersArePositional(CaseState& state) noexcept

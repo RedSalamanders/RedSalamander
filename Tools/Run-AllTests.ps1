@@ -522,6 +522,7 @@ function Invoke-RSTestPlanEntry {
     $parsedResult = $null
     $resultParsed = $false
     $coverageValid = $true
+    $pesterCases = @()
     $passedCount = [int64]0
     $failedCount = [int64]0
     $skippedCount = [int64]0
@@ -596,6 +597,20 @@ function Invoke-RSTestPlanEntry {
                 $totalCount = [int64](Get-JsonValue $pesterResult @('TotalCount', 'Total') `
                     ($passedCount + $failedCount + $skippedCount + $pendingCount + $inconclusiveCount))
                 $exitCode = if ($failedCount -gt 0) { 1 } else { 0 }
+                # Named case results let the durable-evidence contract accept exactly the declared
+                # environment-bound skips and reject any other skip.
+                $pesterCases = @()
+                if ($null -ne $pesterResult -and $null -ne $pesterResult.PSObject.Properties['TestResult']) {
+                    foreach ($testResult in @($pesterResult.TestResult)) {
+                        $status = switch ([string]$testResult.Result) {
+                            'Passed' { 'passed' }
+                            'Failed' { 'failed' }
+                            'Skipped' { 'skipped' }
+                            default { 'inconclusive' }
+                        }
+                        $pesterCases += [pscustomobject]@{ name = [string]$testResult.Name; status = $status }
+                    }
+                }
             }
             'PowerShellScript' {
                 if (-not (Test-Path $Entry.Path)) {
@@ -651,7 +666,7 @@ function Invoke-RSTestPlanEntry {
         Parsed     = $parsedResult
         ResultParsed = $resultParsed
         CoverageValid = $coverageValid
-        Cases      = @()
+        Cases      = @($pesterCases)
         Passed     = $passedCount
         Failed     = $failedCount
         Skipped    = $skippedCount

@@ -23,6 +23,15 @@ function New-RSTestVersionRepo {
 Describe 'Versioning helper' {
     BeforeAll {
         Import-Module $helperModule -Force -ErrorAction Stop
+        # Resolve-RSVersionContext prefers GITHUB_RUN_NUMBER over the local per-worktree counter.
+        # These contracts describe the local counter, so a hosted runner's run number must not
+        # leak into them (the CI lane saw 'Expected 64 but was 63', the run number).
+        $script:savedRunNumber = [Environment]::GetEnvironmentVariable('GITHUB_RUN_NUMBER', 'Process')
+        [Environment]::SetEnvironmentVariable('GITHUB_RUN_NUMBER', $null, 'Process')
+    }
+
+    AfterAll {
+        [Environment]::SetEnvironmentVariable('GITHUB_RUN_NUMBER', $script:savedRunNumber, 'Process')
     }
 
     It 'reuses the saved local build number across ordinary local builds' {

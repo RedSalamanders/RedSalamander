@@ -268,6 +268,44 @@ Describe 'Normalized validation terminal results' {
         (@($pesterTerminal.reason_codes) -contains 'NO_TESTS_DISCOVERED') | Should Be $true
     }
 
+    It 'accepts only the named environment-bound Pester skips' {
+        $pesterFixture = New-RSEvidenceFixture -Root (Join-Path $TestDrive 'named-pester-skips')
+        $allowed = @(Get-RSPesterEnvironmentBoundSkipCases)
+        $allowed.Count | Should BeGreaterThan 0
+        @($pesterFixture.Entry.outcome_contract.static_skip_cases) | Should Be $allowed
+
+        $namedSkips = [pscustomobject]@{
+            ExitCode = 0; Passed = 2; Failed = 0; Skipped = 2; Total = 4; Classification = 'PASSED'
+            Cases = @(
+                [pscustomobject]@{ name = 'keeps the plan digest stable'; status = 'passed' },
+                [pscustomobject]@{ name = 'keeps every entry ordered'; status = 'passed' },
+                [pscustomobject]@{ name = $allowed[0]; status = 'skipped' },
+                [pscustomobject]@{ name = $allowed[1]; status = 'skipped' }
+            )
+        }
+        $terminal = New-RSValidationTerminalResult -EntryContract $pesterFixture.Entry -Result $namedSkips `
+            -ResultParsed $true -CoverageValid $true -RequiredArtifactsPresent $true
+        $terminal.status | Should Be 'PASSED'
+        (@($terminal.reason_codes) -contains 'UNALLOWED_SKIP') | Should Be $false
+
+        $unnamedSkip = [pscustomobject]@{
+            ExitCode = 0; Passed = 1; Failed = 0; Skipped = 1; Total = 2; Classification = 'PASSED'
+            Cases = @(
+                [pscustomobject]@{ name = 'keeps the plan digest stable'; status = 'passed' },
+                [pscustomobject]@{ name = 'some new contract that just started skipping'; status = 'skipped' }
+            )
+        }
+        $unnamedTerminal = New-RSValidationTerminalResult -EntryContract $pesterFixture.Entry -Result $unnamedSkip `
+            -ResultParsed $true -CoverageValid $true -RequiredArtifactsPresent $true
+        (@($unnamedTerminal.reason_codes) -contains 'UNALLOWED_SKIP') | Should Be $true
+
+        # A skip count without named case results cannot be verified against the contract.
+        $countOnly = [pscustomobject]@{ ExitCode = 0; Passed = 1; Failed = 0; Skipped = 1; Total = 2; Classification = 'PASSED' }
+        $countOnlyTerminal = New-RSValidationTerminalResult -EntryContract $pesterFixture.Entry -Result $countOnly `
+            -ResultParsed $true -CoverageValid $true -RequiredArtifactsPresent $true
+        (@($countOnlyTerminal.reason_codes) -contains 'UNALLOWED_SKIP') | Should Be $true
+    }
+
     It 'rejects all-skipped, unallowed-skip, and aggregate count mismatches' {
         $skipped = [pscustomobject]@{ name = 'case.skip'; status = 'skipped'; skip_class = 'unexpected' }
         $result = [pscustomobject]@{
