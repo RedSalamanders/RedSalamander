@@ -665,9 +665,19 @@ function New-RSValidationTerminalResult {
             [void]$reasons.Add('COUNT_MISMATCH')
         }
     } elseif ($kind -eq 'Pester' -and $declaredSkipped -gt 0) {
-        # Pester entries currently declare no named skip allowlist. A skip is
-        # incomplete coverage until an explicit result/outcome contract exists.
-        [void]$reasons.Add('UNALLOWED_SKIP')
+        # A Pester skip is incomplete coverage unless the entry's outcome contract names the
+        # case (environment-bound contracts that need gitignored evidence or unsquashed history).
+        $outcome = Get-RSValidationResultValue -InputObject $EntryContract -Name @('outcome_contract', 'OutcomeContract') -DefaultValue ([pscustomobject]@{})
+        $allowedSkipCases = @(Get-RSValidationResultValue -InputObject $outcome -Name @('static_skip_cases') -DefaultValue @())
+        $cases = @(Get-RSValidationResultValue -InputObject $Result -Name @('Cases', 'cases') -DefaultValue @())
+        $skippedCases = @($cases | Where-Object { [string](Get-RSValidationResultValue -InputObject $_ -Name @('status') -DefaultValue '') -eq 'skipped' })
+        if ($skippedCases.Count -ne $declaredSkipped) {
+            [void]$reasons.Add('UNALLOWED_SKIP')
+        }
+        foreach ($case in $skippedCases) {
+            $caseName = [string](Get-RSValidationResultValue -InputObject $case -Name @('name') -DefaultValue '')
+            if ($caseName -cnotin $allowedSkipCases) { [void]$reasons.Add('UNALLOWED_SKIP') }
+        }
     }
 
     $terminal = [ordered]@{

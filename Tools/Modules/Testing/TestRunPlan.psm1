@@ -16,6 +16,7 @@ foreach ($domainModule in $domainModules) {
 
 Export-ModuleMember -Function @(
     'New-RSTestRunPlanEntry',
+    'Get-RSPesterEnvironmentBoundSkipCases',
     'Assert-RSTestRunPlanEntries',
     'ConvertTo-RSValidationPlanEntry',
     'New-RSValidationPlan',

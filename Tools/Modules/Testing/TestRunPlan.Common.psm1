@@ -3,6 +3,23 @@ Set-StrictMode -Version Latest
 $validationFingerprintModule = Join-Path $PSScriptRoot 'ValidationFingerprint.psm1'
 Import-Module $validationFingerprintModule -Force -Scope Local -ErrorAction Stop
 
+# Pester contracts that can only run where gitignored evidence or unsquashed history exists. They
+# skip with a named reason on a fresh clone, and the durable-evidence terminal result accepts
+# exactly these skips; any other Pester skip remains incomplete coverage.
+$script:RSPesterEnvironmentBoundSkipCases = [string[]]@(
+    'keeps every approved post-Terminal Done history blob unchanged',
+    'keeps every authoritative Terminal TestRuns reference resolvable',
+    'validates every Terminal VT JSONL row and requires its schema-owned artifacts',
+    'rejects Terminal VT results that do not satisfy the area schema',
+    'recomputes the admitted Terminal VT pair and rejects a candidate beyond baseline x1.10',
+    'retains a digest-bound compact summary and the behavioral results supporting the archived claim',
+    'keeps the complete checked-in archive inventory within the contract'
+)
+
+function Get-RSPesterEnvironmentBoundSkipCases {
+    return [string[]]@($script:RSPesterEnvironmentBoundSkipCases)
+}
+
 function Get-RSTestPlanSortedIds {
     param([string[]]$Value = @())
 
@@ -144,7 +161,7 @@ function Get-RSTestRunPlanEntryPolicy {
         }
         OutcomeContract = [pscustomobject][ordered]@{
             pass_required_cases = @('selected')
-            static_skip_cases = @()
+            static_skip_cases = @($(if ($Kind -eq 'Pester') { $script:RSPesterEnvironmentBoundSkipCases } else { @() }))
             capability_bound_skip_cases = @('declared-capability')
             forbidden_skip_classes = @('unclassified', 'unexpected')
         }
@@ -436,6 +453,7 @@ function Get-RSLiveProcessSnapshots {
 
 Export-ModuleMember -Function @(
     'New-RSTestRunPlanEntry',
+    'Get-RSPesterEnvironmentBoundSkipCases',
     'Assert-RSTestRunPlanEntries',
     'ConvertTo-RSValidationPlanEntry',
     'New-RSValidationPlan',
