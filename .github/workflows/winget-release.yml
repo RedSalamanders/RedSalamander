@@ -419,10 +419,29 @@ jobs:
               -Body $payload `
               -Uri "https://api.github.com/repos/microsoft/winget-pkgs/pulls/$Number"
           }.GetNewClosure()
+          $getUpstreamManifest = {
+            # Upstream master is the authority for "already published": resolve its head commit,
+            # then list the exact version directory. A missing directory (404) means not published.
+            $master = Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/microsoft/winget-pkgs/git/ref/heads/master"
+            $ref = [string]$master.object.sha
+            if ($ref -notmatch '^[0-9a-fA-F]{40}$') { throw "Upstream master did not resolve to a commit: '$ref'" }
+            $encodedPrefix = (($identity.ManifestPrefix -split '/') | ForEach-Object { [uri]::EscapeDataString($_) }) -join '/'
+            $names = @()
+            try {
+              $entries = @(Invoke-RestMethod -Headers $headers -Uri "https://api.github.com/repos/microsoft/winget-pkgs/contents/$encodedPrefix?ref=$ref" | ForEach-Object { $_ })
+              $names = @($entries | Where-Object { [string]$_.type -eq 'file' } | ForEach-Object { [string]$_.name })
+            } catch {
+              $status = $null
+              if ($_.Exception.PSObject.Properties['Response'] -and $null -ne $_.Exception.Response) { $status = [int]$_.Exception.Response.StatusCode }
+              if ($status -ne 404) { throw }
+            }
+            return [pscustomobject]@{ Ref = $ref; Names = $names }
+          }.GetNewClosure()
           $repository = @{
             ListPullRequests = $listPullRequests
             ListPullRequestFiles = $listPullRequestFiles
             GetManifestContentHash = $getManifestContentHash
+            GetUpstreamManifest = $getUpstreamManifest
             PatchPullRequest = $patchPullRequest
           }
 
@@ -492,14 +511,22 @@ jobs:
             -MaximumVisibilityAttempts 6
 
           "pull_request_url=$($publication.Url)" >> $env:GITHUB_OUTPUT
-          Write-Host "Winget pull request: $($publication.Url)" -ForegroundColor Green
+          "published=$([bool]$publication.Published)" >> $env:GITHUB_OUTPUT
+          if ($publication.Published) {
+            Write-Host "Winget already publishes this exact manifest: $($publication.Url)" -ForegroundColor Green
+            Write-Host $publication.Reason
+          } else {
+            Write-Host "Winget pull request: $($publication.Url)" -ForegroundColor Green
+          }
 
       - name: Summary
         if: success()
         shell: pwsh
         run: |
           $version = "${{ steps.version.outputs.version }}"
-          if ("${{ github.event_name }}" -eq "release" -or "${{ inputs.submit }}" -eq "true") {
+          if ("${{ steps.winget_submission.outputs.published }}" -eq "True") {
+            Write-Host "RedSalamander $version is already published in winget-pkgs with this exact manifest; nothing was submitted." -ForegroundColor Green
+          } elseif ("${{ github.event_name }}" -eq "release" -or "${{ inputs.submit }}" -eq "true") {
             Write-Host "Successfully submitted RedSalamander $version portable ZIP to winget." -ForegroundColor Green
             Write-Host "The winget community repository maintainers will review the PR."
           } else {

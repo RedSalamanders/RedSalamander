@@ -54,6 +54,10 @@ function New-RSWingetPublicationTestRepository {
         FileListCalls = 0
         ListFailure = $null
         FileListFailure = $null
+        UpstreamRef = ('a' * 40)
+        UpstreamNames = @()
+        UpstreamFailure = $null
+        UpstreamCalls = 0
         PatchCalls = 0
         SubmitCalls = 0
         WaitCalls = 0
@@ -95,6 +99,13 @@ function New-RSWingetPublicationTestRepository {
         }
         return $state.HashesByRefAndPath[$key]
     }.GetNewClosure()
+    $getUpstreamManifest = {
+        $state.UpstreamCalls++
+        if ($state.UpstreamFailure) {
+            throw $state.UpstreamFailure
+        }
+        return [pscustomobject]@{ Ref = $state.UpstreamRef; Names = @($state.UpstreamNames) }
+    }.GetNewClosure()
     $patchPullRequest = {
         param([int]$Number, [string]$Title, [string]$Body)
         $state.PatchCalls++
@@ -111,6 +122,7 @@ function New-RSWingetPublicationTestRepository {
             ListPullRequests = $listPullRequests
             ListPullRequestFiles = $listPullRequestFiles
             GetManifestContentHash = $getManifestContentHash
+            GetUpstreamManifest = $getUpstreamManifest
             PatchPullRequest = $patchPullRequest
         }
     }
@@ -206,6 +218,33 @@ function Add-RSWingetPublicationTestUnrelatedPullRequest {
         [pscustomobject]@{ filename = "$manifestPrefix/$PackageIdentifier.yaml"; status = 'added' }
     )
     return $pullRequest
+}
+
+function Set-RSWingetPublicationTestUpstreamPublished {
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$State,
+
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$Identity,
+
+        [switch]$HashMismatch,
+        [switch]$MissingFile
+    )
+
+    $names = @()
+    $skipped = $false
+    foreach ($entry in $Identity.ManifestHashes.GetEnumerator()) {
+        $name = $entry.Key.Substring($Identity.ManifestPrefix.Length + 1)
+        if ($MissingFile -and -not $skipped) {
+            $skipped = $true
+            continue
+        }
+        $names += $name
+        $hash = if ($HashMismatch -and $names.Count -eq 1) { '1' * 64 } else { $entry.Value }
+        $State.HashesByRefAndPath["$($State.UpstreamRef)|$($entry.Key)"] = $hash
+    }
+    $State.UpstreamNames = $names
 }
 
 Describe 'Canonical Winget manifest content' {
@@ -505,6 +544,135 @@ Describe 'Resumable Winget pull-request publication' {
                 -Submit $submit `
                 -Wait $noWait } |
             Should Throw 'Pull request #100 is not open.'
+        $testRepository.State.PatchCalls | Should Be 0
+    }
+
+    It 'reports an exact upstream publication without listing pull requests or submitting' {
+        Set-RSWingetPublicationTestUpstreamPublished -State $testRepository.State -Identity $identity
+        $submit = { throw 'submit must not run' }
+
+        $result = Invoke-RSWingetPublication `
+            -Identity $identity `
+            -ExpectedAuthor $expectedAuthor `
+            -ExpectedHeadRepository $expectedHeadRepository `
+            -PullRequestBody $body `
+            -Repository $testRepository.Operations `
+            -Submit $submit `
+            -Wait $noWait
+
+        $result.Published | Should Be $true
+        $result.Submitted | Should Be $false
+        $result.PullRequestNumber | Should BeNullOrEmpty
+        $result.Url | Should Be 'https://github.com/microsoft/winget-pkgs/tree/master/manifests/r/RedSalamanders/RedSalamander/7.0.42'
+        $result.Reason | Should Match 'Upstream master already contains manifests/r/RedSalamanders/RedSalamander/7.0.42 with this exact canonical content'
+        $testRepository.State.UpstreamCalls | Should Be 1
+        $testRepository.State.ListCalls | Should Be 0
+        $testRepository.State.PatchCalls | Should Be 0
+    }
+
+    It 'stops when upstream already publishes the version with different content or files' {
+        Set-RSWingetPublicationTestUpstreamPublished -State $testRepository.State -Identity $identity -HashMismatch
+        $submit = { throw 'submit must not run' }
+        { Invoke-RSWingetPublication `
+                -Identity $identity `
+                -ExpectedAuthor $expectedAuthor `
+                -ExpectedHeadRepository $expectedHeadRepository `
+                -PullRequestBody $body `
+                -Repository $testRepository.Operations `
+                -Submit $submit `
+                -Wait $noWait } |
+            Should Throw 'whose canonical content does not match'
+
+        $partialRepository = New-RSWingetPublicationTestRepository
+        Set-RSWingetPublicationTestUpstreamPublished -State $partialRepository.State -Identity $identity -MissingFile
+        { Invoke-RSWingetPublication `
+                -Identity $identity `
+                -ExpectedAuthor $expectedAuthor `
+                -ExpectedHeadRepository $expectedHeadRepository `
+                -PullRequestBody $body `
+                -Repository $partialRepository.Operations `
+                -Submit $submit `
+                -Wait $noWait } |
+            Should Throw 'with a different manifest file set'
+        $partialRepository.State.ListCalls | Should Be 0
+    }
+
+    It 'recognizes an upstream merge that lands while waiting for the submitted pull request' {
+        $submit = {
+            param([string]$InitialTitle, [pscustomobject]$PublicationIdentity, [hashtable]$Repository)
+            $state = $Repository['_TestState']
+            $state['SubmitCalls']++
+            # The submission merged upstream before the PR list ever showed it.
+            Set-RSWingetPublicationTestUpstreamPublished -State $state -Identity $PublicationIdentity
+            return [pscustomobject]@{ ExitCode = 0; Output = @('created') }
+        }
+
+        $result = Invoke-RSWingetPublication `
+            -Identity $identity `
+            -ExpectedAuthor $expectedAuthor `
+            -ExpectedHeadRepository $expectedHeadRepository `
+            -PullRequestBody $body `
+            -Repository $testRepository.Operations `
+            -Submit $submit `
+            -Wait $noWait
+
+        $result.Published | Should Be $true
+        $result.Submitted | Should Be $true
+        $testRepository.State.SubmitCalls | Should Be 1
+        $testRepository.State.PatchCalls | Should Be 0
+    }
+
+    It 'treats an empty changed-file list on a fresh owned pull request as not yet visible' {
+        $created = Add-RSWingetPublicationTestPullRequest -State $testRepository.State -Identity $identity
+        $files = $testRepository.State.FilesByNumber[[string]$created.number]
+        $testRepository.State.FilesByNumber[[string]$created.number] = @()
+        $attempts = 0
+        $revealOnSecondScan = {
+            param([int]$Attempt, [hashtable]$Repository)
+            $Repository['_TestState']['WaitCalls']++
+            $Repository['_TestState']['FilesByNumber'][[string]$created.number] = $files
+        }.GetNewClosure()
+        $submit = { throw 'submit must not run' }
+
+        $result = Invoke-RSWingetPublication `
+            -Identity $identity `
+            -ExpectedAuthor $expectedAuthor `
+            -ExpectedHeadRepository $expectedHeadRepository `
+            -PullRequestBody $body `
+            -Repository $testRepository.Operations `
+            -Submit $submit `
+            -Wait $revealOnSecondScan `
+            -MaximumVisibilityAttempts 3
+
+        $result.PullRequestNumber | Should Be $created.number
+        $result.Submitted | Should Be $false
+        $testRepository.State.WaitCalls | Should Be 1
+        $testRepository.State.PatchCalls | Should Be 1
+    }
+
+    It 'names the empty changed-file list when it never fills in' {
+        $created = Add-RSWingetPublicationTestPullRequest -State $testRepository.State -Identity $identity
+        $testRepository.State.FilesByNumber[[string]$created.number] = @()
+        $submit = { throw 'submit must not run' }
+
+        $failure = $null
+        try {
+            Invoke-RSWingetPublication `
+                -Identity $identity `
+                -ExpectedAuthor $expectedAuthor `
+                -ExpectedHeadRepository $expectedHeadRepository `
+                -PullRequestBody $body `
+                -Repository $testRepository.Operations `
+                -Submit $submit `
+                -Wait $noWait `
+                -MaximumVisibilityAttempts 2
+        }
+        catch {
+            $failure = [string]$_.Exception.Message
+        }
+
+        $failure | Should Match "Last state: Pending - Pull request #$($created.number) files are not yet visible: the changed-file list is empty\."
+        $failure | Should Match 'Submission never ran'
         $testRepository.State.PatchCalls | Should Be 0
     }
 

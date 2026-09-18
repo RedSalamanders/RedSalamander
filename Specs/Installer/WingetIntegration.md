@@ -186,11 +186,23 @@ when no date is supplied (bare local runs). Release tags whose generator predate
 with a workflow warning, and a rerun of such a tag on a later day cannot resume its earlier PR. Marker mismatches on
 the token owner's own exact-version PR stop as `not owned`; the earlier PR must be closed or finalized by hand.
 
-The state machine creates only when the bounded direct upstream list proves there is no exact-version PR. Exactly
-one automation-owned open match resumes through the same idempotent PATCH-and-verify path. External, ambiguous,
-multiple, closed, extra-file, or content-mismatched candidates stop without mutation. A submit failure or malformed
-WingetCreate output is not authoritative: bounded direct-list retries recover a newly created exact PR after GitHub
-eventual consistency. If stable ownership cannot be proven, publication stops; titles are never fuzzy-searched.
+Before any pull request is listed, the state machine reads upstream `master`: it resolves the head commit and lists
+the exact `manifests/<p>/<Publisher>/<Name>/<version>` directory (a 404 means not published). When the directory holds
+exactly the three expected files with identical canonical content, the state is `Published`: publication reports the
+manifest tree URL with `Published = $true`, submits nothing, and patches nothing. A directory with a different file set
+or different canonical content is a `Conflict`. This check exists because the pull-request list covers only the 100
+most recently updated upstream PRs, so a merged publication drops out of it within hours; without it, the v7.0.60 rerun
+re-submitted an already merged version and upstream closed the empty PR as "does not update any files". The same
+check runs during the visibility retries, so a submission that upstream merges before the list ever shows it also
+ends as `Published`.
+
+The state machine creates only when upstream master lacks the version and the bounded direct upstream list proves
+there is no exact-version PR. Exactly one automation-owned open match resumes through the same idempotent
+PATCH-and-verify path. External, ambiguous, multiple, closed, extra-file, or content-mismatched candidates stop
+without mutation; an owned candidate whose changed-file list is still empty is `Pending`, because GitHub lists a
+fresh PR's files a few seconds after the PR itself exists. A submit failure or malformed WingetCreate output is not
+authoritative: bounded direct-list retries recover a newly created exact PR after GitHub eventual consistency. If
+stable ownership cannot be proven, publication stops; titles are never fuzzy-searched.
 
 Each state check lists the 100 most recently updated upstream PRs (two pages of 50), but it reads a changed-file list
 (one request per PR) only for candidate PRs: those authored by the token owner, those carrying the publication marker,
