@@ -2274,6 +2274,9 @@ END
                << L" previewUs=" << previewElapsed.count() << L'\n';
 #if defined(__SANITIZE_ADDRESS__)
     std::wcout << L"redconfigure.repo_sized timingBudget=diagnostic-ASan\n";
+#elif defined(_DEBUG)
+    // Unoptimized builds record the timings; the budgets qualify optimized builds only.
+    std::wcout << L"redconfigure.repo_sized timingBudget=diagnostic-Debug\n";
 #else
     ok = Require(scanElapsed < std::chrono::milliseconds(500), L"Repo-sized RedConfigure scan should stay under the 500 ms target.") && ok;
     ok = Require(validationElapsed < std::chrono::milliseconds(250), L"Repo-sized RedConfigure validation should stay under the 250 ms target.") && ok;
@@ -2865,6 +2868,8 @@ END
          ok;
 #if defined(__SANITIZE_ADDRESS__)
     std::wcout << L"redconfigure.theme.mass_preview timingBudget=diagnostic-ASan\n";
+#elif defined(_DEBUG)
+    std::wcout << L"redconfigure.theme.mass_preview timingBudget=diagnostic-Debug\n";
 #else
     ok = Require(massPreviewElapsed < std::chrono::milliseconds(100),
                  L"The worst-allowed 512-token theme mass preview should remain below the 100 ms explicit-action budget.") &&

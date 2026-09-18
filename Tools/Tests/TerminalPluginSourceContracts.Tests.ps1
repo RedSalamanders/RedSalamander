@@ -625,7 +625,8 @@ Describe 'Embedded Terminal plugin source contracts' {
         $resizeHandler | Should Not Match 'discardDeviceResources\(\)'
     }
 
-    It 'keeps every authoritative Terminal TestRuns reference resolvable' {
+    # Specs/TestRuns is gitignored evidence; the references can only resolve where the archive exists.
+    It 'keeps every authoritative Terminal TestRuns reference resolvable' -Skip:(-not (Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\TestRuns\4cb089111a23\Terminal') -PathType Container)) {
         $terminalSpec | Should Not Match '2026-08-09_150404'
         $references = @([regex]::Matches(
                 $terminalSpec,

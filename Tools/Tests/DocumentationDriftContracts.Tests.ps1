@@ -12,7 +12,11 @@ Import-Module (Join-Path $repoRoot 'Tools\Modules\Tooling\SpecInformationArchite
 Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 
 Describe 'Specification information architecture integration' {
-    It 'keeps every approved post-Terminal Done history blob unchanged' {
+    # The protected Done history is measured from base commit 6aecfde8e, which a squashed or
+    # shallow clone (hosted runners check out one commit) does not carry.
+    & git -C $repoRoot rev-parse --verify --quiet '6aecfde8e^{commit}' *> $null
+    $protectedHistoryBaseAvailable = ($LASTEXITCODE -eq 0)
+    It 'keeps every approved post-Terminal Done history blob unchanged' -Skip:(-not $protectedHistoryBaseAvailable) {
         $history = Test-RSProtectedDoneHistory -RepositoryRoot $repoRoot -BaseCommit '6aecfde8e'
 
         $history.Available | Should Be $true

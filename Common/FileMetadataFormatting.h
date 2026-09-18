@@ -38,8 +38,13 @@ struct DisplayFields
         return {};
     }
 
+    // The largest FILETIME that FileTimeToSystemTime can represent (30827-12-31 23:59:59.9999999 UTC).
+    // Beyond it the conversion outcome depends on the process time zone: with a zero bias the Windows
+    // APIs still produce a year-30828 SYSTEMTIME, so an out-of-range time must be rejected explicitly.
+    constexpr int64_t kMaxConvertibleFileTime = 0x7FFF35F4F06C7FFF;
+
     DisplayFields fields;
-    if (metadata.lastWriteTime100nsSince1601 > 0)
+    if (metadata.lastWriteTime100nsSince1601 > 0 && metadata.lastWriteTime100nsSince1601 <= kMaxConvertibleFileTime)
     {
         ULARGE_INTEGER ticks{};
         ticks.QuadPart = static_cast<ULONGLONG>(metadata.lastWriteTime100nsSince1601);
