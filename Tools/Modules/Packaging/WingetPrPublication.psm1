@@ -203,6 +203,13 @@ function Get-RSWingetObjectString {
         if ($null -eq $current) {
             return ''
         }
+        if ($current -is [hashtable]) {
+            if (-not $current.ContainsKey($segment)) {
+                return ''
+            }
+            $current = $current[$segment]
+            continue
+        }
         $property = $current.PSObject.Properties[$segment]
         if ($null -eq $property) {
             return ''
@@ -213,6 +220,28 @@ function Get-RSWingetObjectString {
         return ''
     }
     return [string]$current
+}
+
+function Get-RSWingetObjectValues {
+    param(
+        [object]$Object,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name
+    )
+
+    if ($null -eq $Object) {
+        return @()
+    }
+    $property = if ($Object -is [hashtable]) {
+        if ($Object.ContainsKey($Name)) { [pscustomobject]@{ Value = $Object[$Name] } } else { $null }
+    } else {
+        $Object.PSObject.Properties[$Name]
+    }
+    if ($null -eq $property -or $null -eq $property.Value) {
+        return @()
+    }
+    return @($property.Value)
 }
 
 function Test-RSWingetPullRequestCandidate {
@@ -266,6 +295,44 @@ function Get-RSWingetPublicationState {
     $listPullRequests = Get-RSRepositoryOperation -Repository $Repository -Name 'ListPullRequests'
     $listPullRequestFiles = Get-RSRepositoryOperation -Repository $Repository -Name 'ListPullRequestFiles'
     $getManifestContentHash = Get-RSRepositoryOperation -Repository $Repository -Name 'GetManifestContentHash'
+    $getUpstreamManifest = Get-RSRepositoryOperation -Repository $Repository -Name 'GetUpstreamManifest'
+    $expectedPaths = @($Identity.ManifestHashes.Keys)
+
+    # The pull-request list covers only the most recently updated upstream PRs, so a merged
+    # publication drops out of it within hours and a new submission would open an empty PR that
+    # upstream closes as "does not update any files". Upstream master is the authority for
+    # "already published": one directory read, then the same canonical content check.
+    $upstream = $null
+    try {
+        $upstream = & $getUpstreamManifest
+    }
+    catch [System.Exception] {
+        return [pscustomobject]@{ Kind = 'Pending'; Reason = "The upstream manifest directory is not yet readable: $($_.Exception.Message)"; PullRequest = $null }
+    }
+    $upstreamNames = @()
+    $upstreamRef = ''
+    if ($null -ne $upstream) {
+        $upstreamNames = @(Get-RSWingetObjectValues -Object $upstream -Name 'Names' | ForEach-Object { [string]$_ })
+        $upstreamRef = Get-RSWingetObjectString -Object $upstream -Path @('Ref')
+    }
+    if ($upstreamNames.Count -gt 0) {
+        $expectedNames = @($expectedPaths | ForEach-Object { $_.Substring($Identity.ManifestPrefix.Length + 1) })
+        if (-not (Test-RSStringSetEqual -Left $upstreamNames -Right $expectedNames)) {
+            return [pscustomobject]@{ Kind = 'Conflict'; Reason = "Upstream master already contains $($Identity.ManifestPrefix) with a different manifest file set."; PullRequest = $null }
+        }
+        foreach ($path in $expectedPaths) {
+            try {
+                $publishedHash = [string](& $getManifestContentHash 'microsoft/winget-pkgs' $path $upstreamRef)
+            }
+            catch [System.Exception] {
+                return [pscustomobject]@{ Kind = 'Pending'; Reason = "Upstream master manifest content is not yet readable: '$path' at ${upstreamRef}: $($_.Exception.Message)"; PullRequest = $null }
+            }
+            if ($publishedHash -cne [string]$Identity.ManifestHashes[$path]) {
+                return [pscustomobject]@{ Kind = 'Conflict'; Reason = "Upstream master already contains $($Identity.ManifestPrefix) whose canonical content does not match '$path'."; PullRequest = $null }
+            }
+        }
+        return [pscustomobject]@{ Kind = 'Published'; Reason = "Upstream master already contains $($Identity.ManifestPrefix) with this exact canonical content."; PullRequest = $null }
+    }
 
     try {
         $pullRequests = @(Get-RSPagedResults `
@@ -276,7 +343,6 @@ function Get-RSWingetPublicationState {
         return [pscustomobject]@{ Kind = 'Pending'; Reason = "The upstream pull-request list is not yet readable: $($_.Exception.Message)"; PullRequest = $null }
     }
 
-    $expectedPaths = @($Identity.ManifestHashes.Keys)
     $candidates = @()
     $scanIncomplete = $false
     $scanFailure = $null
@@ -353,6 +419,11 @@ function Get-RSWingetPublicationState {
     }
 
     $fileNames = @($candidate.Files | ForEach-Object { [string]$_.filename })
+    if ($fileNames.Count -eq 0) {
+        # GitHub lists a freshly created PR's files a few seconds after the PR itself exists;
+        # an empty list is not yet evidence of a wrong file set.
+        return [pscustomobject]@{ Kind = 'Pending'; Reason = "Pull request #$($pullRequest.number) files are not yet visible: the changed-file list is empty."; PullRequest = $pullRequest }
+    }
     if (-not (Test-RSStringSetEqual -Left $fileNames -Right $expectedPaths)) {
         return [pscustomobject]@{ Kind = 'Conflict'; Reason = "Pull request #$($pullRequest.number) does not contain the exact manifest file set."; PullRequest = $pullRequest }
     }
@@ -465,6 +536,26 @@ function Set-RSWingetPullRequestMetadata {
     }
 }
 
+function New-RSWingetPublishedResult {
+    param(
+        [Parameter(Mandatory = $true)]
+        [pscustomobject]$Identity,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Reason,
+
+        [bool]$Submitted = $false
+    )
+
+    return [pscustomobject]@{
+        PullRequestNumber = $null
+        Url = "https://github.com/microsoft/winget-pkgs/tree/master/$($Identity.ManifestPrefix)"
+        Submitted = $Submitted
+        Published = $true
+        Reason = $Reason
+    }
+}
+
 function Invoke-RSWingetPublication {
     param(
         [Parameter(Mandatory = $true)]
@@ -501,6 +592,9 @@ function Invoke-RSWingetPublication {
     if ($state.Kind -ceq 'Conflict') {
         throw $state.Reason
     }
+    if ($state.Kind -ceq 'Published') {
+        return New-RSWingetPublishedResult -Identity $Identity -Reason $state.Reason -Submitted $false
+    }
     if ($state.Kind -ceq 'Owned') {
         $result = Set-RSWingetPullRequestMetadata `
             -Identity $Identity `
@@ -511,6 +605,8 @@ function Invoke-RSWingetPublication {
             PullRequestNumber = $result.PullRequestNumber
             Url = $result.Url
             Submitted = $false
+            Published = $false
+            Reason = $state.Reason
         }
     }
 
@@ -541,6 +637,10 @@ function Invoke-RSWingetPublication {
         if ($state.Kind -ceq 'Conflict') {
             throw $state.Reason
         }
+        if ($state.Kind -ceq 'Published') {
+            # Upstream merged the manifests (ours or an equivalent submission) while we waited.
+            return New-RSWingetPublishedResult -Identity $Identity -Reason $state.Reason -Submitted $submitted
+        }
         if ($state.Kind -ceq 'Owned') {
             $result = Set-RSWingetPullRequestMetadata `
                 -Identity $Identity `
@@ -551,6 +651,8 @@ function Invoke-RSWingetPublication {
                 PullRequestNumber = $result.PullRequestNumber
                 Url = $result.Url
                 Submitted = $submitted
+                Published = $false
+                Reason = $state.Reason
             }
         }
         if ($attempt -lt $MaximumVisibilityAttempts) {

@@ -244,6 +244,21 @@ Describe 'Winget release workflow' {
         $publicationModule | Should Not Match "'Get-RSWingetSubmitDiagnostics'"
     }
 
+    It 'treats upstream master as the authority for an already published version' {
+        # The PR list covers only recently updated PRs; a merged publication drops out within hours
+        # and a fresh submission then opens an empty PR that upstream closes.
+        $workflow | Should Match 'GetUpstreamManifest = \$getUpstreamManifest'
+        $workflow | Should Match 'api\.github\.com/repos/microsoft/winget-pkgs/git/ref/heads/master'
+        $workflow | Should Match 'contents/\$encodedPrefix\?ref=\$ref'
+        $workflow | Should Match 'if \(\$status -ne 404\) \{ throw \}'
+        $workflow | Should Match '"published=\$\(\[bool\]\$publication\.Published\)" >> \$env:GITHUB_OUTPUT'
+        $workflow | Should Match 'steps\.winget_submission\.outputs\.published'
+        $publicationModule | Should Match "-Name 'GetUpstreamManifest'"
+        $publicationModule | Should Match "Kind = 'Published'"
+        $publicationModule | Should Match 'function New-RSWingetPublishedResult'
+        $publicationModule | Should Match 'the changed-file list is empty'
+    }
+
     It 'reads changed files only for candidate pull requests' {
         # One changed-file request per listed upstream PR turned each state check into ~100 calls; the
         # scan now inspects only the token owner's PRs and PRs naming the package or carrying the marker.
