@@ -16,8 +16,11 @@ name: Build (reusable)
         type: boolean
         default: false
       test_suite:
-        # Run-AllTests suite for the native validation step: CI is the quick PR/main gate;
-        # Full adds the artifact-mutating build-toolchain lane and ETW latency diagnostics.
+        # Run-AllTests suite for the native validation step. PR is the pull-request gate (standalone
+        # executables and tooling contracts, no in-product self-test suites, no interactive entries,
+        # no failure-classification reruns; about ten minutes). CI adds the three in-product self-test
+        # suites with classification for pushes to main. Full adds the artifact-mutating
+        # build-toolchain lane and ETW latency diagnostics and stays the local closeout gate.
         type: string
         default: CI
       build_number:
@@ -580,10 +583,11 @@ jobs:
           if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -ine '${{ inputs.platform }}') {
             throw 'Runtime qualification requires a native runner for the target architecture.'
           }
-          if ($env:RS_TEST_SUITE -notin @('CI', 'Full')) {
-            throw "test_suite must be CI or Full; received '$env:RS_TEST_SUITE'."
+          if ($env:RS_TEST_SUITE -notin @('PR', 'CI', 'Full')) {
+            throw "test_suite must be PR, CI, or Full; received '$env:RS_TEST_SUITE'."
           }
-          # Suite CI is the quick receipt-verified gate. Suite Full adds the artifact-mutating
+          # Suite PR is the pull-request gate (about ten minutes). Suite CI adds the in-product
+          # self-test suites with failure classification. Suite Full adds the artifact-mutating
           # build-toolchain lane (a single-node targeted rebuild plus a full re-attestation build)
           # and ETW latency diagnostics; it remains the local closeout gate.
           ./Tools/Run-AllTests.ps1 -Suite $env:RS_TEST_SUITE -ValidationMode Fresh -SkipBuild -Configuration '${{ inputs.configuration }}' -Platform '${{ inputs.platform }}' -TestRoot $env:REDSALAMANDER_TEST_ROOT -TimeoutMultiplier 2.0 -AllowAlternateVolumeTestRoot

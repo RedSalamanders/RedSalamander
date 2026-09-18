@@ -86,9 +86,11 @@ jobs:
           Write-Host "Formatting passes for $($sources.Count) changed native files; archived evidence is excluded."
           $global:LASTEXITCODE = 0
 
-  # Pull requests build and test one Debug profile per architecture on native runners.
-  # Pushes to main add both Release profiles. ASan Debug runs from asan.yml (weekly, on
-  # dispatch, and on PRs that touch native sources), never as part of every push.
+  # Pull requests build one Debug profile per architecture on native runners and run Suite PR:
+  # the standalone test executables and tooling contracts, about ten minutes, no in-product
+  # self-test suites and no classification reruns. Pushes to main add both Release profiles and
+  # run Suite CI, which adds the three in-product self-test suites. ASan Debug runs from asan.yml
+  # (weekly, on dispatch, and on PRs that touch native sources), never as part of every push.
   native:
     strategy:
       fail-fast: false
@@ -107,5 +109,5 @@ jobs:
       platform: ${{ matrix.platform }}
       native_runner: ${{ matrix.runner }}
       run_full_tests: true
-      test_suite: CI
+      test_suite: ${{ github.event_name == 'pull_request' && 'PR' || 'CI' }}
       upload_build_output: false

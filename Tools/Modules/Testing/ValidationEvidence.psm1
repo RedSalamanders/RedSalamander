@@ -481,7 +481,7 @@ function New-RSValidationEvidenceRun {
     Assert-RSValidationRunId -RunId $RunId
     if (-not [string]::IsNullOrEmpty($CampaignId)) { Assert-RSValidationRunId -RunId $CampaignId }
     if (-not [string]::IsNullOrEmpty($ParentRunId)) { Assert-RSValidationRunId -RunId $ParentRunId }
-    if ($Plan.requested_suite -notin @('CI', 'Full')) { throw 'Durable validation evidence is limited to CI or Full plans.' }
+    if ($Plan.requested_suite -notin @('PR', 'CI', 'Full')) { throw 'Durable validation evidence is limited to PR, CI, or Full plans.' }
     $root = Assert-RSValidationEvidenceRoot -EvidenceRoot $EvidenceRoot
     [void](New-Item -ItemType Directory -Path (Join-Path $root 'runs') -Force)
     $runDirectory = Join-Path (Join-Path $root 'runs') $RunId

@@ -696,10 +696,10 @@ Describe 'Pinned build-tool and CI identity' {
         $subclassGuard | Should Match 'Select-String -SimpleMatch -Pattern \$pattern'
         $subclassGuard | Should Match '\$global:LASTEXITCODE\s*=\s*0\s*$'
         $ci | Should Match '"platform": "ARM64", "runner": "windows-11-vs2026-arm", "configuration": "Debug"'
-        $selfTests | Should Match 'Suite CI covers .*PluginContractTests, SettingsSchemaTests, CrashHandlingTests'
+        $selfTests | Should Match 'Suite PR is the ten-minute subset of Suite CI: .*PluginContractTests, SettingsSchemaTests, CrashHandlingTests'
         $ci | Should Match 'run_full_tests:\s*true'
         # The quick gate runs the receipt-verified CI suite; Full stays the local closeout gate.
-        $ci | Should Match 'test_suite:\s*CI'
+        $ci | Should Match "test_suite: \$\{\{ github\.event_name == 'pull_request' && 'PR' \|\| 'CI' \}\}"
         $ci | Should Not Match '"configuration": "ASan Debug"'
         $ci | Should Match '(?ms)^concurrency:\s+group:\s*ci-\$\{\{ github\.event\.pull_request\.number \|\| github\.ref \}\}\s+cancel-in-progress:\s*true'
     }

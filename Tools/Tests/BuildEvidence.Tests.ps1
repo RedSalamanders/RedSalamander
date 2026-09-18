@@ -582,7 +582,7 @@ Describe 'Operation Startrail build receipt records' {
         $reusable.IndexOf('Create portable same-workflow build attestation') | Should BeLessThan $reusable.IndexOf('Upload build output')
 
         $reusable | Should Match 'Run-AllTests.ps1 -Suite \$env:RS_TEST_SUITE -ValidationMode Fresh -SkipBuild'
-        $reusable | Should Match "if \(\`$env:RS_TEST_SUITE -notin @\('CI', 'Full'\)\)"
+        $reusable | Should Match "if \(\`$env:RS_TEST_SUITE -notin @\('PR', 'CI', 'Full'\)\)"
         $reusable | Should Match 'RS_TEST_SUITE:\s*\$\{\{ inputs\.test_suite \}\}'
         $reusable | Should Match '(?ms)test_suite:\s*(?:#[^\n]*\n\s*)*type:\s*string\s+default:\s*CI'
         $reusable.IndexOf('Build solution') | Should BeLessThan $reusable.IndexOf('Run native validation suite')

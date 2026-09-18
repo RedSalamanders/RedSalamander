@@ -563,8 +563,8 @@ The native matrix is selected per event: pull requests build x64 Debug and ARM64
 pushes to `main` add both Release profiles, and ASan Debug runs from `asan.yml`. Each
 job builds the test-enabled solution, verifies the ASAN defect probe where selected,
 then uses the receipt-gated runner in that same job with the suite named by the
-reusable workflow's `test_suite` input (`CI` by default; `Full` remains the local
-closeout gate). Cross-job nightly/package handoffs still require portable attestation.
+reusable workflow's `test_suite` input (`PR` on pull requests, `CI` on pushes to
+`main`; `Full` remains the local closeout gate). Cross-job nightly/package handoffs still require portable attestation.
 Runtime execution is rejected if host architecture differs from the selected target.
 No custom DxUi secret is required; the public pin restores through HTTPS.
 

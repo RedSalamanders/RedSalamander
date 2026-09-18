@@ -64,7 +64,7 @@ function Get-RSViewerTestGroups {
 function Get-RSTestRunPlan {
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet('All', 'Compare', 'Commands', 'FileOps', 'CI', 'Full')]
+        [ValidateSet('All', 'Compare', 'Commands', 'FileOps', 'PR', 'CI', 'Full')]
         [string]$Suite,
 
         [Parameter(Mandatory = $true)]
@@ -147,7 +147,7 @@ function Get-RSTestRunPlan {
             -RequiresInteractiveDesktop:$requiresInteractiveDesktop
     }
 
-    if ($Suite -eq 'CI') {
+    if ($Suite -in @('PR', 'CI')) {
         $plan += New-RSTestRunPlanEntry `
             -Id 'standalone.product-ui' `
             -Name 'ProductUiTests' `
@@ -228,8 +228,15 @@ function Get-RSTestRunPlan {
             -WorkingDirectory $RepoRoot
     }
 
-    # Suite CI is the GitHub Actions PR gate. Suite Full remains the broader local/closeout gate
+    # Suite PR is the pull-request gate: the CI standalone executables and tooling contracts
+    # without the three in-product self-test suites (26-100 minutes each on hosted runners)
+    # and without interactive-desktop entries, so it finishes in well under fifteen minutes.
+    # Suite CI is the push-to-main gate. Suite Full remains the broader local/closeout gate
     # and additionally includes diagnostics such as RedSalamanderMonitorEtwLatency.
+    if ($Suite -eq 'PR') {
+        $plan = @($plan | Where-Object { $_.Kind -ne 'SelfTest' -and -not $_.RequiresInteractiveDesktop })
+    }
+
     if ($Suite -eq 'Full') {
         # The artifact-mutating deployment proof is the first canonical Full entry.
         # Run-AllTests re-attests a byte-verified full receipt, opens a new artifact

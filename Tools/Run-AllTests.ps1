@@ -161,7 +161,7 @@
 
 [CmdletBinding()]
 param(
-    [ValidateSet('All', 'Compare', 'Commands', 'FileOps', 'CI', 'Full')]
+    [ValidateSet('All', 'Compare', 'Commands', 'FileOps', 'PR', 'CI', 'Full')]
     [string]$Suite = 'All',
 
     [switch]$SkipBuild,
@@ -1341,7 +1341,7 @@ $requiredPlanArtifactPaths = @($testPlan | ForEach-Object {
             [IO.Path]::GetRelativePath($repoRoot, $candidate).Replace('\', '/')
         }
     } | Sort-Object -Unique)
-if ($Suite -in @('CI', 'Full') -and
+if ($Suite -in @('PR', 'CI', 'Full') -and
     -not (Test-RSBuildReceiptForArtifactUse -Receipt $receipt -SourceSnapshot (Get-RSBuildSourceSnapshot -RepoRoot $repoRoot) `
         -Platform $Platform -Configuration $Configuration -RepoRoot $repoRoot `
         -RequiredRelativePath $requiredPlanArtifactPaths)) {
@@ -1580,7 +1580,7 @@ if ($ValidationMode -eq 'Resume') {
     Write-Host "Exact resume: $(@($resumeCandidates | Where-Object reusable).Count)/$($resumeCandidates.Count) entries reusable from $($resumeOriginState.run_id)." -ForegroundColor Cyan
 }
 $validationEvidenceRun = $null
-if ($Suite -in @('CI', 'Full')) {
+if ($Suite -in @('PR', 'CI', 'Full')) {
     $validationEvidenceRun = New-RSValidationEvidenceRun `
         -EvidenceRoot $validationEvidenceRoot `
         -RunId $testRunContext.RunId -Plan $validationPlan -Decision $shadowDecision `

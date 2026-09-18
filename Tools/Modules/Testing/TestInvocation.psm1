@@ -142,7 +142,7 @@ function New-RSPesterInvokeParameters {
 function Get-RSBuildScriptArguments {
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet('All', 'Compare', 'Commands', 'FileOps', 'CI', 'Full')]
+        [ValidateSet('All', 'Compare', 'Commands', 'FileOps', 'PR', 'CI', 'Full')]
         [string]$Suite,
 
         [Parameter(Mandatory = $true)]
@@ -158,7 +158,7 @@ function Get-RSBuildScriptArguments {
         Platform = $Platform
     }
 
-    if ($Suite -notin @('CI', 'Full')) {
+    if ($Suite -notin @('PR', 'CI', 'Full')) {
         $arguments.ProjectName = 'RedSalamander'
     }
     elseif ($Suite -eq 'Full') {
@@ -174,7 +174,7 @@ function Get-RSBuildScriptArguments {
 function Get-RSBuildEnvironmentOverrides {
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet('All', 'Compare', 'Commands', 'FileOps', 'CI', 'Full')]
+        [ValidateSet('All', 'Compare', 'Commands', 'FileOps', 'PR', 'CI', 'Full')]
         [string]$Suite
     )
 
