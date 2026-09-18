@@ -34,7 +34,7 @@ $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer
 $installation = & $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath
 if (-not $installation) { throw 'Visual Studio C++ MSBuild is required.' }
 $msbuildRelative = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64') {
-    'MSBuild/Current/Bin/MSBuild.exe'
+    'MSBuild/Current/Bin/arm64/MSBuild.exe'
 } else { 'MSBuild/Current/Bin/amd64/MSBuild.exe' }
 Restore-RSDxUiDependency -RepoRoot $repo -MSBuildPath (Join-Path $installation $msbuildRelative) `
     -Platform $Platform -Configuration $Configuration -CheckUpdates:$CheckUpdates

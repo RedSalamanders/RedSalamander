@@ -220,7 +220,7 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
         $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
         $installation = (& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath).Trim()
         $relative = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64') {
-            'MSBuild/Current/Bin/MSBuild.exe'
+            'MSBuild/Current/Bin/arm64/MSBuild.exe'
         } else { 'MSBuild/Current/Bin/amd64/MSBuild.exe' }
         $msbuild = Join-Path $installation $relative
         $dxuiFixture = Join-Path $TestDrive 'reference-host'
