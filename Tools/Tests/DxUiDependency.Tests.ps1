@@ -237,8 +237,13 @@ Export-ModuleMember -Function Get-DxUiConsumerBuildIdentity
                     $json = & $msbuild (Join-Path $repoRoot 'Tests/RedConfigureTests/RedConfigureTests.vcxproj') /nologo "/p:Configuration=$configuration" "/p:Platform=$platform" "/p:DxUiRoot=$dxuiFixture" '-getProperty:EnableASAN,PreferredToolArchitecture' '-getItem:ClCompile,ProjectReference'
                     if ($LASTEXITCODE -ne 0) { throw "Cannot evaluate consumer profile $platform/$configuration." }
                     $evaluated = ($json -join "`n") | ConvertFrom-Json
-                    if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'X64') {
+                    $hostArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+                    if ($hostArchitecture -eq 'X64') {
                         $evaluated.Properties.PreferredToolArchitecture | Should Be 'x64'
+                    } elseif ($hostArchitecture -eq 'Arm64' -and $platform -eq 'ARM64') {
+                        # Never the 32-bit x86-hosted cross tools: their heap cannot optimize the
+                        # largest Release self-test translation units (C1002 on the hosted runners).
+                        $evaluated.Properties.PreferredToolArchitecture | Should Be 'arm64'
                     }
                     $restoreHost = & (Get-Module DxUiDependency) {
                         param($Root,$BuildTool,$Target,$Profile)

@@ -248,10 +248,12 @@ Describe 'Release workflow source contracts' {
         $workflow | Should Match 'GetEnvironmentVariable\(\$name, ''Process''\)'
         $workflow | Should Match '>> \$env:GITHUB_ENV'
         $workflow | Should Match 'Native \$env:RS_TEST_SUITE suite failed with exit code'
-        # Two MSBuild nodes by default; one on the native ARM64 host for Release, where the
-        # optimizer has run out of heap on the largest self-test translation unit.
-        $workflow | Should Match '\$buildWorkers = if \(\$isNativeArm64Host -and "\$\{\{ inputs\.configuration \}\}" -eq "Release"\) \{ 1 \} else \{ 2 \}'
-        $workflow | Should Match 'MaxCpuCount\s*=\s*\$buildWorkers'
+        $workflow | Should Match 'MaxCpuCount\s*=\s*2'
+        # The ARM64 heap exhaustion (C1002) was the 32-bit x86-hosted cross compiler, which
+        # Directory.Build.props now avoids on ARM64 hosts; node count is not the lever.
+        $props = Get-Content -LiteralPath (Join-Path $repoRoot 'Directory.Build.props') -Raw
+        $expectedArm64HostRule = '<PreferredToolArchitecture Condition="''$(PreferredToolArchitecture)''=='''' and ''$(Platform)''==''ARM64'' and (''$(PROCESSOR_ARCHITECTURE)''==''ARM64'' or ''$(PROCESSOR_ARCHITEW6432)''==''ARM64'')">arm64</PreferredToolArchitecture>'
+        $props | Should Match ([regex]::Escape($expectedArm64HostRule))
         $evidence = [regex]::Match($workflow, '(?s)- name: Upload native qualification evidence(.*?)(?=      - name:)').Groups[1].Value
         $evidence | Should Match 'steps\.test_root\.outputs\.path'
         $evidence | Should Not Match '\.build/'

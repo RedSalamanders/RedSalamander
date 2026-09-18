@@ -458,15 +458,10 @@ jobs:
           $buildScript = Join-Path $env:GITHUB_WORKSPACE "build.ps1"
           if (-not (Test-Path $buildScript)) { throw "build.ps1 not found at: $buildScript" }
 
-          # Native ARM64 runners have run the Release optimizer out of heap (C1002) on the largest
-          # self-test translation unit with two MSBuild nodes each fanning out /MP compiles, so
-          # Release builds on the ARM64 host use one node.
-          $isNativeArm64Host = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture -eq [Runtime.InteropServices.Architecture]::Arm64
-          $buildWorkers = if ($isNativeArm64Host -and "${{ inputs.configuration }}" -eq "Release") { 1 } else { 2 }
           $buildArgs = @{
             Configuration = "${{ inputs.configuration }}"
             Platform      = "${{ inputs.platform }}"
-            MaxCpuCount   = $buildWorkers
+            MaxCpuCount   = 2
           }
           if ("${{ inputs.build_number }}" -ne "") {
             $buildArgs.BuildNumber = "${{ inputs.build_number }}"
