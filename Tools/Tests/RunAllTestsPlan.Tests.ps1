@@ -486,6 +486,59 @@ Describe 'Run-AllTests plan helper' {
         Assert-RSEqual -Actual @($lockValidation).Count -Expected 0 -Message 'The intrusive vcpkg lock validation script should not run in Suite Full by default.'
     }
 
+    It 'defines Suite PR as the ten-minute pull-request subset of Suite CI' {
+        $arguments = @{
+            RepoRoot = $repoRoot
+            Platform = 'x64'
+            Configuration = 'Debug'
+            RedSalamanderExePath = 'C:\repo\.build\x64\Debug\RedSalamander.exe'
+            TimeoutMultiplier = 2.0
+        }
+        $pr = @(Get-RSTestRunPlan -Suite 'PR' @arguments)
+        $ci = @(Get-RSTestRunPlan -Suite 'CI' @arguments)
+
+        # Hosted-runner durations (x64 Debug): every PR entry finishes in seconds except
+        # PluginContractTests (~75 s) and the tooling Pester profile (~3 min); the three in-product
+        # self-test suites take 26-100 minutes each and stay on the push-to-main gate.
+        Assert-RSSequenceEqual `
+            -Actual @($pr | ForEach-Object { $_.Name }) `
+            -Expected @(
+                'ProductUiTests',
+                'FileSystemCurlTests',
+                'ViewerPETests.Noninteractive',
+                'ViewerSqliteTests.Noninteractive',
+                'MonitorTest',
+                'LocalizationTests',
+                'RedConfigureTests',
+                'PluginContractTests',
+                'SettingsSchemaTests',
+                'CrashHandlingTests',
+                'PerformanceTests2',
+                'ToolsPesterTests',
+                'VcpkgMergeSynthetic'
+            ) `
+            -Message 'Suite PR keeps every non-interactive standalone CI entry, in CI order.'
+        Assert-RSEqual -Actual @($pr | Where-Object { $_.Kind -eq 'SelfTest' }).Count -Expected 0 -Message 'Suite PR runs no in-product self-test suite.'
+        Assert-RSEqual -Actual @($pr | Where-Object { $_.RequiresInteractiveDesktop }).Count -Expected 0 -Message 'Suite PR runs no interactive-desktop entry.'
+        foreach ($entry in $pr) {
+            $ciEntry = @($ci | Where-Object { $_.Id -eq $entry.Id })
+            Assert-RSEqual -Actual $ciEntry.Count -Expected 1 -Message "Suite PR entry '$($entry.Id)' must also be a Suite CI entry."
+            Assert-RSSequenceEqual -Actual @($entry.Arguments) -Expected @($ciEntry[0].Arguments) -Message "Suite PR entry '$($entry.Id)' must run with the Suite CI arguments."
+        }
+
+        $prBuild = Get-RSBuildScriptArguments -Suite 'PR' -Configuration 'Debug' -Platform 'x64'
+        Assert-RSEqual -Actual $prBuild.ContainsKey('ProjectName') -Expected $false -Message 'Suite PR builds the solution so standalone tests and CppUnitTest DLLs exist.'
+        Assert-RSEqual -Actual (Get-RSBuildEnvironmentOverrides -Suite 'PR').Count -Expected 0 -Message 'Suite PR uses the default build environment like Suite CI.'
+
+        $runner = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Run-AllTests.ps1') -Raw
+        $runner | Should Match "\`$failureClassificationEnabled = \(\`$ClassifyFailures -or \`$Suite -eq 'CI'\)"
+        $runner | Should Match "if \(\`$Suite -in @\('PR', 'CI', 'Full'\) -and\s*\r?\n\s*-not \(Test-RSBuildReceiptForArtifactUse"
+        $runner | Should Match "\`$validationEvidenceRun = \`$null\s*\r?\nif \(\`$Suite -in @\('PR', 'CI', 'Full'\)\)"
+        foreach ($schema in @('ValidationPlan', 'ValidationRunState', 'RunAllTestsSummary')) {
+            (Get-Content -LiteralPath (Join-Path $repoRoot "Specs\Testing\$schema.schema.json") -Raw) | Should Match '"PR", "CI", "Full"'
+        }
+    }
+
     It 'defines Suite CI as the GitHub Actions gate through the unified runner' {
         $plan = Get-RSTestRunPlan `
             -Suite 'CI' `
@@ -579,7 +632,7 @@ Describe 'Run-AllTests plan helper' {
             -Expected @('x64|Debug|windows-2025-vs2026', 'x64|Release|windows-2025-vs2026', 'ARM64|Debug|windows-11-vs2026-arm', 'ARM64|Release|windows-11-vs2026-arm') `
             -Message 'Pushes to main add both Release profiles on native runners.'
         Assert-RSEqual -Actual ($workflow -match 'run_full_tests: true') -Expected $true -Message 'Every profile runs the receipt-verified native suite.'
-        Assert-RSEqual -Actual ($workflow -match 'test_suite: CI') -Expected $true -Message 'The quick gate runs Suite CI; Suite Full stays the local closeout gate.'
+        Assert-RSEqual -Actual ($workflow -match "test_suite: \$\{\{ github\.event_name == 'pull_request' && 'PR' \|\| 'CI' \}\}") -Expected $true -Message 'Pull requests run Suite PR; pushes to main run Suite CI; Suite Full stays the local closeout gate.'
 
     }
 

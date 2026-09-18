@@ -84,7 +84,7 @@ function Convert-RSTestQuarantineRepairAttemptForRunSummary {
 function New-RSTestRunSummary {
     param(
         [Parameter(Mandatory = $true)]
-        [ValidateSet('All', 'Compare', 'Commands', 'FileOps', 'CI', 'Full')]
+        [ValidateSet('All', 'Compare', 'Commands', 'FileOps', 'PR', 'CI', 'Full')]
         [string]$Suite,
 
         [Parameter(Mandatory = $true)]

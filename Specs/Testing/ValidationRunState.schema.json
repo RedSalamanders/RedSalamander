@@ -12,7 +12,7 @@
     "campaign_id": { "$ref": "#/definitions/runId" },
     "campaign_sequence": { "type": "integer", "minimum": 1 },
     "parent_run_id": { "anyOf": [{ "$ref": "#/definitions/runId" }, { "type": "null" }] },
-    "requested_suite": { "enum": ["CI", "Full"] },
+    "requested_suite": { "enum": ["PR", "CI", "Full"] },
     "validation_mode": { "enum": ["Fresh", "Resume", "Affected"] },
     "snapshot_id": { "$ref": "#/definitions/digest" },
     "build_receipt_id": { "$ref": "#/definitions/digest" },

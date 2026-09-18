@@ -10,7 +10,7 @@
     "canonicalization": { "const": "rs-canonical-json-v1" },
     "plan_digest": { "$ref": "#/definitions/digest" },
     "coverage_plan_digest": { "$ref": "#/definitions/digest" },
-    "requested_suite": { "enum": ["All", "Compare", "Commands", "FileOps", "CI", "Full"] },
+    "requested_suite": { "enum": ["All", "Compare", "Commands", "FileOps", "PR", "CI", "Full"] },
     "validation_mode": { "enum": ["Fresh", "Resume", "Affected"] },
     "coverage_scope": { "enum": ["complete", "filtered", "family", "capability-reduced"] },
     "entries": { "type": "array", "maxItems": 10000, "items": { "$ref": "#/definitions/entry" } }
