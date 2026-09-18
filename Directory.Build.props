@@ -72,7 +72,9 @@
     <PlatformToolset>v145</PlatformToolset>
     <!-- Keep ARM64 cross-LTCG in a 64-bit host; explicit and native ARM64 selections remain authoritative. -->
     <PreferredToolArchitecture Condition="'$(PreferredToolArchitecture)'=='' and '$(Platform)'=='ARM64' and ('$(PROCESSOR_ARCHITECTURE)'=='AMD64' or '$(PROCESSOR_ARCHITEW6432)'=='AMD64')">x64</PreferredToolArchitecture>
-    <!-- On an ARM64 host the toolset otherwise falls back to the 32-bit x86-hosted tools (HostX86\arm64),
+    <!-- Native ARM64-hosted tools on an ARM64 host. The toolset honors this only when the MSBuild process is itself
+         ARM64 (Bin\arm64\MSBuild.exe): Microsoft.Cpp.ToolsetLocation.props downgrades an arm64 host to x86 whenever
+         the process's PROCESSOR_ARCHITECTURE is not ARM64, so an x86 MSBuild can only drive the 32-bit HostX86 tools,
          whose heap cannot optimize the largest Release self-test translation units (C1002). -->
     <PreferredToolArchitecture Condition="'$(PreferredToolArchitecture)'=='' and '$(Platform)'=='ARM64' and ('$(PROCESSOR_ARCHITECTURE)'=='ARM64' or '$(PROCESSOR_ARCHITEW6432)'=='ARM64')">arm64</PreferredToolArchitecture>
     <CharacterSet>Unicode</CharacterSet>

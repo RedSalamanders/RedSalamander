@@ -160,14 +160,23 @@ jobs:
             throw "vswhere.exe not found: $vswhere"
           }
 
-          $msbuild =
-            (& $vswhere -latest -products * -prerelease -version '[18.0,19.0)' -find 'MSBuild\Current\Bin\MSBuild.exe' 2>$null) |
-            Select-Object -First 1
-
-          if (-not $msbuild) {
+          # Bin\MSBuild.exe is the 32-bit x86 MSBuild. The VC toolset picks the compiler host from the
+          # MSBuild process's own PROCESSOR_ARCHITECTURE and downgrades a requested arm64 host to x86
+          # unless that process is ARM64, so an x86 MSBuild on the ARM64 runner can only ever drive the
+          # 32-bit HostX86 tools (C1002 out of heap on the largest Release translation units). Use the
+          # MSBuild that matches the host: arm64\ on ARM64, amd64\ on x64.
+          $hostArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+          [string[]]$preferredRelativePaths = if ($hostArchitecture -eq 'Arm64') {
+            @('MSBuild\Current\Bin\arm64\MSBuild.exe', 'MSBuild\Current\Bin\amd64\MSBuild.exe')
+          } else {
+            @('MSBuild\Current\Bin\amd64\MSBuild.exe')
+          }
+          $msbuild = $null
+          foreach ($relativePath in ($preferredRelativePaths + [string[]]@('MSBuild\Current\Bin\MSBuild.exe'))) {
             $msbuild =
-              (& $vswhere -latest -products * -prerelease -version '[18.0,19.0)' -find 'MSBuild\Current\Bin\amd64\MSBuild.exe' 2>$null) |
+              (& $vswhere -latest -products * -prerelease -version '[18.0,19.0)' -find $relativePath 2>$null) |
               Select-Object -First 1
+            if ($msbuild) { break }
           }
 
           if (-not $msbuild -or -not (Test-Path $msbuild)) {
@@ -179,6 +188,7 @@ jobs:
           $msbuildDir = Split-Path -Parent $msbuild
           $msbuildDir | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
           "MSBUILD_EXE_PATH=$msbuild" | Out-File -FilePath $env:GITHUB_ENV -Encoding utf8 -Append
+          Write-Host "Host $hostArchitecture selected MSBuild: $msbuild"
           & $msbuild -version
 
       - name: Resolve canonical toolchain identity

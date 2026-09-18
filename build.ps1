@@ -409,8 +409,11 @@ function Find-MSBuild {
                 $installVersion = [version]"0.0"
             }
 
+            # Bin\MSBuild.exe is the 32-bit x86 MSBuild; the VC toolset derives the compiler host from
+            # the MSBuild process architecture and downgrades arm64/x64 hosts it cannot see, so the
+            # native 64-bit MSBuild (arm64\ or amd64\) comes first on each host.
             $nativeMSBuild = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64') {
-                Join-Path $installPath 'MSBuild/Current/Bin/MSBuild.exe'
+                Join-Path $installPath 'MSBuild/Current/Bin/arm64/MSBuild.exe'
             } else { Join-Path $installPath 'MSBuild/Current/Bin/amd64/MSBuild.exe' }
             $msbuildCandidates = @(
                 $nativeMSBuild,

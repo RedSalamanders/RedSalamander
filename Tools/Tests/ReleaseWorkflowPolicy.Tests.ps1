@@ -254,6 +254,16 @@ Describe 'Release workflow source contracts' {
         $props = Get-Content -LiteralPath (Join-Path $repoRoot 'Directory.Build.props') -Raw
         $expectedArm64HostRule = '<PreferredToolArchitecture Condition="''$(PreferredToolArchitecture)''=='''' and ''$(Platform)''==''ARM64'' and (''$(PROCESSOR_ARCHITECTURE)''==''ARM64'' or ''$(PROCESSOR_ARCHITEW6432)''==''ARM64'')">arm64</PreferredToolArchitecture>'
         $props | Should Match ([regex]::Escape($expectedArm64HostRule))
+        # The toolset honors that rule only from an ARM64 MSBuild process, so every MSBuild
+        # selection prefers the host-matching 64-bit executable over the x86 Bin\MSBuild.exe.
+        $workflow | Should Match "if \(\`$hostArchitecture -eq 'Arm64'\) \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\arm64\\MSBuild\.exe', 'MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)"
+        $workflow | Should Match "@\('MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)"
+        $workflow | Should Match "\[string\[\]\]\`$preferredRelativePaths = if"
+        $workflow | Should Match "\(\`$preferredRelativePaths \+ \[string\[\]\]@\('MSBuild\\Current\\Bin\\MSBuild\.exe'\)\)"
+        $buildScript = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
+        $buildScript | Should Match "OSArchitecture\.ToString\(\) -eq 'Arm64'\) \{\s*\r?\n\s*Join-Path \`$installPath 'MSBuild/Current/Bin/arm64/MSBuild\.exe'"
+        $restoreScript = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Restore-DxUi.ps1') -Raw
+        $restoreScript | Should Match "OSArchitecture\.ToString\(\) -eq 'Arm64'\) \{\s*\r?\n\s*'MSBuild/Current/Bin/arm64/MSBuild\.exe'"
         $evidence = [regex]::Match($workflow, '(?s)- name: Upload native qualification evidence(.*?)(?=      - name:)').Groups[1].Value
         $evidence | Should Match 'steps\.test_root\.outputs\.path'
         $evidence | Should Not Match '\.build/'

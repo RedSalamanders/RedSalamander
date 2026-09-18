@@ -574,12 +574,19 @@ right after the dependency install and the solution build. The combined `actions
 action saves only when the whole job succeeds, so a failing test step used to discard a
 successful 25-minute dependency build on every red run.
 
-On an ARM64 host, `Directory.Build.props` selects the native ARM64-hosted tools
-(`PreferredToolArchitecture=arm64`) for ARM64 targets, mirroring the x64-host rule. Left
-unset, the toolset fell back to the 32-bit x86-hosted cross tools (`HostX86\arm64`), whose
-heap could not optimize the largest Release self-test translation units: the hosted ARM64
-Release builds failed with C1002 and the 32-bit linker restarted as 64-bit. Toolchain
-receipts and the DxUi consumer identity record the selected host.
+The MSBuild executable must match the host: `MSBuild\Current\Bin\arm64\MSBuild.exe` on
+ARM64 hosts and `Bin\amd64\MSBuild.exe` on x64 hosts, with `Bin\MSBuild.exe` (the 32-bit
+x86 MSBuild) only as a last resort. `build.ps1`, `Tools\Restore-DxUi.ps1`, the DxUi
+consumer test, and the CI "Select MSBuild" step all follow that order. The VC toolset
+(`Microsoft.Cpp.ToolsetLocation.props`) derives the compiler host from the MSBuild
+process's own `PROCESSOR_ARCHITECTURE`: it downgrades a requested `arm64` host to x86
+whenever that process is not ARM64 and an `x64` host to x86 whenever it is neither x64
+nor ARM64, so an x86 MSBuild on the hosted ARM64 runner could only drive the 32-bit
+`HostX86\arm64` tools, whose heap could not optimize the largest Release self-test
+translation units (C1002; the 32-bit linker restarted itself as 64-bit). With the ARM64
+MSBuild, `Directory.Build.props` selects `PreferredToolArchitecture=arm64` for ARM64
+targets (mirroring the x64-host rule) and the toolset keeps it. Toolchain receipts and the
+DxUi consumer identity record the selected host.
 
 Windows CI enables Git `core.longpaths` before checkout: retained test evidence includes repository paths beyond
 the default Windows Git path limit. This setup runs on the disposable runner before any project validation.
