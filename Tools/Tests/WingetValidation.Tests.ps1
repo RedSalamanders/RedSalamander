@@ -273,7 +273,7 @@ Describe 'Winget release workflow' {
         $publicationModule | Should Not Match 'GetFileSha256'
 
         # The identity marker embeds the manifest hashes, so ReleaseDate must not drift with the rerun day.
-        $workflow | Should Match '\$publishedAt = \[string\]\$release\.published_at'
+        $workflow | Should Match '\$releaseDate = Get-RSReleaseDate \$release\.published_at'
         $workflow | Should Match '"release_date=\$releaseDate" >> \$env:GITHUB_OUTPUT'
         $workflow | Should Match 'RELEASE_DATE:\s*\$\{\{ steps\.portable\.outputs\.release_date \}\}'
         $workflow | Should Match '\(Get-Command \$generator\)\.Parameters\.ContainsKey\(''ReleaseDate''\)'
@@ -287,6 +287,26 @@ Describe 'Winget release workflow' {
         $generator | Should Match '\$ReleaseDate = Resolve-WingetReleaseDate -CandidateDate \$ReleaseDate'
         $generator | Should Not Match '\$ReleaseDate = Get-Date -Format "yyyy-MM-dd"'
         $generator | Should Match '(?m)^\.PARAMETER ReleaseDate\r?$'
+    }
+
+    It 'derives the release date from the deserialized published_at value the GitHub API returns' {
+        # Invoke-RestMethod turns "2026-09-17T21:07:11Z" into a [datetime] (Kind Utc); the v7.0.60
+        # publication stopped because the workflow matched that object's culture text against the
+        # ISO pattern. Execute the workflow's own function against every shape it can receive.
+        $functionMatch = [regex]::Match($workflow, '(?ms)^ {10}function Get-RSReleaseDate\(\[object\]\$PublishedAt\) \{.*?^ {10}\}\r?$')
+        $functionMatch.Success | Should Be $true
+        . ([scriptblock]::Create($functionMatch.Value))
+
+        (Get-RSReleaseDate ([datetime]::new(2026, 9, 17, 21, 7, 11, [DateTimeKind]::Utc))) | Should Be '2026-09-17'
+        (Get-RSReleaseDate ([datetime]::new(2026, 9, 17, 23, 30, 0, [DateTimeKind]::Unspecified))) | Should Be '2026-09-17'
+        $lateLocal = [datetime]::new(2026, 9, 17, 23, 30, 0, [DateTimeKind]::Utc).ToLocalTime()
+        (Get-RSReleaseDate $lateLocal) | Should Be '2026-09-17'
+        (Get-RSReleaseDate '2026-09-17T21:07:11Z') | Should Be '2026-09-17'
+        (Get-RSReleaseDate '2026-09-17T23:30:00+02:00') | Should Be '2026-09-17'
+        (Get-RSReleaseDate '2026-09-18T01:30:00+02:00') | Should Be '2026-09-17'
+        { Get-RSReleaseDate '' } | Should Throw 'did not report a published_at timestamp'
+        { Get-RSReleaseDate $null } | Should Throw 'did not report a published_at timestamp'
+        { Get-RSReleaseDate 'yesterday' } | Should Throw 'not a recognizable timestamp'
     }
 
     It 'supports a serialized direct release handoff' {

@@ -123,11 +123,23 @@ jobs:
 
           # The manifest ReleaseDate comes from the release itself so that reruns on later days
           # generate identical manifests and keep the same publication identity.
-          $publishedAt = [string]$release.published_at
-          if ($publishedAt -notmatch '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$') {
-            throw "Release '$tag' did not report a valid published_at timestamp: '$publishedAt'"
+          # Invoke-RestMethod deserializes ISO 8601 timestamps to [datetime] (Kind Utc), so the
+          # value is a date object, not the "2026-09-17T21:07:11Z" text; accept either shape.
+          function Get-RSReleaseDate([object]$PublishedAt) {
+            if ($PublishedAt -is [datetime]) {
+              $utc = if ($PublishedAt.Kind -eq [DateTimeKind]::Unspecified) { [datetime]::SpecifyKind($PublishedAt, [DateTimeKind]::Utc) } else { $PublishedAt.ToUniversalTime() }
+            } else {
+              $text = [string]$PublishedAt
+              if ([string]::IsNullOrWhiteSpace($text)) { throw "The release did not report a published_at timestamp." }
+              $parsed = [DateTimeOffset]::MinValue
+              if (-not [DateTimeOffset]::TryParse($text, [Globalization.CultureInfo]::InvariantCulture, [Globalization.DateTimeStyles]::AssumeUniversal, [ref]$parsed)) {
+                throw "The release published_at value is not a recognizable timestamp: '$text'"
+              }
+              $utc = $parsed.UtcDateTime
+            }
+            return $utc.ToString('yyyy-MM-dd', [Globalization.CultureInfo]::InvariantCulture)
           }
-          $releaseDate = $publishedAt.Substring(0, 10)
+          $releaseDate = Get-RSReleaseDate $release.published_at
           "release_date=$releaseDate" >> $env:GITHUB_OUTPUT
           Write-Host "Release date: $releaseDate"
 
