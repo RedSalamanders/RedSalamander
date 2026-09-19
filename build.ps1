@@ -324,17 +324,19 @@ $versionStatePath = Get-RSVersionStatePath -RepoRoot $SolutionDir
 function Get-RSHostOrderedMSBuildRelativePaths {
     # Bin\MSBuild.exe is the 32-bit x86 MSBuild. The VC toolset derives the compiler host from the
     # MSBuild process architecture and downgrades arm64/x64 hosts it cannot see, so every discovery
-    # strategy prefers the native 64-bit MSBuild of this host (arm64\ or amd64\), then the other
-    # 64-bit flavors (including the legacy 15.0 layout), and only then an x86 executable.
+    # strategy prefers the native 64-bit MSBuild of this host, then every other 64-bit executable
+    # the host can run (ARM64 Windows emulates x64; x64 Windows cannot run arm64\), and only then
+    # an x86 executable.
     $isArm64Host = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64'
-    $native = if ($isArm64Host) { 'arm64' } else { 'amd64' }
-    $other = if ($isArm64Host) { 'amd64' } else { 'arm64' }
-    return @(
-        "MSBuild\Current\Bin\$native\MSBuild.exe",
-        "MSBuild\Current\Bin\$other\MSBuild.exe",
-        "MSBuild\15.0\Bin\amd64\MSBuild.exe",
-        "MSBuild\Current\Bin\MSBuild.exe",
-        "MSBuild\15.0\Bin\MSBuild.exe"
+    [string[]]$candidates = if ($isArm64Host) {
+        @('MSBuild\Current\Bin\arm64\MSBuild.exe', 'MSBuild\Current\Bin\amd64\MSBuild.exe')
+    } else {
+        @('MSBuild\Current\Bin\amd64\MSBuild.exe')
+    }
+    return $candidates + [string[]]@(
+        'MSBuild\15.0\Bin\amd64\MSBuild.exe',
+        'MSBuild\Current\Bin\MSBuild.exe',
+        'MSBuild\15.0\Bin\MSBuild.exe'
     )
 }
 

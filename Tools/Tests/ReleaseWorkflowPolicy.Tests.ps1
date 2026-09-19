@@ -264,9 +264,12 @@ Describe 'Release workflow source contracts' {
         # VSINSTALLDIR) through one host-ordered candidate list.
         $buildScript = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
         $buildScript | Should Match 'function Get-RSHostOrderedMSBuildRelativePaths \{'
-        $buildScript | Should Match "\`$native = if \(\`$isArm64Host\) \{ 'arm64' \} else \{ 'amd64' \}"
-        # Every 64-bit executable, including the legacy 15.0 layout, outranks both x86 executables.
-        $buildScript | Should Match '"MSBuild\\Current\\Bin\\\$native\\MSBuild\.exe",\s*\r?\n\s*"MSBuild\\Current\\Bin\\\$other\\MSBuild\.exe",\s*\r?\n\s*"MSBuild\\15\.0\\Bin\\amd64\\MSBuild\.exe",\s*\r?\n\s*"MSBuild\\Current\\Bin\\MSBuild\.exe",\s*\r?\n\s*"MSBuild\\15\.0\\Bin\\MSBuild\.exe"\s*\r?\n\s*\)'
+        # ARM64 hosts also accept the emulated amd64 executable; x64 hosts cannot run arm64\, so it
+        # is never a candidate there. Every runnable 64-bit executable, including the legacy 15.0
+        # layout, outranks both x86 executables.
+        $buildScript | Should Match "if \(\`$isArm64Host\) \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\arm64\\MSBuild\.exe', 'MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)\s*\r?\n\s*\} else \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)"
+        $buildScript | Should Match "return \`$candidates \+ \[string\[\]\]@\(\s*\r?\n\s*'MSBuild\\15\.0\\Bin\\amd64\\MSBuild\.exe',\s*\r?\n\s*'MSBuild\\Current\\Bin\\MSBuild\.exe',\s*\r?\n\s*'MSBuild\\15\.0\\Bin\\MSBuild\.exe'\s*\r?\n\s*\)"
+        $buildScript | Should Not Match '\$other'
         ([regex]::Matches($buildScript, 'Get-RSHostOrderedMSBuildRelativePaths \| ForEach-Object')).Count | Should Be 3
         $buildScript | Should Not Match '\\MSBuild\\Current\\Bin\\MSBuild\.exe",'
         # The MSIX packaging job selects MSBuild with the same host order.
