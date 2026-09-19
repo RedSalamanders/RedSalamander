@@ -277,14 +277,20 @@ jobs:
             throw "vswhere.exe not found: $vswhere"
           }
 
-          $msbuild =
-            (& $vswhere -latest -products * -prerelease -version '[18.0,19.0)' -find 'MSBuild\Current\Bin\MSBuild.exe' 2>$null) |
-            Select-Object -First 1
-
-          if (-not $msbuild) {
+          # Same host order as build-reusable.yml: the 64-bit MSBuild of this host first, the x86
+          # Bin\MSBuild.exe last, so the VC toolset never downgrades the compiler host.
+          $hostArchitecture = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString()
+          [string[]]$preferredRelativePaths = if ($hostArchitecture -eq 'Arm64') {
+            @('MSBuild\Current\Bin\arm64\MSBuild.exe', 'MSBuild\Current\Bin\amd64\MSBuild.exe')
+          } else {
+            @('MSBuild\Current\Bin\amd64\MSBuild.exe')
+          }
+          $msbuild = $null
+          foreach ($relativePath in ($preferredRelativePaths + [string[]]@('MSBuild\Current\Bin\MSBuild.exe'))) {
             $msbuild =
-              (& $vswhere -latest -products * -prerelease -version '[18.0,19.0)' -find 'MSBuild\Current\Bin\amd64\MSBuild.exe' 2>$null) |
+              (& $vswhere -latest -products * -prerelease -version '[18.0,19.0)' -find $relativePath 2>$null) |
               Select-Object -First 1
+            if ($msbuild) { break }
           }
 
           if (-not $msbuild -or -not (Test-Path $msbuild)) {

@@ -208,7 +208,8 @@ Describe 'Winget release workflow' {
         $workflow | Should Match 'winget install --manifest \.build\\AppPackages\\winget-manifest'
         $workflow | Should Match 'winget list --exact --id RedSalamanders\.RedSalamander'
         $workflow | Should Match 'Manifest conforms to the \[1\.12 schema\]'
-        $workflow | Should Match 'pull_request_url=\$\(\$publication\.Url\)'
+        $workflow | Should Match 'publication_url=\$\(\$publication\.Url\)'
+        $workflow | Should Match "pull_request_url=\`$\(if \(\`$publication\.Published\) \{ '' \} else \{ \`$publication\.Url \}\)"
     }
 
     It 'keeps event data inert and verifies one pinned publisher before exposing its token' {

@@ -684,6 +684,9 @@ Describe 'Pinned build-tool and CI identity' {
         $ci = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\ci.yml') -Raw
         $subclassGuard = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Verify-NoSubclassManager.ps1') -Raw
         $selfTests = Get-Content -LiteralPath (Join-Path $repoRoot 'Specs\Testing\Testing_SelfTests.md') -Raw
+        # The run title names the suite, the profiles, and the trigger instead of the PR title.
+        $ci | Should Match "run-name: >-\s*\r?\n\s*\$\{\{ github\.event_name == 'pull_request'\s*\r?\n\s*&& 'Suite PR on x64 Debug \+ ARM64 Debug \(pull request\)'"
+        $ci | Should Match "\|\| format\('Suite PR on x64 \+ ARM64, Debug \+ Release \(\{0\} \{1\}\)', github\.event_name == 'push' && 'push to' \|\| 'dispatch on', github\.ref_name\)"
         $ci | Should Match 'push:\s*\r?\n\s*branches:\s*\[main, master\]'
         $ci | Should Match 'pull_request:\s*\r?\n\s*branches:\s*\[main, master\]'
         $ci | Should Match 'contents:\s*read'
@@ -698,24 +701,50 @@ Describe 'Pinned build-tool and CI identity' {
         $ci | Should Match '"platform": "ARM64", "runner": "windows-11-vs2026-arm", "configuration": "Debug"'
         $selfTests | Should Match 'Suite PR is the ten-minute subset of Suite CI: .*PluginContractTests, SettingsSchemaTests, CrashHandlingTests'
         $ci | Should Match 'run_full_tests:\s*true'
-        # The quick gate runs the receipt-verified CI suite; Full stays the local closeout gate.
-        $ci | Should Match "test_suite: \$\{\{ github\.event_name == 'pull_request' && 'PR' \|\| 'CI' \}\}"
+        # Pull requests and pushes to main run Suite PR; Suite CI runs nightly from nightly-ci.yml;
+        # Full stays the local closeout gate.
+        $ci | Should Match 'test_suite:\s*PR\s*\r?\n'
+        $ci | Should Not Match 'test_suite:\s*\$\{\{'
+        $nightly = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\nightly-ci.yml') -Raw
+        $nightly | Should Match 'schedule:\s*\r?\n\s*- cron: "47 2 \* \* \*"'
+        $nightly | Should Match 'workflow_dispatch:'
+        $nightly | Should Match "run-name: >-\s*\r?\n\s*\$\{\{ format\('Suite CI on x64 \+ ARM64, Debug \+ Release \(\{0\} \{1\}\)', github\.event_name == 'schedule' && 'nightly on' \|\| 'dispatch on', github\.ref_name\) \}\}"
+        $nightly | Should Not Match 'pull_request:|push:'
+        $nightly | Should Match 'test_suite:\s*CI\s*\r?\n'
+        $nightly | Should Match 'run_full_tests:\s*true'
+        $nightly | Should Not Match '"configuration": "ASan Debug"|configuration: ASan Debug'
+        $nightly | Should Match 'workflows/nightly-ci\.yml/runs\?branch='
+        # The run-list call needs the Actions read scope; an API failure runs the suite instead of skipping it.
+        $nightly | Should Match '(?ms)^  changes:\s*\r?\n(?:.*?\r?\n)*?    permissions:\s*\r?\n\s*actions: read\s*\r?\n\s*contents: read'
+        $nightly | Should Match 'if ! last=\$\(gh api'
+        $nightly | Should Match '::warning::Could not list the completed nightly runs'
+        $nightly | Should Match "if: needs\.changes\.outputs\.run == 'true'"
+        foreach ($profile in @('x64, runner: windows-2025-vs2026, configuration: Debug',
+                'x64, runner: windows-2025-vs2026, configuration: Release',
+                'ARM64, runner: windows-11-vs2026-arm, configuration: Debug',
+                'ARM64, runner: windows-11-vs2026-arm, configuration: Release')) {
+            $nightly | Should Match ([regex]::Escape("- { platform: $profile }"))
+        }
+        $nightly | Should Match '(?ms)^concurrency:\s+group:\s*nightly-ci-\$\{\{ github\.ref \}\}\s+cancel-in-progress:\s*false'
         $ci | Should Not Match '"configuration": "ASan Debug"'
         $ci | Should Match '(?ms)^concurrency:\s+group:\s*ci-\$\{\{ github\.event\.pull_request\.number \|\| github\.ref \}\}\s+cancel-in-progress:\s*true'
     }
 
-    It 'runs scheduled and high-risk ASan with a seeded detector proof before green contracts' {
+    It 'runs weekly ASan on both architectures with a seeded detector proof before green contracts' {
         $asan = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\asan.yml') -Raw
         $reusable = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\build-reusable.yml') -Raw
         $harness = Get-Content -LiteralPath (Join-Path $repoRoot 'Tests\PluginContractTests\PluginContractTests.cpp') -Raw
-        $asan | Should Match 'schedule:'
-        $asan | Should Match 'pull_request:\s*\r?\n\s*branches:\s*\[main, master\]'
-        $asan | Should Match '\*\*/\*\.cpp'
+        $asan | Should Match "run-name: >-\s*\r?\n\s*\$\{\{ format\('ASan Debug, Suite CI on x64 \+ ARM64 \(\{0\}\)', github\.event_name == 'schedule' && 'weekly' \|\| 'dispatch'\) \}\}"
+        $asan | Should Match 'schedule:\s*\r?\n\s*- cron: "30 4 \* \* 2"'
+        $asan | Should Match 'workflow_dispatch:'
+        # The instrumented build alone takes over an hour: never a pull-request or push lane.
+        $asan | Should Not Match 'pull_request|push:'
         $asan | Should Match 'configuration:\s*ASan Debug'
         $asan | Should Match 'run_asan_plugin_contracts:\s*true'
         $asan | Should Match 'run_full_tests:\s*true'
-        $asan | Should Match 'test_suite:\s*CI'
-        $asan | Should Match '"platform": "ARM64", "runner": "windows-11-vs2026-arm"'
+        $asan | Should Match 'test_suite:\s*CI\s*\r?\n'
+        $asan | Should Match '- \{ platform: x64, runner: windows-2025-vs2026 \}'
+        $asan | Should Match '- \{ platform: ARM64, runner: windows-11-vs2026-arm \}'
         $reusable | Should Match '--asan-seed-heap-overflow'
         $reusable | Should Match 'not rejected by AddressSanitizer'
         $reusable | Should Match 'AddressSanitizer diagnostic'

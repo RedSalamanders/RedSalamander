@@ -563,8 +563,9 @@ The native matrix is selected per event: pull requests build x64 Debug and ARM64
 pushes to `main` add both Release profiles, and ASan Debug runs from `asan.yml`. Each
 job builds the test-enabled solution, verifies the ASAN defect probe where selected,
 then uses the receipt-gated runner in that same job with the suite named by the
-reusable workflow's `test_suite` input (`PR` on pull requests, `CI` on pushes to
-`main`; `Full` remains the local closeout gate). Cross-job nightly/package handoffs still require portable attestation.
+reusable workflow's `test_suite` input (`PR` on pull requests and pushes to `main`;
+`CI` on the nightly `nightly-ci.yml` matrix and the weekly ASan lane, which never runs
+on pull requests; `Full` remains the local closeout gate). Cross-job nightly/package handoffs still require portable attestation.
 Runtime execution is rejected if host architecture differs from the selected target.
 No custom DxUi secret is required; the public pin restores through HTTPS.
 
@@ -576,8 +577,10 @@ successful 25-minute dependency build on every red run.
 
 The MSBuild executable must match the host: `MSBuild\Current\Bin\arm64\MSBuild.exe` on
 ARM64 hosts and `Bin\amd64\MSBuild.exe` on x64 hosts, with `Bin\MSBuild.exe` (the 32-bit
-x86 MSBuild) only as a last resort. `build.ps1`, `Tools\Restore-DxUi.ps1`, the DxUi
-consumer test, and the CI "Select MSBuild" step all follow that order. The VC toolset
+x86 MSBuild) only as a last resort. `build.ps1` (every discovery strategy: vswhere, the
+common installation roots, and `VSINSTALLDIR`), `Tools\Restore-DxUi.ps1`, the DxUi
+consumer test, the CI "Select MSBuild" step, and the MSIX packaging job in `release.yml`
+all follow that order. The VC toolset
 (`Microsoft.Cpp.ToolsetLocation.props`) derives the compiler host from the MSBuild
 process's own `PROCESSOR_ARCHITECTURE`: it downgrades a requested `arm64` host to x86
 whenever that process is not ARM64 and an `x64` host to x86 whenever it is neither x64

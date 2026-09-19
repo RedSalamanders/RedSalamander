@@ -260,8 +260,46 @@ Describe 'Release workflow source contracts' {
         $workflow | Should Match "@\('MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)"
         $workflow | Should Match "\[string\[\]\]\`$preferredRelativePaths = if"
         $workflow | Should Match "\(\`$preferredRelativePaths \+ \[string\[\]\]@\('MSBuild\\Current\\Bin\\MSBuild\.exe'\)\)"
+        # build.ps1 routes every discovery strategy (vswhere, common installation roots,
+        # VSINSTALLDIR) through one host-ordered candidate list.
         $buildScript = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
-        $buildScript | Should Match "OSArchitecture\.ToString\(\) -eq 'Arm64'\) \{\s*\r?\n\s*Join-Path \`$installPath 'MSBuild/Current/Bin/arm64/MSBuild\.exe'"
+        $buildScript | Should Match 'function Get-RSHostOrderedMSBuildRelativePaths \{'
+        # ARM64 hosts also accept the emulated amd64 executable; x64 hosts cannot run arm64\, so it
+        # is never a candidate there. Every runnable 64-bit executable, including the legacy 15.0
+        # layout, outranks both x86 executables.
+        $buildScript | Should Match "if \(\`$isArm64Host\) \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\arm64\\MSBuild\.exe', 'MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)\s*\r?\n\s*\} else \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)"
+        $buildScript | Should Match "return \`$candidates \+ \[string\[\]\]@\(\s*\r?\n\s*'MSBuild\\15\.0\\Bin\\amd64\\MSBuild\.exe',\s*\r?\n\s*'MSBuild\\Current\\Bin\\MSBuild\.exe',\s*\r?\n\s*'MSBuild\\15\.0\\Bin\\MSBuild\.exe'\s*\r?\n\s*\)"
+        $buildScript | Should Not Match '\$other'
+        # A PATH hit (developer prompts expose the x86 MSBuild\Current\Bin) is mapped to the best
+        # host-ordered executable of the same installation before it is returned.
+        ([regex]::Matches($buildScript, 'Resolve-RSHostOrderedMSBuildPath -Path \$msbuildInPath\.Source')).Count | Should Be 2
+        $buildScript | Should Not Match 'Path = \$msbuildInPath\.Source'
+        $tokens = $null; $parseErrors = $null
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'build.ps1'), [ref]$tokens, [ref]$parseErrors)
+        @($parseErrors).Count | Should Be 0
+        $helpers = @($ast.FindAll({ param($node)
+                    $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+                    $node.Name -in @('Get-RSHostOrderedMSBuildRelativePaths', 'Resolve-RSHostOrderedMSBuildPath')
+                }, $true) | ForEach-Object { $_.Extent.Text })
+        $helpers.Count | Should Be 2
+        $installRoot = Join-Path $TestDrive 'Microsoft Visual Studio\18\Community'
+        $x86 = Join-Path $installRoot 'MSBuild\Current\Bin\MSBuild.exe'
+        $native = Join-Path $installRoot ('MSBuild\Current\Bin\{0}\MSBuild.exe' -f $(if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64') { 'arm64' } else { 'amd64' }))
+        foreach ($file in @($x86, $native)) {
+            [void](New-Item -ItemType Directory -Path (Split-Path -Parent $file) -Force)
+            Set-Content -LiteralPath $file -Value 'stub'
+        }
+        $resolved = & ([scriptblock]::Create(($helpers -join "`n") + "`nResolve-RSHostOrderedMSBuildPath -Path '$x86'"))
+        $resolved | Should Be $native
+        $unrelated = Join-Path $TestDrive 'elsewhere\msbuild.exe'
+        (& ([scriptblock]::Create(($helpers -join "`n") + "`nResolve-RSHostOrderedMSBuildPath -Path '$unrelated'"))) | Should Be $unrelated
+        ([regex]::Matches($buildScript, 'Get-RSHostOrderedMSBuildRelativePaths \| ForEach-Object')).Count | Should Be 3
+        $buildScript | Should Not Match '\\MSBuild\\Current\\Bin\\MSBuild\.exe",'
+        # The MSIX packaging job selects MSBuild with the same host order.
+        $releaseWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/release.yml') -Raw
+        $releaseWorkflow | Should Match "if \(\`$hostArchitecture -eq 'Arm64'\) \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\arm64\\MSBuild\.exe', 'MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)"
+        $releaseWorkflow | Should Match "\(\`$preferredRelativePaths \+ \[string\[\]\]@\('MSBuild\\Current\\Bin\\MSBuild\.exe'\)\)"
+        $releaseWorkflow | Should Not Match "-find 'MSBuild\\Current\\Bin\\MSBuild\.exe'"
         $restoreScript = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Restore-DxUi.ps1') -Raw
         $restoreScript | Should Match "OSArchitecture\.ToString\(\) -eq 'Arm64'\) \{\s*\r?\n\s*'MSBuild/Current/Bin/arm64/MSBuild\.exe'"
         $evidence = [regex]::Match($workflow, '(?s)- name: Upload native qualification evidence(.*?)(?=      - name:)').Groups[1].Value

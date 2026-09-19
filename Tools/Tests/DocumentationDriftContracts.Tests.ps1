@@ -16,6 +16,9 @@ Describe 'Specification information architecture integration' {
     # shallow clone (hosted runners check out one commit) does not carry.
     & git -C $repoRoot rev-parse --verify --quiet '6aecfde8e^{commit}' *> $null
     $protectedHistoryBaseAvailable = ($LASTEXITCODE -eq 0)
+    if (-not $protectedHistoryBaseAvailable) {
+        Write-Host 'Skipping the protected Done history contract: base commit 6aecfde8e is not in this (squashed or shallow) clone.'
+    }
     It 'keeps every approved post-Terminal Done history blob unchanged' -Skip:(-not $protectedHistoryBaseAvailable) {
         $history = Test-RSProtectedDoneHistory -RepositoryRoot $repoRoot -BaseCommit '6aecfde8e'
 

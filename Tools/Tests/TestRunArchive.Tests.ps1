@@ -115,6 +115,15 @@ Describe 'TestRuns archive contract' {
         (Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\TestRuns\4cb089111a23\Terminal\20260826_071820_pair2-candidate') -PathType Container)
     $fileOpsSummaryArchivePresent = Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\TestRuns\7d3a1247382a\FileOps\2026-07-20_205550') -PathType Container
     $checkedInInventoryPresent = @(Get-RSTestRunArchiveInventoryPaths -RepoRoot $repoRoot).Count -gt 0
+    if (-not $terminalVtArchivePresent) {
+        Write-Host 'Skipping the Terminal VT archive contracts: Specs\TestRuns\4cb089111a23\Terminal pair2 evidence is not present (gitignored archive).'
+    }
+    if (-not $fileOpsSummaryArchivePresent) {
+        Write-Host 'Skipping the FileOps summary archive contract: Specs\TestRuns\7d3a1247382a\FileOps\2026-07-20_205550 is not present (gitignored archive).'
+    }
+    if (-not $checkedInInventoryPresent) {
+        Write-Host 'Skipping the archive inventory contract: no Specs\TestRuns archive is present (gitignored archive).'
+    }
 
     It 'accepts a bounded artifact under its embedded machine profile' {
         $root = New-RSArchiveContractRoot

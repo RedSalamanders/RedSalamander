@@ -626,7 +626,11 @@ Describe 'Embedded Terminal plugin source contracts' {
     }
 
     # Specs/TestRuns is gitignored evidence; the references can only resolve where the archive exists.
-    It 'keeps every authoritative Terminal TestRuns reference resolvable' -Skip:(-not (Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\TestRuns\4cb089111a23\Terminal') -PathType Container)) {
+    $terminalArchivePresent = Test-Path -LiteralPath (Join-Path $repoRoot 'Specs\TestRuns\4cb089111a23\Terminal') -PathType Container
+    if (-not $terminalArchivePresent) {
+        Write-Host 'Skipping the Terminal TestRuns reference contract: Specs\TestRuns\4cb089111a23\Terminal is not present (gitignored archive).'
+    }
+    It 'keeps every authoritative Terminal TestRuns reference resolvable' -Skip:(-not $terminalArchivePresent) {
         $terminalSpec | Should Not Match '2026-08-09_150404'
         $references = @([regex]::Matches(
                 $terminalSpec,
