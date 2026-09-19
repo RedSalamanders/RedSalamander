@@ -23,10 +23,10 @@ function Update-RSEvidenceDecisionDigest([object]$Decision) {
     return $Decision
 }
 
-function New-RSEvidenceFixture([string]$Root, [string]$RunId = '20260813T120000Z-42-0123456789abcdef0123456789abcdef') {
+function New-RSEvidenceFixture([string]$Root, [string]$RunId = '20260813T120000Z-42-0123456789abcdef0123456789abcdef', [string]$RequestedSuite = 'Full') {
     $execution = New-RSTestRunPlanEntry -Id 'tooling.pester' -Name 'Tooling' -Kind Pester `
         -Path (Join-Path $repoRoot 'Tools\Tests')
-    $plan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite Full -Entries @($execution)
+    $plan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite $RequestedSuite -Entries @($execution)
     $entry = $plan.entries[0]
     $snapshot = [pscustomobject]@{ snapshot_id = 'a' * 64 }
     $fingerprint = 'b' * 64
@@ -88,6 +88,20 @@ function New-RSEvidenceFingerprintComponents {
 }
 
 Describe 'Operation Startrail run-directory resolution' {
+    It 'creates durable evidence for PR, CI, and Full plans only' {
+        foreach ($suite in @('PR', 'CI', 'Full')) {
+            $fixture = New-RSEvidenceFixture -Root (Join-Path $TestDrive "run-suite-$suite") -RequestedSuite $suite
+            $fixture.Run.State.requested_suite | Should Be $suite
+            (Publish-RSEvidenceFixturePass -Fixture $fixture).Evidence.status | Should Be 'provisional-passed'
+            (Complete-RSValidationEvidenceRun -Run $fixture.Run) | Should Be 'passed'
+        }
+        foreach ($suite in @('All', 'Commands')) {
+            (Test-RSEvidenceActionThrows {
+                    New-RSEvidenceFixture -Root (Join-Path $TestDrive "run-suite-rejected-$suite") -RequestedSuite $suite
+                }) | Should Be $true
+        }
+    }
+
     It 'accepts only the exact direct child whose leaf matches canonical run state' {
         $fixture = New-RSEvidenceFixture -Root (Join-Path $TestDrive 'run-resolver')
         $schemaRoot = Join-Path $repoRoot 'Specs\Testing'

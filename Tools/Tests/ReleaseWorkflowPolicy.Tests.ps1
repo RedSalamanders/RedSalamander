@@ -260,8 +260,19 @@ Describe 'Release workflow source contracts' {
         $workflow | Should Match "@\('MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)"
         $workflow | Should Match "\[string\[\]\]\`$preferredRelativePaths = if"
         $workflow | Should Match "\(\`$preferredRelativePaths \+ \[string\[\]\]@\('MSBuild\\Current\\Bin\\MSBuild\.exe'\)\)"
+        # build.ps1 routes every discovery strategy (vswhere, common installation roots,
+        # VSINSTALLDIR) through one host-ordered candidate list.
         $buildScript = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
-        $buildScript | Should Match "OSArchitecture\.ToString\(\) -eq 'Arm64'\) \{\s*\r?\n\s*Join-Path \`$installPath 'MSBuild/Current/Bin/arm64/MSBuild\.exe'"
+        $buildScript | Should Match 'function Get-RSHostOrderedMSBuildRelativePaths \{'
+        $buildScript | Should Match "\`$native = if \(\`$isArm64Host\) \{ 'arm64' \} else \{ 'amd64' \}"
+        $buildScript | Should Match '"MSBuild\\Current\\Bin\\\$native\\MSBuild\.exe",\s*\r?\n\s*"MSBuild\\Current\\Bin\\\$other\\MSBuild\.exe",\s*\r?\n\s*"MSBuild\\Current\\Bin\\MSBuild\.exe"'
+        ([regex]::Matches($buildScript, 'Get-RSHostOrderedMSBuildRelativePaths \| ForEach-Object')).Count | Should Be 3
+        $buildScript | Should Not Match '\\MSBuild\\Current\\Bin\\MSBuild\.exe",'
+        # The MSIX packaging job selects MSBuild with the same host order.
+        $releaseWorkflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/release.yml') -Raw
+        $releaseWorkflow | Should Match "if \(\`$hostArchitecture -eq 'Arm64'\) \{\s*\r?\n\s*@\('MSBuild\\Current\\Bin\\arm64\\MSBuild\.exe', 'MSBuild\\Current\\Bin\\amd64\\MSBuild\.exe'\)"
+        $releaseWorkflow | Should Match "\(\`$preferredRelativePaths \+ \[string\[\]\]@\('MSBuild\\Current\\Bin\\MSBuild\.exe'\)\)"
+        $releaseWorkflow | Should Not Match "-find 'MSBuild\\Current\\Bin\\MSBuild\.exe'"
         $restoreScript = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools/Restore-DxUi.ps1') -Raw
         $restoreScript | Should Match "OSArchitecture\.ToString\(\) -eq 'Arm64'\) \{\s*\r?\n\s*'MSBuild/Current/Bin/arm64/MSBuild\.exe'"
         $evidence = [regex]::Match($workflow, '(?s)- name: Upload native qualification evidence(.*?)(?=      - name:)').Groups[1].Value

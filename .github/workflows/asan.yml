@@ -25,8 +25,8 @@ concurrency:
   cancel-in-progress: true
 
 # ASan Debug is the slowest profile, so it runs here instead of in every CI push:
-# x64 on native-source pull requests, both architectures weekly and on dispatch.
-# Each job proves the seeded detector before the ordinary contracts and the CI suite.
+# x64 on native-source pull requests with Suite PR (about half an hour after the detector
+# proof), both architectures weekly and on dispatch with Suite CI.
 jobs:
   asan:
     strategy:
@@ -43,6 +43,6 @@ jobs:
       platform: ${{ matrix.platform }}
       native_runner: ${{ matrix.runner }}
       run_full_tests: true
-      test_suite: CI
+      test_suite: ${{ github.event_name == 'pull_request' && 'PR' || 'CI' }}
       run_asan_plugin_contracts: true
       upload_build_output: false

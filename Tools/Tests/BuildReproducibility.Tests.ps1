@@ -698,8 +698,26 @@ Describe 'Pinned build-tool and CI identity' {
         $ci | Should Match '"platform": "ARM64", "runner": "windows-11-vs2026-arm", "configuration": "Debug"'
         $selfTests | Should Match 'Suite PR is the ten-minute subset of Suite CI: .*PluginContractTests, SettingsSchemaTests, CrashHandlingTests'
         $ci | Should Match 'run_full_tests:\s*true'
-        # The quick gate runs the receipt-verified CI suite; Full stays the local closeout gate.
-        $ci | Should Match "test_suite: \$\{\{ github\.event_name == 'pull_request' && 'PR' \|\| 'CI' \}\}"
+        # Pull requests and pushes to main run Suite PR; Suite CI runs nightly from nightly-ci.yml;
+        # Full stays the local closeout gate.
+        $ci | Should Match 'test_suite:\s*PR\s*\r?\n'
+        $ci | Should Not Match 'test_suite:\s*\$\{\{'
+        $nightly = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\nightly-ci.yml') -Raw
+        $nightly | Should Match 'schedule:\s*\r?\n\s*- cron: "47 2 \* \* \*"'
+        $nightly | Should Match 'workflow_dispatch:'
+        $nightly | Should Not Match 'pull_request:|push:'
+        $nightly | Should Match 'test_suite:\s*CI\s*\r?\n'
+        $nightly | Should Match 'run_full_tests:\s*true'
+        $nightly | Should Not Match '"configuration": "ASan Debug"|configuration: ASan Debug'
+        $nightly | Should Match 'workflows/nightly-ci\.yml/runs\?branch='
+        $nightly | Should Match "if: needs\.changes\.outputs\.run == 'true'"
+        foreach ($profile in @('x64, runner: windows-2025-vs2026, configuration: Debug',
+                'x64, runner: windows-2025-vs2026, configuration: Release',
+                'ARM64, runner: windows-11-vs2026-arm, configuration: Debug',
+                'ARM64, runner: windows-11-vs2026-arm, configuration: Release')) {
+            $nightly | Should Match ([regex]::Escape("- { platform: $profile }"))
+        }
+        $nightly | Should Match '(?ms)^concurrency:\s+group:\s*nightly-ci-\$\{\{ github\.ref \}\}\s+cancel-in-progress:\s*false'
         $ci | Should Not Match '"configuration": "ASan Debug"'
         $ci | Should Match '(?ms)^concurrency:\s+group:\s*ci-\$\{\{ github\.event\.pull_request\.number \|\| github\.ref \}\}\s+cancel-in-progress:\s*true'
     }
@@ -714,7 +732,9 @@ Describe 'Pinned build-tool and CI identity' {
         $asan | Should Match 'configuration:\s*ASan Debug'
         $asan | Should Match 'run_asan_plugin_contracts:\s*true'
         $asan | Should Match 'run_full_tests:\s*true'
-        $asan | Should Match 'test_suite:\s*CI'
+        # Pull requests run the ten-minute Suite PR on x64 only; schedule and dispatch run Suite CI on both.
+        $asan | Should Match "test_suite: \$\{\{ github\.event_name == 'pull_request' && 'PR' \|\| 'CI' \}\}"
+        $asan | Should Match "github\.event_name == 'pull_request'\s*\r?\n\s*&& '\[\{`"platform`": `"x64`", `"runner`": `"windows-2025-vs2026`"\}\]'"
         $asan | Should Match '"platform": "ARM64", "runner": "windows-11-vs2026-arm"'
         $reusable | Should Match '--asan-seed-heap-overflow'
         $reusable | Should Match 'not rejected by AddressSanitizer'

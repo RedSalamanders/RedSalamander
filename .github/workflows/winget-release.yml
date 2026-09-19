@@ -510,7 +510,10 @@ jobs:
             -Wait $wait `
             -MaximumVisibilityAttempts 6
 
-          "pull_request_url=$($publication.Url)" >> $env:GITHUB_OUTPUT
+          # publication_url is the manifest tree on upstream master when the version is already
+          # published and the pull request otherwise; pull_request_url names only a pull request.
+          "publication_url=$($publication.Url)" >> $env:GITHUB_OUTPUT
+          "pull_request_url=$(if ($publication.Published) { '' } else { $publication.Url })" >> $env:GITHUB_OUTPUT
           "published=$([bool]$publication.Published)" >> $env:GITHUB_OUTPUT
           if ($publication.Published) {
             Write-Host "Winget already publishes this exact manifest: $($publication.Url)" -ForegroundColor Green

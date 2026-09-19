@@ -189,7 +189,8 @@ the token owner's own exact-version PR stop as `not owned`; the earlier PR must 
 Before any pull request is listed, the state machine reads upstream `master`: it resolves the head commit and lists
 the exact `manifests/<p>/<Publisher>/<Name>/<version>` directory (a 404 means not published). When the directory holds
 exactly the three expected files with identical canonical content, the state is `Published`: publication reports the
-manifest tree URL with `Published = $true`, submits nothing, and patches nothing. A directory with a different file set
+manifest tree URL with `Published = $true`, submits nothing, and patches nothing; the workflow exposes that URL as
+`publication_url` and leaves `pull_request_url` empty, because no pull request exists. A directory with a different file set
 or different canonical content is a `Conflict`. This check exists because the pull-request list covers only the 100
 most recently updated upstream PRs, so a merged publication drops out of it within hours; without it, the v7.0.60 rerun
 re-submitted an already merged version and upstream closed the empty PR as "does not update any files". The same

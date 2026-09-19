@@ -25,7 +25,8 @@ Related specifications:
 
 ```powershell
 .\Tools\Run-AllTests.ps1                      # Build Debug + run ALL self-tests
-.\Tools\Run-AllTests.ps1 -Suite CI             # Build Debug + run the GitHub Actions PR gate locally
+.\Tools\Run-AllTests.ps1 -Suite PR             # Build Debug + run the GitHub Actions pull-request/push gate locally (about ten minutes of tests)
+.\Tools\Run-AllTests.ps1 -Suite CI             # Build Debug + run the nightly suite locally (adds the in-product self-test suites)
 .\Tools\Run-AllTests.ps1 -Suite Full           # Build Debug + run self-tests, native tests, PerformanceTests2, and local script tests
 .\Tools\Run-AllTests.ps1 -Suite Commands       # Single suite
 .\Tools\Run-AllTests.ps1 -Suite Commands -CommandsFamily file-operations # One governed family process; not Full evidence
@@ -225,11 +226,12 @@ This is the same dynamically discovered current profile used by CI and Full.
 It deliberately excludes the SHA-256-sealed Gate0/Round4 Terminal cohort; see
 `Tools/TerminalEngine/README.md` for explicit archival reproduction commands.
 
-**Run in artifact-only CI jobs:** `.\Tools\Run-AllTests.ps1 -Suite CI -SkipBuild`
+**Run in artifact-only CI jobs:** `.\Tools\Run-AllTests.ps1 -Suite PR -ValidationMode Fresh -SkipBuild`
+(pull requests and pushes) or `-Suite CI` (nightly).
 
-Suite CI includes the deterministic PluginContractTests, SettingsSchemaTests, and CrashHandlingTests
-executables. The pull-request workflow separately performs a Debug ARM64 build-only gate; hosted x64
-runners do not execute the ARM64 artifacts.
+Suite PR and Suite CI both include the deterministic PluginContractTests, SettingsSchemaTests, and
+CrashHandlingTests executables. Pull requests build and test x64 Debug and ARM64 Debug on native
+runners (`windows-2025-vs2026`, `windows-11-vs2026-arm`); the ARM64 artifacts run on the ARM64 host.
 
 | File | Coverage |
 |------|----------|

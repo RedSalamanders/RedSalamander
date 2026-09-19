@@ -321,6 +321,23 @@ $versionContext = Resolve-RSVersionContext `
 $versionStatePath = Get-RSVersionStatePath -RepoRoot $SolutionDir
 
 # Function to find MSBuild
+function Get-RSHostOrderedMSBuildRelativePaths {
+    # Bin\MSBuild.exe is the 32-bit x86 MSBuild. The VC toolset derives the compiler host from the
+    # MSBuild process architecture and downgrades arm64/x64 hosts it cannot see, so every discovery
+    # strategy prefers the native 64-bit MSBuild of this host (arm64\ or amd64\), then the other
+    # 64-bit flavor, and only then the x86 executable.
+    $isArm64Host = [Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64'
+    $native = if ($isArm64Host) { 'arm64' } else { 'amd64' }
+    $other = if ($isArm64Host) { 'amd64' } else { 'arm64' }
+    return @(
+        "MSBuild\Current\Bin\$native\MSBuild.exe",
+        "MSBuild\Current\Bin\$other\MSBuild.exe",
+        "MSBuild\Current\Bin\MSBuild.exe",
+        "MSBuild\15.0\Bin\amd64\MSBuild.exe",
+        "MSBuild\15.0\Bin\MSBuild.exe"
+    )
+}
+
 function Find-MSBuild {
     Write-Host "Locating MSBuild..." -ForegroundColor Yellow
 
@@ -409,19 +426,7 @@ function Find-MSBuild {
                 $installVersion = [version]"0.0"
             }
 
-            # Bin\MSBuild.exe is the 32-bit x86 MSBuild; the VC toolset derives the compiler host from
-            # the MSBuild process architecture and downgrades arm64/x64 hosts it cannot see, so the
-            # native 64-bit MSBuild (arm64\ or amd64\) comes first on each host.
-            $nativeMSBuild = if ([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64') {
-                Join-Path $installPath 'MSBuild/Current/Bin/arm64/MSBuild.exe'
-            } else { Join-Path $installPath 'MSBuild/Current/Bin/amd64/MSBuild.exe' }
-            $msbuildCandidates = @(
-                $nativeMSBuild,
-                (Join-Path $installPath "MSBuild\\Current\\Bin\\amd64\\MSBuild.exe"),
-                (Join-Path $installPath "MSBuild\\Current\\Bin\\MSBuild.exe"),
-                (Join-Path $installPath "MSBuild\\15.0\\Bin\\amd64\\MSBuild.exe"),
-                (Join-Path $installPath "MSBuild\\15.0\\Bin\\MSBuild.exe")
-            )
+            $msbuildCandidates = @(Get-RSHostOrderedMSBuildRelativePaths | ForEach-Object { Join-Path $installPath $_ })
 
             $msbuildPath = $msbuildCandidates | Where-Object { Test-Path $_ } | Select-Object -First 1
             if (-not $msbuildPath) {
@@ -462,12 +467,7 @@ function Find-MSBuild {
     foreach ($basePath in $basePaths) {
         foreach ($year in $vsYears) {
             foreach ($edition in $vsEditions) {
-                $msbuildPaths = @(
-                    "$basePath\$year\$edition\MSBuild\Current\Bin\MSBuild.exe",
-                    "$basePath\$year\$edition\MSBuild\Current\Bin\amd64\MSBuild.exe",
-                    "$basePath\$year\$edition\MSBuild\15.0\Bin\MSBuild.exe",
-                    "$basePath\$year\$edition\MSBuild\15.0\Bin\amd64\MSBuild.exe"
-                )
+                $msbuildPaths = @(Get-RSHostOrderedMSBuildRelativePaths | ForEach-Object { "$basePath\$year\$edition\$_" })
                 
                 foreach ($msbuildPath in $msbuildPaths) {
                     if (Test-Path $msbuildPath) {
@@ -498,10 +498,7 @@ function Find-MSBuild {
     Write-Host "  Checking Developer Command Prompt environment..." -ForegroundColor Gray
     
     if ($env:VSINSTALLDIR) {
-        $devMSBuildPaths = @(
-            "$env:VSINSTALLDIR\MSBuild\Current\Bin\MSBuild.exe",
-            "$env:VSINSTALLDIR\MSBuild\15.0\Bin\MSBuild.exe"
-        )
+        $devMSBuildPaths = @(Get-RSHostOrderedMSBuildRelativePaths | ForEach-Object { "$env:VSINSTALLDIR\$_" })
         
         foreach ($devPath in $devMSBuildPaths) {
             if (Test-Path $devPath) {

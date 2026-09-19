@@ -499,7 +499,7 @@ Describe 'Run-AllTests plan helper' {
 
         # Hosted-runner durations (x64 Debug): every PR entry finishes in seconds except
         # PluginContractTests (~75 s) and the tooling Pester profile (~3 min); the three in-product
-        # self-test suites take 26-100 minutes each and stay on the push-to-main gate.
+        # self-test suites take 26-100 minutes each and stay on the nightly Suite CI lane.
         Assert-RSSequenceEqual `
             -Actual @($pr | ForEach-Object { $_.Name }) `
             -Expected @(
@@ -632,7 +632,10 @@ Describe 'Run-AllTests plan helper' {
             -Expected @('x64|Debug|windows-2025-vs2026', 'x64|Release|windows-2025-vs2026', 'ARM64|Debug|windows-11-vs2026-arm', 'ARM64|Release|windows-11-vs2026-arm') `
             -Message 'Pushes to main add both Release profiles on native runners.'
         Assert-RSEqual -Actual ($workflow -match 'run_full_tests: true') -Expected $true -Message 'Every profile runs the receipt-verified native suite.'
-        Assert-RSEqual -Actual ($workflow -match "test_suite: \$\{\{ github\.event_name == 'pull_request' && 'PR' \|\| 'CI' \}\}") -Expected $true -Message 'Pull requests run Suite PR; pushes to main run Suite CI; Suite Full stays the local closeout gate.'
+        Assert-RSEqual -Actual ($workflow -match 'test_suite: PR\s*\r?\n') -Expected $true -Message 'Pull requests and pushes to main run Suite PR; Suite Full stays the local closeout gate.'
+        $nightly = Get-Content -Path (Join-Path $repoRoot '.github\workflows\nightly-ci.yml') -Raw
+        Assert-RSEqual -Actual ($nightly -match 'test_suite: CI\s*\r?\n') -Expected $true -Message 'Suite CI runs nightly from nightly-ci.yml on every native profile.'
+        Assert-RSEqual -Actual ($nightly -match 'schedule:') -Expected $true -Message 'The nightly lane is scheduled, not event-driven.'
 
     }
 

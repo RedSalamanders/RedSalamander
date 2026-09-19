@@ -1,0 +1,63 @@
+name: Nightly Native Suite
+
+# Suite CI (the three in-product self-test suites plus the standalone executables, with
+# failure classification) takes one to four hours per profile on hosted runners, so it runs
+# once a night on every native profile instead of on every push. Pushes and pull requests
+# run Suite PR (ci.yml); ASan Debug runs from asan.yml.
+"on":
+  schedule:
+    - cron: "47 2 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-ci-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  # Skip the whole matrix when main has not changed since the last completed nightly.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      run: ${{ steps.decide.outputs.run }}
+    steps:
+      - name: Compare with the last completed nightly
+        id: decide
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "Manual dispatch: running."
+            exit 0
+          fi
+          last=$(gh api "repos/${{ github.repository }}/actions/workflows/nightly-ci.yml/runs?branch=${{ github.ref_name }}&status=completed&per_page=1" --jq '.workflow_runs[0].head_sha // ""')
+          if [ "$last" = "${{ github.sha }}" ]; then
+            echo "run=false" >> "$GITHUB_OUTPUT"
+            echo "No new commits on ${{ github.ref_name }} since the last completed nightly ($last): skipping."
+          else
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "New commits since the last completed nightly (${last:-none}): running."
+          fi
+
+  native:
+    needs: changes
+    if: needs.changes.outputs.run == 'true'
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - { platform: x64, runner: windows-2025-vs2026, configuration: Debug }
+          - { platform: x64, runner: windows-2025-vs2026, configuration: Release }
+          - { platform: ARM64, runner: windows-11-vs2026-arm, configuration: Debug }
+          - { platform: ARM64, runner: windows-11-vs2026-arm, configuration: Release }
+    uses: ./.github/workflows/build-reusable.yml
+    with:
+      configuration: ${{ matrix.configuration }}
+      platform: ${{ matrix.platform }}
+      native_runner: ${{ matrix.runner }}
+      run_full_tests: true
+      test_suite: CI
+      upload_build_output: false

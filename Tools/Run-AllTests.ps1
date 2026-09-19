@@ -28,7 +28,10 @@
       Compare   - Run only --compare-selftest
       Commands  - Run only --commands-selftest
       FileOps   - Run only --fileops-selftest
-      CI        - Run the GitHub Actions PR gate through the unified runner
+      PR        - Run the GitHub Actions pull-request/push gate: the non-interactive
+                  standalone entries of CI (about ten minutes on a hosted runner)
+      CI        - Run the nightly GitHub Actions suite: PR plus the in-product
+                  self-test suites, interactive entries, and failure classification
       Full      - Run all self-tests plus standalone/native and script tests
 
 .PARAMETER SkipBuild
