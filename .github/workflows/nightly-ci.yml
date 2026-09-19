@@ -1,5 +1,8 @@
 name: Nightly Native Suite
 
+run-name: >-
+  ${{ format('Suite CI on x64 + ARM64, Debug + Release ({0} {1})', github.event_name == 'schedule' && 'nightly on' || 'dispatch on', github.ref_name) }}
+
 # Suite CI (the three in-product self-test suites plus the standalone executables, with
 # failure classification) takes one to four hours per profile on hosted runners, so it runs
 # once a night on every native profile instead of on every push. Pushes and pull requests

@@ -684,6 +684,9 @@ Describe 'Pinned build-tool and CI identity' {
         $ci = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\ci.yml') -Raw
         $subclassGuard = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Verify-NoSubclassManager.ps1') -Raw
         $selfTests = Get-Content -LiteralPath (Join-Path $repoRoot 'Specs\Testing\Testing_SelfTests.md') -Raw
+        # The run title names the suite, the profiles, and the trigger instead of the PR title.
+        $ci | Should Match "run-name: >-\s*\r?\n\s*\$\{\{ github\.event_name == 'pull_request'\s*\r?\n\s*&& 'Suite PR on x64 Debug \+ ARM64 Debug \(pull request\)'"
+        $ci | Should Match "\|\| format\('Suite PR on x64 \+ ARM64, Debug \+ Release \(\{0\} \{1\}\)', github\.event_name == 'push' && 'push to' \|\| 'dispatch on', github\.ref_name\)"
         $ci | Should Match 'push:\s*\r?\n\s*branches:\s*\[main, master\]'
         $ci | Should Match 'pull_request:\s*\r?\n\s*branches:\s*\[main, master\]'
         $ci | Should Match 'contents:\s*read'
@@ -705,6 +708,7 @@ Describe 'Pinned build-tool and CI identity' {
         $nightly = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\nightly-ci.yml') -Raw
         $nightly | Should Match 'schedule:\s*\r?\n\s*- cron: "47 2 \* \* \*"'
         $nightly | Should Match 'workflow_dispatch:'
+        $nightly | Should Match "run-name: >-\s*\r?\n\s*\$\{\{ format\('Suite CI on x64 \+ ARM64, Debug \+ Release \(\{0\} \{1\}\)', github\.event_name == 'schedule' && 'nightly on' \|\| 'dispatch on', github\.ref_name\) \}\}"
         $nightly | Should Not Match 'pull_request:|push:'
         $nightly | Should Match 'test_suite:\s*CI\s*\r?\n'
         $nightly | Should Match 'run_full_tests:\s*true'
@@ -730,6 +734,8 @@ Describe 'Pinned build-tool and CI identity' {
         $asan = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\asan.yml') -Raw
         $reusable = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\build-reusable.yml') -Raw
         $harness = Get-Content -LiteralPath (Join-Path $repoRoot 'Tests\PluginContractTests\PluginContractTests.cpp') -Raw
+        $asan | Should Match "run-name: >-\s*\r?\n\s*\$\{\{ github\.event_name == 'pull_request'\s*\r?\n\s*&& 'ASan Debug, Suite PR on x64 \(pull request\)'"
+        $asan | Should Match "\|\| format\('ASan Debug, Suite CI on x64 \+ ARM64 \(\{0\}\)', github\.event_name == 'schedule' && 'weekly' \|\| 'dispatch'\)"
         $asan | Should Match 'schedule:'
         $asan | Should Match 'pull_request:\s*\r?\n\s*branches:\s*\[main, master\]'
         $asan | Should Match '\*\*/\*\.cpp'

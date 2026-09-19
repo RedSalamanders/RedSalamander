@@ -1,5 +1,10 @@
 name: AddressSanitizer
 
+run-name: >-
+  ${{ github.event_name == 'pull_request'
+  && 'ASan Debug, Suite PR on x64 (pull request)'
+  || format('ASan Debug, Suite CI on x64 + ARM64 ({0})', github.event_name == 'schedule' && 'weekly' || 'dispatch') }}
+
 "on":
   workflow_dispatch:
   schedule:
