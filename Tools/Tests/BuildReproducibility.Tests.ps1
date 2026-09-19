@@ -710,6 +710,10 @@ Describe 'Pinned build-tool and CI identity' {
         $nightly | Should Match 'run_full_tests:\s*true'
         $nightly | Should Not Match '"configuration": "ASan Debug"|configuration: ASan Debug'
         $nightly | Should Match 'workflows/nightly-ci\.yml/runs\?branch='
+        # The run-list call needs the Actions read scope; an API failure runs the suite instead of skipping it.
+        $nightly | Should Match '(?ms)^  changes:\s*\r?\n(?:.*?\r?\n)*?    permissions:\s*\r?\n\s*actions: read\s*\r?\n\s*contents: read'
+        $nightly | Should Match 'if ! last=\$\(gh api'
+        $nightly | Should Match '::warning::Could not list the completed nightly runs'
         $nightly | Should Match "if: needs\.changes\.outputs\.run == 'true'"
         foreach ($profile in @('x64, runner: windows-2025-vs2026, configuration: Debug',
                 'x64, runner: windows-2025-vs2026, configuration: Release',

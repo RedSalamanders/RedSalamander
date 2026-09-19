@@ -265,7 +265,8 @@ Describe 'Release workflow source contracts' {
         $buildScript = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
         $buildScript | Should Match 'function Get-RSHostOrderedMSBuildRelativePaths \{'
         $buildScript | Should Match "\`$native = if \(\`$isArm64Host\) \{ 'arm64' \} else \{ 'amd64' \}"
-        $buildScript | Should Match '"MSBuild\\Current\\Bin\\\$native\\MSBuild\.exe",\s*\r?\n\s*"MSBuild\\Current\\Bin\\\$other\\MSBuild\.exe",\s*\r?\n\s*"MSBuild\\Current\\Bin\\MSBuild\.exe"'
+        # Every 64-bit executable, including the legacy 15.0 layout, outranks both x86 executables.
+        $buildScript | Should Match '"MSBuild\\Current\\Bin\\\$native\\MSBuild\.exe",\s*\r?\n\s*"MSBuild\\Current\\Bin\\\$other\\MSBuild\.exe",\s*\r?\n\s*"MSBuild\\15\.0\\Bin\\amd64\\MSBuild\.exe",\s*\r?\n\s*"MSBuild\\Current\\Bin\\MSBuild\.exe",\s*\r?\n\s*"MSBuild\\15\.0\\Bin\\MSBuild\.exe"\s*\r?\n\s*\)'
         ([regex]::Matches($buildScript, 'Get-RSHostOrderedMSBuildRelativePaths \| ForEach-Object')).Count | Should Be 3
         $buildScript | Should Not Match '\\MSBuild\\Current\\Bin\\MSBuild\.exe",'
         # The MSIX packaging job selects MSBuild with the same host order.

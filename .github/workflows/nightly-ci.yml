@@ -20,6 +20,10 @@ jobs:
   # Skip the whole matrix when main has not changed since the last completed nightly.
   changes:
     runs-on: ubuntu-latest
+    # Listing this workflow's runs needs the Actions read scope on the job token.
+    permissions:
+      actions: read
+      contents: read
     outputs:
       run: ${{ steps.decide.outputs.run }}
     steps:
@@ -33,7 +37,12 @@ jobs:
             echo "Manual dispatch: running."
             exit 0
           fi
-          last=$(gh api "repos/${{ github.repository }}/actions/workflows/nightly-ci.yml/runs?branch=${{ github.ref_name }}&status=completed&per_page=1" --jq '.workflow_runs[0].head_sha // ""')
+          # When the run list cannot be read, run the suite: skipping is only an optimization.
+          if ! last=$(gh api "repos/${{ github.repository }}/actions/workflows/nightly-ci.yml/runs?branch=${{ github.ref_name }}&status=completed&per_page=1" --jq '.workflow_runs[0].head_sha // ""'); then
+            echo "run=true" >> "$GITHUB_OUTPUT"
+            echo "::warning::Could not list the completed nightly runs; running the suite without the unchanged-main check."
+            exit 0
+          fi
           if [ "$last" = "${{ github.sha }}" ]; then
             echo "run=false" >> "$GITHUB_OUTPUT"
             echo "No new commits on ${{ github.ref_name }} since the last completed nightly ($last): skipping."
