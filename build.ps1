@@ -340,6 +340,19 @@ function Get-RSHostOrderedMSBuildRelativePaths {
     )
 }
 
+function Resolve-RSHostOrderedMSBuildPath {
+    param([Parameter(Mandatory = $true)][string]$Path)
+    # A PATH hit from a developer prompt is usually the x86 MSBuild\Current\Bin\MSBuild.exe; map
+    # it to the best host-ordered executable of the same installation when one exists.
+    $match = [regex]::Match($Path, '^(?<root>.+?)\\MSBuild\\(?:Current|15\.0)\\Bin\\(?:(?:amd64|arm64)\\)?MSBuild\.exe$', 'IgnoreCase')
+    if (-not $match.Success) { return $Path }
+    foreach ($relative in Get-RSHostOrderedMSBuildRelativePaths) {
+        $candidate = Join-Path $match.Groups['root'].Value $relative
+        if (Test-Path -LiteralPath $candidate -PathType Leaf) { return $candidate }
+    }
+    return $Path
+}
+
 function Find-MSBuild {
     Write-Host "Locating MSBuild..." -ForegroundColor Yellow
 
@@ -366,7 +379,7 @@ function Find-MSBuild {
         # Compatibility fallback for callers that only prepend the selected directory.
         $msbuildInPath = Get-Command msbuild.exe -ErrorAction SilentlyContinue
         if ($msbuildInPath -and $msbuildInPath.Source -and (Test-Path $msbuildInPath.Source)) {
-            $candidatePath = $msbuildInPath.Source
+            $candidatePath = Resolve-RSHostOrderedMSBuildPath -Path $msbuildInPath.Source
             $fileMajor = $null
             try {
                 $ver = [System.Diagnostics.FileVersionInfo]::GetVersionInfo($candidatePath)
@@ -490,7 +503,7 @@ function Find-MSBuild {
     $msbuildInPath = Get-Command msbuild.exe -ErrorAction SilentlyContinue
     if ($msbuildInPath) {
         return @{
-            Path = $msbuildInPath.Source
+            Path = Resolve-RSHostOrderedMSBuildPath -Path $msbuildInPath.Source
             Version = "Found in PATH"
             Method = "PATH"
         }

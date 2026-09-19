@@ -6,7 +6,7 @@ run-name: >-
 # Suite CI (the three in-product self-test suites plus the standalone executables, with
 # failure classification) takes one to four hours per profile on hosted runners, so it runs
 # once a night on every native profile instead of on every push. Pushes and pull requests
-# run Suite PR (ci.yml); ASan Debug runs from asan.yml.
+# run Suite PR (ci.yml); ASan Debug runs weekly from asan.yml.
 "on":
   schedule:
     - cron: "47 2 * * *"

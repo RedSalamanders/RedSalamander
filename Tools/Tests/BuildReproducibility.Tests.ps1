@@ -730,22 +730,21 @@ Describe 'Pinned build-tool and CI identity' {
         $ci | Should Match '(?ms)^concurrency:\s+group:\s*ci-\$\{\{ github\.event\.pull_request\.number \|\| github\.ref \}\}\s+cancel-in-progress:\s*true'
     }
 
-    It 'runs scheduled and high-risk ASan with a seeded detector proof before green contracts' {
+    It 'runs weekly ASan on both architectures with a seeded detector proof before green contracts' {
         $asan = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\asan.yml') -Raw
         $reusable = Get-Content -LiteralPath (Join-Path $repoRoot '.github\workflows\build-reusable.yml') -Raw
         $harness = Get-Content -LiteralPath (Join-Path $repoRoot 'Tests\PluginContractTests\PluginContractTests.cpp') -Raw
-        $asan | Should Match "run-name: >-\s*\r?\n\s*\$\{\{ github\.event_name == 'pull_request'\s*\r?\n\s*&& 'ASan Debug, Suite PR on x64 \(pull request\)'"
-        $asan | Should Match "\|\| format\('ASan Debug, Suite CI on x64 \+ ARM64 \(\{0\}\)', github\.event_name == 'schedule' && 'weekly' \|\| 'dispatch'\)"
-        $asan | Should Match 'schedule:'
-        $asan | Should Match 'pull_request:\s*\r?\n\s*branches:\s*\[main, master\]'
-        $asan | Should Match '\*\*/\*\.cpp'
+        $asan | Should Match "run-name: >-\s*\r?\n\s*\$\{\{ format\('ASan Debug, Suite CI on x64 \+ ARM64 \(\{0\}\)', github\.event_name == 'schedule' && 'weekly' \|\| 'dispatch'\) \}\}"
+        $asan | Should Match 'schedule:\s*\r?\n\s*- cron: "30 4 \* \* 2"'
+        $asan | Should Match 'workflow_dispatch:'
+        # The instrumented build alone takes over an hour: never a pull-request or push lane.
+        $asan | Should Not Match 'pull_request|push:'
         $asan | Should Match 'configuration:\s*ASan Debug'
         $asan | Should Match 'run_asan_plugin_contracts:\s*true'
         $asan | Should Match 'run_full_tests:\s*true'
-        # Pull requests run the ten-minute Suite PR on x64 only; schedule and dispatch run Suite CI on both.
-        $asan | Should Match "test_suite: \$\{\{ github\.event_name == 'pull_request' && 'PR' \|\| 'CI' \}\}"
-        $asan | Should Match "github\.event_name == 'pull_request'\s*\r?\n\s*&& '\[\{`"platform`": `"x64`", `"runner`": `"windows-2025-vs2026`"\}\]'"
-        $asan | Should Match '"platform": "ARM64", "runner": "windows-11-vs2026-arm"'
+        $asan | Should Match 'test_suite:\s*CI\s*\r?\n'
+        $asan | Should Match '- \{ platform: x64, runner: windows-2025-vs2026 \}'
+        $asan | Should Match '- \{ platform: ARM64, runner: windows-11-vs2026-arm \}'
         $reusable | Should Match '--asan-seed-heap-overflow'
         $reusable | Should Match 'not rejected by AddressSanitizer'
         $reusable | Should Match 'AddressSanitizer diagnostic'

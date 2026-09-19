@@ -95,7 +95,7 @@ jobs:
   # both Release profiles. Every job runs Suite PR: the standalone test executables and tooling
   # contracts, about ten minutes, no in-product self-test suites and no classification reruns.
   # Suite CI (the in-product suites, one to four hours per profile) runs nightly from
-  # nightly-ci.yml; ASan Debug runs from asan.yml, never as part of every push.
+  # nightly-ci.yml; ASan Debug runs weekly from asan.yml, never on pull requests or pushes.
   native:
     strategy:
       fail-fast: false
