@@ -60,7 +60,7 @@
     },
     {
       "name": "aws-sdk-cpp",
-      "version>=": "1.11.880",
+      "version>=": "1.11.900",
       "features": [
         "s3",
         "s3-crt",
