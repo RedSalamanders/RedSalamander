@@ -595,7 +595,7 @@ jobs:
 
       - name: Upload native qualification evidence
         if: ${{ always() && inputs.run_full_tests && steps.test_root.outputs.path != '' }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-validation-${{ inputs.platform }}-${{ inputs.configuration }}
           path: |
@@ -606,7 +606,7 @@ jobs:
 
       - name: Upload native build diagnostics
         if: ${{ always() && inputs.run_full_tests }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: native-build-${{ inputs.platform }}-${{ inputs.configuration }}
           include-hidden-files: true
@@ -618,7 +618,7 @@ jobs:
 
       - name: Upload build output
         if: ${{ inputs.upload_build_output }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: build-output-${{ inputs.platform }}
           path: ${{ steps.portable_attestation.outputs.payload_path }}/

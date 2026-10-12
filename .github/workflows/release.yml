@@ -115,7 +115,7 @@ jobs:
           }
       - name: Upload Ghostty release preflight
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ghostty-runtime-release-preflight-${{ github.run_id }}
           path: .build/TerminalEngineStatus/release/status.json
@@ -190,7 +190,7 @@ jobs:
           & $zipScript -Configuration Release -Platform "${{ matrix.platform }}" -BuildNumber "${{ needs.version-info.outputs.build_number }}"
 
       - name: Upload portable package
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: portable-package-${{ matrix.platform }}
           path: .build/AppPackages/RedSalamander-${{ needs.version-info.outputs.release_version }}-${{ matrix.platform }}-Portable.zip
@@ -383,7 +383,7 @@ jobs:
 
       - name: Upload MSIX package
         if: ${{ inputs.build_msix }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: msix-package-${{ matrix.platform }}
           path: .build/AppPackages/RedSalamander-${{ needs.version-info.outputs.release_version }}-${{ matrix.platform }}.msix
