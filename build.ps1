@@ -389,8 +389,11 @@ function Find-MSBuild {
                 throw "Workflow-selected MSBuild does not exist: $selectedPath"
             }
             $selectedVersion = [Diagnostics.FileVersionInfo]::GetVersionInfo($selectedPath)
+            # A registered VS instance can live under RUNNER_TEMP or another custom
+            # root. Validate the binary identity and MSBuild layout, not its parent name.
             if ($selectedVersion.FileMajorPart -lt 18 -or
-                $selectedPath -notmatch '\\Microsoft Visual Studio\\') {
+                $selectedVersion.OriginalFilename -ne 'MSBuild.exe' -or
+                $selectedPath -notmatch '\\MSBuild\\Current\\Bin\\(?:(?:amd64|arm64)\\)?MSBuild\.exe$') {
                 throw "Workflow-selected MSBuild is not a Visual Studio 2026 executable: $selectedPath"
             }
             return @{
@@ -414,7 +417,8 @@ function Find-MSBuild {
             }
 
             # VS 2026 MSBuild should report major version 18.
-            if (($null -ne $fileMajor) -and ($fileMajor -ge 18) -and ($candidatePath -match '\\Microsoft Visual Studio\\')) {
+            if (($null -ne $fileMajor) -and ($fileMajor -ge 18) -and $ver.OriginalFilename -eq 'MSBuild.exe' -and
+                $candidatePath -match '\\MSBuild\\Current\\Bin\\(?:(?:amd64|arm64)\\)?MSBuild\.exe$') {
                 return @{
                     Path = $candidatePath
                     Version = "MSBuild $fileMajor (PATH)"

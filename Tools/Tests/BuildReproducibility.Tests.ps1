@@ -818,3 +818,48 @@ Describe 'Pinned build-tool and CI identity' {
         $harness | Should Match 'raw\[16\]\s*=\s*0x5Au'
     }
 }
+
+Describe 'Workflow-selected MSBuild identity' {
+    It 'accepts a relocated VS18 MSBuild and rejects wrong layouts and non-MSBuild executables' {
+        $tokens = $null
+        $errors = $null
+        $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'build.ps1'),[ref]$tokens,[ref]$errors)
+        $errors.Count | Should Be 0
+        $functions = @($ast.FindAll({param($node) $node -is [Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Find-MSBuild'},$true))
+        $functions.Count | Should Be 1
+        $find = $functions[0].Body.GetScriptBlock()
+        $vswhere = Join-Path ${env:ProgramFiles(x86)} 'Microsoft Visual Studio/Installer/vswhere.exe'
+        $installation = @(& $vswhere -latest -prerelease -products '*' -requires Microsoft.Component.MSBuild -property installationPath)[0]
+        $hostFolder = if([Runtime.InteropServices.RuntimeInformation]::OSArchitecture.ToString() -eq 'Arm64'){'arm64'}else{'amd64'}
+        $real = Join-Path $installation ('MSBuild/Current/Bin/'+$hostFolder+'/MSBuild.exe')
+        (Get-Item -LiteralPath $real).VersionInfo.FileMajorPart | Should BeGreaterThan 17
+        $fixture = Join-Path $TestDrive ('relocated VS é日/MSBuild/Current/Bin/'+$hostFolder+'/MSBuild.exe')
+        [void][IO.Directory]::CreateDirectory((Split-Path $fixture))
+        Copy-Item -LiteralPath $real -Destination $fixture
+        $savedActions = $env:GITHUB_ACTIONS
+        $savedMsbuild = $env:MSBUILD_EXE_PATH
+        try {
+            $env:GITHUB_ACTIONS = 'true'
+            $env:MSBUILD_EXE_PATH = $fixture
+            $selected = & $find
+            $selected.Path | Should Be ([IO.Path]::GetFullPath($fixture))
+            $selected.Method | Should Be 'MSBUILD_EXE_PATH'
+            $wrongLayout = Join-Path $TestDrive 'outside-install-layout/MSBuild.exe'
+            [void][IO.Directory]::CreateDirectory((Split-Path $wrongLayout))
+            Copy-Item -LiteralPath $real -Destination $wrongLayout
+            $env:MSBUILD_EXE_PATH = $wrongLayout
+            Assert-RSThrowsMatching { & $find } 'not a Visual Studio 2026 executable'
+            # Keep valid version metadata but use a different binary identity.
+            $other = Join-Path (Split-Path $real) 'MSBuildTaskHost.exe'
+            (Test-Path -LiteralPath $other) | Should Be $true
+            Copy-Item -LiteralPath $other -Destination $fixture -Force
+            $env:MSBUILD_EXE_PATH = $fixture
+            Assert-RSThrowsMatching { & $find } 'not a Visual Studio 2026 executable'
+            $env:MSBUILD_EXE_PATH = Join-Path $TestDrive 'missing/MSBuild.exe'
+            Assert-RSThrowsMatching { & $find } 'does not exist'
+        } finally {
+            $env:GITHUB_ACTIONS = $savedActions
+            $env:MSBUILD_EXE_PATH = $savedMsbuild
+        }
+    }
+}

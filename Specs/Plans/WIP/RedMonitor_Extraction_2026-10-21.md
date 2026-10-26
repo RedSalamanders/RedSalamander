@@ -581,3 +581,11 @@ A real delayed GUI fixture exercises the hosted branch with 0, 3010 and failure
 exits and Unicode/spaced paths. Current public CI must pass; the qualified C++
 source and its 51 focused native checks are unchanged. Full runtime reruns remain
 omitted under the accepted scope; package/manual gates remain open.
+
+The subsequent public x64 job completed all vcpkg dependencies, then failed before
+compilation because build.ps1 required the literal Microsoft Visual Studio parent
+directory in the workflow-selected MSBuild path. The hosted installer intentionally
+uses RUNNER_TEMP. Discovery now validates actual VS18+ binary version, invariant
+MSBuild.exe identity and standard host layout; compiler-family requirements remain
+strict. A relocated real binary and wrong-layout/wrong-binary/missing controls cover
+the repair. No C++ source changed; updated native CI remains required.

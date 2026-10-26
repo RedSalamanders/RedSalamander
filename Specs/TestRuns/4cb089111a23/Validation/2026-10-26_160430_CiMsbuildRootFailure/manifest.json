@@ -1,0 +1,80 @@
+{
+  "publicPredecessor": "1edb7f3c6aa6879cc86f13f3e409e0a2977a1ac3",
+  "failedCiRun": 40349762459,
+  "sourceSnapshot": "bfcaaaa14142dc8426752543237275d46678c2179616a1cfcc5307d23c058068",
+  "restoredToolFixture": "d53f25d56e7806475054f624439e93ee38e1e81d",
+  "files": [
+    {
+      "file": "pr142-x64-1edb7f3c-job.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\pr142-x64-1edb7f3c-job.log",
+      "sha256": "8CC5DA041824C82C72B45E8CC5DC590509BAB003B403432E7DB0F95CC1A71303",
+      "bytes": 188356
+    },
+    {
+      "file": "pr142-arm64-1edb7f3c-job.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\pr142-arm64-1edb7f3c-job.log",
+      "sha256": "316AAD118F813E5A685E2A9C39C24A1A642BF0D4FB51BC762B66A65789D206F1",
+      "bytes": 200608
+    },
+    {
+      "file": "ci-msbuild-layout-focused-tests.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-msbuild-layout-focused-tests.json",
+      "sha256": "D40B2BD2382289230BDB293E6621B610997F65E43306678E6D25907020B454A3",
+      "bytes": 17741
+    },
+    {
+      "file": "ci-msbuild-layout-source-before.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-msbuild-layout-source-before.json",
+      "sha256": "D31A6F28660D195D59F94B711E386773D14531061EC38647D3CDACD93AE8DC96",
+      "bytes": 4069
+    },
+    {
+      "file": "BuildReproducibility.Tests.ps1.xml",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\BuildReproducibility.Tests.ps1.xml",
+      "sha256": "4D8D10F55F3BC8E1DF9E0CF583D6D6BC500C962A27B48DB969BB4DE647FBFD41",
+      "bytes": 18367
+    },
+    {
+      "file": "MSBuildInvocation.Tests.ps1.xml",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\MSBuildInvocation.Tests.ps1.xml",
+      "sha256": "AFC15ED20F93BB6DB5C118232E236A7CB4DAD8CF42ECD3C44E264D4652CD329E",
+      "bytes": 10295
+    },
+    {
+      "file": "VcpkgInstallSafety.Tests.ps1.xml",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\VcpkgInstallSafety.Tests.ps1.xml",
+      "sha256": "33C0E4504A191E4D5DC6288010B594E137705CC8BD9E70439CCE621DC85AE753",
+      "bytes": 10529
+    },
+    {
+      "file": "ci-msbuild-layout-focused-tests-restored-driver.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-msbuild-layout-focused-tests-restored-driver.log",
+      "sha256": "EDCBC41265BE56CC70A2FF57958E2C50C3549454302E652645CB2B15FDD624FD",
+      "bytes": 9529
+    },
+    {
+      "file": "ci-msbuild-layout-focused-tests-missing-fixture.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-msbuild-layout-focused-tests-missing-fixture.json",
+      "sha256": "4AD5414D4E8F87C9C8CC9927818DCF3D5557F23ABB94BD327C9FBAE26C9231A8",
+      "bytes": 17672
+    },
+    {
+      "file": "ci-msbuild-layout-focused-tests-missing-fixture.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-msbuild-layout-focused-tests-missing-fixture.log",
+      "sha256": "AABB34F27C7DE7CDC5309E409B9249823B8B394C449F4C6F6EF8511CA4927092",
+      "bytes": 9600
+    },
+    {
+      "file": "build-under-test.ps1.txt",
+      "source": "E:\\RedSalamander.Perf\\repository-migration-20261024\\public-verification-582d644be\\build.ps1",
+      "sha256": "B758DC60FFE9C27B97419BF3AB05EF1DBC50875092B963C3E4CDBA8AA98B5120",
+      "bytes": 63740
+    },
+    {
+      "file": "build-reproducibility-under-test.ps1.txt",
+      "source": "E:\\RedSalamander.Perf\\repository-migration-20261024\\public-verification-582d644be\\Tools\\Tests\\BuildReproducibility.Tests.ps1",
+      "sha256": "44AB82AFAB32BD683D3B2FE1306736F7ABCA82C213655EDA54EDA3BB6F144932",
+      "bytes": 57323
+    }
+  ]
+}

@@ -391,3 +391,6 @@ It waits at most 45 minutes, retains stdout/stderr under RUNNER_TEMP, accepts on
 0 or reboot-required 3010, then verifies the required compiler/ASan/SDK/LLVM tools.
 A real GUI fixture exercises delayed completion, Unicode/spaced arguments and
 0/3010/failure exits without installing software; local -VerifyOnly remains read-only.
+Workflow-selected VS18 MSBuild may live in a custom/temporary installation root;
+build discovery checks its real binary version/identity and standard host layout,
+then applies the required compiler/SDK policy independently of the parent name.
