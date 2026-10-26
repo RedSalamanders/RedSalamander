@@ -4,6 +4,7 @@ Entries are generated from [Changes](Changes/README.md). Existing release notes 
 
 ## Unreleased
 
+- Prepare the GitHub-hosted Windows x64 job's own console session before native capture validation. Refuse local/self-hosted/service-session mutation and fail if console connection cannot be verified; retain all HWND capture, pixel/layer and foreground assertions. Focused ownership tests cover refusal, no-op, connection and timeout paths; hosted x64/ARM64 qualification remains required.
 - Preserve shared browser-creation serialization across profile resolution and drain any queued consumers when test-profile admission fails. The existing viewer lifetime guard, actual profile readbacks and resource bounds remain in force.
 - Preserve ViewerWeb's existing lifetime guard while resolving the browser profile, and balance initialization state on profile rejection before starting environment creation. Existing browser-isolation and resource assertions remain unchanged.
 - Pass a validated sandbox profile explicitly to WebView2 in test builds, including loaders that ignore a late environment override. Reject invalid test overrides before starting browser creation, retain actual profile readback checks, and keep ordinary application profile behavior. The original ASan regression cluster remains green at b5ea0d679; current-source qualification follows this repair.

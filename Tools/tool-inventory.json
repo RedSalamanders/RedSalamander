@@ -2,6 +2,36 @@
   "schemaVersion": 3,
   "entries": [
     {
+      "path": "Tools/Modules/Testing/HostedCaptureDesktop.psm1",
+      "kind": "module",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Connect only a GitHub-hosted Windows x64 job's own process session to its console before mandatory HWND capture validation.",
+      "usage": "Import from the reusable native build workflow before running the validation suite.",
+      "usedBy": [".github/workflows/build-reusable.yml", "Tools/Tests/HostedCaptureDesktop.Tests.ps1"],
+      "prerequisites": ["PowerShell 7", "GitHub-hosted Windows x64 runner", "Session connect permission"],
+      "sideEffects": ["Connects only the validated hosted job process session to its console", "Fails closed outside the hosted runner or when console identity does not converge"],
+      "outputs": ["Console session verification diagnostics"],
+      "ownerSpec": "Specs/Testing/Testing_SelfTests.md",
+      "tests": ["Tools/Tests/HostedCaptureDesktop.Tests.ps1"],
+      "replacement": null
+    },
+    {
+      "path": "Tools/Tests/HostedCaptureDesktop.Tests.ps1",
+      "kind": "test",
+      "visibility": "internal",
+      "lifecycle": "active",
+      "purpose": "Exercise hosted desktop ownership refusals, own-session connection, already-connected no-op and fail-closed connection/timeout behavior without changing the real desktop.",
+      "usage": "Run through the current tooling Pester profile or focused Pester invocation.",
+      "usedBy": ["Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1", "Tools/Run-AllTests.ps1"],
+      "prerequisites": ["PowerShell with Pester"],
+      "sideEffects": ["Mocks all session queries and mutations; restores test process environment"],
+      "outputs": ["Pester pass/fail results"],
+      "ownerSpec": "Specs/Testing/Testing_SelfTests.md",
+      "tests": ["self"],
+      "replacement": null
+    },
+    {
       "path": "Tools/Tests/VcpkgInstallSafety.Tests.ps1",
       "kind": "test",
       "visibility": "internal",

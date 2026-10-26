@@ -2058,6 +2058,15 @@ STA/MTA; COM-only initialization does not meet that API precondition. Capture ob
 event registrations MUST be released before the matching runtime cleanup. Failure diagnostics
 record the API stage and the process's session, window station and desktop.
 
+Before native validation on a GitHub-hosted Windows x64 runner, the reusable build workflow
+connects the job's own process session to its console using
+`Tools/Modules/Testing/HostedCaptureDesktop.psm1`. Preparation refuses local, self-hosted,
+non-Windows, ARM64 and service-session callers before session mutation. It never chooses
+another user's session and verifies the resulting console identity within a bounded deadline;
+connection or verification failure stops the job. Native HWND capture, pixel/layer witnesses,
+foreground isolation and capture-failure assertions remain unchanged. A usable window station
+and visible window alone do not establish that the hosted capture session has a console.
+
 ViewerSpace lifecycle fixtures fit their 1200 by 720 DIP target to the current monitor work area.
 The analysis-visibility, exact lifecycle state, no-activation and complete-layer pixel witnesses remain mandatory.
 `REDSALAMANDER_VIEWER_LIFECYCLE_TEST_SMALL_WORKAREA=1` restricts only the owned fixture to a 1024 by 680

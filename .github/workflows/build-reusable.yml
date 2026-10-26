@@ -597,6 +597,14 @@ jobs:
             if ($LASTEXITCODE -ne 0) { throw "ASan PluginContractTests failed with exit code $LASTEXITCODE." }
           }
 
+      - name: Connect hosted x64 capture session to its console
+        if: ${{ inputs.run_full_tests && runner.environment == 'github-hosted' && runner.arch == 'X64' }}
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Import-Module ./Tools/Modules/Testing/HostedCaptureDesktop.psm1 -Force
+          Initialize-RSHostedCaptureDesktop | ConvertTo-Json | Write-Host
+
       - name: Run native validation suite
         if: ${{ inputs.run_full_tests }}
         shell: pwsh

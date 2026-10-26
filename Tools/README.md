@@ -1,4 +1,8 @@
 # Repository tooling
+The reusable native workflow prepares its GitHub-hosted Windows x64 job's own console with
+`Modules/Testing/HostedCaptureDesktop.psm1` before mandatory HWND capture. This internal helper
+refuses local and self-hosted desktop changes; see `Specs/Testing/Testing_SelfTests.md`.
+
 RedMonitor shares one vendored client header/license. Verify-RedMonitorClient.ps1 checks local hashes
 without Git/network/viewer work. Update-RedMonitorClient.ps1 -Commit FULL_SHA is the explicit dependency
 update operation. Restore-RedMonitor.ps1 is a compatibility alias for local verification only.
