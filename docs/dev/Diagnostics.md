@@ -115,7 +115,7 @@ Written by `Perf::Scope`'s destructor and by `Perf::Emit`.
 ## Consumer pipeline
 
 The independently installed RedMonitor.exe owns ETW session/listener lifetime, bounded model, intake
-queue and rendering. Its [transport contract](https://github.com/RedSalamanders/RedMonitor/blob/ej/redmonitor-adoption-20261023/Specs/Core/Core_Transport.md)
+queue and rendering. Its [transport contract](https://github.com/RedSalamanders/RedMonitor/blob/main/Specs/Core/Core_Transport.md)
 owns session collision and shutdown behavior; never stop a foreign session. This application emits
 through its existing module-owned provider and does not own a listener thread or viewer window.
 
