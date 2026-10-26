@@ -2066,6 +2066,9 @@ another user's session and verifies the resulting console identity within a boun
 connection or verification failure stops the job. Native HWND capture, pixel/layer witnesses,
 foreground isolation and capture-failure assertions remain unchanged. A usable window station
 and visible window alone do not establish that the hosted capture session has a console.
+The same deadline bounds the contained `tscon` child and subsequent verification; a late
+successful connection is rejected. The shared streaming-process helper contains and closes
+only the launched child tree, and redirected-output draining remains separately bounded.
 
 ViewerSpace lifecycle fixtures fit their 1200 by 720 DIP target to the current monitor work area.
 The analysis-visibility, exact lifecycle state, no-activation and complete-layer pixel witnesses remain mandatory.

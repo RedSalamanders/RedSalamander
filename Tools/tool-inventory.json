@@ -21,7 +21,7 @@
       "kind": "test",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Exercise hosted desktop ownership refusals, own-session connection, already-connected no-op and fail-closed connection/timeout behavior without changing the real desktop.",
+      "purpose": "Exercise hosted desktop ownership refusals, own-session connection, already-connected no-op, contained command failures/timeouts and rejection of late connection success without changing the real desktop.",
       "usage": "Run through the current tooling Pester profile or focused Pester invocation.",
       "usedBy": ["Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1", "Tools/Run-AllTests.ps1"],
       "prerequisites": ["PowerShell with Pester"],
@@ -1905,6 +1905,7 @@
       "purpose": "Launch child processes with sanitized environments and live stdout/stderr streaming.",
       "usage": "Import from build and test orchestration that requires live subprocess output.",
       "usedBy": [
+        "Tools/Modules/Testing/HostedCaptureDesktop.psm1",
         ".github/actions/setup-msvc/Setup.ps1",
         "build.ps1",
         "Tools/Run-AllTests.ps1",

@@ -84,5 +84,32 @@ InModuleScope HostedCaptureDesktop {
             Assert-RSHostedCaptureFailure { Initialize-RSHostedCaptureDesktop -TimeoutSeconds 1 } 'did not reach the console'
             Assert-MockCalled Connect-RSHostedCaptureSession -Times 1 -Exactly -Scope It -ParameterFilter { $SessionId -eq 7 }
         }
+        It 'rejects a connection that succeeds after the shared deadline' {
+            Mock Connect-RSHostedCaptureSession {
+                Start-Sleep -Milliseconds 1100
+                $script:connected = $true
+            }
+            Assert-RSHostedCaptureFailure { Initialize-RSHostedCaptureDesktop -TimeoutSeconds 1 } 'did not reach the console'
+        }
+    }
+
+    Describe 'Contained hosted console command' {
+        It 'bounds the owned session command and its redirected output drain' {
+            Mock Invoke-RSStreamingProcess { 0 }
+            Connect-RSHostedCaptureSession -SessionId 7 -TimeoutMilliseconds 1200
+            Assert-MockCalled Invoke-RSStreamingProcess -Times 1 -Exactly -Scope It -ParameterFilter {
+                $FilePath -eq (Join-Path $env:SystemRoot 'System32/tscon.exe') -and
+                $Arguments.Count -eq 2 -and $Arguments[0] -eq '7' -and $Arguments[1] -eq '/dest:console' -and
+                $TimeoutMilliseconds -eq 1200 -and $OutputDrainTimeoutMilliseconds -eq 250
+            }
+        }
+        It 'fails on a nonzero connection exit code' {
+            Mock Invoke-RSStreamingProcess { 5 }
+            Assert-RSHostedCaptureFailure { Connect-RSHostedCaptureSession -SessionId 7 -TimeoutMilliseconds 1200 } 'failed: 5'
+        }
+        It 'propagates a contained-process timeout instead of accepting late console state' {
+            Mock Invoke-RSStreamingProcess { throw 'Timed out running owned tscon.' }
+            Assert-RSHostedCaptureFailure { Connect-RSHostedCaptureSession -SessionId 7 -TimeoutMilliseconds 1200 } 'Timed out'
+        }
     }
 }

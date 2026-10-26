@@ -1,4 +1,5 @@
 Set-StrictMode -Version Latest
+Import-Module (Join-Path $PSScriptRoot '../Build/ProcessStreaming.psm1') -Scope Local -ErrorAction Stop
 
 function Get-RSHostedCaptureProcessSession {
     $process = [Diagnostics.Process]::GetCurrentProcess()
@@ -22,12 +23,16 @@ namespace RedSalamander.Testing {
 }
 
 function Connect-RSHostedCaptureSession {
-    param([Parameter(Mandatory)][ValidateRange(1, [int]::MaxValue)][int]$SessionId)
+    param(
+        [Parameter(Mandatory)][ValidateRange(1, [int]::MaxValue)][int]$SessionId,
+        [Parameter(Mandatory)][ValidateRange(1, 30000)][int]$TimeoutMilliseconds
+    )
 
     $tscon = Join-Path $env:SystemRoot 'System32/tscon.exe'
-    & $tscon $SessionId /dest:console | Out-Host
-    if ($LASTEXITCODE -ne 0) {
-        throw "Connecting the owned hosted session $SessionId to its console failed: $LASTEXITCODE."
+    $exitCode = Invoke-RSStreamingProcess -FilePath $tscon -Arguments @([string]$SessionId, '/dest:console') `
+        -TimeoutMilliseconds $TimeoutMilliseconds -OutputDrainTimeoutMilliseconds 250
+    if ($exitCode -ne 0) {
+        throw "Connecting the owned hosted session $SessionId to its console failed: $exitCode."
     }
 }
 
@@ -40,7 +45,7 @@ function Initialize-RSHostedCaptureDesktop {
     session mutation. It never selects another user's session, launches tests, changes
     capture assertions or substitutes desktop capture. A failed connection is fatal.
     .PARAMETER TimeoutSeconds
-    Bounded time to observe the owned process session on the console after connection.
+    One deadline for the contained connection command and console-identity verification.
     .OUTPUTS
     Session identities, whether a connection was needed, and elapsed milliseconds.
     #>
@@ -52,19 +57,25 @@ function Initialize-RSHostedCaptureDesktop {
         throw 'Hosted capture desktop preparation requires a GitHub-hosted Windows x64 job.'
     }
 
+    $clock = [Diagnostics.Stopwatch]::StartNew()
+    $budgetMilliseconds = $TimeoutSeconds * 1000
     $sessionId = Get-RSHostedCaptureProcessSession
     if ($sessionId -le 0) {
         throw 'Hosted capture cannot run in service session zero.'
     }
     $before = Get-RSHostedCaptureConsoleSession
+    $console = $before
     Write-Host "Hosted capture desktop: process session=$sessionId, console session=$before."
     $connected = $before -ne $sessionId
-    $clock = [Diagnostics.Stopwatch]::StartNew()
     if ($connected) {
-        Connect-RSHostedCaptureSession -SessionId $sessionId
+        $remaining = $budgetMilliseconds - [int]$clock.ElapsedMilliseconds
+        if ($remaining -le 0) { throw 'Hosted capture console deadline expired before connection.' }
+        Connect-RSHostedCaptureSession -SessionId $sessionId -TimeoutMilliseconds $remaining
     }
     do {
+        if ($clock.ElapsedMilliseconds -ge $budgetMilliseconds) { break }
         $console = Get-RSHostedCaptureConsoleSession
+        if ($clock.ElapsedMilliseconds -ge $budgetMilliseconds) { break }
         if ($console -eq $sessionId) {
             return [pscustomobject]@{
                 ProcessSession = $sessionId
@@ -74,7 +85,6 @@ function Initialize-RSHostedCaptureDesktop {
                 ElapsedMilliseconds = $clock.ElapsedMilliseconds
             }
         }
-        if ($clock.Elapsed.TotalSeconds -ge $TimeoutSeconds) { break }
         Start-Sleep -Milliseconds 100
     } while ($true)
     throw "Hosted process session $sessionId did not reach the console within $TimeoutSeconds seconds (console=$console)."
