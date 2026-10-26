@@ -1,0 +1,105 @@
+{
+  "head": "582d644be5e6147acb0b8a8aae05511b75f64d17",
+  "passed": true,
+  "observerSha256": "585C7E7CFCC6073F90CFFD00F5FE422926066DD5E0C59C96962235D62B645981",
+  "records": [
+    {
+      "kind": "paired-owned-warmup-gates",
+      "profile": "ASan Debug",
+      "exitCode": 0,
+      "producer": {
+        "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\ASan Debug\\RedSalamander.exe",
+        "sha256": "F311D399269E4CAE08C6CA5253AFC57750A0C618AC33D721A47FFE5D983B6B70",
+        "receipt": "42ce49d20927eaf82ffa84b4007557b250bcd6d45fbd1ec44bf686957f9aac87",
+        "sourceSnapshot": "8ab7430db73e3b66815cd6c875130ffa3f50644bd9375635ac41d5f99c51fbd3"
+      },
+      "baselineRun": "20261025T205025Z-30012-6cfdfa2480ec481a8a2c0af51d802617",
+      "testRoot": "C:\\RedSalamander.Perf",
+      "startedUtc": "2026-10-26T14:46:26.8205212Z",
+      "finishedUtc": "2026-10-26T14:46:30.3353202Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-diagnostic-probes\\paired-busy-volume-gates.log"
+    },
+    {
+      "kind": "real-etw-roundtrip",
+      "profile": "Debug",
+      "exitCode": 0,
+      "producer": {
+        "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\Debug\\RedSalamander.exe",
+        "sha256": "7E5C5C5164D084DCC74904FA2AF2BD3DB9D5675217B476D3ED206AE931AC90B9",
+        "receipt": "0f116904e0aa9df16511858570136af0bfda78b9d589e26297da8b4f7f1013b4",
+        "sourceSnapshot": "8ab7430db73e3b66815cd6c875130ffa3f50644bd9375635ac41d5f99c51fbd3"
+      },
+      "common": {
+        "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\Debug\\Common.dll",
+        "sha256": "D6724AA90ACF52ADFBAB58198A2F183863A6FE1CBB07FEDC8348DEC61B084634",
+        "receipt": "0f116904e0aa9df16511858570136af0bfda78b9d589e26297da8b4f7f1013b4",
+        "sourceSnapshot": "8ab7430db73e3b66815cd6c875130ffa3f50644bd9375635ac41d5f99c51fbd3"
+      },
+      "observerSha256": "585C7E7CFCC6073F90CFFD00F5FE422926066DD5E0C59C96962235D62B645981",
+      "observerSourceIdentity": "d97c8b11c48d76a0fa9f1a93fd3c9362963dbf0a42cb6cd9adaea5748d051716",
+      "startedUtc": "2026-10-26T14:46:30.8051734Z",
+      "finishedUtc": "2026-10-26T14:46:32.8932748Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-diagnostic-probes\\etw-Debug.log"
+    },
+    {
+      "kind": "real-etw-roundtrip",
+      "profile": "Release",
+      "exitCode": 0,
+      "producer": {
+        "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\Release\\RedSalamander.exe",
+        "sha256": "2D3B729F1404104E8AF56F72D676BA8DF45B2B37B1322853A26833210BB70435",
+        "receipt": "af059110f12224d18e8a1a4df0a67fefe8d97ee47e9b0ef6ed7e322265e51405",
+        "sourceSnapshot": "8ab7430db73e3b66815cd6c875130ffa3f50644bd9375635ac41d5f99c51fbd3"
+      },
+      "common": {
+        "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\Release\\Common.dll",
+        "sha256": "2B6ECDFC896A8F36A0A5A7A31A4C3F89FFD14B6F1ED98D5C52ADD0CAA8C86F89",
+        "receipt": "af059110f12224d18e8a1a4df0a67fefe8d97ee47e9b0ef6ed7e322265e51405",
+        "sourceSnapshot": "8ab7430db73e3b66815cd6c875130ffa3f50644bd9375635ac41d5f99c51fbd3"
+      },
+      "observerSha256": "585C7E7CFCC6073F90CFFD00F5FE422926066DD5E0C59C96962235D62B645981",
+      "observerSourceIdentity": "d97c8b11c48d76a0fa9f1a93fd3c9362963dbf0a42cb6cd9adaea5748d051716",
+      "startedUtc": "2026-10-26T14:46:33.0950549Z",
+      "finishedUtc": "2026-10-26T14:46:35.1484372Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-diagnostic-probes\\etw-Release.log"
+    },
+    {
+      "kind": "real-etw-roundtrip",
+      "profile": "ASan Debug",
+      "exitCode": 0,
+      "producer": {
+        "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\ASan Debug\\RedSalamander.exe",
+        "sha256": "F311D399269E4CAE08C6CA5253AFC57750A0C618AC33D721A47FFE5D983B6B70",
+        "receipt": "42ce49d20927eaf82ffa84b4007557b250bcd6d45fbd1ec44bf686957f9aac87",
+        "sourceSnapshot": "8ab7430db73e3b66815cd6c875130ffa3f50644bd9375635ac41d5f99c51fbd3"
+      },
+      "common": {
+        "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\ASan Debug\\Common.dll",
+        "sha256": "E6D57AE6372DDAC8408B788D031D2E0E08D13A0165C4BB84D1141C3694CAAC72",
+        "receipt": "42ce49d20927eaf82ffa84b4007557b250bcd6d45fbd1ec44bf686957f9aac87",
+        "sourceSnapshot": "8ab7430db73e3b66815cd6c875130ffa3f50644bd9375635ac41d5f99c51fbd3"
+      },
+      "observerSha256": "585C7E7CFCC6073F90CFFD00F5FE422926066DD5E0C59C96962235D62B645981",
+      "observerSourceIdentity": "d97c8b11c48d76a0fa9f1a93fd3c9362963dbf0a42cb6cd9adaea5748d051716",
+      "startedUtc": "2026-10-26T14:46:35.4728145Z",
+      "finishedUtc": "2026-10-26T14:46:37.6463754Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-diagnostic-probes\\etw-ASan-Debug.log"
+    },
+    {
+      "kind": "asan-seeded-heap-overflow",
+      "profile": "ASan Debug",
+      "exitCode": 1,
+      "expectedFailureDetected": true,
+      "artifact": {
+        "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\ASan Debug\\PluginContractTests.exe",
+        "sha256": "9A7A572E507CD4651F5B358E0FC07F7E249FFEFE01191CE229AA2246BFAC3BE8",
+        "receipt": "42ce49d20927eaf82ffa84b4007557b250bcd6d45fbd1ec44bf686957f9aac87",
+        "sourceSnapshot": "8ab7430db73e3b66815cd6c875130ffa3f50644bd9375635ac41d5f99c51fbd3"
+      },
+      "startedUtc": "2026-10-26T14:46:37.9138759Z",
+      "finishedUtc": "2026-10-26T14:46:48.3402507Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\final-diagnostic-probes\\asan-canary.log"
+    }
+  ],
+  "scope": "Paired C-root owned warmup gates, three real ETW producer profiles and seeded x64 ASan rejection; installed helper handoff remains separate."
+}

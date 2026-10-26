@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-10-26T14:20:08.934Z",
+    "suite": "Commands",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20261026T142005Z-97620-f2f674721eeb42378f7f259b51e849ff\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 13414,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "theme_cycle_overlay_retention",
+            "status": "passed",
+            "duration_ms": 8462,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_fileops_move_breadcrumb_durable_lifecycle",
+            "status": "passed",
+            "duration_ms": 433,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_two_pending_task_identity",
+            "status": "passed",
+            "duration_ms": 3117,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

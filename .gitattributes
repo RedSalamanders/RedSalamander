@@ -417,3 +417,4 @@ Specs/TestRuns/4cb089111a23/Validation/2026-10-26_100317_GuardedRendererResource
 Specs/TestRuns/4cb089111a23/Validation/2026-10-26_113110_FocusViewportRecheck/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_131427_FocusBindingsFailure/** -text -whitespace
 /Specs/TestRuns/4cb089111a23/Validation/2026-10-26_140706_DisclosurePointerFailure/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/Validation/2026-10-26_145454_MigrationFocusedClosure/** -text -whitespace

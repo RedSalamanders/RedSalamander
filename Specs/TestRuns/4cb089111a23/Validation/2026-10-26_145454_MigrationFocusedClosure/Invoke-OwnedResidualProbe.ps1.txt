@@ -1,0 +1,145 @@
+param(
+    [Parameter(Mandatory)][string]$ExpectedHead,
+    [Parameter(Mandatory)][ValidatePattern('^[a-z0-9-]+$')][string]$Label,
+    [Parameter(Mandatory)][ValidateSet('Commands','Compare','FileOps')][string]$Suite,
+    [Parameter(Mandatory)][string]$CaseFilter,
+    [ValidateRange(1,10)][int]$Repeat=1,
+    [ValidateSet('ASan Debug','Debug','Release')][string]$Configuration='ASan Debug',
+    [switch]$SampleOwnedMemory,
+    [string[]]$CompanionCases=@(),
+    [ValidateSet('E:\RedSalamander.Perf','C:\RedSalamander.Perf')][string]$TestRoot='E:\RedSalamander.Perf'
+)
+$ErrorActionPreference='Stop'
+Set-StrictMode -Version Latest
+$repoPath='E:\RedSalamander.Perf\integration-20261024'
+$declaredCompanionCases=@($CompanionCases|ForEach-Object {$_ -split ','}|Where-Object {![string]::IsNullOrWhiteSpace($_)})
+Set-Location -LiteralPath $repoPath
+function Assert-FrozenSource {
+    if ((git rev-parse HEAD) -ne $ExpectedHead -or (git status --porcelain)) { throw 'Owned diagnostic source changed.' }
+}
+Assert-FrozenSource
+Import-Module ./Tools/Modules/Testing/TestInvocation.psm1 -Force
+Import-Module ./Tools/Modules/Testing/TestSandbox.psm1 -Force
+Import-Module ./Tools/Modules/Build/ProcessStreaming.psm1 -Force
+Import-Module ./Tools/Modules/Build/ArtifactOperationLock.psm1 -Force
+$buildEnv=Get-RSBuildEnvironmentOverrides -Suite Full
+foreach ($key in $buildEnv.Keys) { [Environment]::SetEnvironmentVariable($key,$buildEnv[$key],'Process') }
+if (-not [string]::IsNullOrWhiteSpace($env:REDSALAMANDER_TEST_FORCE_NTFS_TRAVERSAL_SEED)) { throw 'Inherited traversal override is forbidden.' }
+$profilePath=Join-Path $repoPath ('.build\x64\'+$Configuration)
+$receipt=Get-Content (Join-Path $profilePath 'build-receipt.json') -Raw | ConvertFrom-Json
+if ($receipt.git_head -ne $ExpectedHead -or $receipt.exit_code -ne 0 -or -not $receipt.tests_enabled) { throw 'Invalid exact-source diagnostic receipt.' }
+$artifacts=foreach ($relative in @('RedSalamander.exe','RedSalamanderSearchService.exe','Common.dll','Plugins/ViewerSpace.dll')) {
+    $path=Join-Path $profilePath $relative
+    $receiptRelative='.build/x64/'+$Configuration+'/'+$relative
+    $entry=@($receipt.outputs | Where-Object relative_path -EQ $receiptRelative)
+    $sha=(Get-FileHash -LiteralPath $path -Algorithm SHA256).Hash
+    if ($entry.Count -ne 1 -or $entry[0].sha256 -ne $sha) { throw "Unattested diagnostic artifact: $relative" }
+    [pscustomobject]@{path=$path;sha256=$sha}
+}
+# Reuse the exact canonical desktop mutex/execution-state implementation; do not
+# execute the runner or copy its body into a second maintained implementation.
+$tokens=$null
+$parseErrors=$null
+$runner=Join-Path $repoPath 'Tools\Run-AllTests.ps1'
+$ast=[System.Management.Automation.Language.Parser]::ParseFile($runner,[ref]$tokens,[ref]$parseErrors)
+if ($parseErrors.Count) { throw 'Canonical runner parsing failed.' }
+$desktopFunction=@($ast.FindAll({param($node) $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and $node.Name -eq 'Invoke-RSInteractiveDesktopOperation'},$true))
+if ($desktopFunction.Count -ne 1) { throw 'Canonical desktop operation is ambiguous.' }
+$desktopOperation=$desktopFunction[0].Body.GetScriptBlock()
+$operationScope=@{kind='test';target='owned residual diagnostic';suite=$Suite;configuration=$Configuration;platform='x64'}
+$operationLock=$null
+$memoryJob=$null
+$memoryStopPath=$null
+$recordPath=Join-Path $PSScriptRoot ('owned-residual-'+$Label+'.json')
+if (Test-Path -LiteralPath $recordPath) { throw 'Preserve the existing diagnostic record.' }
+try {
+    $operationLock=Enter-RSArtifactOperationLock -RepoRoot $repoPath -Operation "Owned residual diagnostic $Label" -Scope $operationScope
+    if ($operationLock.WasAbandoned -or (Test-RSArtifactOperationContaminated -RepoRoot $repoPath -Scope $operationScope)) { throw 'A clean attested profile is required.' }
+    Assert-RSNoResidualArtifactToolProcesses -RepoRoot $repoPath -Scope $operationScope
+    Assert-FrozenSource
+    $env:REDSALAMANDER_TEST_ROOT=$TestRoot
+    $env:REDSALAMANDER_SELFTEST_ROOT=''
+    $context=New-RSTestRunContext -RepoRoot $repoPath -TestRootOverride $TestRoot
+    $env:REDSALAMANDER_TEST_RUN_ID=$context.RunId
+    $processTemp=New-RSTestSandboxScratchDirectory -RepoRoot $repoPath -Harness 'residual-diagnostic' -Case 'process-temp' -RunId $context.RunId
+    # The native selftest owns and rotates ArtifactRoot. Observer streams must
+    # stay outside that directory so they cannot lock its initialization.
+    $observationRoot=Join-Path $context.RunRoot 'artifacts\residual-observer'
+    New-Item -ItemType Directory -Path $observationRoot -Force | Out-Null
+    $log=Join-Path $observationRoot 'native-output.txt'
+    $errorLog=Join-Path $observationRoot 'native-error.txt'
+    $metricsPath=Join-Path $observationRoot 'residual-perf.jsonl'
+    $memorySamplesPath=Join-Path $observationRoot 'owned-memory-samples.jsonl'
+    $memoryStopPath=Join-Path $observationRoot 'stop-memory-sampling'
+    $environment=@{REDSALAMANDER_TEST_ROOT=$context.TestRoot;REDSALAMANDER_TEST_RUN_ID=$context.RunId;REDSALAMANDER_SELFTEST_ROOT='';TEMP=$processTemp;TMP=$processTemp;REDSALAMANDER_PERF_JSONL_PATH=$metricsPath;REDSALAMANDER_PERF_JSONL_SCENARIO=$Label;REDSALAMANDER_PERF_JSONL_COMMIT=$ExpectedHead;REDSALAMANDER_PERF_JSONL_RUN_ID=$context.RunId}
+    $arguments=@(
+        ('--'+$Suite.ToLowerInvariant()+'-selftest')
+        ('--selftest-case='+$CaseFilter)
+        ('--selftest-repeat='+$Repeat)
+    )
+    if ($Suite -eq 'Compare') { $arguments+='--selftest-no-activate' }
+    $started=[DateTime]::UtcNow
+    $record=[ordered]@{source=$ExpectedHead;ownerPid=$PID;scope='focused diagnostic only; never Full qualification';observerScriptSha256=(Get-FileHash -LiteralPath $PSCommandPath).Hash;label=$Label;suite=$Suite;configuration=$Configuration;filter=$CaseFilter;companionCases=$declaredCompanionCases;repeat=$Repeat;runId=$context.RunId;root=$context.TestRoot;buildReceipt=$receipt.receipt_id;sourceSnapshot=$receipt.source_snapshot_id;artifacts=$artifacts;desktopOperationSourceSha256=(Get-FileHash -LiteralPath $runner).Hash;startedUtc=$started.ToString('o');outcome='running';log=$log;errorLog=$errorLog;requestedMetricsPath=$metricsPath}
+    $record | ConvertTo-Json -Depth 7 | Set-Content -LiteralPath $recordPath
+    $executable=Join-Path $profilePath 'RedSalamander.exe'
+    if ($SampleOwnedMemory) {
+        $samplerPath=Join-Path $PSScriptRoot 'Sample-OwnedResidualMemory.ps1'
+        $ownerStartedTicks=(Get-Process -Id $PID).StartTime.ToUniversalTime().Ticks
+        $memoryJob=Start-ThreadJob -FilePath $samplerPath -ArgumentList $PID,$ownerStartedTicks,$executable,(Join-Path $profilePath 'RedSalamanderSearchService.exe'),$memorySamplesPath,$memoryStopPath
+    }
+    $code=& $desktopOperation -RequiresInteractiveDesktop ($Suite -in @('Commands','FileOps')) -Operation {
+        Invoke-RSStreamingProcess -FilePath $executable -Arguments $arguments -WorkingDirectory $profilePath -LogPath $log -ErrorLogPath $errorLog -AdditionalEnvironment $environment -TimeoutMilliseconds 240000
+    }
+    Assert-FrozenSource
+    foreach ($artifact in $artifacts) { if ((Get-FileHash -LiteralPath $artifact.path).Hash -ne $artifact.sha256) { throw 'Diagnostic artifact changed.' } }
+    $record.exitCode=$code
+    $record.finishedUtc=[DateTime]::UtcNow.ToString('o')
+    $record.arguments=$arguments
+    $nativePath=Join-Path $context.ArtifactRoot ($Suite.ToLowerInvariant()+'\results.json')
+    if (-not (Test-Path -LiteralPath $nativePath)) {
+        $record.outcome='invalid_missing_native_verdict'
+        $record | ConvertTo-Json -Depth 7 | Set-Content -LiteralPath $recordPath
+        throw "Missing native verdict: $nativePath"
+    }
+    $native=Get-Content -LiteralPath $nativePath -Raw | ConvertFrom-Json
+    $selected=@($CaseFilter -split ',')+@($declaredCompanionCases)
+    $caseCountsValid=@($native.cases).Count -eq $selected.Count*$Repeat
+    foreach ($name in $selected) { $caseCountsValid=$caseCountsValid -and @($native.cases | Where-Object name -EQ $name).Count -eq $Repeat }
+    $record.nativeResults=$nativePath
+    $record.nativeResultsSha256=(Get-FileHash -LiteralPath $nativePath).Hash
+    $record.nativePassed=$native.passed
+    $record.nativeFailed=$native.failed
+    $record.nativeSkipped=$native.skipped
+    $record.exactCaseCounts=$caseCountsValid
+    $record.outcome=if ($code -eq 0 -and $caseCountsValid -and $native.failed -eq 0 -and $native.skipped -eq 0) {'focused_pass_only'} else {'failed'}
+    $candidateMetrics=@($metricsPath,(Join-Path $context.ArtifactRoot 'perf\perf_metrics.jsonl'))
+    $record.metricsPaths=@($candidateMetrics | Where-Object {Test-Path -LiteralPath $_})
+    if ($SampleOwnedMemory) {
+        New-Item -ItemType File -Path $memoryStopPath | Out-Null
+        $null=Wait-Job -Job $memoryJob -Timeout 10
+        if ($memoryJob.State -ne 'Completed') { throw 'Owned memory sampler did not complete.' }
+        $null=Receive-Job -Job $memoryJob -ErrorAction Stop
+        Remove-Job -Job $memoryJob
+        $memoryJob=$null
+        $samples=@(Get-Content -LiteralPath $memorySamplesPath | ForEach-Object {$_ | ConvertFrom-Json})
+        if ($samples.Count -lt 2) { throw 'Owned memory sampling did not observe the native process.' }
+        $record.memorySamplesPath=$memorySamplesPath
+        $record.memorySamplesSha256=(Get-FileHash -LiteralPath $memorySamplesPath).Hash
+        $record.memorySampleCount=$samples.Count
+        $record.sampledPeakPrivateBytes=($samples | Measure-Object privateBytes -Maximum).Maximum
+        $record.sampledPeakWorkingSetBytes=($samples | Measure-Object workingSetBytes -Maximum).Maximum
+        $record.memorySamplerSourceSha256=(Get-FileHash -LiteralPath $samplerPath).Hash
+    }
+    $record | ConvertTo-Json -Depth 7 | Set-Content -LiteralPath $recordPath
+    $record | ConvertTo-Json -Depth 4
+    if ($record.outcome -ne 'focused_pass_only') { exit 1 }
+}
+finally {
+    if ($null -ne $memoryJob) {
+        if ($memoryStopPath -and -not (Test-Path -LiteralPath $memoryStopPath)) { New-Item -ItemType File -Path $memoryStopPath | Out-Null }
+        $null=Wait-Job -Job $memoryJob -Timeout 10
+        $null=Receive-Job -Job $memoryJob -ErrorAction Continue
+        Remove-Job -Job $memoryJob -Force -ErrorAction SilentlyContinue
+    }
+    if ($null -ne $operationLock) { Exit-RSArtifactOperationLock -Lock $operationLock }
+}

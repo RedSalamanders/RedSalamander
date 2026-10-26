@@ -1,0 +1,51 @@
+param([Parameter(Mandatory)][string]$ExpectedHead)
+$ErrorActionPreference='Stop'
+Set-StrictMode -Version Latest
+$PSNativeCommandUseErrorActionPreference=$false
+$short=$ExpectedHead.Substring(0,9)
+$publication=Get-Content (Join-Path $PSScriptRoot ('publication-'+$short+'.json')) -Raw|ConvertFrom-Json
+if($publication.head -ne $ExpectedHead -or $publication.outcome -ne 'public-snapshot-branch-published' -or !$publication.noAdditionalCommitObjects){throw 'Publication is not complete.'}
+$clonePath=Join-Path 'E:\RedSalamander.Perf\repository-migration-20261024' ('public-verification-'+$short)
+$recordPath=Join-Path $PSScriptRoot ('public-verification-'+$short+'.json')
+if((Test-Path -LiteralPath $clonePath) -or (Test-Path -LiteralPath $recordPath)){throw 'Preserve an existing verification clone or record.'}
+$record=[ordered]@{privateSource=$ExpectedHead;publicSnapshot=$publication.snapshot;tree=$publication.tree;clone=$clonePath;startedUtc=[DateTime]::UtcNow.ToString('o');outcome='cloning'}
+$record|ConvertTo-Json -Depth 5|Set-Content $recordPath
+function Invoke-Git([string[]]$Arguments){$output=@(& git @Arguments 2>&1); if($LASTEXITCODE -ne 0){throw ($output -join "`n")};return ,$output}
+Invoke-Git @('-c','core.longpaths=true','clone','--no-local','--single-branch','--no-tags','--branch',$publication.publicBranch,'https://github.com/RedSalamanders/RedSalamander.git',$clonePath)|Out-Null
+Invoke-Git @('-C',$clonePath,'config','core.longpaths','true')|Out-Null
+if((Invoke-Git @('-C',$clonePath,'rev-parse','HEAD'))[0] -ne $publication.snapshot -or
+   (Invoke-Git @('-C',$clonePath,'rev-parse','HEAD^{tree}'))[0] -ne $publication.tree){throw 'Fresh public source tree differs.'}
+if(Test-Path -LiteralPath (Join-Path $clonePath '.git/objects/info/alternates')){throw 'Fresh clone borrows objects.'}
+& git -C $clonePath merge-base --is-ancestor $publication.protectedDoneBaseline HEAD
+if($LASTEXITCODE -ne 0){throw 'Protected Done ancestry is absent.'}
+foreach($privateCommit in @($ExpectedHead,$publication.privateBase,'e06ea0b40ef71a9a3f37217b1a18a878844bdb3a')){
+    & git -C $clonePath cat-file -e ($privateCommit+'^{commit}') 2>$null
+    if($LASTEXITCODE -eq 0){throw ('Private commit object imported: '+$privateCommit)}
+    if($LASTEXITCODE -notin @(1,128)){throw 'Cannot establish private-object absence.'}
+}
+$reachable=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach($commit in (Invoke-Git @('-C',$clonePath,'rev-list','HEAD'))){[void]$reachable.Add([string]$commit)}
+$reachableObjects=[Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+foreach($entry in (Invoke-Git @('-C',$clonePath,'rev-list','--objects','HEAD'))){[void]$reachableObjects.Add((([string]$entry)-split ' ',2)[0])}
+$allObjectCount=0
+$commitCount=0
+foreach($item in (Invoke-Git @('-C',$clonePath,'cat-file','--batch-all-objects','--batch-check=%(objectname) %(objecttype)'))){$parts=([string]$item)-split ' ';$allObjectCount++;if(!$reachableObjects.Contains((([string]$item)-split ' ',2)[0])){throw 'Unexpected unreachable object in the fresh public clone.'};if($parts.Count -eq 2 -and $parts[1] -eq 'commit'){$commitCount++;if(!$reachable.Contains($parts[0])){throw 'Unexpected unreachable commit object in fresh public clone.'}}}
+if($commitCount -ne $reachable.Count -or $allObjectCount -ne $reachableObjects.Count){throw 'Complete reachable object inventory differs.'}
+$protectedCount=0
+foreach($entry in (Invoke-Git @('-C',$clonePath,'ls-tree','-r',$publication.protectedDoneBaseline))){
+    if(([string]$entry) -notmatch '^100644 blob ([0-9a-f]{40})\t(.+)$'){throw 'Unexpected protected baseline entry.'}
+    $blob=$Matches[1];$path=$Matches[2]
+    if((Invoke-Git @('-C',$clonePath,'rev-parse',('HEAD:'+$path)))[0] -ne $blob){throw ('Protected document changed: '+$path)}
+    $protectedCount++
+}
+Invoke-Git @('-C',$clonePath,'fsck','--full','--strict')|Out-Null
+$record.outcome='history-and-tree-verified';$record.reachableCommits=$reachable.Count;$record.commitObjects=$commitCount;$record.protectedDocuments=$protectedCount;$record.privateCommitObjectsAbsent=$true;$record.allObjectCount=$allObjectCount;$record.allObjectsReachable=$true
+$record|ConvertTo-Json -Depth 5|Set-Content $recordPath
+& pwsh -NoProfile -File (Join-Path $clonePath 'Tools/Restore-DxUi.ps1') -Platform x64 -Configuration Debug *> (Join-Path $PSScriptRoot ('public-dxui-restore-'+$short+'.log'))
+if($LASTEXITCODE -ne 0){throw 'Fresh public DxUi restore failed.'}
+$dxuiRoot=Join-Path $clonePath '.build/dependencies/DxUi/source/0def3d03edae58b099b7d1918d6de114ae8a2609'
+if((Invoke-Git @('-C',$dxuiRoot,'rev-parse','HEAD'))[0] -ne '0def3d03edae58b099b7d1918d6de114ae8a2609'){throw 'Fresh public dependency pin differs.'}
+if(Invoke-Git @('-C',$clonePath,'status','--porcelain')){throw 'Dependency restore modified tracked public source.'}
+$record.outcome='passed';$record.dxuiPin='0def3d03edae58b099b7d1918d6de114ae8a2609';$record.finishedUtc=[DateTime]::UtcNow.ToString('o')
+$record|ConvertTo-Json -Depth 5|Set-Content $recordPath
+$record|ConvertTo-Json -Depth 5

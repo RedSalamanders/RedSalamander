@@ -13,7 +13,7 @@ The current consumer contract is [RedMonitor](../../Core/Core_RedSalamanderMonit
 - [x] Keep Preferences on the Release 7.0 monitor settings path in every consumer configuration.
 - [x] Remove viewer ownership from ZIP/MSI/MSIX, symbol packages and consumer test plans; retain SDK notice.
 - [x] Pass tooling contracts, local client controls and native format/validators on the revised boundary.
-- [ ] Build six native profiles and run required x64 Debug/Release/ASan suites and actual app ETW probe.
+- [x] Build six native profiles, pass the accepted focused x64 Debug/Release/ASan scope and actual app ETW probes; Full runtime reruns explicitly omitted by the user.
 - [ ] Qualify clean app-only ZIP/MSI/MSIX and Preferences Apply/restart/live filter behavior.
 - [x] Retain reviewed source-bound evidence, fold changes, commit and push this integration delivery; qualification remains open below.
 - [ ] Close timed focus, native ARM64, physical IME/AT, paired performance and release handoff gates.
@@ -568,3 +568,6 @@ Other action lookup semantics, all original pointer/focus/identity predicates,
 the eight-page bound and timing limits remain intact. Production code is
 unchanged after the green original ASan closure. Fixed-source qualification is
 still required before publication; Full runtime reruns remain omitted by the user.
+
+
+Final focused source handoff: all six builds, all eight original ASan regressions, 51 native checks, three real ETW roundtrips and the real ASan negative control passed. The [qualified source snapshot packet](../../TestRuns/4cb089111a23/Validation/2026-10-26_145454_MigrationFocusedClosure/README.md) preserves exact source/artifact provenance, no-frame A/B focus and original return assertions, the explicit Full runtime waiver, and fresh public-only source/history/dependency verification. Earlier failed receipts remain failed. This public-history child changes documentation/evidence only; public PR/main CI and primary-checkout routing are subsequent delivery operations. Installed-helper, packages, release and manual platform/accessibility gates remain open; I47 stays WIP.
