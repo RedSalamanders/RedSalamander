@@ -1,0 +1,44 @@
+{
+  "sourceCommit": "551280ac4b56569255a6d76b601677e694a0a33a",
+  "mergeCommit": "5141305d9c1d284c031d325d2e448fcd4a13a1d9",
+  "pushedRef": "refs/heads/master",
+  "remoteVerified": "5141305d9c1d284c031d325d2e448fcd4a13a1d9",
+  "sourceBranchPreserved": "ej/review-safety-fixes",
+  "build": {
+    "profile": "x64 Debug, tests enabled, Embedded compiler debug information",
+    "warnings": 0,
+    "errors": 0,
+    "receipt": "a0a8353c1dec5735943599e39fd665b701969bb42b53caac675d053b772351d9"
+  },
+  "prePush": {
+    "passed": 262,
+    "failed": 0,
+    "skipped": 26,
+    "repositoryVerdict": "NOT_EVALUATED"
+  },
+  "pr": {
+    "passed": 949,
+    "failed": 1,
+    "skipped": 0,
+    "verdict": "FAILED",
+    "failedCase": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+    "assertion": "ViewerSpace UIA-only analysis checks preserve desktop foreground and cursor",
+    "cause": "Unresolved",
+    "reports": "Z:\\RedSalamander.Perf\\evidence\\review-safety-raw\\merge-pr-failed"
+  },
+  "isolatedViewerSpaceRepeats": {
+    "passed": 2,
+    "failed": 0,
+    "activation": "--no-activate",
+    "doesNotReplaceFailedPrRun": true
+  },
+  "focusedFileOps": {
+    "passed": 15,
+    "failed": 0,
+    "skipped": 0,
+    "reports": "Z:\\RedSalamander.Perf\\evidence\\review-safety-raw\\merge-fileops-results.json"
+  },
+  "qualification": "Not green: original PR failure retained; Full, interactive and broader platform/environment qualification pending",
+  "shutdown": "Separately investigated; no production scheduler change",
+  "completedUtc": "2026-10-16T11:57:38.4082102Z"
+}

@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-10-09T10:40:51.800Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261009T103939Z-45460-97527841ee64431d8d4f96a8020659ab\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 43228,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_viewer_space_cache_reopen_200_first_map_optin",
+            "status": "passed",
+            "duration_ms": 42509,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

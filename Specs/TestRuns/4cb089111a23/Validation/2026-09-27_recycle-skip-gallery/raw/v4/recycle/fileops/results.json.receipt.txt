@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-09-26T10:35:23.904Z",
+    "suite": "FileOperations",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20260926T103508Z-7556-94c0a97c0ad84f8db2862aeea76a3c7e\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 2422,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Exact Recycle Skip changed the real source or lost the task's partial status.",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1156,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase10_DeferredConsentAndRecycleEscalation",
+            "status": "failed",
+            "duration_ms": 1234,
+            "repeat_index": 1,
+            "reason": "Exact Recycle Skip changed the real source or lost the task's partial status."
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 32,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

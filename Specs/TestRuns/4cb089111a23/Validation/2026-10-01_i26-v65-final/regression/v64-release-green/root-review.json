@@ -1,0 +1,19 @@
+{
+  "schema": "i26-v64-release-green-root-review.v1",
+  "reviewUtc": "2026-10-01T08:54:41.4176713+00:00",
+  "summarySha256": "6e3ca4eb5e26c5f58c81a506d4f7d13141ade4443a83f05654d1933c37818c8f",
+  "nativeRunnerTraceHashesVerified": true,
+  "runId": "20261001T085325Z-99668-5ae41790e3994165858e0f0c8d97cda0",
+  "passed": 1,
+  "failed": 0,
+  "skipped": 0,
+  "focus": [
+    "Two focus requests before paint must reveal the final group disclosure: painted=0, lower=48, group=20, top=6, height=27, viewport=[0,348]."
+  ],
+  "retirement": [
+    "First collapsed frame must retire all three tasks' raw hosted UIA controls, including offscreen descendants; traversal=true, providers=0/0/0 for task IDs 1/2/3."
+  ],
+  "redRunId": "20261001T084255Z-86664-fca0c8b17eaf4181bf49894b7aaa7c97",
+  "identicalTestSha256": "89bf23a6cb7d3b062bf8a15895dead2a76210715eeb267627a4dddf521d81ec3",
+  "wholePlanComplete": false
+}

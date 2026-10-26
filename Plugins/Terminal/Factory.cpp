@@ -2,10 +2,12 @@
 #define NOMINMAX
 #include <windows.h>
 
+#include <algorithm>
 #include <memory>
 #include <mutex>
 #include <new>
 #include <string>
+#include <utility>
 
 #define PLUGFACTORY_EXPORTS
 #include "PlugInterfaces/Factory.h"
@@ -27,12 +29,12 @@ struct PluginMetaDataStorage final
         : name(LoadStringResource(g_hInstance, IDS_TERMINAL_NAME)),
           description(LoadStringResource(g_hInstance, IDS_TERMINAL_DESCRIPTION)),
           metaData{
-              .id = L"builtin/terminal",
-              .shortId = L"terminal",
-              .name = name.c_str(),
+              .id          = L"builtin/terminal",
+              .shortId     = L"terminal",
+              .name        = name.c_str(),
               .description = description.c_str(),
-              .author = L"RedSalamander",
-              .version = VERSINFO_PLUGIN_VERSION,
+              .author      = L"RedSalamander",
+              .version     = VERSINFO_PLUGIN_VERSION,
           }
     {
     }
@@ -44,6 +46,10 @@ struct PluginMetaDataStorage final
 
 std::mutex g_metaDataMutex;
 std::unique_ptr<PluginMetaDataStorage> g_metaData;
+#if defined(ENABLE_TESTS)
+// One creating UI thread, one instance; never inherited by ordinary later sessions.
+thread_local bool g_documentationSessionArmed = false;
+#endif
 
 [[nodiscard]] const PluginMetaData* GetMetaData() noexcept
 {
@@ -67,6 +73,9 @@ HRESULT CreateInstance(const FactoryOptions* /*factoryOptions*/, IHost* /*host*/
     {
         return E_OUTOFMEMORY;
     }
+#if defined(ENABLE_TESTS)
+    instance->DebugEnableDocumentationSession(std::exchange(g_documentationSessionArmed, false));
+#endif
     const HRESULT hr = instance->QueryInterface(__uuidof(ITerminal), result);
     instance->Release();
     return hr;
@@ -77,13 +86,32 @@ const PluginFactoryEntry kEntries[] = {
 };
 } // namespace
 
+#if defined(ENABLE_TESTS)
+extern "C" __declspec(dllexport) BOOL __stdcall RedSalamanderTerminalDocumentationFindHintIsUnicodeForSelfTest() noexcept
+{
+    const std::wstring hint = LoadStringResource(g_hInstance, IDS_TERMINAL_FIND_INSTRUCTIONS);
+    return std::ranges::count(hint, L'\u2022') == 2 ? TRUE : FALSE;
+}
+extern "C" __declspec(dllexport) void __stdcall RedSalamanderTerminalArmDocumentationSessionForSelfTest(BOOL armed) noexcept
+{
+    g_documentationSessionArmed = armed != FALSE;
+}
+extern "C" __declspec(dllexport) BOOL __stdcall RedSalamanderTerminalDocumentationSessionIsArmedForSelfTest() noexcept
+{
+    return g_documentationSessionArmed ? TRUE : FALSE;
+}
+extern "C" __declspec(dllexport) BOOL __stdcall RedSalamanderTerminalIsDocumentationSessionForSelfTest(ITerminal* terminal) noexcept
+{
+    return terminal && static_cast<Terminal*>(terminal)->DebugIsDocumentationSession() ? TRUE : FALSE;
+}
+#endif
+
 extern "C" HRESULT __stdcall RedSalamanderEnumeratePlugins(REFIID riid, const PluginMetaData** metaData, unsigned int* count)
 {
     return FactoryEnumeratePlugins<ITerminal>(kEntries, riid, metaData, count);
 }
 
-extern "C" HRESULT __stdcall RedSalamanderCreate(
-    REFIID riid, const FactoryOptions* factoryOptions, IHost* host, const wchar_t* pluginId, void** result)
+extern "C" HRESULT __stdcall RedSalamanderCreate(REFIID riid, const FactoryOptions* factoryOptions, IHost* host, const wchar_t* pluginId, void** result)
 {
     return FactoryCreate<ITerminal>(kEntries, riid, factoryOptions, host, pluginId, result);
 }

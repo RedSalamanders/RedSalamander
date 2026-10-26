@@ -1,0 +1,242 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-09-08T16:31:20.5679640Z",
+  "run_ended_utc": "2026-09-08T16:31:37.5228036Z",
+  "duration_ms": 16955,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Release",
+  "executable": "Z:\\src\\RedSalamander\\.build\\x64\\Release\\RedSalamander.exe",
+  "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260908T162713Z-48948-a9cf39e8a96e410192229af7769cfe81\\artifacts\\selftest\\last_run",
+  "test_root": "Z:\\RedSalamander.Perf",
+  "run_id": "20260908T162713Z-48948-a9cf39e8a96e410192229af7769cfe81",
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "case_filter": "cmd_pane_embedded_terminal_command_state_truth,cmd_pane_embedded_terminal_plugin_lifecycle,cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab,cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target,cmd_terminal_session_menu_floating_dispatch,cmd_pane_open_command_shell_prefers_windows_terminal,cmd_pane_fileops_completed_post_failure_still_applies_ui_contract,cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs,cmd_pane_fileops_move_removal_focus_selects_next_survivor",
+  "exit_code": 1,
+  "passed": 6,
+  "failed": 1,
+  "skipped": 0,
+  "total": 7,
+  "classifications": {
+    "passed": 0,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 1
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 24,
+    "test_root": "Z:\\RedSalamander.Perf",
+    "run_id": "20260908T162713Z-48948-a9cf39e8a96e410192229af7769cfe81",
+    "allowed_run_ids": [
+      "20260908T162713Z-48948-a9cf39e8a96e410192229af7769cfe81"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\RedSalamander.Perf\\tools",
+        "reason": "Unified TestSandbox root should contain only runner-owned runs, config, and evidence."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-103144",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-110612",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-111140",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-112400",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-123440",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-129300",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-130500",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-136944",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-29644",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-40092",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-43748",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-50356",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-5160",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-55216",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-58844",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-65188",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-65888",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-74808",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-85920",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-86068",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-93268",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\adhoc-99888",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\RedSalamander.Perf\\runs\\i12-contracts-20260908",
+        "reason": "The run directory is neither explicitly allowed nor attributable to a protected live owner."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 1,
+      "duration_ms": 10316,
+      "classification": "UNCLASSIFIED_FAILURE",
+      "classification_reason": "Initial attempt failed and no retry classification evidence was collected.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 6,
+      "failed": 1,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 3,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_move_removal_focus_selects_next_survivor",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 300,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_completed_post_failure_still_applies_ui_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 200,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_open_command_shell_prefers_windows_terminal",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 32,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_embedded_terminal_command_state_truth",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 666,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_terminal_session_menu_floating_dispatch",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1636,
+          "attempt": 1
+        }
+      ],
+      "failures": [
+        {
+          "name": "selftest_result_coverage",
+          "status": "failed",
+          "reason": "missing: cmd_pane_embedded_terminal_plugin_lifecycle, cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab, cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target",
+          "duration_ms": 0,
+          "attempt": 1
+        }
+      ]
+    }
+  ]
+}

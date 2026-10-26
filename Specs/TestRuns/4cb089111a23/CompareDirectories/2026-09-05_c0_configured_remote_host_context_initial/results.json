@@ -1,0 +1,58 @@
+{
+    "run_started_utc": "2026-09-05T19:02:01.696Z",
+    "suite": "CompareDirectories",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-configured-remote-host-context-debug-20260905\\artifacts\\selftest\\last_run\\compare",
+    "duration_ms": 1182,
+    "passed": 6,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Remote compare: decision hr failed. hr=0x80070005",
+    "cases": [
+        {
+            "name": "host_services_startup_selection",
+            "status": "passed",
+            "duration_ms": 2,
+            "repeat_index": 1
+        },
+        {
+            "name": "host_services_startup_context",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "remote_file_s3",
+            "status": "passed",
+            "duration_ms": 447,
+            "repeat_index": 1
+        },
+        {
+            "name": "remote_file_ftp",
+            "status": "passed",
+            "duration_ms": 303,
+            "repeat_index": 1
+        },
+        {
+            "name": "remote_file_sftp",
+            "status": "passed",
+            "duration_ms": 189,
+            "repeat_index": 1
+        },
+        {
+            "name": "remote_file_scp",
+            "status": "passed",
+            "duration_ms": 183,
+            "repeat_index": 1
+        },
+        {
+            "name": "remote_file_imap",
+            "status": "failed",
+            "duration_ms": 4,
+            "repeat_index": 1,
+            "reason": "Remote compare: decision hr failed. hr=0x80070005"
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

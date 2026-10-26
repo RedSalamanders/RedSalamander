@@ -1,0 +1,20 @@
+{
+  "source": "a20f6680dd5f82835a549f4c231e5666e4047eda",
+  "files": [
+    {
+      "path": "Z:\\RsI19Closeout\\.build\\x64\\ASan Debug\\RedSalamander.exe",
+      "bytes": 148969984,
+      "sha256": "e633cbe58945b56537fd2d25b1780d92e5dbb3fdea0ecec5d4e2190def2fc724"
+    },
+    {
+      "path": "Z:\\RsI19Closeout\\.build\\x64\\ASan Debug\\RedSalamander.pdb",
+      "bytes": 199389184,
+      "sha256": "88bd7dfc823b25a80db59bca72b9ead55773eaac9507a5397aef4cce64a07aa6"
+    },
+    {
+      "path": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\removal-focus-asan-a20f6680-before.dmp",
+      "bytes": 1533620422,
+      "sha256": "961980db7e0845399b2f7f2097023faed4e6b5ed282306f4a4dfc168f3a9867a"
+    }
+  ]
+}

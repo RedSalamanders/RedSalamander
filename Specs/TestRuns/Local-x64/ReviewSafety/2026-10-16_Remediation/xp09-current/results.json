@@ -1,0 +1,45 @@
+{
+    "run_started_utc": "2026-10-16T10:37:15.578Z",
+    "duration_ms": 2345,
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "FileOps_CrossRootLocalCopy",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261016T103632Z-76152-08104267b20243efad21baafb6163e4f\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 1469,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": true,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "FileOps_CrossRootLocalCopy",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1266,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_CrossRootLocalCopy",
+                    "status": "passed",
+                    "duration_ms": 141,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 62,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

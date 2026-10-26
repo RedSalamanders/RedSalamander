@@ -48,7 +48,7 @@ using DxUi::GridCellData;
 using DxUi::GridCellKind;
 using DxUi::GridColumnDesc;
 using DxUi::GridSelectionMode;
-using DxUi::IDxGridModel;
+using DxUi::IGridModel;
 using DxUi::Label;
 using DxUi::Panel;
 using DxUi::TextField;
@@ -199,7 +199,7 @@ struct ThemesGridRow
     uint32_t colorArgb = 0u;
 };
 
-class ThemesGridModel final : public IDxGridModel
+class ThemesGridModel final : public IGridModel
 {
 public:
     ThemesGridModel()
@@ -2117,7 +2117,7 @@ struct ThemesDxPage
     Label* searchLabel       = nullptr;
     TextField* searchEdit    = nullptr;
     Grid* colorsListControl  = nullptr;
-    std::unique_ptr<IDxGridModel> colorsListModelStorage;
+    std::unique_ptr<IGridModel> colorsListModelStorage;
     ThemesGridModel* colorsListModel = nullptr;
     Label* keyLabel                  = nullptr;
     TextField* keyEdit               = nullptr;

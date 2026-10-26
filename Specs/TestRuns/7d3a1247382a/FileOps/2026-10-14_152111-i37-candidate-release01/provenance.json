@@ -1,0 +1,163 @@
+{
+  "runId": "20261014T152111Z-53292-fd0ac4b8d8b849b3aea620afea08e980",
+  "receipt": "abbd693d6b993271b352381c7c6f30c67c3a2a6ddc417c36b5e7b85f28224d0e",
+  "sourceSnapshotId": "180bb20cdea4370b1c3376df556a6c1000e51c6a6e58386afeb63c4854d3a152",
+  "configuration": "Release",
+  "sourceRetained": "D:\\RedSalamander.Perf\\evidence\\folder-copy-progress-candidate-release-20261014-01",
+  "nativeVerdict": "PASSED",
+  "runnerVerdict": "PASSED",
+  "runnerAudit": "Three unrelated pre-existing unexpected-test-run-dir findings, untouched and separate; they do not themselves fail the selected runner.",
+  "note": "Final frozen test-enabled x64 Release: all strict primary five, the independently defined wide open traversal, small/empty, and lifecycle controls pass. No original Release baseline exists; these are absolute costs, with no Debug to Release speed claim.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "bytes": 95225,
+      "sha256": "0BC6AADCDA696C51A08812796B51172DD712FEEB288696BFD91C003E9D0C6B81"
+    },
+    {
+      "path": "captures\\bridge-open-prefix-7.png",
+      "bytes": 78359,
+      "sha256": "75E9630C0816E3356173F44625FF92235648D50BD96578E6C845928EDCF257DE"
+    },
+    {
+      "path": "captures\\bridge-parallel-counts.png",
+      "bytes": 70912,
+      "sha256": "6595E664EC6BF5343F4791DE025A0486661B3181BCF401C6743D314EC23D91D6"
+    },
+    {
+      "path": "captures\\bridge-parallel-early.png",
+      "bytes": 70912,
+      "sha256": "6595E664EC6BF5343F4791DE025A0486661B3181BCF401C6743D314EC23D91D6"
+    },
+    {
+      "path": "captures\\bridge-parallel-late.png",
+      "bytes": 80637,
+      "sha256": "BE3E34020BFC1459915886E5A162509930A1BFA94DA438F1BB1C721789CDEB90"
+    },
+    {
+      "path": "captures\\bridge-small-publishing.png",
+      "bytes": 69611,
+      "sha256": "BBE2AAB27E4BDC5CED46D6517A729EA841DCECDD8515A2512861A1E86FD1053D"
+    },
+    {
+      "path": "captures\\bridge-verify-counts.png",
+      "bytes": 70158,
+      "sha256": "D4E95DF55DCE4CD18DF5643B50CA18B82773C2C80482D3C3CCEE2733B4F2186F"
+    },
+    {
+      "path": "captures\\bridge-verify-early.png",
+      "bytes": 73830,
+      "sha256": "63C914B89BA276E8C447052B8EAC04BF851FD82FD51D5BD4ECD2BF34FFAAAE9D"
+    },
+    {
+      "path": "captures\\bridge-verify-late.png",
+      "bytes": 75072,
+      "sha256": "335D7420BA2FE99F1F53FF0B64347B6057FDDE4E05C2FDBD66A75710DA01361A"
+    },
+    {
+      "path": "captures\\local-overwrite-counts.png",
+      "bytes": 43689,
+      "sha256": "9BC16C0CEAF5E150870B039B286C789718A81B7B3E86C66BEAA09266B123DBBB"
+    },
+    {
+      "path": "captures\\local-overwrite-early.png",
+      "bytes": 55672,
+      "sha256": "1EAF33B7CD39FE0AEF4C33739E2481131C28D105F28B8750E7C2B15AEBDD6244"
+    },
+    {
+      "path": "captures\\local-overwrite-finalizing.png",
+      "bytes": 62392,
+      "sha256": "BB1DC6307891D82EFA915220C5B2ED88257C92A7E0B9BF389220A3F6C82C21FC"
+    },
+    {
+      "path": "captures\\local-overwrite-late.png",
+      "bytes": 57481,
+      "sha256": "E8CA8C0D9DAB599416722E63B792724717C2FBBBA5E83060B98FCF4356232352"
+    },
+    {
+      "path": "captures\\local-parallel-counts.png",
+      "bytes": 50738,
+      "sha256": "6B8C7DA299D3C80F33B7FF4AB20CC2C7609893C0C3AB6F5149B276A08651FFAB"
+    },
+    {
+      "path": "captures\\local-parallel-early.png",
+      "bytes": 72488,
+      "sha256": "74D82D9684304AF039D5AC4BF58BF78F9792266E4793B35A59C95E9A46EBF6F7"
+    },
+    {
+      "path": "captures\\local-parallel-finalizing.png",
+      "bytes": 77398,
+      "sha256": "57D99F9746572D5F4FD5E8717A11A9BB396A04EE212C5B21FB3FB2E774DF8124"
+    },
+    {
+      "path": "captures\\local-parallel-late.png",
+      "bytes": 75985,
+      "sha256": "7F0CF19D2EB024C058A9AE35FF88310F92E0CCDCF103C03BBEC1D545EE7F8B39"
+    },
+    {
+      "path": "captures\\local-serial-counts.png",
+      "bytes": 38473,
+      "sha256": "4D5A6D408AD94A7C97B2AD742D46F29CEBE9304CDF694E9C0F23AC6FA813C477"
+    },
+    {
+      "path": "captures\\local-serial-early.png",
+      "bytes": 48441,
+      "sha256": "F5C2961A6F003477CFCEAFB955B7334781AD017497051AC52602F955F5CC6B73"
+    },
+    {
+      "path": "captures\\local-serial-finalizing.png",
+      "bytes": 56655,
+      "sha256": "E06CFDD3E42DA89E791208121879796A07CE893C29401FDC81C3A3BE74809435"
+    },
+    {
+      "path": "captures\\local-serial-late.png",
+      "bytes": 52519,
+      "sha256": "2F316BA41ECCF376100095565BC6A9B057859CAEA292DED9C858FC3E0BD51101"
+    },
+    {
+      "path": "characterization.json",
+      "bytes": 5957,
+      "sha256": "19A21957045AD047E9552E0A806FD498A0837F3A956D99C0B9487CAB73A60306"
+    },
+    {
+      "path": "metric-selection.json",
+      "bytes": 102687,
+      "sha256": "BE5AC7A33E8F111501291592EE9DBDAC938ACF7DCB7C0986BBA0F28479394B37"
+    },
+    {
+      "path": "perf_metrics-002.jsonl",
+      "bytes": 575714,
+      "sha256": "F4A56294AA9C4C00F7162E32D82ECA4137B79F811C344AB357E839FDC9D9327C"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "bytes": 1749973,
+      "sha256": "6F727B2DB54D14DE11A4FCD4F3652C877D29313CF067C76731DDE75FE08A479D"
+    },
+    {
+      "path": "qualified-input-source-manifest.json",
+      "bytes": 4069,
+      "sha256": "F74EEEB958AD7EF927066ABE495828FE17D8FD34FCA7B2D45F2A9803F92E94F6"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1407,
+      "sha256": "A9A5F145189E37FE0216EBC47DBC701B6837E4E8EF63AABE3D6899FF61E55A05"
+    },
+    {
+      "path": "results.json",
+      "bytes": 890,
+      "sha256": "CFE02641B179D0C4B84B92350FE852547ED3AA207411DB7393DC43EA860252C7"
+    },
+    {
+      "path": "runner-results.json",
+      "bytes": 3445,
+      "sha256": "9BC972F6BB1E22F4DEBD4E35B3B20C210811D33B43C2E05D54A4E30BBEDB4DBB"
+    },
+    {
+      "path": "trace.txt",
+      "bytes": 42644,
+      "sha256": "4044D0289D62ACA0CCD008D93671B3F69041768605C83EE63C328D9757C9EDCA"
+    }
+  ]
+}

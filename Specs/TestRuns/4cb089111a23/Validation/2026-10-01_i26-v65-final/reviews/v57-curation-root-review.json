@@ -1,0 +1,33 @@
+{
+  "schema": "i26-v57-curator-root-review.v1",
+  "reviewer": "root",
+  "script": "curate-i26-final-v57-draft.ps1",
+  "sha256": "b2203ff6625f80979d6d4c65ed61f64b6675ee0325f19af8760b44de64d52649",
+  "reviewed": [
+    "Entire V55 to V57 adaptation and unchanged staging/size/ZIP boundaries",
+    "Pinned two-stage frozen source, formatting/include-order and build snapshot provenance",
+    "Exact original V55 broad Debug and gallery plus repeated V56 Commands cluster",
+    "Original failed V55 Full and all five R0e outcomes retained",
+    "Actual final Full v2/v1/source snapshot and post-run build binding",
+    "Actual final A78 46-input manifest/receipt and V57 pair identities; eight-run ordering",
+    "Root pair interpretation records acceptance with stated limits or not-established; comparator remains descriptive",
+    "Gallery publication remains original V55 with exact build and reviewed images",
+    "Optional review names correctly identify V57 binding and root reviews"
+  ],
+  "rootCorrections": [
+    "Removed nonexistent build-provenance sourceSnapshotId field references; actual pinned build receipts supply snapshot identity",
+    "Bound cluster root native hash to commands/results.json; retained and copied aggregate and native data separately",
+    "Added fixed V57 snapshot, successful invocation/receipt, and exact carried native counts/bytes",
+    "Made independent root resource acceptance distinct from descriptive comparator and whole-plan completion"
+  ],
+  "schemaPreflight": {
+    "path": "v57-curator-carried-schema-preflight.log",
+    "sha256": "3f49624e467c58e5d9761174f22e33d82c0d735e0ba63ffa7ba555469597b4cd",
+    "result": "PASS against real retained source/build/cluster/gallery/failure inputs only",
+    "excluded": "Final Full and pair blocks were not executed; no curation or repository writes. Unread pair parameters in bounded preflight are placeholders, not evidence."
+  },
+  "parser": "PASS",
+  "curatorExecuted": false,
+  "wholePlanComplete": false,
+  "next": "Use actual terminal Full/postFull, final A78/paired data, root interpretation and case binding before curation."
+}

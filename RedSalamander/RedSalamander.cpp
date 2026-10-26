@@ -1,3 +1,4 @@
+#include "WindowActivation.h"
 #include <algorithm>
 #include <array>
 #include <atomic>
@@ -101,11 +102,13 @@
 #ifdef ENABLE_TESTS
 #include "CommandDispatch.Debug.h"
 #include "CommandDispatch.h"
-#include "Commands.SelfTest.h"
-#include "CompareDirectoriesEngine.SelfTest.h"
-#include "FolderWindow.FileOperations.SelfTest.h"
-#include "TestSupport/DirectedSelfTestInputWarning.h"
-#include "TestWindowActivationGuard.h"
+#include "Commands.Tests.Runner.h"
+#include "Common.Tests.WindowActivationGuard.h"
+#include "CompareDirectoriesEngine.Tests.Runner.h"
+#include "FolderWindow.FileOperations.Tests.OwnedShutdown.h"
+#include "FolderWindow.FileOperations.Tests.Runner.h"
+#include "TestSupport/TestSupport.Tests.DirectedSelfTestInputWarning.h"
+#include "TestSupport/TestSupport.Tests.FailureReports.h"
 #endif
 
 PCWSTR REDSALAMANDER_TEXT_VERSION = L"RedSalamander " VERSINFO_VERSION;
@@ -561,7 +564,7 @@ public:
         if (const HWND existing = FindWindowW(kAboutDialogWindowClassName, nullptr); existing && IsWindow(existing) != FALSE)
         {
             ShowWindow(existing, IsIconic(existing) ? SW_RESTORE : SW_SHOW);
-            SetForegroundWindow(existing);
+            Common::RequestForegroundWindow(existing);
             return S_FALSE;
         }
 
@@ -1166,203 +1169,6 @@ private:
 bool g_runFileOpsSelfTest            = false;
 bool g_runCompareDirectoriesSelfTest = false;
 bool g_runCommandsSelfTest           = false;
-std::atomic<DWORD> g_selfTestMonitorProcessId{0};
-
-struct SelfTestMonitorCloseContext
-{
-    DWORD processId    = 0;
-    bool foundWindow   = false;
-    bool closedWithMsg = false;
-};
-
-BOOL CALLBACK SelfTestMonitorWindowEnumProc(HWND hwnd, LPARAM lParam) noexcept
-{
-    auto* context = reinterpret_cast<SelfTestMonitorCloseContext*>(lParam);
-    if (! context || hwnd == nullptr)
-    {
-        return TRUE;
-    }
-
-    DWORD windowPid = 0;
-    GetWindowThreadProcessId(hwnd, &windowPid);
-    if (windowPid != context->processId)
-    {
-        return TRUE;
-    }
-
-    context->foundWindow = true;
-    if (PostMessageW(hwnd, WM_CLOSE, 0, 0))
-    {
-        context->closedWithMsg = true;
-    }
-
-    return TRUE;
-}
-
-void ShutdownSelfTestMonitor() noexcept
-{
-    if (! (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest))
-    {
-        return;
-    }
-
-    const DWORD monitorPid = g_selfTestMonitorProcessId.load(std::memory_order_acquire);
-    if (monitorPid == 0)
-    {
-        return;
-    }
-
-    SelfTestMonitorCloseContext context{};
-    context.processId = monitorPid;
-    EnumWindows(SelfTestMonitorWindowEnumProc, reinterpret_cast<LPARAM>(&context));
-
-    if (! context.closedWithMsg && ! context.foundWindow)
-    {
-        Debug::Info(L"SelfTest: monitor PID {} not found in window enumeration", monitorPid);
-    }
-
-    const wil::unique_handle monitorProcess{::OpenProcess(SYNCHRONIZE | PROCESS_TERMINATE | PROCESS_QUERY_LIMITED_INFORMATION, FALSE, monitorPid)};
-    if (! monitorProcess)
-    {
-        g_selfTestMonitorProcessId.store(0, std::memory_order_release);
-        return;
-    }
-
-    if (WaitForSingleObject(monitorProcess.get(), 2000) == WAIT_TIMEOUT)
-    {
-        TerminateProcess(monitorProcess.get(), 0);
-        WaitForSingleObject(monitorProcess.get(), 2000);
-    }
-
-    g_selfTestMonitorProcessId.store(0, std::memory_order_release);
-}
-
-[[nodiscard]] bool HasAnySelfTestArgInCommandLine() noexcept
-{
-    int argc = 0;
-    wil::unique_hlocal_ptr<wchar_t*> argv(::CommandLineToArgvW(::GetCommandLineW(), &argc));
-    if (! argv || argc <= 1)
-    {
-        return false;
-    }
-
-    constexpr std::wstring_view kSelfTestArgs[] = {
-        L"--selftest",
-        L"--compare-selftest",
-        L"--commands-selftest",
-        L"--fileops-selftest",
-    };
-
-    for (int i = 1; i < argc; ++i)
-    {
-        const wchar_t* arg = argv.get()[i];
-        if (! arg || arg[0] == L'\0')
-        {
-            continue;
-        }
-
-        const std::wstring_view argView(arg);
-        for (std::wstring_view needle : kSelfTestArgs)
-        {
-            if (OrdinalString::EqualsNoCase(argView, needle))
-            {
-                return true;
-            }
-        }
-    }
-
-    return false;
-}
-
-void QueueRedSalamanderMonitorLaunch() noexcept
-{
-    if (HasAnySelfTestArgInCommandLine())
-    {
-        return;
-    }
-
-    // Best-effort: launch the ETW viewer early in debug builds so startup ETW events are visible.
-    // RedSalamanderMonitor has its own single-instance mutex, so extra launches will exit quickly.
-    constexpr wchar_t kInstanceMutexName[] = L"Local\\RedSalamanderMonitor_Instance";
-    wil::unique_handle existingInstance(::OpenMutexW(SYNCHRONIZE, FALSE, kInstanceMutexName));
-    if (existingInstance)
-    {
-        return;
-    }
-
-    static_cast<void>(TrySubmitThreadpoolCallback(
-        [](PTP_CALLBACK_INSTANCE /*instance*/, void* /*context*/) noexcept
-    {
-        constexpr wchar_t kInstanceMutexName[] = L"Local\\RedSalamanderMonitor_Instance";
-        wil::unique_handle existingInstance(::OpenMutexW(SYNCHRONIZE, FALSE, kInstanceMutexName));
-        if (existingInstance)
-        {
-            return;
-        }
-
-        wchar_t exePath[MAX_PATH]{};
-        const DWORD exeLen = ::GetModuleFileNameW(nullptr, exePath, static_cast<DWORD>(std::size(exePath)));
-        if (exeLen == 0 || exeLen >= std::size(exePath))
-        {
-            return;
-        }
-
-        wchar_t* lastSlash = wcsrchr(exePath, L'\\');
-        if (! lastSlash)
-        {
-            lastSlash = wcsrchr(exePath, L'/');
-        }
-        if (! lastSlash)
-        {
-            return;
-        }
-        *(lastSlash + 1) = L'\0';
-
-        wchar_t monitorPath[MAX_PATH]{};
-        if (wcscpy_s(monitorPath, std::size(monitorPath), exePath) != 0)
-        {
-            return;
-        }
-        if (wcscat_s(monitorPath, std::size(monitorPath), L"RedSalamanderMonitor.exe") != 0)
-        {
-            return;
-        }
-
-        if (::GetFileAttributesW(monitorPath) == INVALID_FILE_ATTRIBUTES)
-        {
-            return;
-        }
-
-        wchar_t cmdLine[(MAX_PATH * 2) + 4]{};
-        if (wcscpy_s(cmdLine, std::size(cmdLine), L"\"") != 0)
-        {
-            return;
-        }
-        if (wcscat_s(cmdLine, std::size(cmdLine), monitorPath) != 0)
-        {
-            return;
-        }
-        if (wcscat_s(cmdLine, std::size(cmdLine), L"\"") != 0)
-        {
-            return;
-        }
-
-        STARTUPINFOW si{};
-        si.cb = sizeof(si);
-
-        PROCESS_INFORMATION pi{};
-        if (! ::CreateProcessW(monitorPath, cmdLine, nullptr, nullptr, FALSE, 0, nullptr, nullptr, &si, &pi))
-        {
-            return;
-        }
-
-        wil::unique_handle process(pi.hProcess);
-        wil::unique_handle thread(pi.hThread);
-        g_selfTestMonitorProcessId.store(pi.dwProcessId, std::memory_order_release);
-    },
-        nullptr,
-        nullptr));
-}
 #endif // ENABLE_TESTS
 
 [[nodiscard]] bool IsRunningAnySelfTest() noexcept
@@ -1447,7 +1253,7 @@ std::optional<uint32_t> g_functionBarPressedKey;
 std::optional<uint32_t> g_functionBarPressedKeyClearPending;
 
 #ifdef ENABLE_TESTS
-#include "SelfTestCommon.h"
+#include "Common.Tests.Runner.h"
 
 constexpr UINT_PTR kFileOpsSelfTestTimerId     = 1002u;
 constexpr UINT kFileOpsSelfTestTimerIntervalMs = 50u;
@@ -1574,8 +1380,6 @@ void FinalizeSelfTestRun() noexcept
     {
         return;
     }
-
-    ShutdownSelfTestMonitor();
 
     const auto now                   = std::chrono::steady_clock::now();
     g_selfTestRunResult.durationMs   = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::milliseconds>(now - g_selfTestRunStart.value()).count());
@@ -2139,8 +1943,13 @@ LRESULT OnMainWindowTimer(HWND hWnd, UINT_PTR timerId) noexcept
             MergeRepeatedSelfTestSuite(g_fileOpsSelfTestAggregateResult, SelfTest::SelfTestSuite::FileOperations, currentRunResult, currentRepeatIndex);
             g_selfTestExitCode |= currentRunFailed ? 1 : 0;
 
-            const bool hasMoreRuns = g_fileOpsSelfTestRunIndex < g_fileOpsSelfTestRunFilters.size();
-            const bool stopEarly   = currentRunFailed && g_selfTestOptions.failFast;
+            const bool hasMoreRuns   = g_fileOpsSelfTestRunIndex < g_fileOpsSelfTestRunFilters.size();
+            const bool cleanupFailed = std::ranges::any_of(currentRunResult.cases, [](const SelfTest::SelfTestCaseResult& result) noexcept {
+                return result.name == L"Cleanup_RestorePluginConfig" && result.status == SelfTest::SelfTestCaseResult::Status::failed;
+            });
+            // A live worker can retain provider state and interlocks. Never seed another family on
+            // top of a failed cleanup, even when ordinary assertion failures are not fail-fast.
+            const bool stopEarly = cleanupFailed || FileOperationsSelfTest::HasRetainedFailureEvidence() || (currentRunFailed && g_selfTestOptions.failFast);
             if (hasMoreRuns && ! stopEarly)
             {
                 g_fileOpsSelfTestStartPending = true;
@@ -2704,6 +2513,10 @@ void SaveAppSettings(HWND hWnd) noexcept
     }
 
     const HRESULT saveHr = SettingsHotReload::SaveSettingsAndSchemaForProcessShutdown(kAppId, g_settings, pluginSchemas, kFinalSettingsSaveTimeoutMs);
+#ifdef ENABLE_TESTS
+    if (OwnedShutdownSelfTest::UsesProductionRoute(hWnd))
+        OwnedShutdownSelfTest::RecordNormalSettingsSave(saveSettings, saveHr);
+#endif
     if (SUCCEEDED(saveHr))
     {
         return;
@@ -3886,7 +3699,7 @@ void ShowUserMenuPopup(HWND hWnd) noexcept
     RebuildUserMenuDynamicItems(g_userMenu);
 
     const POINT point = GetUserMenuPopupAnchor(hWnd);
-    SetForegroundWindow(hWnd);
+    Common::RequestForegroundWindow(hWnd);
     const UINT commandId =
         static_cast<UINT>(TrackPopupMenuEx(g_userMenu, TPM_LEFTALIGN | TPM_TOPALIGN | TPM_RIGHTBUTTON | TPM_RETURNCMD, point.x, point.y, hWnd, nullptr));
     if (commandId != 0u)
@@ -5345,7 +5158,7 @@ private:
             return;
         }
 
-        if (PostMessageW(target, WndMsg::kDxUiContextMenuRootHoverChanged, static_cast<WPARAM>(hoverIndex.value()), static_cast<LPARAM>(pendingSequence)) == 0)
+        if (! DxUi::ContextMenu::PostMenuBarHover(target, hoverIndex.value(), pendingSequence))
         {
             Debug::Info(L"RedSalamander::MenuTrace MainMenu hover-switch post-failed target={:#x} hover={} active={}",
                         reinterpret_cast<uintptr_t>(target),
@@ -7331,7 +7144,8 @@ constexpr wchar_t kRedSalamanderHelpText[] =
     L"  --compare-selftest              Run CompareDirectories self-test suite.\r\n"
     L"  --commands-selftest             Run Commands self-test suite.\r\n"
     L"  --fileops-selftest              Run FileOperations self-test suite.\r\n"
-    L"  --selftest-no-activate          Prevent noninteractive Compare/FileOperations selftests from taking foreground activation or keyboard focus.\r\n"
+    L"  --selftest-no-activate          Prevent reviewed Compare/FileOperations or exact static documentation selftests from taking activation or keyboard "
+    L"focus.\r\n"
     L"  --selftest-fail-fast            Stop after first failing self-test case.\r\n"
     L"  --selftest-case=NAME            Run the exact matching self-test case, a case-prefix family when NAME ends in '_', or comma-separated exact cases.\r\n"
     L"  --selftest-family=NAME          Run one governed Commands source family in a separate process.\r\n"
@@ -7609,6 +7423,15 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         return false;
     };
 
+#ifdef ENABLE_TESTS
+    // A self-test run never waits on a dialog: a failed Debug-CRT or STL check ends the run with its report on stderr and exit code 3
+    // instead of opening a modal Abort/Retry/Ignore box. An interactive run keeps its dialogs, which a developer can attach to.
+    if (hasArg(L"--selftest") || hasArg(L"--compare-selftest") || hasArg(L"--commands-selftest") || hasArg(L"--fileops-selftest"))
+    {
+        RedSalamander::TestSupport::RouteFailureReportsAwayFromDialogs();
+    }
+#endif
+
     if (hasArg(L"--etw"))
     {
         Debug::detail::SetRuntimeMonitorDiagnosticsEnabled(true);
@@ -7693,20 +7516,26 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
 #ifdef ENABLE_TESTS
     RedSalamander::TestSupport::ScopedWindowActivationBlocker selfTestActivationBlocker;
     const bool explicitNoActivate = hasArg(L"--selftest-no-activate");
-    const bool selectedSafeSuite  = hasArg(L"--compare-selftest") || hasArg(L"--fileops-selftest");
     std::wstring selectedCaptureCase;
+    std::wstring selectedCaptureProof;
+    const bool selectedDocumentationGallery =
+        hasArg(L"--commands-selftest") && getArgValue(L"--selftest-case=", selectedCaptureCase) &&
+        selectedCaptureCase == L"cmd_product_documentation_gallery" && ! hasArg(L"--selftest") && ! hasArg(L"--compare-selftest") &&
+        ! hasArg(L"--fileops-selftest") && ! getArgValue(L"--selftest-flaky-proof-case=", selectedCaptureProof) &&
+        ! getArgValue(L"--selftest-order-proof-case=", selectedCaptureProof) && ! getArgValue(L"--selftest-crash-case=", selectedCaptureProof);
+    const bool selectedSafeSuite          = hasArg(L"--compare-selftest") || hasArg(L"--fileops-selftest") || selectedDocumentationGallery;
     const bool selectedGalleryInteraction = hasArg(L"--fileops-selftest") && getArgValue(L"--selftest-case=", selectedCaptureCase) &&
                                             _wcsicmp(selectedCaptureCase.c_str(), L"FileOps_VisualGalleryInteraction") == 0;
-    const bool selectedFocusSuite = hasArg(L"--selftest") || hasArg(L"--commands-selftest") || selectedGalleryInteraction;
+    const bool selectedFocusSuite = hasArg(L"--selftest") || (hasArg(L"--commands-selftest") && ! selectedDocumentationGallery) || selectedGalleryInteraction;
     const HWND previousGalleryForeground = selectedGalleryInteraction ? GetForegroundWindow() : nullptr;
-    const auto restoreGalleryForeground = wil::scope_exit([&]
+    const auto restoreGalleryForeground  = wil::scope_exit([&]
     {
         if (previousGalleryForeground && IsWindow(previousGalleryForeground))
-            SetForegroundWindow(previousGalleryForeground);
+            Common::RequestForegroundWindow(previousGalleryForeground);
     });
     if (explicitNoActivate && (! selectedSafeSuite || selectedFocusSuite))
     {
-        Debug::Error(L"--selftest-no-activate requires --compare-selftest or --fileops-selftest and cannot be combined with Commands.");
+        Debug::Error(L"--selftest-no-activate requires a reviewed no-activation suite or exact static documentation case.");
         return 2;
     }
     // Warn before startup can activate a Commands test window. The suite and
@@ -7727,7 +7556,6 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         }
     }
 
-    QueueRedSalamanderMonitorLaunch();
 #endif
 
     if (hasArg(L"--crash-test"))
@@ -7903,7 +7731,11 @@ static int RunApplication(HINSTANCE hInstance, int nCmdShow)
         }
 
         SelfTest::GetSelfTestOptions() = g_selfTestOptions;
-        SelfTest::RotateSelfTestRuns();
+        if (! SelfTest::RotateSelfTestRuns())
+        {
+            Debug::Error(L"Self-test artifact rotation failed; retained runs require review before retrying.");
+            return 1;
+        }
         ResetSelfTestRunState();
         SelfTest::InitSelfTestRun(g_selfTestOptions);
     }
@@ -8523,6 +8355,60 @@ void BuildFatalExceptionMessage(HINSTANCE hInstance, const wchar_t* exceptionNam
 }
 } // namespace
 
+namespace
+{
+int HandleRedMonitorCommand(const wchar_t* raw) noexcept
+{
+    const std::wstring_view command = raw ? raw : L"";
+    if (command == L"--redmonitor-probe")
+    {
+        const ULONGLONG start = GetTickCount64();
+        while (! Debug::detail::IsDebugEtwEnabled() && GetTickCount64() - start < 2000)
+            Sleep(10);
+        if (! Debug::detail::IsDebugEtwEnabled())
+            return 2;
+        const auto info = Debug::detail::BuildInfoParam(Debug::InfoParam::Type::Warning);
+        return Debug::detail::EmitEtwEvent(info, L"diagnostic probe \u00e9\u65e5\U0001F642") ? 0 : 2;
+    }
+    try
+    {
+        if (RedMonitor::IsViewerCommand(command))
+            return RedMonitor::LaunchInstalledViewer() == ERROR_SUCCESS ? 0 : 1;
+#if defined(_DEBUG)
+        if (RedMonitor::IsOrdinaryStartup(command))
+        {
+            (void)TrySubmitThreadpoolCallback(
+                [](PTP_CALLBACK_INSTANCE, void*) noexcept
+            {
+                try
+                {
+                    (void)RedMonitor::LaunchInstalledViewer();
+                }
+                catch (const std::bad_alloc&)
+                {
+                    std::terminate();
+                }
+                catch (const std::exception&)
+                { /* Optional helper failure never blocks the app. */
+                }
+            },
+                nullptr,
+                nullptr);
+        }
+#endif
+        return -1;
+    }
+    catch (const std::bad_alloc&)
+    {
+        std::terminate();
+    }
+    catch (const std::exception&)
+    {
+        return 1;
+    }
+}
+} // namespace
+
 int APIENTRY wWinMain(_In_ HINSTANCE hInstance, [[maybe_unused]] _In_opt_ HINSTANCE hPrevInstance, [[maybe_unused]] _In_ LPWSTR lpCmdLine, _In_ int nCmdShow)
 {
     if (! ConfigureSafeDllSearchDirectories())
@@ -8534,6 +8420,10 @@ int APIENTRY wWinMain(_In_ HINSTANCE hInstance, [[maybe_unused]] _In_opt_ HINSTA
     {
         return 1;
     }
+
+    const int monitorCommand = HandleRedMonitorCommand(lpCmdLine);
+    if (monitorCommand >= 0)
+        return monitorCommand;
 
     // Use SEH to catch all exceptions (no C++ objects in this scope)
     CrashHandler::Install();
@@ -9452,7 +9342,7 @@ void RereadAssociations(HWND hWnd) noexcept
 
 LRESULT OnMainWindowSettingsFileChanged(HWND hWnd, LPARAM lParam) noexcept
 {
-    auto payload = TakeMessagePayload<SettingsHotReload::SettingsFileChangedPayload>(lParam);
+    auto payload = TakeMessagePayload<SettingsHotReload::SettingsFileChangedPayload>(hWnd, WndMsg::kSettingsFileChanged, lParam);
     if (! payload || ! hWnd)
     {
         return 0;
@@ -11048,6 +10938,12 @@ LRESULT OnMainWindowCommand(HWND hWnd, UINT id, UINT codeNotify, HWND hwndCtl, R
             g_folderWindow.CommandListOpenedFiles(pane);
             break;
         }
+        case IDM_PANE_CLEANUP_LEFTOVERS:
+        {
+            const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
+            g_folderWindow.CommandCleanUpLeftovers(pane);
+            break;
+        }
         case IDM_PANE_SHARES:
         {
             const FolderWindow::Pane pane = g_folderWindow.GetFocusedPane();
@@ -11721,7 +11617,7 @@ LRESULT OnMainWindowPluginsChanged(HWND hWnd)
 
 LRESULT OnMainWindowConnectionManagerConnect([[maybe_unused]] HWND hWnd, WPARAM wParam, LPARAM lParam)
 {
-    auto name = TakeMessagePayload<std::wstring>(lParam);
+    auto name = TakeMessagePayload<std::wstring>(hWnd, WndMsg::kConnectionManagerConnect, lParam);
     if (! name || name->empty())
     {
         return 0;
@@ -11845,7 +11741,9 @@ BOOL CALLBACK ShutdownCloseEnumWindowsProc(HWND hwnd, LPARAM lParam) noexcept
 LRESULT OnMainWindowClose(HWND hWnd)
 {
 #ifdef ENABLE_TESTS
-    if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
+    const bool ownedProductionClose =
+        g_runFileOpsSelfTest && g_selfTestOptions.caseFilter == OwnedShutdownSelfTest::kCase && OwnedShutdownSelfTest::UsesProductionRoute(hWnd);
+    if ((g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) && ! ownedProductionClose)
     {
         if (! DestroyWindow(hWnd))
         {
@@ -11860,10 +11758,29 @@ LRESULT OnMainWindowClose(HWND hWnd)
         return 0;
     }
 
+#ifdef ENABLE_TESTS
+    if (ownedProductionClose)
+    {
+        OwnedShutdownSelfTest::RecordCloseAttempt(OwnedShutdownSelfTest::OwnerHasActiveOperations(g_folderWindow));
+    }
+#endif
     if (! g_folderWindow.ConfirmCancelAllFileOperations(hWnd))
     {
+#ifdef ENABLE_TESTS
+        if (ownedProductionClose)
+        {
+            // Reacquire after consent: no FileOperationState borrow across its pump.
+            OwnedShutdownSelfTest::RecordDeferredClose(OwnedShutdownSelfTest::OwnerHasActiveOperations(g_folderWindow));
+        }
+#endif
         return 0;
     }
+#ifdef ENABLE_TESTS
+    if (ownedProductionClose)
+    {
+        OwnedShutdownSelfTest::RecordAcceptedQuietClose(! OwnedShutdownSelfTest::OwnerHasActiveOperations(g_folderWindow));
+    }
+#endif
 
     g_mainWindowCloseCommitted.store(true, std::memory_order_release);
     HostBeginPromptShutdown();
@@ -11929,7 +11846,9 @@ LRESULT OnMainWindowDestroy(HWND hWnd)
     g_mainMenuBarHost.Destroy();
 
 #ifdef ENABLE_TESTS
-    if (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest)
+    const bool ownedProductionClose =
+        g_runFileOpsSelfTest && g_selfTestOptions.caseFilter == OwnedShutdownSelfTest::kCase && OwnedShutdownSelfTest::UsesProductionRoute(hWnd);
+    if ((g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) && ! ownedProductionClose)
     {
         SettingsHotReload::BeginProcessShutdown();
         PrepareFloatingTerminalWindowForAppShutdown();
@@ -11952,8 +11871,6 @@ LRESULT OnMainWindowDestroy(HWND hWnd)
         SelfTest::AppendSelfTestTrace(L"OnMainWindowDestroy: viewer plugin shutdown complete");
         SessionState::Clear();
         SelfTest::AppendSelfTestTrace(L"OnMainWindowDestroy: session state cleared");
-        ShutdownSelfTestMonitor();
-        SelfTest::AppendSelfTestTrace(L"OnMainWindowDestroy: selftest monitor shutdown complete");
         TraceSelfTestExitCode(L"OnMainWindowDestroy: PostQuitMessage",
                               (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);
         PostQuitMessage((g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);
@@ -11962,10 +11879,13 @@ LRESULT OnMainWindowDestroy(HWND hWnd)
 #endif
 
     SaveAppSettings(hWnd);
+#ifdef ENABLE_TESTS
+    if (ownedProductionClose && ! OwnedShutdownSelfTest::RecordNormalDestroy(hWnd, DebugGetSessionEndSettingsSnapshotForSelfTest().normalTeardownCallCount))
+        g_selfTestExitCode |= 1;
+#endif
     SessionState::Clear();
 
 #ifdef ENABLE_TESTS
-    ShutdownSelfTestMonitor();
     TraceSelfTestExitCode(L"OnMainWindowDestroy: PostQuitMessage",
                           (g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);
     PostQuitMessage((g_runFileOpsSelfTest || g_runCompareDirectoriesSelfTest || g_runCommandsSelfTest) ? g_selfTestExitCode : 0);
@@ -12099,7 +12019,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
         case WndMsg::kSettingsFileChanged: g_themeCycleOverlay.Hide(); return OnMainWindowSettingsFileChanged(hWnd, lParam);
         case WndMsg::kTerminalSessionExited:
         {
-            auto event = TakeMessagePayload<TerminalEvent>(lParam);
+            auto event = TakeMessagePayload<TerminalEvent>(hWnd, message, lParam);
             if (event)
             {
                 g_folderWindow.HandleTerminalSessionExited(*event);
@@ -12128,7 +12048,7 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
                 ShowWindow(hWnd, SW_RESTORE);
             }
             static_cast<void>(SetActiveWindow(hWnd));
-            static_cast<void>(SetForegroundWindow(hWnd));
+            static_cast<void>(Common::RequestForegroundWindow(hWnd));
             RestoreMainWindowFolderFocus(hWnd);
             if (g_folderWindow.GetFocusedFolderViewHwnd() == nullptr)
             {

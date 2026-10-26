@@ -1,0 +1,43 @@
+{
+  "generatedAt": "2026-07-03T08:30:45.3588255+02:00",
+  "selfTests": {
+    "commands": {
+      "runCaseRegistrations": 676
+    },
+    "compareDirectories": {
+      "runCaseRegistrations": 229
+    },
+    "fileOperations": {
+      "activePhases": 120
+    }
+  },
+  "standalone": {
+    "nativeExecutables": [
+      "DxUiTests",
+      "FileSystemCurlTests",
+      "ViewerPETests",
+      "ViewerSqliteTests",
+      "MonitorTest",
+      "LocalizationTests",
+      "RedConfigureTests"
+    ],
+    "performanceTests2": {
+      "testMethods": 12
+    },
+    "dxUiTests": {
+      "nativeTextInputCases": 117
+    }
+  },
+  "scripts": {
+    "toolsPester": {
+      "cases": 115,
+      "requiresBuildToolchainCases": 1
+    },
+    "vcpkgMergeSynthetic": {
+      "cases": 5
+    },
+    "vcpkgMergeLockValidation": {
+      "cases": 3
+    }
+  }
+}

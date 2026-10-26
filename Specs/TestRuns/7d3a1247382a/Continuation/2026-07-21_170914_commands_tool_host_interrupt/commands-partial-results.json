@@ -1,0 +1,1036 @@
+{
+    "run_started_utc": "2026-07-21T15:00:39.037Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T150024Z-63056-ba7d0fabad60401b97e3bd7404b01877\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 0,
+    "passed": 169,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Worst-case version 2 theme resolution exceeded the 100000 us guard (max=380873 us).",
+    "cases": [
+        {
+            "name": "cmd_app_session_end_persists_runtime_state_without_teardown",
+            "status": "passed",
+            "duration_ms": 135,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_hot_reload_merge_runtime_session",
+            "status": "passed",
+            "duration_ms": 3,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_hot_reload_merge_disk_preferences",
+            "status": "passed",
+            "duration_ms": 2,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_no_recovery_and_file_stamp",
+            "status": "passed",
+            "duration_ms": 109,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_grid_layout_parsing_parity",
+            "status": "passed",
+            "duration_ms": 20,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_search_roundtrip",
+            "status": "passed",
+            "duration_ms": 76,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_batch_rename_roundtrip",
+            "status": "passed",
+            "duration_ms": 40,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_file_actions_v16_roundtrip",
+            "status": "passed",
+            "duration_ms": 30,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_file_actions_v16_disables_relative_executables",
+            "status": "passed",
+            "duration_ms": 37,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_file_actions_v16_rejects_legacy_shape",
+            "status": "passed",
+            "duration_ms": 13,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_unsupported_schema_backup_recovery",
+            "status": "passed",
+            "duration_ms": 15,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_invalid_file_actions_preserves_unrelated_sections",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_invalid_shortcuts_preserves_unrelated_sections",
+            "status": "passed",
+            "duration_ms": 27,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_unsupported_future_schema_never_overwrites_source",
+            "status": "passed",
+            "duration_ms": 30,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_unknown_top_level_members_survive_save",
+            "status": "passed",
+            "duration_ms": 24,
+            "repeat_index": 1
+        },
+        {
+            "name": "resource_hresult_details_format_is_valid",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "resource_invalid_format_string_returns_raw_fallback",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "resource_format_placeholders_are_positional",
+            "status": "passed",
+            "duration_ms": 399,
+            "repeat_index": 1
+        },
+        {
+            "name": "popup_dialog_titles_are_localized",
+            "status": "passed",
+            "duration_ms": 583,
+            "repeat_index": 1
+        },
+        {
+            "name": "embedded_viewer_context_menus_expose_menu_actions",
+            "status": "passed",
+            "duration_ms": 210,
+            "repeat_index": 1
+        },
+        {
+            "name": "embedded_vlc_audio_preview_stays_inside_preview",
+            "status": "passed",
+            "duration_ms": 35,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_file_actions_v16_rejects_malformed_definitions",
+            "status": "passed",
+            "duration_ms": 216,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_file_actions_v16_empty_viewers_roundtrip",
+            "status": "passed",
+            "duration_ms": 42,
+            "repeat_index": 1
+        },
+        {
+            "name": "file_action_resolution_v16_explains_priority",
+            "status": "passed",
+            "duration_ms": 2,
+            "repeat_index": 1
+        },
+        {
+            "name": "file_action_resolution_v16_action_ids_are_case_insensitive",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "file_action_resolution_v16_command_keys_are_distinct",
+            "status": "passed",
+            "duration_ms": 3,
+            "repeat_index": 1
+        },
+        {
+            "name": "file_action_defaults_v16_route_viewer_extensions",
+            "status": "passed",
+            "duration_ms": 13,
+            "repeat_index": 1
+        },
+        {
+            "name": "file_action_executable_path_template_macro_detection",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "file_action_external_launch_plan_macros",
+            "status": "passed",
+            "duration_ms": 1,
+            "repeat_index": 1
+        },
+        {
+            "name": "file_action_external_launch_starts_process",
+            "status": "passed",
+            "duration_ms": 1166,
+            "repeat_index": 1
+        },
+        {
+            "name": "file_action_selected_paths_file_lifecycle",
+            "status": "passed",
+            "duration_ms": 366,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_shortcuts_default_roundtrip",
+            "status": "passed",
+            "duration_ms": 51,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_shortcuts_view_state_roundtrip",
+            "status": "passed",
+            "duration_ms": 62,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_file_operations_precalc_roundtrip",
+            "status": "passed",
+            "duration_ms": 634,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_uia_blocked_operation_deadline_is_bounded",
+            "status": "passed",
+            "duration_ms": 905,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_ui_customization_roundtrip",
+            "status": "passed",
+            "duration_ms": 28,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_ui_compact_mode_defaults_true",
+            "status": "passed",
+            "duration_ms": 4,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_shortcuts_invalid_section_rejected",
+            "status": "passed",
+            "duration_ms": 9,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_shortcuts_unassigned_sentinel_roundtrip",
+            "status": "passed",
+            "duration_ms": 38,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_hot_reload_self_save_suppression",
+            "status": "passed",
+            "duration_ms": 2319,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_save_queue_serializes_coalesces_and_flushes",
+            "status": "passed",
+            "duration_ms": 14784,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_hot_reload_invalid_external_file",
+            "status": "passed",
+            "duration_ms": 3468,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_hot_reload_transient_arm_failure_is_async",
+            "status": "passed",
+            "duration_ms": 1052,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_hot_reload_creates_missing_directory",
+            "status": "passed",
+            "duration_ms": 988,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_file_system_curl_plugin_names_localized",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "icon_bitmap_alpha_normalization",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "folder_view_icon_bitmap_interpolation",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "icon_cache_selects_non_upscaled_source",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "red_salamander_help_lists_diagnostics_options",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "registry_integrity",
+            "status": "passed",
+            "duration_ms": 20,
+            "repeat_index": 1
+        },
+        {
+            "name": "shortcut_defaults_mapping",
+            "status": "passed",
+            "duration_ms": 10,
+            "repeat_index": 1
+        },
+        {
+            "name": "shortcut_defaults_restore_missing_f3_view",
+            "status": "passed",
+            "duration_ms": 6,
+            "repeat_index": 1
+        },
+        {
+            "name": "shortcut_defaults_restore_missing_defaults_and_preserve_unassigned",
+            "status": "passed",
+            "duration_ms": 5,
+            "repeat_index": 1
+        },
+        {
+            "name": "implemented_menu_labels_not_todo",
+            "status": "passed",
+            "duration_ms": 1,
+            "repeat_index": 1
+        },
+        {
+            "name": "pane_view_options_live_in_left_right_menus",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "theme_menu_navigation_commands_are_last",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "help_menu_links_external_documentation",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_app_rereadAssociations_reloads_actions_and_refreshes_panes",
+            "status": "passed",
+            "duration_ms": 2075,
+            "repeat_index": 1
+        },
+        {
+            "name": "theme_cycle_commands",
+            "status": "passed",
+            "duration_ms": 386,
+            "repeat_index": 1
+        },
+        {
+            "name": "theme_v2_runtime_resolution_and_dynamic_perf",
+            "status": "failed",
+            "duration_ms": 7619,
+            "repeat_index": 1,
+            "reason": "Worst-case version 2 theme resolution exceeded the 100000 us guard (max=380873 us)."
+        },
+        {
+            "name": "generic_status_bar_command_routes_active_pane",
+            "status": "passed",
+            "duration_ms": 708,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_pane_view_options_roundtrip",
+            "status": "passed",
+            "duration_ms": 37,
+            "repeat_index": 1
+        },
+        {
+            "name": "folderView_thumbnail_settings_roundtrip",
+            "status": "passed",
+            "duration_ms": 34,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_make_file_list_roundtrip",
+            "status": "passed",
+            "duration_ms": 32,
+            "repeat_index": 1
+        },
+        {
+            "name": "settings_store_make_file_list_suppresses_default_fields",
+            "status": "passed",
+            "duration_ms": 35,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_makeFileList_generates_formats_and_saves_options",
+            "status": "passed",
+            "duration_ms": 7111,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_listOpenedFiles_shows_sources_prunes_closed_editors_and_focuses_items",
+            "status": "passed",
+            "duration_ms": 2121,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_shares_shows_synthetic_rows_opens_paths_and_reports_access_denied",
+            "status": "passed",
+            "duration_ms": 326,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_archive_pack_unpack_zip_roundtrip_and_validation",
+            "status": "passed",
+            "duration_ms": 5409,
+            "repeat_index": 1
+        },
+        {
+            "name": "pane_view_options_toggle_file_extensions_navigation_filter_bar",
+            "status": "passed",
+            "duration_ms": 352,
+            "repeat_index": 1
+        },
+        {
+            "name": "pane_filter_bar_inline_workflow",
+            "status": "passed",
+            "duration_ms": 315,
+            "repeat_index": 1
+        },
+        {
+            "name": "pane_view_options_toggle_thumbnails",
+            "status": "passed",
+            "duration_ms": 397,
+            "repeat_index": 1
+        },
+        {
+            "name": "pane_view_options_toggle_preview_pane_tabs_and_selection",
+            "status": "passed",
+            "duration_ms": 777,
+            "repeat_index": 1
+        },
+        {
+            "name": "pane_view_options_preview_uses_configured_embedded_viewer_and_preserves_focus",
+            "status": "passed",
+            "duration_ms": 4726,
+            "repeat_index": 1
+        },
+        {
+            "name": "pane_view_options_preview_rejects_zero_new_embedded_children",
+            "status": "passed",
+            "duration_ms": 300,
+            "repeat_index": 1
+        },
+        {
+            "name": "pane_view_options_preview_rejects_multiple_new_embedded_children",
+            "status": "passed",
+            "duration_ms": 757,
+            "repeat_index": 1
+        },
+        {
+            "name": "pane_view_options_preview_rejects_same_plugin_additional_embedded_child",
+            "status": "passed",
+            "duration_ms": 1657,
+            "repeat_index": 1
+        },
+        {
+            "name": "pane_view_options_preview_rejects_same_plugin_replacement_embedded_child",
+            "status": "passed",
+            "duration_ms": 736,
+            "repeat_index": 1
+        },
+        {
+            "name": "pane_view_options_preview_uses_builtin_embedded_viewer_with_empty_associations",
+            "status": "passed",
+            "duration_ms": 401,
+            "repeat_index": 1
+        },
+        {
+            "name": "pane_view_options_preview_falls_back_to_item_properties_when_no_embedded_preview_matches",
+            "status": "passed",
+            "duration_ms": 753,
+            "repeat_index": 1
+        },
+        {
+            "name": "pane_view_options_preview_properties_card_scrolls_and_uses_rainbow_theme",
+            "status": "passed",
+            "duration_ms": 1016,
+            "repeat_index": 1
+        },
+        {
+            "name": "pane_view_options_preview_pane_extends_without_function_bar",
+            "status": "passed",
+            "duration_ms": 622,
+            "repeat_index": 1
+        },
+        {
+            "name": "alternate_view_uses_configured_viewer_action",
+            "status": "passed",
+            "duration_ms": 732,
+            "repeat_index": 1
+        },
+        {
+            "name": "alternate_view_launches_external_viewer_action",
+            "status": "passed",
+            "duration_ms": 1462,
+            "repeat_index": 1
+        },
+        {
+            "name": "view_command_uses_configured_primary_viewer_action",
+            "status": "passed",
+            "duration_ms": 877,
+            "repeat_index": 1
+        },
+        {
+            "name": "view_with_disabled_action_reports_alert",
+            "status": "passed",
+            "duration_ms": 195,
+            "repeat_index": 1
+        },
+        {
+            "name": "view_with_launch_failure_reports_alert",
+            "status": "passed",
+            "duration_ms": 395,
+            "repeat_index": 1
+        },
+        {
+            "name": "alternate_view_without_configured_action_reports_alert",
+            "status": "passed",
+            "duration_ms": 378,
+            "repeat_index": 1
+        },
+        {
+            "name": "edit_with_disabled_action_reports_alert",
+            "status": "passed",
+            "duration_ms": 184,
+            "repeat_index": 1
+        },
+        {
+            "name": "edit_with_launch_failure_reports_alert",
+            "status": "passed",
+            "duration_ms": 188,
+            "repeat_index": 1
+        },
+        {
+            "name": "alternate_edit_without_configured_action_reports_alert",
+            "status": "passed",
+            "duration_ms": 189,
+            "repeat_index": 1
+        },
+        {
+            "name": "view_with_parameterized_command_uses_configured_viewer_action",
+            "status": "passed",
+            "duration_ms": 273,
+            "repeat_index": 1
+        },
+        {
+            "name": "view_with_parameterized_command_launches_external_viewer_action",
+            "status": "passed",
+            "duration_ms": 1203,
+            "repeat_index": 1
+        },
+        {
+            "name": "view_with_menu_populates_applicable_viewer_actions",
+            "status": "passed",
+            "duration_ms": 763,
+            "repeat_index": 1
+        },
+        {
+            "name": "edit_with_parameterized_command_launches_external_editor_action",
+            "status": "passed",
+            "duration_ms": 1334,
+            "repeat_index": 1
+        },
+        {
+            "name": "edit_command_uses_focused_primary_editor_action",
+            "status": "passed",
+            "duration_ms": 1367,
+            "repeat_index": 1
+        },
+        {
+            "name": "alternate_edit_launches_configured_editor_action",
+            "status": "passed",
+            "duration_ms": 1602,
+            "repeat_index": 1
+        },
+        {
+            "name": "edit_with_menu_populates_applicable_editor_actions",
+            "status": "passed",
+            "duration_ms": 745,
+            "repeat_index": 1
+        },
+        {
+            "name": "user_menu_populates_and_dispatches_configured_actions",
+            "status": "passed",
+            "duration_ms": 831,
+            "repeat_index": 1
+        },
+        {
+            "name": "user_menu_parameterized_command_reports_unavailable",
+            "status": "passed",
+            "duration_ms": 433,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_command_registered",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_opens_from_active_pane",
+            "status": "passed",
+            "duration_ms": 1626,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_folder_scope_collects_local_children_metadata",
+            "status": "passed",
+            "duration_ms": 9564,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_provider_collection_does_not_block_window",
+            "status": "passed",
+            "duration_ms": 3794,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_recursive_collection_skips_symlink_loops",
+            "status": "passed",
+            "duration_ms": 9,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_nonlocal_selection_fallback_metadata_unknown",
+            "status": "passed",
+            "duration_ms": 1,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_rules_recompute_preview",
+            "status": "passed",
+            "duration_ms": 4163,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_datetime_columns_match_macro_expansion",
+            "status": "passed",
+            "duration_ms": 475,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_created_macro_uses_collected_creation_time",
+            "status": "passed",
+            "duration_ms": 326,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_preview_context_menu_copies_rows",
+            "status": "passed",
+            "duration_ms": 410,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_preview_clipboard_honors_display_order",
+            "status": "passed",
+            "duration_ms": 433,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_stale_generation_payloads_are_ignored",
+            "status": "passed",
+            "duration_ms": 528,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_theme_accessibility_snapshot",
+            "status": "passed",
+            "duration_ms": 406,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_rule_controls_drive_preview",
+            "status": "passed",
+            "duration_ms": 658,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_debounces_text_preview",
+            "status": "passed",
+            "duration_ms": 399,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_uses_and_persists_settings",
+            "status": "passed",
+            "duration_ms": 669,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_manual_mode_controls_drive_preview",
+            "status": "passed",
+            "duration_ms": 561,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_manual_mode_target_change_blocks_until_reconciled",
+            "status": "passed",
+            "duration_ms": 1058,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_path_sort_uses_displayed_path_and_stable_ties",
+            "status": "passed",
+            "duration_ms": 301,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_executes_local_rename",
+            "status": "passed",
+            "duration_ms": 12110,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_refreshes_pane_after_success",
+            "status": "passed",
+            "duration_ms": 331,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_invokes_success_callback",
+            "status": "passed",
+            "duration_ms": 243,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_success_callback_parent_child_execution_order",
+            "status": "passed",
+            "duration_ms": 771,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_parent_child_directory_cache_notify_retargets_pinned_descendant",
+            "status": "passed",
+            "duration_ms": 1413,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_target_collection_respects_provider_cancellation",
+            "status": "passed",
+            "duration_ms": 13,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_reports_execution_summary",
+            "status": "passed",
+            "duration_ms": 309,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_collision_existing_and_duplicate_names",
+            "status": "passed",
+            "duration_ms": 260,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_destination_probe_failure_issue_id",
+            "status": "passed",
+            "duration_ms": 151,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_cancel_does_not_apply_remaining_rows",
+            "status": "passed",
+            "duration_ms": 189,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_falls_back_to_rename_item_when_bulk_unsupported",
+            "status": "passed",
+            "duration_ms": 183,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_executes_swap_rename",
+            "status": "passed",
+            "duration_ms": 290,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_executes_chain_rename",
+            "status": "passed",
+            "duration_ms": 252,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_directory_chain_undo_plan",
+            "status": "passed",
+            "duration_ms": 203,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_case_only_rename_not_treated_as_dependency",
+            "status": "passed",
+            "duration_ms": 253,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_partial_batch_failure_tracks_completed_rows",
+            "status": "passed",
+            "duration_ms": 223,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_omitted_item_completion_counts_row_failed",
+            "status": "passed",
+            "duration_ms": 254,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_temp_hop_reported_failure_counts_row_failed",
+            "status": "passed",
+            "duration_ms": 222,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_swap_failure_rolls_back_orphan_temp",
+            "status": "passed",
+            "duration_ms": 229,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_swap_cancel_after_temp_hop_rolls_back",
+            "status": "passed",
+            "duration_ms": 208,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_executes_three_member_cycle",
+            "status": "passed",
+            "duration_ms": 241,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_cancel_mid_batch_tracks_completed_rows",
+            "status": "passed",
+            "duration_ms": 199,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_execute_while_busy_returns_busy",
+            "status": "passed",
+            "duration_ms": 175,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_close_while_execution_inflight_is_bounded",
+            "status": "passed",
+            "duration_ms": 288,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_report_survives_view_only_refreshes",
+            "status": "passed",
+            "duration_ms": 19684,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_post_execution_target_refresh_is_linear",
+            "status": "passed",
+            "duration_ms": 7084,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_duplicate_source_target_refresh_consumes_distinct_rows",
+            "status": "passed",
+            "duration_ms": 214,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_manual_sort_like_preview_with_hide_unchanged",
+            "status": "passed",
+            "duration_ms": 225,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_executes_case_only_local_rename",
+            "status": "passed",
+            "duration_ms": 189,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_blocks_invalid_preview_execution",
+            "status": "passed",
+            "duration_ms": 171,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_blocks_missing_provider_path_identity",
+            "status": "passed",
+            "duration_ms": 153,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_executes_parent_child_deepest_first",
+            "status": "passed",
+            "duration_ms": 688,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_blocks_destination_created_after_preview",
+            "status": "passed",
+            "duration_ms": 193,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_blocks_source_missing_after_preview",
+            "status": "passed",
+            "duration_ms": 193,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_helper_menus_expose_canonical_insertions",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_window_helper_buttons_insert_into_rule_fields",
+            "status": "passed",
+            "duration_ms": 251,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_rename_multi_selection_opens_batch_rename",
+            "status": "passed",
+            "duration_ms": 204,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_rename_single_file_uses_standard_prompt",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_rename_file_prompt_batch_button_opens_batch_rename",
+            "status": "passed",
+            "duration_ms": 250,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_rename_folder_prompt_batch_button_opens_batch_rename",
+            "status": "passed",
+            "duration_ms": 30195,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_preview_macro_regex_case_validation",
+            "status": "passed",
+            "duration_ms": 2,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_engine_provider_path_identity",
+            "status": "passed",
+            "duration_ms": 3,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_path_identity_parser",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_engine_macro_alias_datetime_regex_tokens",
+            "status": "passed",
+            "duration_ms": 3,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_engine_leaf_splitter_matches_filesystem",
+            "status": "passed",
+            "duration_ms": 2,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_engine_recompute_stats_after_contextual_issue",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_manual_mode_line_count_validation",
+            "status": "passed",
+            "duration_ms": 2,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_engine_warnings_and_remaining_transforms",
+            "status": "passed",
+            "duration_ms": 3,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_engine_remaining_validation_transform_coverage",
+            "status": "passed",
+            "duration_ms": 5,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_engine_regex_match_failure_and_whole_word_captures",
+            "status": "passed",
+            "duration_ms": 18,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_engine_reserved_device_names_and_counter_width",
+            "status": "passed",
+            "duration_ms": 6,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

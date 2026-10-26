@@ -14,7 +14,9 @@ function Get-RSText {
         [string]$Path
     )
 
-    return Get-Content -LiteralPath (Join-Path $script:RepositoryRoot $Path) -Raw
+    Import-Module (Join-Path $PSScriptRoot '../Modules/Build/RedMonitorDependency.psm1') -Force
+    $resolved=Resolve-RSRedMonitorTestInput -RepoRoot $script:RepositoryRoot -Path $Path
+    return Get-Content -LiteralPath $resolved -Raw
 }
 
 function Assert-RSEqual {
@@ -119,9 +121,28 @@ function New-RSValidationGitFixture {
     }
 }
 
+function New-RSTestRunArchiveFixture {
+    <#
+    .SYNOPSIS
+        Allocates a unique, caller-owned archive transaction fixture in an already marked sandbox.
+    #>
+    param([Parameter(Mandatory = $true)][string]$TestRoot)
+    $id = (New-RSTestRunContext -RepoRoot $script:RepositoryRoot -TestRootOverride $TestRoot).RunId
+    $source = Assert-RSTestSandboxContainedPath -TestRoot $TestRoot -Path (Join-Path $TestRoot "runs\$id") -RequireDescendant
+    [void][IO.Directory]::CreateDirectory($source)
+    $payload = Join-Path $source 'unique.txt'
+    [IO.File]::WriteAllText($payload, 'synthetic archive regression evidence')
+    return [pscustomobject]@{
+        Root = $TestRoot; Id = $id; Source = $source; Payload = $payload
+        Destination = Join-Path $TestRoot "evidence\completed-runs\$id"
+        Records = Join-Path $TestRoot "evidence\run-archive-records\$id"
+    }
+}
+
 Export-ModuleMember -Function @(
     'Get-RSText',
     'Assert-RSEqual',
     'Assert-RSSequenceEqual',
-    'New-RSValidationGitFixture'
+    'New-RSValidationGitFixture',
+    'New-RSTestRunArchiveFixture'
 )

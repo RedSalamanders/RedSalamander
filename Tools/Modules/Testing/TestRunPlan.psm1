@@ -38,7 +38,12 @@ Export-ModuleMember -Function @(
     'Remove-RSTestSandboxExactRunDirectory',
     'Resolve-RSTestSandboxStaleRunTargets',
     'Remove-RSTestSandboxStaleRunDirectories',
+    'Save-RSTestSandboxRunEvidence',
+    'Save-RSTestSandboxStaleRunEvidence',
     'Get-RSTestSandboxDiskAudit',
+    'New-RSTestOwnedVirtualDiskMount',
+    'Remove-RSTestOwnedVirtualDiskMount',
+    'Get-RSTestOwnedVirtualDiskReceiptPaths',
     'Get-RSSelfTestArtifactRoot',
     'Get-RSSelfTestArguments',
     'Get-RSSelfTestListArguments',
@@ -66,4 +71,5 @@ Export-ModuleMember -Function @(
     'Convert-RSTestRunSummaryToGitHubStepSummary',
     'Get-RSCommandsSelfTestFamilies',
     'Get-RSTestRunPlan'
+    'Get-RSPrDeferredTestPlan'
 )

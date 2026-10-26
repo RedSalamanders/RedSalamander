@@ -1,4 +1,25 @@
 # Official Build Toolchain Identity
+## External RedMonitor build boundary
+
+RedMonitor is an independent project. RedSalamander vendors only Client.h and its MIT notice under
+ThirdParty/RedMonitor; Dependencies/RedMonitor.lock.json records the exact upstream commit, API and
+file hashes. Ordinary builds run local-only verification and add the public include directory. The
+explicit Tools/Update-RedMonitorClient.ps1 command fetches only those two files. The compatibility
+Tools/Restore-RedMonitor.ps1 entrypoint now verifies that local client and rejects viewer requests.
+
+Every first-party native project with ClCompile inputs verifies before PrepareForBuild, including a
+direct plugin build that does not reference Common. Resource-only and external dependency projects
+are excluded. Real MSBuild controls prove valid direct admission, tampered-header rejection before
+admission, and both exclusions; offline verifier controls cover the immutable manifest and file bytes.
+
+The full behavioral receipt closure includes the lock, header, license and local verification tools.
+There are no viewer/test/satellite compatibility projects, helper build/staging operations, or helper
+runtime artifacts in consumer receipts/packages. RedMonitor owns its own production Release ZIP and
+installation. Debug may asynchronously launch an installed production helper from its two standard
+locations; missing helpers are harmless. No independent process is terminated. See the consumer
+contract in Specs/Core/Core_RedSalamanderMonitor.md. Standalone SDK qualification does not qualify
+RedSalamander Preferences, runtime or packaging.
+
 
 The MSIX project declares Debug, Release and ASan Debug for both x64 and ARM64. Solution mappings preserve the selected configuration; an ASan build must never package Release or ordinary Debug executables. Packaging remains an explicit operation rather than an automatic side effect of a sanitizer solution build, consistent across both architectures.
 
@@ -19,9 +40,20 @@ Synthetic restore tests exercise a checkout path whose Git hook paths exceed 260
 matching the governed Full sandbox depth. Their local Git clones enable long paths without
 changing global or developer-repository settings; focused runs must cover the same boundary.
 
+Contained process environment overrides distinguish removal from an empty value.
+`New-RSProcessStartInfo` and its contained launch callers remove a child key for an
+explicit `$null` override, retain a present empty key for `''`, and install exact
+nonempty values. Parameter binding must preserve that distinction before converting
+non-null values to strings. None of these child overrides changes the caller's
+environment. Constructor tests and an actual contained child cover all three states.
+
 ## Pinned DxUi consumption
 
-`Dependencies/DxUi.lock.json` selects API revision 2 and the single `DxUi.lib` target.
+`Dependencies/DxUi.lock.json` records the API revision the product has adopted (4) and selects the single `DxUi.lib`
+target. The pinned source states its own revision in `capabilities.json`, and the identity probe records it. Restore
+requires the two to match, before the library's own dependency restore: a pin that crosses a revision is adopted
+deliberately, by adapting the product to the revision's change notes (`CHANGELOG.md` and any pending `Changes/` notes in the library) and then updating the
+lock. `Tools/Update-DxUi.ps1` moves only the commit and leaves `apiRevision` alone.
 All DxUi-using production projects consume that pin: RedSalamander, RedConfigure, Monitor, Terminal
 and the viewer plugins. ProductUiTests, RedConfigureTests and PerformanceTests2 use the same imports.
 The old library and DxUiTests projects are retired. Shared implementation and control tests live
@@ -31,11 +63,28 @@ Consumers import `Build/RedSalamander.DxUi.props` and `.targets`; they never enu
 The root build restores the exact source with `Tools/Modules/Build/DxUiDependency.psm1`, or developers
 can use `Tools/Restore-DxUi.ps1` before an IDE build. Restore owns the repository/platform dependency
 lease, contains its native child processes and leaves sibling repositories unchanged.
+The clone enables Git long paths twice: a process-level `-c core.longpaths=true` covers `git init`, which copies its
+template hooks before the new repository has a configuration, and `clone -c` stores the setting in that repository so every
+later git command on the checkout (the clean-source check) works from a deep consumer root. User and global Git
+configuration never change. The checkout is sparse (`/*`, `!/Measurements/`, `!/docs/gallery/`, `!/Specs/`): retained
+measurements, specifications and gallery sheets are most of the library's tracked files and none of its consumer
+interface. Omitted paths are not deletions, so the clean-source check still holds. After checkout the restore requires a
+clean status (a checkout can name files it could not write and still exit 0) and the paths restore and build read
+(`capabilities.json`, `vcpkg-install.ps1`, `Tools/ConsumerBuild.psm1`, `Build/DxUi.Consumer.props`/`.targets`,
+`src/DxUi.vcxproj`, `include`). A restore that fails removes only the partial checkout it created, beneath the guarded
+dependency root, so the next run clones again. A restore test from a 160-character root, where a kept library file's
+restored path passes MAX_PATH, covers all of it. Long paths do not lift the 258-character Win32 limit on a current
+directory, which `git -C` needs, so the checkout directory (the consumer root plus 72 characters) must stay within it: a
+root of at most 186 characters.
 
 Separate platform properties select an output fingerprint containing source/API, compiler host and
 compiler/linker/MSBuild/SDK identities, CRT family and STL annotation policy. RedSalamander explicitly
 sets `DxUiDisableStlAnnotations=true` to match its ordinary vcpkg C++ dependencies; ASAN heap/stack
 instrumentation remains required. Debug, Release and ASan Debug on x64/ARM64 are the target matrix.
+The output directory under `.build/dependencies/DxUi` is the fingerprint's first 16 hexadecimal
+characters (64 bits), which keeps the nested vcpkg tool, build-tree and archive paths short. It is a
+lookup key only: `DxUi.identity.<Platform>.json` and every module sidecar retain the full SHA-256
+fingerprint, and provenance rejects a linker command that names any other archive path.
 
 The tracked lock participates in existing source and project-graph identities. A modified managed
 source fails snapshot acquisition; missing or dirty source prevents build-receipt reuse. Successful
@@ -211,9 +260,17 @@ in either direction.
 `RSBuildCompilerDebugInformation` is an invocation-wide, receipt-bound build input with
 exact values `ProgramDatabase` (the default) or `Embedded`. `Embedded` maps first-party
 C++ compilation to `/Z7`, keeping compiler debug records in object files while preserving
-normal final linker PDB output. The Full validation runner uses this mode only for the
-test-enabled full-profile build and post-writer re-attestation, where a complete Rebuild
+normal final linker PDB output. `ProgramDatabase` preserves the normal profile policy, including
+Debug Edit and Continue; Release and ASan Debug use the compiler PDB format. Embedded mode updates
+existing `ClCompile` items as well as defaults so explicit ASan metadata cannot silently retain `/Zi`.
+Real MSBuild evaluation controls cover every compile item in representative Common, plugin, app and
+test projects across all six profiles and both policies, including the exact shared-TU `/MP` exception.
+The Full validation runner uses this mode only for the
+test-enabled full-profile build, its nested artifact-writing deployment tests and post-writer re-attestation,
+where a complete Rebuild
 must coexist with disjoint worktree builds without sharing MSVC's process-global compiler-PDB service.
+Nested writers reuse `Get-RSBuildEnvironmentOverrides -Suite Full`; they must not reconstruct only
+the test-enable flag or silently change the selected compiler debug-information mode.
 MSVC 14.51 has a separate `/Z7` + `/MP` internal-compiler failure in the shared,
 template-heavy `Common/SearchTextHelpers.cpp` translation unit. Embedded-mode builds
 therefore compile that one translation unit without `/MP`; solution, project, and all
@@ -228,6 +285,44 @@ executable against production libraries that intentionally omit test hooks. When
 value is true, those projects retain their declared application/library types. Individual
 projects MUST NOT override `RSBuildEnableTests`; mixed test surfaces inside one build graph
 invalidate both ABI assumptions and receipt truthfulness.
+
+#### Distributable test surface
+
+A test-enabled (`ENABLE_TESTS`) build MUST never be distributed, whatever its configuration.
+Test-enabled Release remains valid for validation (Full keeps `RSBuildEnableTests=true`), but
+its outputs are never package inputs. Every distributable path builds with
+`RSBuildEnableTests=false` and fails closed rather than packaging a test surface:
+
+- `build.ps1` refuses `-Zip`, `-Msi`, `-Msix`, `-GenerateWingetManifest`, and
+  `-OfficialRelease` before any build when the effective tests setting would be true: the
+  process `RSBuildEnableTests` is `true`, or it is unset and the configuration is not Release
+  (whose default is tests on). It and the standalone `Installer/msix/build-msix.ps1` pass
+  `/p:RSBuildEnableTests=false` to the MSIX packaging project so its project references cannot
+  be rebuilt test-enabled.
+- The reusable build workflow fails a call that requests `official_release` together with
+  `run_full_tests` or a configuration other than Release; `release.yml` builds Release and never
+  requests `run_full_tests`.
+- `Common/VersionInfo.rc` stamps every test-enabled first-party executable and DLL with
+  `VS_FF_SPECIALBUILD` and the version string `SpecialBuild` =
+  `RedSalamander.TestSurface=ENABLE_TESTS`. A production build carries neither.
+- Native test-only entry points use reserved, case-sensitive export names: a name containing
+  `SelfTest` or `ForTest`, or a C name that starts with `RedSalamander` and continues with
+  `Test` or `Debug` (`SelfTest|ForTest|^RedSalamander\w*(Test|Debug)`). Production exports
+  MUST NOT use these forms. `Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1` holds the reviewed
+  production export list and fails on any other first-party C export (`__declspec(dllexport)` or
+  `PLUGFACTORY_API`) outside the reserved forms. The version marker is the primary guard: it
+  covers every first-party binary, including `Common.dll`, whose `COMMON_API` C++ exports the
+  export-name scan does not review; the scan is defense in depth for C entry points.
+- `Tools/Modules/Packaging/ReleaseArtifactPolicy.psm1` parses each packaged PE image without
+  loading it and rejects the version marker, any reserved test export, and any malformed image.
+  Release portable ZIP packaging (the staged archive), MSI packaging (the staged directory),
+  MSIX packaging (the produced package), `build.ps1` package outputs, and the release workflow's
+  final artifact gate all run that check. MSBuild publishes an MSIX before it can be inspected,
+  so a rejected MSIX is deleted with its package folder beneath `.build\AppPackages` before the
+  failure is reported, while the packaging lease is held and never through a reparse point
+  (one refuses the removal and the package must not be distributed); checks made after the
+  lease is released never delete. Debug portable ZIPs are diagnostic, are never
+  published, and would fail the release gate.
 
 For C++ projects, the evaluated `LibraryPath` used to materialize the build child's
 `LIB` environment MUST omit nonexistent directories. Missing optional
@@ -274,6 +369,12 @@ after its build and is attested in that executable's receipt closure.
 `RedSalamanderSearchService.exe` and `sqlite3.dll` are the current required pair. Staging
 and cleanup ownership are separate obligations: copying after one project's Build cannot
 protect against a different project's later Clean; the shared-history guard above does.
+
+The same ownership rule applies to Visual C++ `CoreCppClean`. Its native cleanup task
+MUST exclude other projects' DLLs in the shared output directory while retaining cleanup
+of the exact current target and private intermediates, including when a test project
+becomes a production Utility node. Common MSBuild `CoreClean`/`FileWrites` coverage alone
+does not qualify this path; build-toolchain tests also execute the installed native C++ task.
 
 For `ASan Debug`, the shared build target MUST copy the platform-specific
 `clang_rt.asan_dynamic-*.dll` before writing application artifact manifests and MUST
@@ -431,6 +532,90 @@ diagnostic rather than inheriting a package from a populated local install root.
 When source behavior is audited against one dependency version, `version>=` alone
 is insufficient because the baseline may select a newer default; the manifest MUST
 also carry an exact override until that behavior is re-audited.
+
+In this repository `builtin-baseline` and the `vcpkg-tool.json` commit name the same vcpkg commit; no reviewed
+divergence is recorded. The offline pin contract (`Tools/Tests/VcpkgInstallSafety.Tests.ps1`, "Vcpkg dependency pins")
+fails when the two differ, unless that exact baseline and tool pair is added to its reviewed-divergence table and to this
+section. It also fails when a direct `version>=` floor exceeds the exact override of the same port (vcpkg silently builds
+the override, so the manifest would advertise a version never built), when the `aws-sdk-cpp` override is not paired with
+its audited `aws-crt-cpp` override, when the Dependabot rules below are removed, and, whenever the executable checkout
+`.build/vcpkg-tool` is present at the pinned commit, when a floor or override has no exact entry in that checkout's
+version database.
+
+Dependabot's vcpkg feed MUST NOT move these audit-gated pins. It ignores `github.com/microsoft/vcpkg` (the
+`builtin-baseline`), because it proposes the newest release tag, which can be older than the commit both pins name: it
+proposed exactly such a downgrade on 2026-09-14 (#98) and 2026-10-05 (#111). It ignores `aws-sdk-cpp` and `aws-crt-cpp`,
+which move only together as the re-audited exact-override pair (see the AWS paragraph below and
+[FileSystem_S3.md](../FileSystem/FileSystem_S3.md)). A dependency change merges only with a green CI build, including
+when CI cannot start.
+
+Dependabot also MUST NOT propose any other vcpkg port update. It cannot move the baseline together with a port floor, so
+a floor it raises is absent from the pinned baseline and the PR is unmergeable on its own: #111-#113 did exactly that and
+#117 (`sqlite3` `3.53.4#1` to `3.53.4#2`) repeated it after the ignores above landed. `.github/dependabot.yml`
+therefore carries an unrestricted wildcard ignore (`dependency-name: "*"`, no `update-types` or `versions`) under the
+`ignore:` list of its vcpkg block, and the offline pin contract fails without it. The wildcard ignore is the required
+mechanism: the vcpkg block itself stays declared (the pin and core-stack group contracts check it), and
+`open-pull-requests-limit: 0` is not a substitute because GitHub applies it to version updates only, while ignore rules
+also cover security updates.
+
+Updating vcpkg dependencies is therefore a manual, single reviewed change:
+
+1. Choose the target vcpkg commit. Move `vcpkg-tool.json` (executable revision) and `vcpkg.json` `builtin-baseline`
+   to that same commit together, since a newer baseline can require a newer tool schema.
+2. Raise the affected `version>=` floors and exact overrides in the same change, keeping every floor at or below its
+   override, and keep the `aws-sdk-cpp` and `aws-crt-cpp` overrides on an audited pair. Moving that pair needs the
+   re-audit described in the AWS paragraph below and [FileSystem_S3.md](../FileSystem/FileSystem_S3.md).
+3. Prove availability with the governed installer gate: `vcpkg-install.ps1` against the new tool and baseline on a clean
+   restore, and the offline pin contract (`Tools/Tests/VcpkgInstallSafety.Tests.ps1`), which checks each floor and
+   override against the pinned checkout's version database.
+4. Merge only with a green CI build.
+
+The governed installer pins every triplet it builds to the Visual Studio installation and the default MSVC toolset the
+build discovers. vcpkg otherwise builds with the newest toolset of the installation it prefers. That toolset can lack a
+compiler for a target (in the historical 14.51-default installation, the side-by-side 14.52 preview lacked an x64-hosted ARM64 compiler, so every fresh
+ARM64 install failed), and for the compiled libraries linked into the product binaries (curl, 7-Zip, libjpeg-turbo) it is
+newer than the toolset that links them, a known link hazard. `vcpkg-install.ps1` takes the installation as `build.ps1`
+does (GitHub Actions: the workflow-selected MSBuild; otherwise the newest installation with MSBuild that vswhere reports)
+and the toolset from its `VC\Auxiliary\Build\Microsoft.VCToolsVersion.default.txt`, before any lock, staging directory or
+download; a missing or malformed file fails and names the file and the repair. For each selected triplet it writes
+`.build\vcpkg-triplets\<platform>\<triplet>.cmake`: the selected vcpkg root's own triplet (`triplets\`, then
+`triplets\community\`) copied unchanged in its own line endings, then `set(VCPKG_VISUAL_STUDIO_PATH ...)` and
+`set(VCPKG_PLATFORM_TOOLSET_VERSION "<major.minor>")`, rewritten only when its bytes change. It passes
+`--overlay-triplets=<that directory>` to `vcpkg install`. The custom-triplet rules above are unchanged (leaf names only,
+x64-/arm64- prefix mapping). A different triplet is a different package ABI hash, so the first install after this
+change, and after a change of installation or default major.minor, rebuilds the packages; vcpkg's binary cache then
+serves any root whose triplet text is identical. The functions live in `Tools/Modules/Build/VcpkgInstallSafety.psm1` and
+keep the contract of DxUi's `Tools/VisualStudio.psm1` and `Tools/VcpkgTriplet.psm1`, a documented consumer interface of
+the pinned library. They are not imported, because this installer runs before the DxUi checkout is restored (the Ghostty
+ARM64 workflow installs first); a parity test compares both implementations whenever the pinned checkout is restored.
+MSBuild's own manifest-mode install is not limited to an empty tree: vcpkg's `vcpkg.targets` runs it whenever `vcpkg.json`
+(or `vcpkg-configuration.json`) is newer than `.build\vcpkg_installed\<platform>\.msbuildstamp-<triplet>.<host>.stamp`, a
+stamp the governed installer never writes. It uses the same overlay. For first-party projects `Directory.Build.props`
+appends `"--overlay-triplets=.build\vcpkg-triplets\<platform>"` (absolute, quoted, no trailing backslash) to
+`VcpkgAdditionalInstallOptions` only when that directory holds `<triplet>.cmake`, so vcpkg never receives a directory that
+does not exist. Before each MSBuild run, inside the platform dependency lock, `build.ps1` refreshes that file through the
+same functions, installation and default toolset, copying the stock triplet of the vcpkg root MSBuild's integration
+installs with (an explicit `VcpkgRoot`, else the installation's bundled `VC\vcpkg`). The `x64-windows` and `arm64-windows`
+stock triplets of the bundled (VS 18) and pinned roots are byte-identical, so both writers produce the same bytes and do not
+alternate the package ABI. `build.ps1` skips the refresh when `VcpkgManifestInstall=false` or when no such root has the
+triplet. MSBuild's install still runs its own vcpkg root, scripts and `vcpkg\status` database, so its package ABIs differ
+from the installer's staged ones: when its stamp is stale it rebuilds what its own status lacks, with the pinned toolset.
+The inline install of the reusable CI workflow does not call the installer and keeps vcpkg's default toolset choice; CI then
+builds with `VcpkgManifestInstall=false`. The pin matters where the default toolset is older than the newest one installed
+beside it (the historical VS 18 Insiders 14.51-default/14.52-preview installation), above all for an ARM64 target on an x64 host when only the default toolset has
+that compiler.
+
+AWS SDK `1.11.880` is paired with the exact `aws-crt-cpp` `0.43.4` override,
+matching the SDK tag's `crt/aws-crt-cpp` submodule. CRT `0.43.0` lacks the
+ByteCursor Base64 overloads and encoded/decoded-length functions used by that
+SDK, so a successful dependency restore alone cannot qualify the pair: clean
+SDK compilation and the consumer Release build are required. The `aws-sdk-cpp`
+floor equals that override, and the pair moves only together after that
+re-audit. The vcpkg tool and registry baseline pins name one commit whose
+version database contains every current manifest floor and override, including
+the SQLite (`3.53.4#1`), libjpeg-turbo, curl, AWS SDK and CRT entries.
+See [the SDK's CRT source](https://github.com/aws/aws-sdk-cpp/tree/1.11.880/crt/aws-crt-cpp)
+and [the paired CRT declarations](https://github.com/awslabs/aws-crt-cpp/blob/v0.43.4/include/aws/crt/Types.h).
 
 Official clean-runner builds MUST NOT assume that the Visual Studio image includes
 user-wide vcpkg MSBuild integration. After the governed install succeeds, the
@@ -601,3 +786,24 @@ The reusable CI build step checks the native build exit status immediately, befo
 any matrix validator or other native command can overwrite it. A compiler failure
 must fail the build step and prevent native test/provenance acceptance; a missing
 receipt is not the primary diagnosis for an already failed compilation.
+
+## MSVC 14.52 Release compilation and linkage
+
+All native profiles require the installed default MSVC **14.52.x** family with the v145 platform toolset. Discovery remains installation-independent. Restore rejects another default family before dependency compilation; MSBuild validates the selected family before compilation. Record exact patch/compiler/linker identities; GL archives and their final links require exactly matching tools.
+
+Release explicitly uses /Gy and /GL, /OPT:REF and full /LTCG, with ordinary incremental linking disabled. Debug/ASan diagnostic optimization settings are unchanged. Preserve existing project-specific size/speed, warning, ISA, CRT and subsystem choices. Evaluated-profile tests check all six native configurations, pinned archives, and negative compiler/linker controls; resource-only satellites contain no C++ bodies.
+
+Project references explicitly forward WholeProgramOptimization and VCToolsVersion into the adopted DxUi archive. Dependency identity includes releaseOptimizationPolicy=Gy-REF-GL-LTCG-full-v1 and is rehashed before choosing writable outputs. This separates the new archive policy without changing the adopted API/source pin. Keep header/library/compiler/CRT identities matched.
+
+LTO is scoped to each final EXE/DLL and does not guarantee reduced size or improved speed. Retain baseline/candidate image hashes, sizes, build/link durations, fixture and dependency identities, every runtime/resource sample and concurrent-activity observations. Different compiler policies are an intentional experiment, not identical-profile evidence reuse. Cross-built ARM64 and headless functional passes cannot close native ARM64, interactive, or existing product/performance acceptance gates.
+
+### CI toolchain preparation and audit evidence
+
+Active Windows compilation/tooling workflows use the local setup-msvc composite action. It reads RequiredMsvcToolsVersion, verifies the discovered default compiler, linker, ASan target libraries, SDK and x64 LLVM scanner tools, and provisions Visual Studio 2026 Insiders only on GitHub-hosted runners when necessary. The Microsoft-signed bootstrapper runs under RUNNER_TEMP; existing installations are retained. A channel that no longer supplies 14.52 fails rather than accepting another compiler. Local -VerifyOnly is read-only; automatic local installation is refused. Hosted provisioning remains a separate unexecuted branch until its actual CI receipt exists.
+
+[Full evaluated settings and differences](../../Measurements/Toolchain/2026-10-23-msvc1452/Settings.md) include both platform/configuration matrices and exact per-file metadata. [Microsoft installation guidance](https://learn.microsoft.com/en-us/cpp/overview/acquire-msvc) documents channel-specific acquisition. The published [runner image inventory](https://github.com/actions/runner-images/blob/main/images/windows/Windows2025-VS2026-Readme.md) does not establish that the required toolset is installed; runtime versions alone are also not compiler proof.
+
+
+### MSVC 14.52 ARM64 AWS backend compatibility
+
+ARM64 dependency installation selects Build/vcpkg-ports/aws-c-common, preserving aws-c-common 1.0.0, its upstream SHA512 and existing CRT patch. A compiler/architecture-scoped CMake helper applies /Ob1 only to source/hash_table.c under the exact MSVC C compiler 19.52.37025.0, retaining /O2 elsewhere. The exact 14.52.37025 command crashes in lookup3.inl:640 with C1001; removing /MP, using /Zi, or /O1 does not repair it, while /Ob1 and /Ob0 compile. Canonical package/product builds remain required. This ARM64-only dependency change has no effect on the x64 size/performance experiment. Native ARM64/S3 performance remains unmeasured. The CMake regression checks affected and other compiler/architecture/file combinations; retained repros live under .build/msvc1452/compiler-repro-attempt2/3.

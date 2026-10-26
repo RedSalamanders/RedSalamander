@@ -1,0 +1,140 @@
+[
+  {
+    "file": "build.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-build.log",
+    "bytes": 28226,
+    "sha256": "2a82a19c4287261e0226efcf407cc27d30582681973156252a0436c15efaa5b7"
+  },
+  {
+    "file": "d404fc90-isolated-x64-Debug-pending-gate-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-pending-gate-summary.json",
+    "bytes": 497,
+    "sha256": "5f21ccf62b85212a9691b61ae0af344eebac814cfcbc6684022a3b746eaed148"
+  },
+  {
+    "file": "pending-gate.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-pending-gate.log",
+    "bytes": 1790,
+    "sha256": "400e9308840ed030e5757465d5a27e900e7e8b141a91336be7c0b70529819394"
+  },
+  {
+    "file": "pending-gate-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-pending-gate\\final-results\\run-all-tests-results.json",
+    "bytes": 11405,
+    "sha256": "57dc0d4f8edbe781f664ae29b3b758cef832f627fdc8b4cf7f31ecfe9458c8a0"
+  },
+  {
+    "file": "pending-gate-compare_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-pending-gate\\archive\\4cb089111a23\\CompareDirectories\\2026-09-13_104703\\compare_results.json",
+    "bytes": 2023,
+    "sha256": "427344b94cfcb26c74b1d164892069dcc6810be57687655a4ca009c00e0811bc"
+  },
+  {
+    "file": "d404fc90-isolated-x64-Debug-post-pending-gate-module-identities.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-post-pending-gate-module-identities.json",
+    "bytes": 7274,
+    "sha256": "5635b3816256bc179032cccfa78350eb941c87234459e42a4bdded77eeef863c"
+  },
+  {
+    "file": "d404fc90-isolated-x64-Debug-removal-focus-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-removal-focus-summary.json",
+    "bytes": 542,
+    "sha256": "2245a21c369c50ea27d2c724f318fe746cba4227fc69b16dea700fa6b3fd2c60"
+  },
+  {
+    "file": "removal-focus.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-removal-focus.log",
+    "bytes": 1729,
+    "sha256": "308f64d59078bda04b2b3a972ef9b4a468906ebe77ac16cae6a68e5bef0f884e"
+  },
+  {
+    "file": "removal-focus-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-removal-focus\\final-results\\run-all-tests-results.json",
+    "bytes": 12225,
+    "sha256": "324155298b925e3ca4864b4cffc57948533ffad4d962eb3540d464175ce74f1e"
+  },
+  {
+    "file": "removal-focus-commands_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-removal-focus\\archive\\4cb089111a23\\Commands\\2026-09-13_104732\\commands_results.json",
+    "bytes": 2443,
+    "sha256": "da5df41f8a9d525d969f6c21f9a7180f701e5d9f3089d3439a045ed155f1ece6"
+  },
+  {
+    "file": "d404fc90-isolated-x64-Debug-post-removal-focus-module-identities.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-post-removal-focus-module-identities.json",
+    "bytes": 7275,
+    "sha256": "f83ba87d2030ccb0f3d7608a8b038cc8ebcda099cd22fbfa36f13eeff7296072"
+  },
+  {
+    "file": "d404fc90-isolated-x64-Debug-bandwidth-clock-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-bandwidth-clock-summary.json",
+    "bytes": 507,
+    "sha256": "14b84b91c663541a6df3a0f044b5b019eda1e3cdafbb0095c8d2df7a72a16ce0"
+  },
+  {
+    "file": "bandwidth-clock.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-bandwidth-clock.log",
+    "bytes": 1786,
+    "sha256": "91ea446edc4b295aea88e47057e1e89b2d637eaccffaf3921f18d8f0d39a3681"
+  },
+  {
+    "file": "bandwidth-clock-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-bandwidth-clock\\final-results\\run-all-tests-results.json",
+    "bytes": 14936,
+    "sha256": "87661d714588c8dcd7f3228c9e7a0d552552b3eea109ce51901b1f3445326bfd"
+  },
+  {
+    "file": "bandwidth-clock-fileops_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-bandwidth-clock\\archive\\4cb089111a23\\FileOps\\2026-09-13_104846\\fileops_results.json",
+    "bytes": 5187,
+    "sha256": "16789a2155166e5afcb97e0cd47394f4cbeea725bff8a81d70a41a8bcbb6defb"
+  },
+  {
+    "file": "d404fc90-isolated-x64-Debug-post-bandwidth-clock-module-identities.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-post-bandwidth-clock-module-identities.json",
+    "bytes": 7277,
+    "sha256": "56681a1004f4c0dfb842c3f04144bf1b736d4cd7eb3a133bf3393a4579c725b3"
+  },
+  {
+    "file": "d404fc90-isolated-x64-Debug-queue-after-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-queue-after-summary.json",
+    "bytes": 514,
+    "sha256": "eac084b53f8b84b8cc19b04d4c0e0e970d3851145e853d68077b9eb3f509a9f4"
+  },
+  {
+    "file": "queue-after.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-queue-after.log",
+    "bytes": 2799,
+    "sha256": "b2594f256e3cba9e6e9bc0e506ed48a72c372ab959c4d68d2266b8ef22d52f1a"
+  },
+  {
+    "file": "queue-after-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-queue-after\\final-results\\run-all-tests-results.json",
+    "bytes": 10792,
+    "sha256": "6a49b8689bbe0a8e1fd7dfee82589996751dbf04541e62d50d7571f2066a84f5"
+  },
+  {
+    "file": "queue-after-fileops_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-queue-after\\final-results\\fileops\\results.json",
+    "bytes": 1026,
+    "sha256": "9e4f86e901a59cf98abcaa2e64d5031052c6ebbe5b68626438cb63846df644eb"
+  },
+  {
+    "file": "d404fc90-queue-after-debug-live-identity.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-queue-after-debug-live-identity.json",
+    "bytes": 391,
+    "sha256": "953c21fc41e2310e5e526caa2013d463fb1e301dbce70207e8b11a0b477a42d9"
+  },
+  {
+    "file": "d404fc90-queue-after-debug-live-stacks.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-queue-after-debug-live-stacks.log",
+    "bytes": 445811,
+    "sha256": "48703c415ca07147f35fefa50c94ae511528ec74991ed21fae10d0cd150569be"
+  },
+  {
+    "file": "d404fc90-queue-after-debug-interruption.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-queue-after-debug-interruption.json",
+    "bytes": 369,
+    "sha256": "0e6c0dd006c89b83f134c0994458c6f43ee1bba647145d32af8e5b2c2126d772"
+  }
+]

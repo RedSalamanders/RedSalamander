@@ -4,12 +4,27 @@
     <ClCompile Include="dllmain.cpp" />
     <ClCompile Include="Factory.cpp" />
     <ClCompile Include="ViewerSpace.cpp" />
-    <ClCompile Include="ViewerSpace.cpp" />
+    <ClCompile Include="ViewerSpace.Layout.cpp" />
+    <ClCompile Include="ViewerSpace.Analysis.cpp" />
+    <ClCompile Include="ViewerSpace.Workspace.cpp" />
+    <ClCompile Include="..\..\Common\FileSystemPathIdentity.cpp" />
+    <ClCompile Include="..\..\Common\FileSystemRouteContract.cpp" />
+    <ClCompile Include="ViewerSpace.Model.cpp" />
+    <ClCompile Include="ViewerSpace.AnalysisHost.cpp" />
+    <ClCompile Include="ViewerSpace.NavigationHost.cpp" />
+    <ClCompile Include="ViewerSpace.Hosts.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="resource.h" />
     <ClInclude Include="ViewerSpace.ScanPolicy.h" />
     <ClInclude Include="ViewerSpace.h" />
+    <ClInclude Include="ViewerSpace.SlicedSort.h" />
+    <ClInclude Include="ViewerSpace.Memory.h" />
+    <ClInclude Include="ViewerSpace.Export.h" />
+    <ClInclude Include="ViewerSpace.ListingValidation.h" />
+    <ClInclude Include="ViewerSpace.AnalysisHost.h" />
+    <ClInclude Include="ViewerSpace.NavigationHost.h" />
+    <ClInclude Include="ViewerSpace.Hosts.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="ViewerSpaceResources.rc" />

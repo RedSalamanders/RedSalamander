@@ -1,0 +1,10 @@
+{
+  "basis": "Native exit code plus both output streams; DxUiTests.cpp emits suite markers on stderr. The original wrapper checked stdout only and is retained unchanged.",
+  "originalRecordSha256": "d378a1c7a71957f966e4273642b3dc4e2db88d2fdd30e7d2c192f53cd9f3f088",
+  "stdoutSha256": "4e26741b455745fd9f3c7f07a4eee4a4d2a7305863c060f33bcacf16dd7e3f89",
+  "stderrSha256": "de00d275b08c42deff75a4d05b49529a59c975a96a876a5edc44ae0c1b49c9bc",
+  "nativeExitCode": 0,
+  "themeStarted": true,
+  "themeCompleted": true,
+  "passed": true
+}

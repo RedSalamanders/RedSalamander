@@ -1,0 +1,22 @@
+[
+  {
+    "path": "Plugins/FileSystemCurl/FileSystemCurl.Imap.cpp",
+    "bytes": 160087,
+    "sha256": "9d14c643fc66e451fe0db6b8d29bfe1d62efbc86acf387f77cbdc9b5e1b6e193"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp",
+    "bytes": 720702,
+    "sha256": "4a3fb50fefa326e964e0490ab83ae722bddfaf6d275fd8950ed2e358e251376d"
+  },
+  {
+    "path": "Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md",
+    "bytes": 56867,
+    "sha256": "ed34f2a34c9aa8457ba07c5c076f5db7009f97c6ada8fda5949d6c33474bcda8"
+  },
+  {
+    "path": "Specs/Testing/Testing_PerformanceValidation.md",
+    "bytes": 115086,
+    "sha256": "ef3fa09fdbfab0923738f328ee9c86547fd822ad772f05533abef646d1471d20"
+  }
+]

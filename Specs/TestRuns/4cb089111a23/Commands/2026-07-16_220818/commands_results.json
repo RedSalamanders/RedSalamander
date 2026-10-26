@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-07-16T20:08:16.343Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands",
+    "duration_ms": 1228,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_unpack_prompt_uses_dxui_destination_unpacker_and_mask",
+            "status": "passed",
+            "duration_ms": 1218,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1
+}

@@ -1,0 +1,110 @@
+[
+  {
+    "variant": "baseline",
+    "source": "S:\\RedSalamander.Perf\\evidence\\i26-conflict-actions-baseline-20260920\\artifacts\\selftest\\last_run\\commands\\conflict-comparison\\common-name__480dip__fr-FR__144dpi.png",
+    "file": "baseline__common-name__480dip__fr-FR__144dpi.png",
+    "sha256": "eaaf3b640c5fe2a15f32c6f814b8f90ebcaf1eef49e62483ac2cf96c6cd04fa0",
+    "source_snapshot": "ccabfa903a0f1d29209c3eedb5f5894080a419b5861bdae85e06e39c1f957c4c",
+    "build_receipt": "0cc56d57136d23bd7f2861654447845f4c17019290b1c2792e22cd2162cfaab8",
+    "archive": "Z:\\src\\RedSalamander\\Specs\\TestRuns\\4cb089111a23\\Commands\\2026-09-20_190204-i26-conflict-actions-baseline"
+  },
+  {
+    "variant": "baseline",
+    "source": "S:\\RedSalamander.Perf\\evidence\\i26-conflict-actions-baseline-20260920\\artifacts\\selftest\\last_run\\commands\\conflict-comparison\\common-name__640dip__fr-FR__144dpi.png",
+    "file": "baseline__common-name__640dip__fr-FR__144dpi.png",
+    "sha256": "5f4e4e054859847ac8234d4a9ffb072005dfa8fd0a3170fb590d5e0782c42a96",
+    "source_snapshot": "ccabfa903a0f1d29209c3eedb5f5894080a419b5861bdae85e06e39c1f957c4c",
+    "build_receipt": "0cc56d57136d23bd7f2861654447845f4c17019290b1c2792e22cd2162cfaab8",
+    "archive": "Z:\\src\\RedSalamander\\Specs\\TestRuns\\4cb089111a23\\Commands\\2026-09-20_190204-i26-conflict-actions-baseline"
+  },
+  {
+    "variant": "baseline",
+    "source": "S:\\RedSalamander.Perf\\evidence\\i26-conflict-actions-baseline-20260920\\artifacts\\selftest\\last_run\\commands\\conflict-comparison\\common-name__760dip__fr-FR__144dpi.png",
+    "file": "baseline__common-name__760dip__fr-FR__144dpi.png",
+    "sha256": "1641d676e39b8ce0dcba19412f60954b889cdb1d9ef1fb53e5b8b4e5f2f716c5",
+    "source_snapshot": "ccabfa903a0f1d29209c3eedb5f5894080a419b5861bdae85e06e39c1f957c4c",
+    "build_receipt": "0cc56d57136d23bd7f2861654447845f4c17019290b1c2792e22cd2162cfaab8",
+    "archive": "Z:\\src\\RedSalamander\\Specs\\TestRuns\\4cb089111a23\\Commands\\2026-09-20_190204-i26-conflict-actions-baseline"
+  },
+  {
+    "variant": "baseline",
+    "source": "S:\\RedSalamander.Perf\\evidence\\i26-conflict-actions-baseline-20260920\\artifacts\\selftest\\last_run\\commands\\conflict-comparison\\conflict-comparison__480dip__fr-FR__144dpi.png",
+    "file": "baseline__conflict-comparison__480dip__fr-FR__144dpi.png",
+    "sha256": "b81f1a28519d2ab35f6b85af891b19cbfc29df125ecfda7f1b6dcf6a2007f326",
+    "source_snapshot": "ccabfa903a0f1d29209c3eedb5f5894080a419b5861bdae85e06e39c1f957c4c",
+    "build_receipt": "0cc56d57136d23bd7f2861654447845f4c17019290b1c2792e22cd2162cfaab8",
+    "archive": "Z:\\src\\RedSalamander\\Specs\\TestRuns\\4cb089111a23\\Commands\\2026-09-20_190204-i26-conflict-actions-baseline"
+  },
+  {
+    "variant": "baseline",
+    "source": "S:\\RedSalamander.Perf\\evidence\\i26-conflict-actions-baseline-20260920\\artifacts\\selftest\\last_run\\commands\\conflict-comparison\\conflict-comparison__640dip__fr-FR__144dpi.png",
+    "file": "baseline__conflict-comparison__640dip__fr-FR__144dpi.png",
+    "sha256": "231667e72ff3b42d3722ceefaa8ef116af3f5e8a5237013ddbc43b78a4e43585",
+    "source_snapshot": "ccabfa903a0f1d29209c3eedb5f5894080a419b5861bdae85e06e39c1f957c4c",
+    "build_receipt": "0cc56d57136d23bd7f2861654447845f4c17019290b1c2792e22cd2162cfaab8",
+    "archive": "Z:\\src\\RedSalamander\\Specs\\TestRuns\\4cb089111a23\\Commands\\2026-09-20_190204-i26-conflict-actions-baseline"
+  },
+  {
+    "variant": "baseline",
+    "source": "S:\\RedSalamander.Perf\\evidence\\i26-conflict-actions-baseline-20260920\\artifacts\\selftest\\last_run\\commands\\conflict-comparison\\conflict-comparison__760dip__fr-FR__144dpi.png",
+    "file": "baseline__conflict-comparison__760dip__fr-FR__144dpi.png",
+    "sha256": "fcdaba0ec93731570dc04d3cec5a97367f1b9f1224a529b0e96a18ff7a948594",
+    "source_snapshot": "ccabfa903a0f1d29209c3eedb5f5894080a419b5861bdae85e06e39c1f957c4c",
+    "build_receipt": "0cc56d57136d23bd7f2861654447845f4c17019290b1c2792e22cd2162cfaab8",
+    "archive": "Z:\\src\\RedSalamander\\Specs\\TestRuns\\4cb089111a23\\Commands\\2026-09-20_190204-i26-conflict-actions-baseline"
+  },
+  {
+    "variant": "candidate",
+    "source": "S:\\RedSalamander.Perf\\evidence\\i26-conflict-actions-candidate-20260920\\artifacts\\selftest\\last_run\\commands\\conflict-comparison\\common-name__480dip__fr-FR__144dpi.png",
+    "file": "candidate__common-name__480dip__fr-FR__144dpi.png",
+    "sha256": "2a5da460a2ab4ef1ebdab76a8ced77d2c0d3cb37078badb81a4b73a82c41cf55",
+    "source_snapshot": "924854b0fdaa39ac458baf74dd6f1e48d4ea258409914e478cd1ddf41a109d19",
+    "build_receipt": "6240c7188bb7afe97973f122da2cba65cc55754411362fa5c5a3eae2057494d6",
+    "archive": "Z:\\src\\RedSalamander\\Specs\\TestRuns\\4cb089111a23\\Commands\\2026-09-21_000342-i26-conflict-actions-candidate"
+  },
+  {
+    "variant": "candidate",
+    "source": "S:\\RedSalamander.Perf\\evidence\\i26-conflict-actions-candidate-20260920\\artifacts\\selftest\\last_run\\commands\\conflict-comparison\\common-name__640dip__fr-FR__144dpi.png",
+    "file": "candidate__common-name__640dip__fr-FR__144dpi.png",
+    "sha256": "617f46f9e90571360e560aff00b14158a4c2f112deb842896b3846bfaddfdfc2",
+    "source_snapshot": "924854b0fdaa39ac458baf74dd6f1e48d4ea258409914e478cd1ddf41a109d19",
+    "build_receipt": "6240c7188bb7afe97973f122da2cba65cc55754411362fa5c5a3eae2057494d6",
+    "archive": "Z:\\src\\RedSalamander\\Specs\\TestRuns\\4cb089111a23\\Commands\\2026-09-21_000342-i26-conflict-actions-candidate"
+  },
+  {
+    "variant": "candidate",
+    "source": "S:\\RedSalamander.Perf\\evidence\\i26-conflict-actions-candidate-20260920\\artifacts\\selftest\\last_run\\commands\\conflict-comparison\\common-name__760dip__fr-FR__144dpi.png",
+    "file": "candidate__common-name__760dip__fr-FR__144dpi.png",
+    "sha256": "b6bd868893af981824919d38dbf238b03682e13f452d4feafea07f90f42db783",
+    "source_snapshot": "924854b0fdaa39ac458baf74dd6f1e48d4ea258409914e478cd1ddf41a109d19",
+    "build_receipt": "6240c7188bb7afe97973f122da2cba65cc55754411362fa5c5a3eae2057494d6",
+    "archive": "Z:\\src\\RedSalamander\\Specs\\TestRuns\\4cb089111a23\\Commands\\2026-09-21_000342-i26-conflict-actions-candidate"
+  },
+  {
+    "variant": "candidate",
+    "source": "S:\\RedSalamander.Perf\\evidence\\i26-conflict-actions-candidate-20260920\\artifacts\\selftest\\last_run\\commands\\conflict-comparison\\conflict-comparison__480dip__fr-FR__144dpi.png",
+    "file": "candidate__conflict-comparison__480dip__fr-FR__144dpi.png",
+    "sha256": "88a3279533af1701f37413accab4dfa629c20e89a3da54e04bd657c3d08cff6e",
+    "source_snapshot": "924854b0fdaa39ac458baf74dd6f1e48d4ea258409914e478cd1ddf41a109d19",
+    "build_receipt": "6240c7188bb7afe97973f122da2cba65cc55754411362fa5c5a3eae2057494d6",
+    "archive": "Z:\\src\\RedSalamander\\Specs\\TestRuns\\4cb089111a23\\Commands\\2026-09-21_000342-i26-conflict-actions-candidate"
+  },
+  {
+    "variant": "candidate",
+    "source": "S:\\RedSalamander.Perf\\evidence\\i26-conflict-actions-candidate-20260920\\artifacts\\selftest\\last_run\\commands\\conflict-comparison\\conflict-comparison__640dip__fr-FR__144dpi.png",
+    "file": "candidate__conflict-comparison__640dip__fr-FR__144dpi.png",
+    "sha256": "400fd0a6177f0412320e6161806367d9373ba96297c73006322d27090f446866",
+    "source_snapshot": "924854b0fdaa39ac458baf74dd6f1e48d4ea258409914e478cd1ddf41a109d19",
+    "build_receipt": "6240c7188bb7afe97973f122da2cba65cc55754411362fa5c5a3eae2057494d6",
+    "archive": "Z:\\src\\RedSalamander\\Specs\\TestRuns\\4cb089111a23\\Commands\\2026-09-21_000342-i26-conflict-actions-candidate"
+  },
+  {
+    "variant": "candidate",
+    "source": "S:\\RedSalamander.Perf\\evidence\\i26-conflict-actions-candidate-20260920\\artifacts\\selftest\\last_run\\commands\\conflict-comparison\\conflict-comparison__760dip__fr-FR__144dpi.png",
+    "file": "candidate__conflict-comparison__760dip__fr-FR__144dpi.png",
+    "sha256": "a73c490ff772da6170541f211806dd6b5f656eab398e2ba48e76a06fb4916552",
+    "source_snapshot": "924854b0fdaa39ac458baf74dd6f1e48d4ea258409914e478cd1ddf41a109d19",
+    "build_receipt": "6240c7188bb7afe97973f122da2cba65cc55754411362fa5c5a3eae2057494d6",
+    "archive": "Z:\\src\\RedSalamander\\Specs\\TestRuns\\4cb089111a23\\Commands\\2026-09-21_000342-i26-conflict-actions-candidate"
+  }
+]

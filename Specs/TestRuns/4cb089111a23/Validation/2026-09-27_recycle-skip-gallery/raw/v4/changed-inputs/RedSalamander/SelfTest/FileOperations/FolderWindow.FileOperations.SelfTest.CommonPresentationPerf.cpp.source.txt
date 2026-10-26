@@ -1,0 +1,408 @@
+// Included by FolderWindow.FileOperations.SelfTest.cpp under ENABLE_TESTS.
+// Keep this file byte-identical in the retained P0 and candidate builds.
+[[nodiscard]] bool RunFileOpsCommonPresentationPerf(SelfTestState& state) noexcept
+{
+    using namespace FileOperationsPopupInternal;
+    using Clock = std::chrono::steady_clock;
+
+    const auto reject = [](std::wstring_view reason) noexcept
+    {
+        AppendLog(std::format(L"FileOps common presentation perf: {}", reason));
+        return false;
+    };
+    if (! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread())
+        return reject(L"no-activation guard is absent");
+
+    auto* folder     = TryGetFolderWindow(state.mainWindow);
+    auto* operations = folder ? TryGetFileOps(folder) : nullptr;
+    if (! folder || ! operations || operations->HasActiveOperations() || operations->GetPopupHwndForSelfTest() || operations->GetIssuesPaneHwndForSelfTest())
+        return reject(L"File Operations must be idle with no retained popup or Issues pane");
+    std::vector<FolderWindow::FileOperationState::TaskDiagnosticEntry> existingDiagnostics;
+    std::vector<FolderWindow::FileOperationState::CompletedTaskSummary> existingCompleted;
+    operations->CollectDiagnostics(existingDiagnostics);
+    operations->CollectCompletedTasks(existingCompleted);
+    if (! existingDiagnostics.empty() || ! existingCompleted.empty())
+        return reject(L"pre-existing File Operations history would change the 128-row workload");
+
+    const auto previousTheme   = folder->GetTheme();
+    const bool previousFooter  = operations->GetPopupFooterOnly();
+    const bool previousDensity = operations->GetPopupCompactDensity();
+    Localization::LanguagePreference previousLanguage{};
+    if (g_settings.ui.has_value() && ! g_settings.ui->language.empty() && g_settings.ui->language != L"system")
+        previousLanguage = {Localization::LanguagePreferenceKind::Culture, g_settings.ui->language};
+    bool settingsRestored = false;
+    const auto restore    = [&]() noexcept
+    {
+        folder->ApplyTheme(previousTheme);
+        operations->SetPopupFooterOnly(previousFooter);
+        operations->SetPopupCompactDensity(previousDensity);
+        const HRESULT languageHr = Localization::ApplyLanguagePreference(previousLanguage);
+        const bool saveSettled   = operations->DebugFlushPendingSettingsSaveForSelfTest(10000u);
+        return SUCCEEDED(languageHr) && saveSettled;
+    };
+    auto restoreSettings = wil::scope_exit([&]() noexcept
+    {
+        if (! settingsRestored)
+            static_cast<void>(restore());
+    });
+    if (FAILED(Localization::ApplyLanguagePreference({Localization::LanguagePreferenceKind::Culture, L"fr-FR"})))
+        return reject(L"French resources unavailable");
+    auto theme                  = ResolveAppTheme(ThemeMode::Dark, L"FileOpsCommonPresentationPerf");
+    theme.reducedMotionOverride = true;
+    folder->ApplyTheme(theme);
+    operations->SetPopupFooterOnly(false);
+    operations->SetPopupCompactDensity(false);
+    if (! operations->DebugFlushPendingSettingsSaveForSelfTest(10000u))
+        return reject(L"fixture settings did not settle before measurement");
+
+    struct ResourceSample
+    {
+        const wchar_t* phase     = L"";
+        uint64_t privateBytes    = 0u;
+        uint64_t workingSetBytes = 0u;
+        uint64_t processCpuUs    = 0u;
+        uint64_t uiThreadCpuUs   = 0u;
+        uint64_t handles         = 0u;
+        uint64_t gdi             = 0u;
+        uint64_t user            = 0u;
+        uint64_t hosts           = 0u;
+        uint64_t attachments     = 0u;
+    };
+    std::array<ResourceSample, 13u> resources{};
+    size_t resourceCount = 0u;
+    std::array<uint64_t, 5u> popupRedraw8Us{};
+    std::array<uint64_t, 32u> churnUpdate8Us{};
+    std::array<uint64_t, 5u> issuesRedraw8Us{};
+    size_t popupRoundCount  = 0u;
+    size_t churnRoundCount  = 0u;
+    size_t issuesRoundCount = 0u;
+    RECT popupClient{};
+    RECT issuesClient{};
+    UINT popupDpi           = 0u;
+    UINT issuesDpi          = 0u;
+    uint64_t workloadDigest = 14695981039346656037ull;
+    const auto hashWord     = [&](uint64_t value) noexcept
+    {
+        for (unsigned int byte = 0u; byte < 8u; ++byte)
+        {
+            workloadDigest ^= (value >> (byte * 8u)) & 0xFFu;
+            workloadDigest *= 1099511628211ull;
+        }
+    };
+    const auto hashText = [&](std::wstring_view value) noexcept
+    {
+        hashWord(value.size());
+        for (const wchar_t codeUnit : value)
+            hashWord(static_cast<uint16_t>(codeUnit));
+    };
+    hashText(L"FileOps.CommonPresentation.v1;fr-FR;dark;reduced-motion;default-density;760x480-DIP");
+    hashWord(8u);                       // running cards
+    hashWord(128u);                     // one warning per Issues task
+    hashWord(32u);                      // churn batches
+    hashWord(8u);                       // mutations and synchronous redraws per batch
+    hashWord(4ull * 1024ull * 1024ull); // completed-byte increase per task/mutation
+    const auto fileTimeUs       = [](FILETIME value) noexcept { return ((static_cast<uint64_t>(value.dwHighDateTime) << 32u) | value.dwLowDateTime) / 10u; };
+    const DWORD uiThreadId      = GetCurrentThreadId();
+    const uint64_t initialHosts = DxUi::DebugGetAttachedWindowHostCount();
+    const uint64_t initialAttachments = DxUi::DebugGetSharedWindowHostAttachmentCountForThread(uiThreadId);
+    const auto sample                 = [&](const wchar_t* phase) noexcept -> bool
+    {
+        if (resourceCount >= resources.size())
+            return false;
+        const auto memory = FolderWindowFileOperationsStateInternal::CaptureProcessMemorySnapshot();
+        DWORD handleCount = 0u;
+        FILETIME created{}, exited{}, kernel{}, user{};
+        if (memory.privateBytes == 0u || memory.workingSetBytes == 0u || GetProcessHandleCount(GetCurrentProcess(), &handleCount) == FALSE ||
+            GetProcessTimes(GetCurrentProcess(), &created, &exited, &kernel, &user) == FALSE)
+            return false;
+        ResourceSample value{};
+        value.phase           = phase;
+        value.privateBytes    = memory.privateBytes;
+        value.workingSetBytes = memory.workingSetBytes;
+        value.processCpuUs    = fileTimeUs(kernel) + fileTimeUs(user);
+        if (GetThreadTimes(GetCurrentThread(), &created, &exited, &kernel, &user) == FALSE)
+            return false;
+        value.uiThreadCpuUs        = fileTimeUs(kernel) + fileTimeUs(user);
+        value.handles              = handleCount;
+        value.gdi                  = GetGuiResources(GetCurrentProcess(), GR_GDIOBJECTS);
+        value.user                 = GetGuiResources(GetCurrentProcess(), GR_USEROBJECTS);
+        value.hosts                = DxUi::DebugGetAttachedWindowHostCount();
+        value.attachments          = DxUi::DebugGetSharedWindowHostAttachmentCountForThread(uiThreadId);
+        resources[resourceCount++] = value;
+        return true;
+    };
+    const auto emitSamples = wil::scope_exit([&]() noexcept
+    {
+        for (size_t index = 0u; index < resourceCount; ++index)
+        {
+            const auto& value = resources[index];
+            Debug::Perf::Emit(L"FileOps.CommonPresentation.Memory", value.phase, 0u, value.privateBytes, value.workingSetBytes, S_OK);
+            Debug::Perf::Emit(L"FileOps.CommonPresentation.Cpu", value.phase, 0u, value.uiThreadCpuUs, value.processCpuUs, S_OK);
+            Debug::Perf::Emit(L"FileOps.CommonPresentation.Handles", value.phase, 0u, value.handles, value.hosts, S_OK);
+            Debug::Perf::Emit(L"FileOps.CommonPresentation.GuiAndAttachments", value.phase, value.attachments, value.gdi, value.user, S_OK);
+        }
+        for (size_t round = 0u; round < popupRoundCount; ++round)
+            Debug::Perf::Emit(L"FileOps.CommonPresentation.PopupRedraw8Us", L"default-open", popupRedraw8Us[round], round, 8u, S_OK);
+        for (size_t round = 0u; round < churnRoundCount; ++round)
+            Debug::Perf::Emit(L"FileOps.CommonPresentation.ChurnUpdate8Us", L"eight-task", churnUpdate8Us[round], round, 8u, S_OK);
+        for (size_t round = 0u; round < issuesRoundCount; ++round)
+            Debug::Perf::Emit(L"FileOps.CommonPresentation.IssuesRedraw8Us", L"selected-row", issuesRedraw8Us[round], round, 8u, S_OK);
+        if (popupDpi != 0u)
+            Debug::Perf::Emit(L"FileOps.CommonPresentation.ClientPixels",
+                              L"popup",
+                              popupDpi,
+                              static_cast<uint64_t>(popupClient.right - popupClient.left),
+                              static_cast<uint64_t>(popupClient.bottom - popupClient.top),
+                              S_OK);
+        if (issuesDpi != 0u)
+            Debug::Perf::Emit(L"FileOps.CommonPresentation.ClientPixels",
+                              L"issues",
+                              issuesDpi,
+                              static_cast<uint64_t>(issuesClient.right - issuesClient.left),
+                              static_cast<uint64_t>(issuesClient.bottom - issuesClient.top),
+                              S_OK);
+        Debug::Perf::Emit(L"FileOps.CommonPresentation.WorkloadFNV64", L"v1-eight-running-128-warnings", workloadDigest, 8u, 128u, S_OK);
+    });
+    if (! sample(L"cold"))
+        return reject(L"cold resource sample unavailable");
+
+    std::vector<TaskSnapshot> tasks;
+    tasks.reserve(8u);
+    const ULONGLONG fixtureNow = GetTickCount64();
+    for (uint64_t index = 0u; index < 8u; ++index)
+    {
+        TaskSnapshot task{};
+        task.taskId                     = 0xF330000000000000ull + index;
+        task.operation                  = (index % 2u) == 0u ? FILESYSTEM_COPY : FILESYSTEM_MOVE;
+        task.lifecyclePhase             = static_cast<uint8_t>(FileOperations::TaskLifecyclePhase::Running);
+        task.started                    = true;
+        task.discoveryClosed            = true;
+        task.hasProgressCallbacks       = true;
+        task.lastProgressCallbackTick   = fixtureNow;
+        task.operationStartTick         = fixtureNow > 25'000u ? fixtureNow - 25'000u : 0u;
+        task.totalBytes                 = 8ull * 1024ull * 1024ull * 1024ull;
+        task.completedBytes             = (index + 1u) * 256ull * 1024ull * 1024ull;
+        task.totalItems                 = 128u;
+        task.completedItems             = static_cast<unsigned long>(index + 1u);
+        task.itemTotalBytes             = 512ull * 1024ull * 1024ull;
+        task.itemCompletedBytes         = 192ull * 1024ull * 1024ull;
+        task.effectiveConcurrencyBudget = 4u;
+        task.currentSourcePath          = std::format(L"C:\\Photos\\CommonPerf\\source-{:02}.raw", index);
+        task.currentDestinationPath     = std::format(L"D:\\Archives\\CommonPerf\\source-{:02}.raw", index);
+        hashWord(task.taskId);
+        hashWord(static_cast<uint64_t>(task.operation));
+        hashWord(task.lifecyclePhase);
+        hashWord(task.started);
+        hashWord(task.discoveryClosed);
+        hashWord(task.hasProgressCallbacks);
+        hashWord(task.totalBytes);
+        hashWord(task.completedBytes);
+        hashWord(task.totalItems);
+        hashWord(task.completedItems);
+        hashWord(task.itemTotalBytes);
+        hashWord(task.itemCompletedBytes);
+        hashText(task.currentSourcePath);
+        hashText(task.currentDestinationPath);
+        tasks.push_back(std::move(task));
+    }
+    auto lifetime = std::make_shared<int>(0);
+    {
+        wil::unique_hwnd popup(FileOperationsPopup::Create(operations, folder, state.mainWindow, lifetime));
+        if (! popup)
+            return reject(L"popup creation failed");
+        auto* popupState = reinterpret_cast<FileOperationsPopupState*>(GetWindowLongPtrW(popup.get(), GWLP_USERDATA));
+        if (! popupState)
+            return reject(L"popup state unavailable");
+        popupState->DebugSetVisualScenario(tasks, false, true);
+        const UINT dpi = GetDpiForWindow(popup.get());
+        RECT outer{0, 0, MulDiv(760, static_cast<int>(dpi), 96), MulDiv(480, static_cast<int>(dpi), 96)};
+        if (AdjustWindowRectExForDpi(&outer,
+                                     static_cast<DWORD>(GetWindowLongPtrW(popup.get(), GWL_STYLE)),
+                                     FALSE,
+                                     static_cast<DWORD>(GetWindowLongPtrW(popup.get(), GWL_EXSTYLE)),
+                                     dpi) == FALSE ||
+            SetWindowPos(popup.get(), nullptr, 0, 0, outer.right - outer.left, outer.bottom - outer.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE) == FALSE)
+            return reject(L"popup geometry could not be established");
+        ShowWindow(popup.get(), SW_SHOWNOACTIVATE);
+        if (GetClientRect(popup.get(), &popupClient) == FALSE)
+            return reject(L"popup client geometry unavailable");
+        popupDpi          = dpi;
+        const auto redraw = [&]() noexcept
+        {
+            for (unsigned int frame = 0u; frame < 8u; ++frame)
+                RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+        };
+        redraw(); // warm-up only
+        PopupLayoutDebugSnapshot layout{};
+        layout.taskId = tasks.front().taskId;
+        if (! DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), layout) || layout.hostedGraphControlCount == 0u)
+            return reject(L"common running task lacks an actual hosted default graph");
+        if (! sample(L"popup-visible-before"))
+            return reject(L"visible resource sample unavailable");
+        for (size_t round = 0u; round < popupRedraw8Us.size(); ++round)
+        {
+            const auto started = Clock::now();
+            redraw();
+            popupRedraw8Us[popupRoundCount++] = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - started).count());
+        }
+        if (! sample(L"popup-visible-after"))
+            return reject(L"post-redraw resource sample unavailable");
+
+        for (size_t batch = 0u; batch < churnUpdate8Us.size(); ++batch)
+        {
+            const auto started = Clock::now();
+            for (size_t step = 0u; step < 8u; ++step)
+            {
+                for (auto& task : tasks)
+                    task.completedBytes += 4ull * 1024ull * 1024ull;
+                popupState->DebugSetVisualScenario(tasks, false, true);
+                RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+            }
+            churnUpdate8Us[churnRoundCount++] = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - started).count());
+        }
+        if (! sample(L"popup-after-churn"))
+            return reject(L"churn resource sample unavailable");
+        ShowWindow(popup.get(), SW_HIDE);
+        const uint64_t hiddenRenderCount = popupState->DebugHostedRenderCount();
+        if (! sample(L"popup-hidden-start"))
+            return reject(L"hidden-start resource sample unavailable");
+        const ULONGLONG hiddenStart = GetTickCount64();
+        while (GetTickCount64() - hiddenStart < 350u)
+        {
+            MsgWaitForMultipleObjectsEx(0u, nullptr, 20u, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+            MSG message{};
+            while (PeekMessageW(&message, nullptr, 0u, 0u, PM_REMOVE) != FALSE)
+            {
+                TranslateMessage(&message);
+                DispatchMessageW(&message);
+            }
+        }
+        if (! sample(L"popup-hidden-end") || popupState->DebugHostedRenderCount() != hiddenRenderCount)
+            return reject(L"hidden popup submitted hosted frames or lost resource samples");
+        ShowWindow(popup.get(), SW_SHOWNOACTIVATE);
+        for (unsigned int batch = 0u; batch < 4u; ++batch)
+            redraw();
+        if (popupState->DebugHostedRenderCount() <= hiddenRenderCount || ! sample(L"popup-reshown"))
+            return reject(L"reshown popup failed to render or sample");
+    }
+    if (DxUi::DebugGetAttachedWindowHostCount() != initialHosts || DxUi::DebugGetSharedWindowHostAttachmentCountForThread(uiThreadId) != initialAttachments ||
+        ! sample(L"popup-destroyed"))
+        return reject(L"popup did not return host attachment resources");
+
+    constexpr uint64_t issueBase = 0xF340000000000000ull;
+    bool issuesRemoved           = false;
+    auto removeIssues            = wil::scope_exit([&]() noexcept
+    {
+        if (! issuesRemoved)
+        {
+            for (uint64_t index = 0u; index < 128u; ++index)
+                operations->DebugRemoveDiagnosticsForTask(issueBase + index);
+        }
+    });
+    for (uint64_t index = 0u; index < 128u; ++index)
+    {
+        const std::wstring message     = std::format(L"Un élément portant ce nom existe déjà ({:03}).", index);
+        const std::wstring source      = std::format(L"C:\\Photos\\CommonPerf\\issue-{:03}.raw", index);
+        const std::wstring destination = std::format(L"D:\\Archives\\CommonPerf\\issue-{:03}.raw", index);
+        hashWord(issueBase + index);
+        hashWord(static_cast<uint64_t>(FILESYSTEM_COPY));
+        hashWord(static_cast<uint64_t>(HRESULT_FROM_WIN32(ERROR_FILE_EXISTS)));
+        hashText(message);
+        hashText(source);
+        hashText(destination);
+        operations->RecordTaskDiagnostic(issueBase + index,
+                                         FILESYSTEM_COPY,
+                                         FolderWindow::FileOperationState::DiagnosticSeverity::Warning,
+                                         HRESULT_FROM_WIN32(ERROR_FILE_EXISTS),
+                                         L"selftest.commonPresentation",
+                                         message,
+                                         source,
+                                         destination);
+    }
+    existingDiagnostics.clear();
+    operations->CollectDiagnostics(existingDiagnostics);
+    if (existingDiagnostics.size() != 128u)
+        return reject(L"128 diagnostic rows were not retained before pane creation");
+    std::vector<FolderWindow::FileOperationState::TaskDiagnosticEntry>{}.swap(existingDiagnostics);
+    {
+        wil::unique_hwnd pane(FileOperationsIssuesPane::Create(operations, folder, state.mainWindow, lifetime));
+        if (! pane)
+            return reject(L"Issues pane creation failed");
+        const UINT dpi = GetDpiForWindow(pane.get());
+        RECT outer{0, 0, MulDiv(760, static_cast<int>(dpi), 96), MulDiv(480, static_cast<int>(dpi), 96)};
+        if (AdjustWindowRectExForDpi(&outer,
+                                     static_cast<DWORD>(GetWindowLongPtrW(pane.get(), GWL_STYLE)),
+                                     FALSE,
+                                     static_cast<DWORD>(GetWindowLongPtrW(pane.get(), GWL_EXSTYLE)),
+                                     dpi) == FALSE ||
+            SetWindowPos(pane.get(), nullptr, 0, 0, outer.right - outer.left, outer.bottom - outer.top, SWP_NOMOVE | SWP_NOZORDER | SWP_NOACTIVATE) == FALSE)
+            return reject(L"Issues geometry could not be established");
+        FileOperationsIssuesPane::SelfTestSnapshot selected{};
+        if (GetClientRect(pane.get(), &issuesClient) == FALSE)
+            return reject(L"Issues client geometry unavailable");
+        issuesDpi  = dpi;
+        bool ready = false;
+        for (unsigned int attempt = 0u; attempt < 100u && ! ready; ++attempt)
+        {
+            MSG message{};
+            while (PeekMessageW(&message, nullptr, 0u, 0u, PM_REMOVE) != FALSE)
+            {
+                TranslateMessage(&message);
+                DispatchMessageW(&message);
+            }
+            static_cast<void>(FileOperationsIssuesPane::SelfTestRefresh(pane.get(), false));
+            ready = FileOperationsIssuesPane::SelfTestSelectTask(pane.get(), issueBase) &&
+                    FileOperationsIssuesPane::TryGetSelfTestSnapshot(pane.get(), selected) && selected.rowCount == 128u &&
+                    selected.primarySelectedTaskId == issueBase;
+            if (! ready)
+                MsgWaitForMultipleObjectsEx(0u, nullptr, 20u, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+        }
+        if (! ready || ! sample(L"issues-selected-before"))
+            return reject(L"Issues row selection did not settle");
+        for (unsigned int warmup = 0u; warmup < 5u; ++warmup)
+            RedrawWindow(pane.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+        for (size_t round = 0u; round < issuesRedraw8Us.size(); ++round)
+        {
+            const auto started = Clock::now();
+            for (unsigned int frame = 0u; frame < 8u; ++frame)
+                RedrawWindow(pane.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_ALLCHILDREN | RDW_UPDATENOW);
+            issuesRedraw8Us[issuesRoundCount++] = static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(Clock::now() - started).count());
+        }
+        if (! sample(L"issues-selected-after"))
+            return reject(L"Issues selected resource sample unavailable");
+        ShowWindow(pane.get(), SW_HIDE);
+        if (! FileOperationsIssuesPane::TryGetSelfTestSnapshot(pane.get(), selected))
+            return reject(L"Issues render counter unavailable after hide");
+        const uint64_t hiddenRenderCount = selected.dxRenderCount;
+        const ULONGLONG hiddenStart      = GetTickCount64();
+        while (GetTickCount64() - hiddenStart < 350u)
+        {
+            MsgWaitForMultipleObjectsEx(0u, nullptr, 20u, QS_ALLINPUT, MWMO_INPUTAVAILABLE);
+            MSG message{};
+            while (PeekMessageW(&message, nullptr, 0u, 0u, PM_REMOVE) != FALSE)
+            {
+                TranslateMessage(&message);
+                DispatchMessageW(&message);
+            }
+        }
+        if (! FileOperationsIssuesPane::TryGetSelfTestSnapshot(pane.get(), selected) || selected.dxRenderCount != hiddenRenderCount ||
+            ! sample(L"issues-hidden-end"))
+            return reject(L"hidden Issues pane submitted frames or lost resource samples");
+    }
+    if (DxUi::DebugGetAttachedWindowHostCount() != initialHosts || DxUi::DebugGetSharedWindowHostAttachmentCountForThread(uiThreadId) != initialAttachments ||
+        ! sample(L"issues-destroyed"))
+        return reject(L"Issues pane did not return host attachment resources");
+    for (uint64_t index = 0u; index < 128u; ++index)
+        operations->DebugRemoveDiagnosticsForTask(issueBase + index);
+    existingDiagnostics.clear();
+    operations->CollectDiagnostics(existingDiagnostics);
+    if (! existingDiagnostics.empty())
+        return reject(L"fixture diagnostic cleanup did not restore empty history");
+    issuesRemoved = true;
+    if (! sample(L"issues-cleaned"))
+        return reject(L"diagnostic cleanup resource sample unavailable");
+    if (! restore())
+        return reject(L"fixture settings restoration did not settle");
+    settingsRestored = true;
+    return true;
+}

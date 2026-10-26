@@ -1,0 +1,261 @@
+[
+  {
+    "file": "ASan-Full-v2.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T135152Z-75348-852232e6ff774e55bec17597e760a3f7\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "sha256": "7D8555AE5F453BEFD6C182916B31F6CD9F9C82361216C4D8D2ECA1219CA2EFCE",
+    "bytes": 13550,
+    "scope": "Original failed Fresh Full component payload"
+  },
+  {
+    "file": "ASan-Full-v1.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T135152Z-75348-852232e6ff774e55bec17597e760a3f7\\artifacts\\selftest\\last_run\\run-all-tests-results-v1.json",
+    "sha256": "47681B354B5844A01F55D1FC2CF2F79B897B60E2B625C50C1851D51CC14198D6",
+    "bytes": 590228,
+    "scope": "Original failed Fresh Full component payload"
+  },
+  {
+    "file": "ASan-Full-case-history.jsonl",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T135152Z-75348-852232e6ff774e55bec17597e760a3f7\\artifacts\\selftest\\last_run\\run-all-tests-case-history.jsonl",
+    "sha256": "4A1531F5872D416CE5F8927BD447729BF84DC313619BAAB8A166F5DAA4A4FF48",
+    "bytes": 1041961,
+    "scope": "Original failed Fresh Full component payload"
+  },
+  {
+    "file": "ASan-Full-final-workspace.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T135152Z-75348-852232e6ff774e55bec17597e760a3f7\\artifacts\\selftest\\last_run\\workspace-final.json",
+    "sha256": "D8113BEB68C47A21B127AC48716E3D2F019521F0E9D95CDE489284D9629F9161",
+    "bytes": 37133,
+    "scope": "Original failed Fresh Full component payload"
+  },
+  {
+    "file": "ASan-ViewerPE-interactive.txt",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T135152Z-75348-852232e6ff774e55bec17597e760a3f7\\artifacts\\selftest\\last_run\\ViewerPETests.Interactive.output.log",
+    "sha256": "B42D790F982651E686C31B5835920FB5CB55C59E615AEA85ACBC76192DD2533E",
+    "bytes": 303513,
+    "scope": "Original failed Fresh Full component payload"
+  },
+  {
+    "file": "ASan-ViewerSqlite-interactive.txt",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T135152Z-75348-852232e6ff774e55bec17597e760a3f7\\artifacts\\selftest\\last_run\\ViewerSqliteTests.Interactive.output.log",
+    "sha256": "C81B0C87447A26597E7C77DA10F44CC2B3A7B8BF883E055AF2061A5CC3629C0D",
+    "bytes": 2616,
+    "scope": "Original failed Fresh Full component payload"
+  },
+  {
+    "file": "ASan-PerformanceTests2.txt",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T135152Z-75348-852232e6ff774e55bec17597e760a3f7\\artifacts\\selftest\\last_run\\PerformanceTests2.output.log",
+    "sha256": "25A746D7A049E39C59293957B85B0750FF5A2CC184B3F3AFA12C82A5F6C73063",
+    "bytes": 1284,
+    "scope": "Original failed Fresh Full component payload"
+  },
+  {
+    "file": "ASan-compare.results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\runs\\20261023T135152Z-75348-852232e6ff774e55bec17597e760a3f7\\entries\\selftest.compare-directories\\results\\results.json",
+    "sha256": "A8E792319D64328094540137069FA703984EB36E2538A85CAAFB1394E3FF3ACC",
+    "bytes": 54535,
+    "scope": "Complete original ASan selftest statuses and reasons"
+  },
+  {
+    "file": "Debug-compare.results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\runs\\20261023T112244Z-4640-da4038fa92944c668559fcfea1c5e779\\entries\\selftest.compare-directories\\results\\results.json",
+    "sha256": "70B373651FDAC372F16B4CDCE65E8D85A11C2B8F4E2E3C7E2E539ECB9FC7F0AA",
+    "bytes": 54496,
+    "scope": "Complete earlier failed Debug Full checkpoint component"
+  },
+  {
+    "file": "ASan-commands.results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\runs\\20261023T135152Z-75348-852232e6ff774e55bec17597e760a3f7\\entries\\selftest.commands\\results\\results.json",
+    "sha256": "EA713355D7641914D6C6FB5175480665157BB324CB30D9BB185603EC48E73541",
+    "bytes": 190708,
+    "scope": "Complete original ASan selftest statuses and reasons"
+  },
+  {
+    "file": "Debug-commands.results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\runs\\20261023T112244Z-4640-da4038fa92944c668559fcfea1c5e779\\entries\\selftest.commands\\results\\results.json",
+    "sha256": "D092466E5710737726E93C5FE3DF11450C454100389C3BD55A645B02DA7CEB47",
+    "bytes": 120502,
+    "scope": "Complete earlier failed Debug Full checkpoint component"
+  },
+  {
+    "file": "ASan-fileops.results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\runs\\20261023T135152Z-75348-852232e6ff774e55bec17597e760a3f7\\entries\\selftest.file-operations\\results\\results.json",
+    "sha256": "78CD2BE84D52587C0208942A112D87D2ECFE6C9AA6B7CC524B75F6446FAD12A8",
+    "bytes": 88426,
+    "scope": "Complete original ASan selftest statuses and reasons"
+  },
+  {
+    "file": "Debug-fileops.results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\runs\\20261023T112244Z-4640-da4038fa92944c668559fcfea1c5e779\\entries\\selftest.file-operations\\results\\results.json",
+    "sha256": "8B65445CA24B38840A69B3A5210C3F4933488FBB8DA235D3781D35711A2A2954",
+    "bytes": 88259,
+    "scope": "Complete earlier failed Debug Full checkpoint component"
+  },
+  {
+    "file": "ASan-Full-plan.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\runs\\20261023T135152Z-75348-852232e6ff774e55bec17597e760a3f7\\validation-plan.json",
+    "sha256": "3DBD51E22895FA6117448D287BB2E621D514417C1B998B33ACC1B0C6662D84D2",
+    "bytes": 22119,
+    "scope": "Immutable 18-entry plan"
+  },
+  {
+    "file": "ASan-Full-state.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\runs\\20261023T135152Z-75348-852232e6ff774e55bec17597e760a3f7\\run-state.json",
+    "sha256": "270624A313CB504528912F4E02AB82FAE8BC35F7C25545B5FEC5151B2A33AF54",
+    "bytes": 6823,
+    "scope": "Final failed entry and epoch state"
+  },
+  {
+    "file": "ASan-ViewerPE-noninteractive.txt",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\runs\\20261023T135152Z-75348-852232e6ff774e55bec17597e760a3f7\\entries\\viewer-pe.noninteractive\\results\\ViewerPETests.Noninteractive.output.log",
+    "sha256": "DE3D15B01C1EDE9F42E8EB9305DB5EFB1029693EE37CC350C15E80407FEB2567",
+    "bytes": 211273,
+    "scope": "Complete bounded failed process output; cause not established"
+  },
+  {
+    "file": "ASan-PluginContract.txt",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\runs\\20261023T135152Z-75348-852232e6ff774e55bec17597e760a3f7\\entries\\standalone.plugin-contract\\results\\PluginContractTests.output.log",
+    "sha256": "B93375E30808497935FDF7A167366CC9443456EC8ED00969E5DD26BCDF095755",
+    "bytes": 182322,
+    "scope": "Complete bounded failed process output; cause not established"
+  },
+  {
+    "file": "ASan-Full-build-receipt.json",
+    "source": "Z:\\src\\RedSalamander\\.build\\x64\\ASan Debug\\receipts\\e37dbc99d623051924d0621df6463888652a98ed3bf4e9e0b94d40ea55fe9c30.json",
+    "sha256": "45C1C50EFF4025578036A98F3B46C6D69673806FA8B638369776263DB0B14203",
+    "bytes": 86270,
+    "scope": "Original Full receipt before the focused repair writer"
+  },
+  {
+    "file": "focused-tooling-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T155854Z-72156-178499b68c4b4150bcd0594607818157\\artifacts\\tooling\\focused-summary.json",
+    "sha256": "685CC031CB62CF4FF7C8DE340BD31BFDBE06E43B5FB29998F8F419CF2EAB44BD",
+    "bytes": 291,
+    "scope": "121 affected controls; no native Full claim"
+  },
+  {
+    "file": "focused-tooling.xml",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T155854Z-72156-178499b68c4b4150bcd0594607818157\\artifacts\\tooling\\focused-results.xml",
+    "sha256": "8832C4C08EEA50276DB47FA06312B6316F5F9E073B5EEFB95DD2C60779170A69",
+    "bytes": 38724,
+    "scope": "All 121 affected statuses"
+  },
+  {
+    "file": "deployment-repair-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T160028Z-500-791bafe185fb412bbccedf6456a96eb0\\artifacts\\deployment\\deployment-summary.json",
+    "sha256": "0D1EFF2DFDD4253A487AFA096068FD1F6A4054C76D5EBE22619FA7EA08373335",
+    "bytes": 646,
+    "scope": "Actual x64 ASan deployment rebuild and embedded-policy receipt"
+  },
+  {
+    "file": "deployment-repair.xml",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T160028Z-500-791bafe185fb412bbccedf6456a96eb0\\artifacts\\deployment\\deployment-results.xml",
+    "sha256": "AD5E1A6B23365681AFF19D5283E8D3EE22915472058D42F85FB9CFB84E156627",
+    "bytes": 1457,
+    "scope": "One actual deployment control"
+  },
+  {
+    "file": "compiler-policy-before.xml",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T163647Z-66052-61a551eff7de418aaa3abdcb3ffa00c6\\artifacts\\effective-compiler\\before-fix.xml",
+    "sha256": "C835ACD8A7AA5B1D5E9AF3B9ED6ECE3ECB5F31BA4CAB36258DC10978121859FE",
+    "bytes": 10925,
+    "scope": "Compiler-policy or final affected-tooling component; no Full promotion"
+  },
+  {
+    "file": "compiler-policy-before.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T163647Z-66052-61a551eff7de418aaa3abdcb3ffa00c6\\artifacts\\effective-compiler\\before-fix-summary.json",
+    "sha256": "44C4C33FEF649C68207E9768B0DABED6133667AE7832DD2BF484AEFEE6BFA8D6",
+    "bytes": 238,
+    "scope": "Compiler-policy or final affected-tooling component; no Full promotion"
+  },
+  {
+    "file": "compiler-policy-after.xml",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T163947Z-76884-713382343cd24d4fb9282bc171ab0ee1\\artifacts\\effective-compiler\\after-fix.xml",
+    "sha256": "56CFE8AE74C9D7F9AD343681D98EC8DD104B9AC77E398481429B9C43C0FE5F32",
+    "bytes": 10007,
+    "scope": "Compiler-policy or final affected-tooling component; no Full promotion"
+  },
+  {
+    "file": "compiler-policy-after.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T163947Z-76884-713382343cd24d4fb9282bc171ab0ee1\\artifacts\\effective-compiler\\after-fix-summary.json",
+    "sha256": "E63068AA247D7A450EC24137B875793DAA925E940A5E98153997375C5705FC64",
+    "bytes": 327,
+    "scope": "Compiler-policy or final affected-tooling component; no Full promotion"
+  },
+  {
+    "file": "final-tooling.xml",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T164258Z-54700-d66215d8aec9425c93c45b625ecd90d3\\artifacts\\tooling\\final-results.xml",
+    "sha256": "CA889EC61CD1C165D51979F59ED10F1F418B570CCD1FC86CB4B8D937DFAEC0EE",
+    "bytes": 46438,
+    "scope": "Compiler-policy or final affected-tooling component; no Full promotion"
+  },
+  {
+    "file": "final-tooling-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T164258Z-54700-d66215d8aec9425c93c45b625ecd90d3\\artifacts\\tooling\\final-summary.json",
+    "sha256": "1599C659449BA04A81666C316A2E81B46B4A2BE966D04913791276D4EDB6072E",
+    "bytes": 287,
+    "scope": "Compiler-policy or final affected-tooling component; no Full promotion"
+  },
+  {
+    "file": "terminal-policy-original.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T162557Z-81644-6fcb8ee6a2484ea4be3a145649e80459\\artifacts\\compiler-policy\\summary.json",
+    "sha256": "7C0567587D1D2A62422EBF9310CBC4C362878FAD2BAF7C79F9749C9FE2151642",
+    "bytes": 260,
+    "scope": "Compiler-policy or final affected-tooling component; no Full promotion"
+  },
+  {
+    "file": "ASan-post-writer-r10-failed.txt",
+    "source": "Z:\\src\\RedSalamander\\.build\\logs\\redmonitor-header-post-writer-ASan-r10.log",
+    "sha256": "B2E45EFDCAB67363DB050B9174117846AA91E181F4BFB609DC12AC9431F88B74",
+    "bytes": 28243,
+    "scope": "Failed post-writer build, Terminal C1090; requested policy was not effective"
+  },
+  {
+    "file": "final-ASan-build-receipt.json",
+    "source": "Z:\\src\\RedSalamander\\.build\\x64\\ASan Debug\\build-receipt.json",
+    "sha256": "51D6F1AAE0E34521BCDB2A0CDCD5DD91C6EA20E6987B4775A06BE0A842CEFC2A",
+    "bytes": 86270,
+    "scope": "Successful repaired clean full-solution ASan build; no Full runtime acceptance"
+  },
+  {
+    "file": "final-ASan-monitor.results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T164832Z-51032-7a7507346a544271a1d81a4b1a3e6348\\artifacts\\selftest\\last_run\\commands\\results.json",
+    "sha256": "4071B9AEBA43907F2B1C65369BEEEA964138E8E987516C2057481C3FF687764B",
+    "bytes": 832,
+    "scope": "Both monitor Preferences controls on final repaired ASan artifact"
+  },
+  {
+    "file": "final-probes.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T165339Z-72028-320fe88b68074e0cb795d2f4ed9c044f\\artifacts\\final-client\\receipt.json",
+    "sha256": "3531FFDE9571C9108711669E33463F2F8EA2D97E9FEF60C5D5B2CC053AA47684",
+    "bytes": 2140,
+    "scope": "Fresh actual producers and actual ASan detection; Debug retains its explicitly recorded checkpoint"
+  },
+  {
+    "file": "final-Debug-etw.txt",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T165339Z-72028-320fe88b68074e0cb795d2f4ed9c044f\\artifacts\\final-client\\Debug-etw.txt",
+    "sha256": "D0B784CAAD45E2524EB09FFB0815056A7E8438505812D2D4DD0F08CD69A22096",
+    "bytes": 79,
+    "scope": "Complete bounded probe output"
+  },
+  {
+    "file": "final-ASan-Debug-etw.txt",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T165339Z-72028-320fe88b68074e0cb795d2f4ed9c044f\\artifacts\\final-client\\ASan-Debug-etw.txt",
+    "sha256": "D0B784CAAD45E2524EB09FFB0815056A7E8438505812D2D4DD0F08CD69A22096",
+    "bytes": 79,
+    "scope": "Complete bounded probe output"
+  },
+  {
+    "file": "final-asan-canary.txt",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T165339Z-72028-320fe88b68074e0cb795d2f4ed9c044f\\artifacts\\final-client\\asan-canary.txt",
+    "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+    "bytes": 0,
+    "scope": "Complete bounded probe output"
+  },
+  {
+    "file": "final-asan-canary-errors.txt",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\completed-runs\\20261023T165339Z-72028-320fe88b68074e0cb795d2f4ed9c044f\\artifacts\\final-client\\asan-canary-errors.txt",
+    "sha256": "D57606D2B37750EE7145514264B4A448F76DD01A310B785559505BDAA6CE0C30",
+    "bytes": 3909,
+    "scope": "Complete bounded probe output"
+  }
+]

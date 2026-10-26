@@ -1,0 +1,42 @@
+{
+  "head": "c4c7399b0ccf700d5f761be5245f6a1e3c513fea",
+  "correctedTimestampConversion": "ConvertFrom-Json returned DateTime values; direct DateTime cast preserves UTC without a culture-dependent Parse.",
+  "priorCheckReportedErrors": true,
+  "coordinatorSessionExit": -1,
+  "guardSessionExit": 0,
+  "completedBuilds": 6,
+  "fullRuntimeStarted": false,
+  "profileStates": [
+    {
+      "platform": "x64",
+      "configuration": "Debug",
+      "contaminated": false
+    },
+    {
+      "platform": "x64",
+      "configuration": "Release",
+      "contaminated": false
+    },
+    {
+      "platform": "x64",
+      "configuration": "ASan Debug",
+      "contaminated": false
+    },
+    {
+      "platform": "ARM64",
+      "configuration": "Debug",
+      "contaminated": false
+    },
+    {
+      "platform": "ARM64",
+      "configuration": "Release",
+      "contaminated": false
+    },
+    {
+      "platform": "ARM64",
+      "configuration": "ASan Debug",
+      "contaminated": false
+    }
+  ],
+  "scope": "Handoff verification only; no Full pass claim."
+}

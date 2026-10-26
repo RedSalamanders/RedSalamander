@@ -1,0 +1,218 @@
+{
+    "run_started_utc": "2026-10-09T09:02:28.270Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261009T090204Z-13052-c39359d4a7204a038bac43bb0e83edd9\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 153834,
+    "passed": 30,
+    "failed": 1,
+    "skipped": 2,
+    "failureMessage": "Stable hover paints its tooltip before containment. sample=11, expected=1073741824, hover=1073741824, tooltip=0, paints=11, painted=false, cursor=(273,508) valid=true, pointerClass=RedSalamander.ViewerSpace, actualPointerOwnerIsViewer=true",
+    "cases": [
+        {
+            "name": "cmd_viewer_space_context_menu_uses_delivered_anchor",
+            "status": "passed",
+            "duration_ms": 377,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_hover_uses_delivered_point",
+            "status": "passed",
+            "duration_ms": 259,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_renderer_device_context_ready_resize_close",
+            "status": "passed",
+            "duration_ms": 264,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_renderer_recovers_from_forced_device_loss",
+            "status": "passed",
+            "duration_ms": 317,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_hover_does_not_rebuild_static_cache",
+            "status": "failed",
+            "duration_ms": 4296,
+            "repeat_index": 1,
+            "reason": "Stable hover paints its tooltip before containment. sample=11, expected=1073741824, hover=1073741824, tooltip=0, paints=11, painted=false, cursor=(273,508) valid=true, pointerClass=RedSalamander.ViewerSpace, actualPointerOwnerIsViewer=true"
+        },
+        {
+            "name": "cmd_viewer_space_dense_files_exposes_more_than_legacy_topk",
+            "status": "passed",
+            "duration_ms": 598,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_synthetic_bucket_metrics_match_root_bytes",
+            "status": "passed",
+            "duration_ms": 6140,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_adaptive_scan_budget_tracks_window_area",
+            "status": "passed",
+            "duration_ms": 520,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_effective_threads_drive_spinners",
+            "status": "passed",
+            "duration_ms": 1606,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_large_sibling_folders_expose_nested_detail",
+            "status": "passed",
+            "duration_ms": 1346,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_hit_grid_matches_linear",
+            "status": "passed",
+            "duration_ms": 1139,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_unmoved_relayout_keeps_grid_hit_testing",
+            "status": "passed",
+            "duration_ms": 1080,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_parallel_scan_serial_golden",
+            "status": "passed",
+            "duration_ms": 2230,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_cancel_teardown_stress",
+            "status": "passed",
+            "duration_ms": 5367,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_cache_skips_or_caps_large_snapshot",
+            "status": "passed",
+            "duration_ms": 1557,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_cache_hit_restores_header_counts",
+            "status": "passed",
+            "duration_ms": 1889,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_explorer_analyst_exact_nested_detail",
+            "status": "passed",
+            "duration_ms": 13451,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_cache_restore_is_sliced",
+            "status": "passed",
+            "duration_ms": 2318,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_cache_aggregate_byte_cap",
+            "status": "passed",
+            "duration_ms": 1891,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_cache_offsets_reject_invalid_extent",
+            "status": "passed",
+            "duration_ms": 3526,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_refresh_preserves_display_until_adoption",
+            "status": "passed",
+            "duration_ms": 1755,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_refresh_cancel_keeps_display",
+            "status": "passed",
+            "duration_ms": 1561,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_refresh_budget_requires_explicit_rebuild",
+            "status": "passed",
+            "duration_ms": 1689,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_deferred_rebuild_waits_for_disposal_capacity",
+            "status": "passed",
+            "duration_ms": 1907,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_close_does_not_wait_for_retired_model_disposal",
+            "status": "passed",
+            "duration_ms": 2023,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_setting_change_refreshes_locale",
+            "status": "passed",
+            "duration_ms": 204,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_idle_timer_stops",
+            "status": "passed",
+            "duration_ms": 1661,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_queue_storm_stays_bounded",
+            "status": "passed",
+            "duration_ms": 2019,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_cache_reopen_200_first_map_optin",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "skip_class": "declared-capability",
+            "reason": "Set REDSALAMANDER_VIEWERSPACE_CACHED_REOPEN_200=1 for the opt-in 200-sample cached first-map benchmark."
+        },
+        {
+            "name": "cmd_viewer_space_memory_heavy_four_root_optin",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 1,
+            "skip_class": "declared-capability",
+            "reason": "Set REDSALAMANDER_VIEWERSPACE_MEMORY_HEAVY=1 for the opt-in four-root 100k memory benchmark."
+        },
+        {
+            "name": "cmd_viewer_space_memory_settles_after_close",
+            "status": "passed",
+            "duration_ms": 33421,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_layout_20k_visible_optin",
+            "status": "passed",
+            "duration_ms": 23056,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_layout_50k_visible_optin",
+            "status": "passed",
+            "duration_ms": 26540,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

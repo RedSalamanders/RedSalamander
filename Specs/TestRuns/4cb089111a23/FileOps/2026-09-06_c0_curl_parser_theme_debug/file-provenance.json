@@ -1,0 +1,37 @@
+[
+  {
+    "name": "stdout.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-theme-debug-20260906\\scratch\\dxui\\theme\\stdout.txt",
+    "bytes": 24,
+    "sha256": "4e26741b455745fd9f3c7f07a4eee4a4d2a7305863c060f33bcacf16dd7e3f89",
+    "transform": "none"
+  },
+  {
+    "name": "stderr.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-theme-debug-20260906\\scratch\\dxui\\theme\\stderr.txt",
+    "bytes": 29,
+    "sha256": "de00d275b08c42deff75a4d05b49529a59c975a96a876a5edc44ae0c1b49c9bc",
+    "transform": "none"
+  },
+  {
+    "name": "perf_metrics.jsonl",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-theme-debug-20260906\\scratch\\dxui\\theme\\perf_metrics.jsonl",
+    "bytes": 4766,
+    "sha256": "e34b423354da48e740ad47990f72a4ed259589ffc80214c5582fd5f52f2c50ba",
+    "transform": "none"
+  },
+  {
+    "name": "theme-validation.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-theme-debug-20260906\\scratch\\dxui\\theme\\theme-validation.json",
+    "bytes": 1339,
+    "sha256": "d378a1c7a71957f966e4273642b3dc4e2db88d2fdd30e7d2c192f53cd9f3f088",
+    "transform": "none"
+  },
+  {
+    "name": "theme-reviewed.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-theme-debug-20260906\\scratch\\dxui\\theme\\theme-reviewed.json",
+    "bytes": 540,
+    "sha256": "9bac6356c79628ed1ef68e94777d11b0ec7e84bc6ca60e00b6f1b215bf7909b5",
+    "transform": "none"
+  }
+]

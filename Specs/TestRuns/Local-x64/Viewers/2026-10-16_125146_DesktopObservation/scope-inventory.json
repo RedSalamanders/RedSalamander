@@ -1,0 +1,8 @@
+{
+  "nativeTestFiles": 118,
+  "manifestWorkflowDigest": "27331b774dc2aae4ca496150e3c365c688813828504077eb204842e337877125",
+  "computedWorkflowDigest": "27331b774dc2aae4ca496150e3c365c688813828504077eb204842e337877125",
+  "workflowDigestMatches": true,
+  "explainExitCode": 2,
+  "explainScope": "Noninteractive Affected plan only; five interactive obligations pending"
+}

@@ -2,6 +2,7 @@ $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\ValidationFingerprint.psm1') -Force
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\TestRunPlan.psm1') -Force
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\ValidationEvidence.psm1') -Force
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1') -Force
 # ValidationEvidence imports ValidationFingerprint into module scope. Import it
 # last as well so fixture construction can compute externally visible digests.
 Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\ValidationFingerprint.psm1') -Force
@@ -145,7 +146,7 @@ Describe 'Operation Startrail run-directory resolution' {
 
         $junctionId = '20260813T120002Z-42-2123456789abcdef0123456789abcdef'
         $junction = Join-Path $runsRoot $junctionId
-        [void](New-Item -ItemType Junction -Path $junction -Target $fixture.Run.RunDirectory)
+        [void](New-RSTestSandboxLink -ItemType Junction -Path $junction -Target $fixture.Run.RunDirectory)
         (Test-RSEvidenceActionThrows {
                 Resolve-RSValidationRunDirectory -EvidenceRoot $evidenceRoot -RunReference $junction -SchemaRoot $schemaRoot
             }) | Should Be $true
@@ -616,7 +617,7 @@ Describe 'Operation Startrail provisional evidence and promotion barriers' {
         [void](New-Item -ItemType Directory -Path $outside)
         [IO.File]::WriteAllText($sentinel, 'preserve-prune-target')
         [void](New-Item -ItemType Directory -Path (Join-Path $outside $runId))
-        [void](New-Item -ItemType Junction -Path $link -Target $outside)
+        [void](New-RSTestSandboxLink -ItemType Junction -Path $link -Target $outside)
         try {
             $craftedPlan = @([pscustomobject]@{
                     LiteralPath = Join-Path $link $runId

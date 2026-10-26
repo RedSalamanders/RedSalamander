@@ -1,0 +1,134 @@
+[
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-26_122402/commands_trace.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-26_122402/compare_trace.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-26_122402/env.txt",
+    "sha256": "2c410955ea57cb5ea83c3825877e5e5ce5a20199a2371e3a2b3cf6b35919ac48"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-26_122402/fileops_results.json",
+    "sha256": "9f4960fd086daaf8faf6d0d6f575a8641a1c78c196cd3b323896ed5358fa6754"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-26_122402/fileops_trace.txt",
+    "sha256": "ced3b3d5ebf0f75b85a3c85d6de89c9e712adbc8b2a5e7a2dda874ab971e00de"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-26_122402/selftest_run_results.json",
+    "sha256": "de404ed51e97055bd0e6c1c406919223770a4a7ba1c514ce691063854d81ffee"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-26_122402/selftest_run_trace.txt",
+    "sha256": "18d138637718e85102acd4e1c547dfe0f77afc9e4d3cf8624bc8bb77104e5d4c"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-26_122402/selftest.txt",
+    "sha256": "5091c9ba3791667bcbc21ac98b5e2983d9e3053e37a707479e88acf796f83e43"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-26_122402/perf/perf_metrics.jsonl",
+    "sha256": "c6adb083924f11fd273731006cab183ba5ad505d7689a7d3ec5895b3afdce1a6"
+  },
+  {
+    "path": "artifacts/selftest/last_run/results.json",
+    "sha256": "de404ed51e97055bd0e6c1c406919223770a4a7ba1c514ce691063854d81ffee"
+  },
+  {
+    "path": "artifacts/selftest/last_run/run-all-tests-case-history.jsonl",
+    "sha256": "71cd56f1263dbf8352b2c5c752e7da91788df7547637a98ed5d346d3a889e78d"
+  },
+  {
+    "path": "artifacts/selftest/last_run/run-all-tests-dashboard.md",
+    "sha256": "cc9998f8a3779ff2f155f3d7eae9c4915f9924f8e38fc5bc36523d1b7b61827e"
+  },
+  {
+    "path": "artifacts/selftest/last_run/run-all-tests-results.json",
+    "sha256": "a71c2cc73f61e72542f0e1621647d26f3d264338e5c0f858682cbcb2233f3a6f"
+  },
+  {
+    "path": "artifacts/selftest/last_run/trace.txt",
+    "sha256": "18d138637718e85102acd4e1c547dfe0f77afc9e4d3cf8624bc8bb77104e5d4c"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-selftest.file-operations.json",
+    "sha256": "feeb871c8bfdf217746dafe2897dd9a1f39bbb737997a999b666c6bfff765587"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-final.json",
+    "sha256": "d5a716473f65bf1a7419201aefe5f459d262f636550540200a2488982d30288c"
+  },
+  {
+    "path": "artifacts/selftest/last_run/commands/trace.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "path": "artifacts/selftest/last_run/compare/trace.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "path": "artifacts/selftest/last_run/fileops/results.json",
+    "sha256": "9f4960fd086daaf8faf6d0d6f575a8641a1c78c196cd3b323896ed5358fa6754"
+  },
+  {
+    "path": "artifacts/selftest/last_run/fileops/trace.txt",
+    "sha256": "ced3b3d5ebf0f75b85a3c85d6de89c9e712adbc8b2a5e7a2dda874ab971e00de"
+  },
+  {
+    "path": "artifacts/selftest/last_run/perf/perf_metrics.jsonl",
+    "sha256": "c6adb083924f11fd273731006cab183ba5ad505d7689a7d3ec5895b3afdce1a6"
+  },
+  {
+    "path": "artifacts/selftest/previous_run/entry-fingerprints.json",
+    "sha256": "a8311713ec2d3b36b79f514f3cb2cb7da2d099e3e087c228a2d79d32a245cdf5"
+  },
+  {
+    "path": "artifacts/selftest/previous_run/validation-plan-decision.json",
+    "sha256": "4fd71517fb48b6f9b5cbf9c0350bc56058c3384607b6a20fb3125f4523a0922d"
+  },
+  {
+    "path": "artifacts/selftest/previous_run/validation-plan.json",
+    "sha256": "ed5f67047b50638cd508082a4b2e305a6a9fabd886213195195bf957ee2cc89d"
+  },
+  {
+    "path": "artifacts/selftest/previous_run/workspace-initial.json",
+    "sha256": "80c57efba3af0db3408954eecf0ba1bf2161f449f15d0ae1c63138bc7b023b12"
+  },
+  {
+    "path": "scratch/settings-store/RedSalamander/Logs/FileOperations-20260926.jsonl",
+    "sha256": "3b985b24d12d3212711cb0be200f01153ca5d64597cff170a97b3aff71ff946d"
+  },
+  {
+    "path": "scratch/settings-store/RedSalamander/Logs/FileOperations-Issues-Task1-20260926-122400773.txt",
+    "sha256": "a0986d9ba222501a300e2cbb7f8b59b625ff44ccb044fe405be851a61dc2eb6c"
+  },
+  {
+    "path": "scratch/settings-store/RedSalamander/Logs/FileOperations-Issues-Task2-20260926-122401018.txt",
+    "sha256": "2236562655538dc352b76b37ba6619d4c044054dc14cb520fd0e656bbabc8d3d"
+  },
+  {
+    "path": "scratch/settings-store/RedSalamander/Logs/FileOperations-Issues-Task3-20260926-122401269.txt",
+    "sha256": "434d1018c9c950d60558b62317902a039b3b32d2bef3504aabb54c4d9521e2ec"
+  },
+  {
+    "path": "scratch/settings-store/RedSalamander/Logs/FileOperations-Issues-Task4-20260926-122401527.txt",
+    "sha256": "c31468323e59dcd4d59e0bc804999dee6d8b0d55c19bcfb5da7ff61940764665"
+  },
+  {
+    "path": "scratch/settings-store/RedSalamander/Logs/FileOperations-Issues-Task5-20260926-122401773.txt",
+    "sha256": "b2d08a2977d64bbc21d1515e031cbf94f563aaf226d177eba6faf14289051d5e"
+  },
+  {
+    "path": "scratch/settings-store/RedSalamander/Logs/FileOperations-Issues-Task6-20260926-122402022.txt",
+    "sha256": "cc064a3836de9e3f03d7864922f196b7a50e4301109449f622ff70e8a885e0f9"
+  },
+  {
+    "path": "scratch/settings-store/RedSalamander/Logs/FileOperations-Issues-Task7-20260926-122402273.txt",
+    "sha256": "e69472a10ce06312096714cf9a9d23871d1c52015cdf880c1310b44ed16aba57"
+  }
+]

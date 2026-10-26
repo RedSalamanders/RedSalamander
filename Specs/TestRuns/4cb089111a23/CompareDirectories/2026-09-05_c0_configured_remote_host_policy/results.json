@@ -1,0 +1,88 @@
+{
+    "run_started_utc": "2026-09-05T19:12:49.523Z",
+    "suite": "CompareDirectories",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-configured-remote-host-policy-debug-20260905\\artifacts\\selftest\\last_run\\compare",
+    "duration_ms": 3160,
+    "passed": 11,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Remote compare: decision hr failed. hr=0x80070005",
+    "cases": [
+        {
+            "name": "host_services_startup_selection",
+            "status": "passed",
+            "duration_ms": 2,
+            "repeat_index": 1
+        },
+        {
+            "name": "host_services_startup_context",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "windows_hello_cache",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 1
+        },
+        {
+            "name": "oauth_refresh_token_storage",
+            "status": "passed",
+            "duration_ms": 37,
+            "repeat_index": 1
+        },
+        {
+            "name": "google_drive_cleared_client_id_requires_configuration",
+            "status": "passed",
+            "duration_ms": 328,
+            "repeat_index": 1
+        },
+        {
+            "name": "google_drive_connection_requires_refresh_token",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "onedrive_personal_cleared_client_id_requires_configuration",
+            "status": "passed",
+            "duration_ms": 203,
+            "repeat_index": 1
+        },
+        {
+            "name": "remote_file_s3",
+            "status": "passed",
+            "duration_ms": 481,
+            "repeat_index": 1
+        },
+        {
+            "name": "remote_file_ftp",
+            "status": "passed",
+            "duration_ms": 196,
+            "repeat_index": 1
+        },
+        {
+            "name": "remote_file_sftp",
+            "status": "passed",
+            "duration_ms": 187,
+            "repeat_index": 1
+        },
+        {
+            "name": "remote_file_scp",
+            "status": "passed",
+            "duration_ms": 454,
+            "repeat_index": 1
+        },
+        {
+            "name": "remote_file_imap",
+            "status": "failed",
+            "duration_ms": 5,
+            "repeat_index": 1,
+            "reason": "Remote compare: decision hr failed. hr=0x80070005"
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

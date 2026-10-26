@@ -1,0 +1,14 @@
+{
+  "configuration": "Release",
+  "platform": "x64",
+  "testEnabled": true,
+  "command": "build.ps1 -Configuration Release -Platform x64 -Rebuild -MaxCpuCount4",
+  "exitCode": 0,
+  "duration": "11:47",
+  "warnings": 0,
+  "errors": 0,
+  "receipt": "3fcbd99abe7790ab0419107520d85e5df8ea726c18ec89ac3e69323d65234add",
+  "sourceSnapshot": "180bb20cdea4370b1c3376df556a6c1000e51c6a6e58386afeb63c4854d3a152",
+  "sharedDependencyContaminationMarkerPresent": false,
+  "qualification": "Recovery after owned tooling interruption; original writer obligation remains failed. No native qualification pass fabricated."
+}

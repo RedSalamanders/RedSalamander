@@ -1,0 +1,27 @@
+{
+  "baseline_receipt": "5a5f98f940e08ad7b0c6cef5e374b9f64332727ac6e7abacddbe6eb838ddcc15",
+  "candidate_receipt": "abe7c168d6a55ecf0c29a60747ba6f99138eb2d4fc7ee6e17bdc03793e0f2b97",
+  "delta": [
+    {
+      "path": "Plugins/FileSystem/FileSystem.cpp",
+      "baseline_sha256": "6a77f8cffe336577fd0da119b00f1115381b8c7e04e0d3ca237097fa614fa283",
+      "candidate_sha256": "3a9cf4e53952dadee42163218433dff254269fc0550ae80810e85ae3f4ce16fd"
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Throughput.cpp",
+      "baseline_sha256": "3784a54816bd2bb79d3ad5ecdcaffac88ad9eb1f3519b4932e7d3afac0dce3c7",
+      "candidate_sha256": "c10a56a5dffa68a6a8ef3792d44451bbc281a180d59bf2fc43b8acbb3d3b7c3c"
+    },
+    {
+      "path": "Specs/FileSystem/FileSystem_FileOperations.md",
+      "baseline_sha256": "99582685806a77fba29ecf1ede6c75f4e70a676d85ef1b67208860737e73e8ca",
+      "candidate_sha256": "bf02740ebac3ffceb256fbad700ccc2ce9a7912debf5cb1432641ad0a0bcb5e8"
+    },
+    {
+      "path": "Specs/Testing/Testing_PerformanceValidation.md",
+      "baseline_sha256": "933098e8ca2a04909eb3bbf980c0a8de88fd13f2a91bacac90bec6bcb056072f",
+      "candidate_sha256": "17cda0590c8fca5687328c585a792cff2a7e66d6005ec907dcb3b3c16f3c03a1"
+    }
+  ],
+  "note": "Baseline Debug failures preserved; production cancellation implementation unchanged; fixture now validates known and uncertain publication truth separately."
+}

@@ -1,0 +1,42 @@
+[
+  {
+    "capture": 1,
+    "run_id": "20261002T143049Z-10872-ad06e06b5db84ed1854596f5ea8ef6f7",
+    "receipt_id": "284d47cf32a3872c22c23e0cce74a17b6d36bd81c20cc52773cae19bab9dc2fc",
+    "source_snapshot_id": "c70c26e7d63c64c8299cf57dd37b1c4e1096231ba6c250d78a0742ccbfbe9ab1",
+    "runtime_binding_sha256": "8935cd5b899c6f013f26602c0d93a7a9297bb949566377b11586e6aafb6f24d6",
+    "modules_checked_before_and_after": 134
+  },
+  {
+    "capture": 2,
+    "run_id": "20261002T143153Z-35860-7e6c95545fec4483be6c09847f685081",
+    "receipt_id": "284d47cf32a3872c22c23e0cce74a17b6d36bd81c20cc52773cae19bab9dc2fc",
+    "source_snapshot_id": "c70c26e7d63c64c8299cf57dd37b1c4e1096231ba6c250d78a0742ccbfbe9ab1",
+    "runtime_binding_sha256": "8935cd5b899c6f013f26602c0d93a7a9297bb949566377b11586e6aafb6f24d6",
+    "modules_checked_before_and_after": 134
+  },
+  {
+    "capture": 3,
+    "run_id": "20261002T143255Z-2748-5d01e85e05794b7fad53acfd810624a1",
+    "receipt_id": "284d47cf32a3872c22c23e0cce74a17b6d36bd81c20cc52773cae19bab9dc2fc",
+    "source_snapshot_id": "c70c26e7d63c64c8299cf57dd37b1c4e1096231ba6c250d78a0742ccbfbe9ab1",
+    "runtime_binding_sha256": "8935cd5b899c6f013f26602c0d93a7a9297bb949566377b11586e6aafb6f24d6",
+    "modules_checked_before_and_after": 134
+  },
+  {
+    "capture": 4,
+    "run_id": "20261002T143412Z-49808-404561466435448dbc9259a4e0da493b",
+    "receipt_id": "284d47cf32a3872c22c23e0cce74a17b6d36bd81c20cc52773cae19bab9dc2fc",
+    "source_snapshot_id": "c70c26e7d63c64c8299cf57dd37b1c4e1096231ba6c250d78a0742ccbfbe9ab1",
+    "runtime_binding_sha256": "8935cd5b899c6f013f26602c0d93a7a9297bb949566377b11586e6aafb6f24d6",
+    "modules_checked_before_and_after": 134
+  },
+  {
+    "capture": 5,
+    "run_id": "20261002T143528Z-45120-0c35cd79054e44d9bfd1858ae89b74e9",
+    "receipt_id": "284d47cf32a3872c22c23e0cce74a17b6d36bd81c20cc52773cae19bab9dc2fc",
+    "source_snapshot_id": "c70c26e7d63c64c8299cf57dd37b1c4e1096231ba6c250d78a0742ccbfbe9ab1",
+    "runtime_binding_sha256": "8935cd5b899c6f013f26602c0d93a7a9297bb949566377b11586e6aafb6f24d6",
+    "modules_checked_before_and_after": 134
+  }
+]

@@ -1,0 +1,194 @@
+{
+    "run_started_utc": "2026-09-13T14:34:25.543Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260913T143402Z-39692-a2aca327ac874d46b00ff78045c77ba2\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 19595,
+    "passed": 30,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1203,
+            "repeat_index": 1
+        },
+        {
+            "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+            "status": "passed",
+            "duration_ms": 1578,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 141,
+            "repeat_index": 1
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 47,
+            "repeat_index": 2
+        },
+        {
+            "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+            "status": "passed",
+            "duration_ms": 1640,
+            "repeat_index": 2
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 110,
+            "repeat_index": 2
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 94,
+            "repeat_index": 3
+        },
+        {
+            "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+            "status": "passed",
+            "duration_ms": 1688,
+            "repeat_index": 3
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 3
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 4
+        },
+        {
+            "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+            "status": "passed",
+            "duration_ms": 1703,
+            "repeat_index": 4
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 63,
+            "repeat_index": 4
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 110,
+            "repeat_index": 5
+        },
+        {
+            "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+            "status": "passed",
+            "duration_ms": 1672,
+            "repeat_index": 5
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 140,
+            "repeat_index": 5
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 94,
+            "repeat_index": 6
+        },
+        {
+            "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+            "status": "passed",
+            "duration_ms": 1671,
+            "repeat_index": 6
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 79,
+            "repeat_index": 6
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 7
+        },
+        {
+            "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+            "status": "passed",
+            "duration_ms": 1625,
+            "repeat_index": 7
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 7
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 8
+        },
+        {
+            "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+            "status": "passed",
+            "duration_ms": 1688,
+            "repeat_index": 8
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 8
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 94,
+            "repeat_index": 9
+        },
+        {
+            "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+            "status": "passed",
+            "duration_ms": 1672,
+            "repeat_index": 9
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 9
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 93,
+            "repeat_index": 10
+        },
+        {
+            "name": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+            "status": "passed",
+            "duration_ms": 1719,
+            "repeat_index": 10
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 10
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 10
+}

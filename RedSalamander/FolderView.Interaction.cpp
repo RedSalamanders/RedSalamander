@@ -199,8 +199,8 @@ void FolderView::OnContextMenuMessage(HWND hwnd, LPARAM lParam)
         if (_focusedIndex < _items.size())
         {
             const RECT currentRect = ToPixelRect(OffsetRect(_items[_focusedIndex].bounds, -_horizontalOffset, -_scrollOffset), _dpi);
-            pt.x = currentRect.left;
-            pt.y = currentRect.bottom;
+            pt.x                   = currentRect.left;
+            pt.y                   = currentRect.bottom;
         }
         else
         {
@@ -334,6 +334,7 @@ void FolderView::OnCommandMessage(UINT commandId)
         case IDM_PANE_ALTERNATE_EDIT:
         case IDM_PANE_CREATE_DIR:
         case IDM_PANE_EDIT_NEW:
+        case IDM_PANE_CLEANUP_LEFTOVERS:
         {
             if (_hWnd)
             {
@@ -356,14 +357,19 @@ void FolderView::OnCommandMessage(UINT commandId)
         case CmdUnselectAll: ClearSelection(); break;
         case CmdProperties: ShowProperties(); break;
         case CmdMove: MoveSelectedItems(); break;
-        case CmdArtifactInspect:
-            static_cast<void>(RequestViewFocusedItem(ViewFileRole::Primary, false, {}, true));
-            break;
+        case CmdArtifactInspect: static_cast<void>(RequestViewFocusedItem(ViewFileRole::Primary, false, {}, true)); break;
         case CmdArtifactReveal:
             if (_focusedIndex < _items.size())
             {
                 EnsureVisible(_focusedIndex);
                 InvalidateRect(_hWnd.get(), nullptr, FALSE);
+            }
+            break;
+        case CmdArtifactOpenLocation:
+            // I35 R7.2: inspection-class and prompt-free; File Explorer owns any later action.
+            if (const auto projection = GetFocusedArtifactProjection(); projection && projection->capabilities.openLocation)
+            {
+                static_cast<void>(FileOperationArtifacts::OpenLocationInFileExplorer(projection->qualifiedLocation));
             }
             break;
         case CmdOverlaySampleError:
@@ -432,8 +438,8 @@ void FolderView::OnCommandMessage(UINT commandId)
 void FolderView::OnMouseWheel(int delta, bool horizontal)
 {
     const float horizontalBefore = _horizontalOffset;
-    const float maxHorizontal = std::max(0.0f, _contentWidth - DipFromPx(_clientSize.cx));
-    const int wheelClicks     = horizontal ? (delta / WHEEL_DELTA) : (-delta / WHEEL_DELTA);
+    const float maxHorizontal    = std::max(0.0f, _contentWidth - DipFromPx(_clientSize.cx));
+    const int wheelClicks        = horizontal ? (delta / WHEEL_DELTA) : (-delta / WHEEL_DELTA);
     for (int click = 0; click < std::abs(wheelClicks); ++click)
     {
         _horizontalOffset = wheelClicks > 0 ? FolderViewColumnLayout::ResolveNextScrollStop(_horizontalOffset, maxHorizontal, _columnLayout)
@@ -480,11 +486,7 @@ void FolderView::OnLButtonDown(POINT pt, WPARAM keys)
         {
             if (hit.buttonId == kCancelButtonId && overlay.kind == ErrorOverlayKind::Enumeration && overlay.severity == OverlaySeverity::Busy)
             {
-                CancelPendingEnumeration();
-                const std::wstring title   = LoadStringResource(nullptr, IDS_OVERLAY_TITLE_CANCELED);
-                const std::wstring message = LoadStringResource(nullptr, IDS_OVERLAY_MSG_ENUMERATION_CANCELED);
-                ShowAlertOverlay(
-                    ErrorOverlayKind::Enumeration, OverlaySeverity::Information, title, message, HRESULT_FROM_WIN32(ERROR_CANCELLED), false, false);
+                CancelEnumerationByUser();
                 return;
             }
             DismissAlertOverlay();
@@ -503,8 +505,8 @@ void FolderView::OnLButtonDown(POINT pt, WPARAM keys)
     auto hit = HitTest(pt);
     if (hit)
     {
-        const bool ctrl  = (keys & MK_CONTROL) != 0;
-        const bool shift = (keys & MK_SHIFT) != 0;
+        const bool ctrl              = (keys & MK_CONTROL) != 0;
+        const bool shift             = (keys & MK_SHIFT) != 0;
         const size_t prePressCurrent = _focusedIndex;
 
         if (shift)
@@ -533,12 +535,13 @@ void FolderView::OnLButtonDown(POINT pt, WPARAM keys)
             _anchorIndex = *hit;
         }
 
-        _drag.startPoint = pt;
-        _drag.pressedIndex = *hit;
-        _drag.sourcePaths = GetSelectedOrFocusedPaths();
-        _drag.sourceDisplayNames = GetSelectedOrFocusedDisplayNames();
-        const bool pressedBelongsToSource = *hit < _items.size() && std::ranges::any_of(_drag.sourceDisplayNames, [&](const std::wstring& name) noexcept
-        { return EquivalentProviderComponent(name, _items[*hit].displayName); });
+        _drag.startPoint                  = pt;
+        _drag.pressedIndex                = *hit;
+        _drag.sourcePaths                 = GetSelectedOrFocusedPaths();
+        _drag.sourceDisplayNames          = GetSelectedOrFocusedDisplayNames();
+        const bool pressedBelongsToSource = *hit < _items.size() && std::ranges::any_of(_drag.sourceDisplayNames, [&](const std::wstring& name) noexcept {
+            return EquivalentProviderComponent(name, _items[*hit].displayName);
+        });
         if (pressedBelongsToSource)
         {
             _drag.potential = true;
@@ -585,6 +588,22 @@ void FolderView::OnLButtonDblClk(POINT pt, WPARAM keys)
 void FolderView::OnLButtonUp(POINT /*pt*/)
 {
     DisarmPotentialDrag();
+}
+
+void FolderView::CancelEnumerationByUser()
+{
+    CancelPendingEnumeration();
+    // No result will arrive for the generation the cancel opened, so it is the terminal
+    // settlement of this navigation. Record it for inspection selection, and post the
+    // settlement event: a listener may navigate, which must follow this overlay.
+    const uint64_t generation      = _enumerationGeneration.load(std::memory_order_acquire);
+    _inspectionCompletedGeneration = generation;
+    _inspectionEnumerationStatus   = HRESULT_FROM_WIN32(ERROR_CANCELLED);
+    if (_enumerationSettledCallback && _hWnd && PostMessageW(_hWnd.get(), WndMsg::kFolderViewEnumerationCanceled, 0, 0) != FALSE)
+        _canceledSettlementGeneration = generation;
+    const std::wstring title   = LoadStringResource(nullptr, IDS_OVERLAY_TITLE_CANCELED);
+    const std::wstring message = LoadStringResource(nullptr, IDS_OVERLAY_MSG_ENUMERATION_CANCELED);
+    ShowAlertOverlay(ErrorOverlayKind::Enumeration, OverlaySeverity::Information, title, message, HRESULT_FROM_WIN32(ERROR_CANCELLED), false, false);
 }
 
 void FolderView::DisarmPotentialDrag() noexcept
@@ -659,8 +678,8 @@ void FolderView::OnMouseMove(POINT pt, WPARAM keys)
 
     if (_drag.potential && (keys & MK_LBUTTON))
     {
-        const UINT dpi = static_cast<UINT>((std::max)(96.0f, _dpi));
-        const int width = (std::max)(1, GetSystemMetricsForDpi(SM_CXDRAG, dpi));
+        const UINT dpi   = static_cast<UINT>((std::max)(96.0f, _dpi));
+        const int width  = (std::max)(1, GetSystemMetricsForDpi(SM_CXDRAG, dpi));
         const int height = (std::max)(1, GetSystemMetricsForDpi(SM_CYDRAG, dpi));
         const RECT thresholdRectangle{
             _drag.startPoint.x - width / 2,
@@ -754,6 +773,13 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift, bool translatedSpa
     {
         if (overlay.blocksInput)
         {
+            // A failed location still needs an escape route, including a deleted folder revisited from history.
+            if (key == VK_BACK && overlay.kind == ErrorOverlayKind::Enumeration && overlay.severity != OverlaySeverity::Busy)
+            {
+                NavigateUp();
+                return;
+            }
+
             if (key == VK_TAB)
             {
                 if (_navigationRequestCallback)
@@ -768,11 +794,7 @@ void FolderView::OnKeyDown(WPARAM key, bool ctrl, bool shift, bool translatedSpa
             {
                 if (overlay.kind == ErrorOverlayKind::Enumeration && overlay.severity == OverlaySeverity::Busy)
                 {
-                    CancelPendingEnumeration();
-                    const std::wstring title   = LoadStringResource(nullptr, IDS_OVERLAY_TITLE_CANCELED);
-                    const std::wstring message = LoadStringResource(nullptr, IDS_OVERLAY_MSG_ENUMERATION_CANCELED);
-                    ShowAlertOverlay(
-                        ErrorOverlayKind::Enumeration, OverlaySeverity::Information, title, message, HRESULT_FROM_WIN32(ERROR_CANCELLED), false, false);
+                    CancelEnumerationByUser();
                     return;
                 }
 

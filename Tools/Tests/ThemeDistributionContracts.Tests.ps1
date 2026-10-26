@@ -23,8 +23,8 @@ Describe 'Theme distribution contracts' {
         }
     }
 
-    It 'copies themes, notices, and exact licenses from both application projects' {
-        foreach ($project in @('RedSalamander\RedSalamander.vcxproj', 'RedSalamanderMonitor\RedSalamanderMonitor.vcxproj')) {
+    It 'copies themes, notices, and exact licenses from the locally owned application project' {
+        foreach ($project in @('RedSalamander\RedSalamander.vcxproj')) {
             $text = Get-Content -LiteralPath (Join-Path $repoRoot $project) -Raw
             $text | Should Match '<ThemeFiles Include="\$\(ThemeSourceDir\)\\\*\.theme\.json5" />'
             $text | Should Match '<ThemeNoticeFiles Include="\$\(ThemeSourceDir\)\\THIRD-PARTY-NOTICES\.md" />'

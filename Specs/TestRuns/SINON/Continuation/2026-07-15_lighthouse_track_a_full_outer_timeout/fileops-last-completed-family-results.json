@@ -1,0 +1,284 @@
+{
+    "run_started_utc": "2026-07-15T06:32:18.755Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260715T061450Z-73520-a23787f92c53421787665998d40d14d7\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 79563,
+    "passed": 45,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        },
+        {
+            "name": "Riptide_MoveDistinctSameSizeFilePreservesSource",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        },
+        {
+            "name": "Riptide_ReparseMoveRollbackKeepsOverwrittenDestination",
+            "status": "passed",
+            "duration_ms": 63,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_MoveFallbackPreservesUncopiedNewFiles",
+            "status": "passed",
+            "duration_ms": 25125,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_MoveMergeReadonlyDestinationFolder",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_OverwriteGrantIsOneShot",
+            "status": "passed",
+            "duration_ms": 750,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_ConflictPromptsSerializedUnderParallelism",
+            "status": "passed",
+            "duration_ms": 375,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_ReparseReplaceNonEmptyDirRequiresConsent",
+            "status": "passed",
+            "duration_ms": 312,
+            "repeat_index": 1
+        },
+        {
+            "name": "Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate",
+            "status": "passed",
+            "duration_ms": 250,
+            "repeat_index": 1
+        },
+        {
+            "name": "Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent",
+            "status": "passed",
+            "duration_ms": 188,
+            "repeat_index": 1
+        },
+        {
+            "name": "Riptide_ReparseMoveSourceNeverUsesDirectoryMerge",
+            "status": "passed",
+            "duration_ms": 62,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_MovedTreeRetargetsInternalLinks",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_CrossFsConcurrentMoveUsesBridge",
+            "status": "passed",
+            "duration_ms": 313,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_RerunCopyIsResumeAware",
+            "status": "passed",
+            "duration_ms": 312,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_MoveFallbackSameSizeCollisionPrompts",
+            "status": "passed",
+            "duration_ms": 188,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_GraphBandsFairUnderParallelCopy",
+            "status": "passed",
+            "duration_ms": 62,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_MergeMoveRenamesChildren",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_JunctionMergeTargetRequiresConsent",
+            "status": "passed",
+            "duration_ms": 188,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_CopyIntoSelfAliasRejected",
+            "status": "passed",
+            "duration_ms": 62,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_StorageKindProbed",
+            "status": "passed",
+            "duration_ms": 25125,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_ParallelDeleteContinuesPastLockedChild",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_BridgePerFileConflictSkips",
+            "status": "passed",
+            "duration_ms": 250,
+            "repeat_index": 1
+        },
+        {
+            "name": "Riptide_BridgeNestedDirVsFileSkipContinuesSiblings",
+            "status": "passed",
+            "duration_ms": 250,
+            "repeat_index": 1
+        },
+        {
+            "name": "Riptide_BridgeDirectoryOverReadOnlyFileRequiresReplaceReadOnly",
+            "status": "passed",
+            "duration_ms": 250,
+            "repeat_index": 1
+        },
+        {
+            "name": "Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPartial",
+            "status": "passed",
+            "duration_ms": 250,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_SaturationConcurrentCopiesMakeProgress",
+            "status": "passed",
+            "duration_ms": 9266,
+            "repeat_index": 1
+        },
+        {
+            "name": "Fairstream_EarlyAdmissionOverlapsPreCalc",
+            "status": "passed",
+            "duration_ms": 4375,
+            "repeat_index": 1
+        },
+        {
+            "name": "Riptide_EarlyAdmissionThreadStartFailureFallsBack",
+            "status": "passed",
+            "duration_ms": 109,
+            "repeat_index": 1
+        },
+        {
+            "name": "Riptide_EarlyAdmissionDisabledDoesNotStartThread",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        },
+        {
+            "name": "Riptide_LiveFinishedSnapshotCarriesDiagnostics",
+            "status": "passed",
+            "duration_ms": 250,
+            "repeat_index": 1
+        },
+        {
+            "name": "Riptide_BridgeSequentialContinueOnErrorCopiesSiblings",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        },
+        {
+            "name": "Causeway_BridgeRejectsHostileChildNames",
+            "status": "passed",
+            "duration_ms": 313,
+            "repeat_index": 1
+        },
+        {
+            "name": "Causeway_BridgeProviderOutputContracts",
+            "status": "passed",
+            "duration_ms": 578,
+            "repeat_index": 1
+        },
+        {
+            "name": "Causeway_BridgeSchedulingAndResourceContracts",
+            "status": "passed",
+            "duration_ms": 6922,
+            "repeat_index": 1
+        },
+        {
+            "name": "Causeway_BridgeFileReparsePolicy",
+            "status": "passed",
+            "duration_ms": 250,
+            "repeat_index": 1
+        },
+        {
+            "name": "Causeway_BridgeFailureStatusAndPausedReader",
+            "status": "passed",
+            "duration_ms": 625,
+            "repeat_index": 1
+        },
+        {
+            "name": "Floodgate_CrossFsCopyGetSizeFailureRefusesCommit",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        },
+        {
+            "name": "Floodgate_CrossFsMoveGetSizeFailurePreservesSource",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        },
+        {
+            "name": "Floodgate_CrossFsMoveCleanupDetectsDestinationCorruption",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        },
+        {
+            "name": "Floodgate_CrossFsDirectoryMoveCleanupPreservesChangedSource",
+            "status": "passed",
+            "duration_ms": 250,
+            "repeat_index": 1
+        },
+        {
+            "name": "Floodgate_LocalWriterOverwriteIsStaged",
+            "status": "passed",
+            "duration_ms": 62,
+            "repeat_index": 1
+        },
+        {
+            "name": "Floodgate_LocalCopyOverwriteIsStaged",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 1
+        },
+        {
+            "name": "Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker",
+            "status": "passed",
+            "duration_ms": 329,
+            "repeat_index": 1
+        },
+        {
+            "name": "Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker",
+            "status": "passed",
+            "duration_ms": 281,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

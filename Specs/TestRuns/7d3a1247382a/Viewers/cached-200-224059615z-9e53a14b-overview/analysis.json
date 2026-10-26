@@ -1,0 +1,25 @@
+{
+  "schema": "viewer-space.cached-reopen-200-analysis.v1",
+  "status": "qualified",
+  "runId": "20261009T224102Z-43236-26566751591f4c62bbb2370dea3e1e75",
+  "receiptId": "37dae646d3557dd0b5ac7618b76b136f0740f1be80dad2744b28236083f98ddd",
+  "workspaceSnapshotId": "9addaf53d4d88d618223a7f2d8554ac0b73f2472946c3a3e0875b1fd94ac9554",
+  "fixtureFiles": 10000,
+  "fixtureDirectories": 121,
+  "fixtureRootBytes": 302230,
+  "cacheHitCount": 200,
+  "sampleCount": 200,
+  "firstMeaningfulPaintUs": {
+    "min": 97330,
+    "median": 117765.0,
+    "p95": 145603,
+    "max": 204976,
+    "targetUs": 100000,
+    "targetMetCount": 1
+  },
+  "allSamplesCurrentPresented": true,
+  "observerMode": "continuous-message-pump",
+  "observerModeInterpretation": "Observer mode is reported as recorded; samples from different observer modes are not combined.",
+  "interpretation": "candidate-only cached reopen samples; no baseline comparison or cache-phase-cap override",
+  "sourceArtifactSha256": "55ae1bdeb571e9f20b6e8a1b406a46c66f88dbe9ead9e7498082b1debf597ad1"
+}

@@ -1,0 +1,1939 @@
+[
+  {
+    "variant": "baseline",
+    "capture": 1,
+    "ui_us": 1625000,
+    "process_us": 1953125,
+    "intervals": [
+      {
+        "phase": "popup-open-before",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "popup-open-after",
+        "ui_us": 78125,
+        "process_us": 78125
+      },
+      {
+        "phase": "popup-collapsed-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "popup-collapsed-after",
+        "ui_us": 109375,
+        "process_us": 140625
+      },
+      {
+        "phase": "popup-after-churn",
+        "ui_us": 750000,
+        "process_us": 953125
+      },
+      {
+        "phase": "popup-hidden-start",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "popup-hidden-end",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "popup-reshown",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-detail-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "issues-detail-after",
+        "ui_us": 78125,
+        "process_us": 93750
+      },
+      {
+        "phase": "issues-hidden-start",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-hidden-end",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-reshown",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-cleaned",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-before",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-compare-after",
+        "ui_us": 78125,
+        "process_us": 109375
+      },
+      {
+        "phase": "scan-compare-closed",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-change-case-before",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-change-case-after",
+        "ui_us": 62500,
+        "process_us": 78125
+      },
+      {
+        "phase": "scan-change-case-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-attributes-before",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-change-attributes-after",
+        "ui_us": 109375,
+        "process_us": 125000
+      },
+      {
+        "phase": "scan-change-attributes-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-file-list-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-file-list-after",
+        "ui_us": 78125,
+        "process_us": 93750
+      },
+      {
+        "phase": "scan-file-list-closed",
+        "ui_us": 0,
+        "process_us": 0
+      }
+    ],
+    "raw_sha256": "af2918267ec7f4c6658289741ca15c959679cad16c75fe2da4851c6d9617d07f"
+  },
+  {
+    "variant": "baseline",
+    "capture": 2,
+    "ui_us": 1875000,
+    "process_us": 2250000,
+    "intervals": [
+      {
+        "phase": "popup-open-before",
+        "ui_us": 62500,
+        "process_us": 62500
+      },
+      {
+        "phase": "popup-open-after",
+        "ui_us": 109375,
+        "process_us": 125000
+      },
+      {
+        "phase": "popup-collapsed-before",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "popup-collapsed-after",
+        "ui_us": 125000,
+        "process_us": 140625
+      },
+      {
+        "phase": "popup-after-churn",
+        "ui_us": 781250,
+        "process_us": 953125
+      },
+      {
+        "phase": "popup-hidden-start",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "popup-hidden-end",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "popup-reshown",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "popup-destroyed",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-detail-before",
+        "ui_us": 46875,
+        "process_us": 62500
+      },
+      {
+        "phase": "issues-detail-after",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "issues-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-hidden-end",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-reshown",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-cleaned",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-before",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-after",
+        "ui_us": 93750,
+        "process_us": 109375
+      },
+      {
+        "phase": "scan-compare-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-case-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "scan-change-case-after",
+        "ui_us": 125000,
+        "process_us": 187500
+      },
+      {
+        "phase": "scan-change-case-closed",
+        "ui_us": 15625,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-attributes-before",
+        "ui_us": 46875,
+        "process_us": 78125
+      },
+      {
+        "phase": "scan-change-attributes-after",
+        "ui_us": 125000,
+        "process_us": 140625
+      },
+      {
+        "phase": "scan-change-attributes-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-file-list-before",
+        "ui_us": 62500,
+        "process_us": 62500
+      },
+      {
+        "phase": "scan-file-list-after",
+        "ui_us": 125000,
+        "process_us": 171875
+      },
+      {
+        "phase": "scan-file-list-closed",
+        "ui_us": 0,
+        "process_us": 0
+      }
+    ],
+    "raw_sha256": "e0424955a2f7eb9620bd8b41369b1a6dd615507c0591109f8656f68bee5057e9"
+  },
+  {
+    "variant": "baseline",
+    "capture": 3,
+    "ui_us": 1406250,
+    "process_us": 1703125,
+    "intervals": [
+      {
+        "phase": "popup-open-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-open-after",
+        "ui_us": 93750,
+        "process_us": 171875
+      },
+      {
+        "phase": "popup-collapsed-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "popup-collapsed-after",
+        "ui_us": 78125,
+        "process_us": 125000
+      },
+      {
+        "phase": "popup-after-churn",
+        "ui_us": 546875,
+        "process_us": 640625
+      },
+      {
+        "phase": "popup-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "popup-hidden-end",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "popup-reshown",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "popup-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-detail-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "issues-detail-after",
+        "ui_us": 31250,
+        "process_us": 46875
+      },
+      {
+        "phase": "issues-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-hidden-end",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-reshown",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-cleaned",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "scan-compare-after",
+        "ui_us": 109375,
+        "process_us": 140625
+      },
+      {
+        "phase": "scan-compare-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-case-before",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-case-after",
+        "ui_us": 93750,
+        "process_us": 125000
+      },
+      {
+        "phase": "scan-change-case-closed",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-change-attributes-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-change-attributes-after",
+        "ui_us": 93750,
+        "process_us": 93750
+      },
+      {
+        "phase": "scan-change-attributes-closed",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-file-list-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-file-list-after",
+        "ui_us": 62500,
+        "process_us": 62500
+      },
+      {
+        "phase": "scan-file-list-closed",
+        "ui_us": 0,
+        "process_us": 0
+      }
+    ],
+    "raw_sha256": "96155e7121a0859a8803c4a7836f18471564411bd365fa2e109e530272861542"
+  },
+  {
+    "variant": "baseline",
+    "capture": 4,
+    "ui_us": 1781250,
+    "process_us": 2578125,
+    "intervals": [
+      {
+        "phase": "popup-open-before",
+        "ui_us": 31250,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-open-after",
+        "ui_us": 78125,
+        "process_us": 93750
+      },
+      {
+        "phase": "popup-collapsed-before",
+        "ui_us": 31250,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-collapsed-after",
+        "ui_us": 125000,
+        "process_us": 156250
+      },
+      {
+        "phase": "popup-after-churn",
+        "ui_us": 656250,
+        "process_us": 890625
+      },
+      {
+        "phase": "popup-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "popup-hidden-end",
+        "ui_us": 31250,
+        "process_us": 93750
+      },
+      {
+        "phase": "popup-reshown",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "popup-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-detail-before",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-detail-after",
+        "ui_us": 62500,
+        "process_us": 109375
+      },
+      {
+        "phase": "issues-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-hidden-end",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-reshown",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-cleaned",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-before",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-after",
+        "ui_us": 156250,
+        "process_us": 218750
+      },
+      {
+        "phase": "scan-compare-closed",
+        "ui_us": 15625,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-change-case-before",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-change-case-after",
+        "ui_us": 156250,
+        "process_us": 296875
+      },
+      {
+        "phase": "scan-change-case-closed",
+        "ui_us": 15625,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-change-attributes-before",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-change-attributes-after",
+        "ui_us": 140625,
+        "process_us": 218750
+      },
+      {
+        "phase": "scan-change-attributes-closed",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-file-list-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "scan-file-list-after",
+        "ui_us": 140625,
+        "process_us": 203125
+      },
+      {
+        "phase": "scan-file-list-closed",
+        "ui_us": 15625,
+        "process_us": 15625
+      }
+    ],
+    "raw_sha256": "52624b6e020db08a73a70de2bcb38e2e3313bc2c04a5a73ed4a42848cf0ab7a5"
+  },
+  {
+    "variant": "baseline",
+    "capture": 5,
+    "ui_us": 1468750,
+    "process_us": 1671875,
+    "intervals": [
+      {
+        "phase": "popup-open-before",
+        "ui_us": 62500,
+        "process_us": 62500
+      },
+      {
+        "phase": "popup-open-after",
+        "ui_us": 62500,
+        "process_us": 78125
+      },
+      {
+        "phase": "popup-collapsed-before",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "popup-collapsed-after",
+        "ui_us": 62500,
+        "process_us": 62500
+      },
+      {
+        "phase": "popup-after-churn",
+        "ui_us": 609375,
+        "process_us": 718750
+      },
+      {
+        "phase": "popup-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "popup-hidden-end",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "popup-reshown",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "popup-destroyed",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-detail-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "issues-detail-after",
+        "ui_us": 31250,
+        "process_us": 46875
+      },
+      {
+        "phase": "issues-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-hidden-end",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-reshown",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-cleaned",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-compare-after",
+        "ui_us": 78125,
+        "process_us": 78125
+      },
+      {
+        "phase": "scan-compare-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-case-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-change-case-after",
+        "ui_us": 62500,
+        "process_us": 109375
+      },
+      {
+        "phase": "scan-change-case-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-attributes-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-change-attributes-after",
+        "ui_us": 109375,
+        "process_us": 125000
+      },
+      {
+        "phase": "scan-change-attributes-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-file-list-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-file-list-after",
+        "ui_us": 140625,
+        "process_us": 140625
+      },
+      {
+        "phase": "scan-file-list-closed",
+        "ui_us": 0,
+        "process_us": 0
+      }
+    ],
+    "raw_sha256": "3f446caf9afff523ed2f5eacf2302cc2df8b246858549607c4e34f4fa746fe36"
+  },
+  {
+    "variant": "candidate",
+    "capture": 1,
+    "ui_us": 2359375,
+    "process_us": 2906250,
+    "intervals": [
+      {
+        "phase": "popup-open-before",
+        "ui_us": 31250,
+        "process_us": 78125
+      },
+      {
+        "phase": "popup-open-after",
+        "ui_us": 125000,
+        "process_us": 187500
+      },
+      {
+        "phase": "popup-collapsed-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "popup-collapsed-after",
+        "ui_us": 93750,
+        "process_us": 125000
+      },
+      {
+        "phase": "popup-after-churn",
+        "ui_us": 1218750,
+        "process_us": 1359375
+      },
+      {
+        "phase": "popup-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "popup-hidden-end",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-reshown",
+        "ui_us": 15625,
+        "process_us": 31250
+      },
+      {
+        "phase": "popup-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-detail-before",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-detail-after",
+        "ui_us": 46875,
+        "process_us": 62500
+      },
+      {
+        "phase": "issues-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-hidden-end",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-reshown",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-cleaned",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "scan-compare-after",
+        "ui_us": 109375,
+        "process_us": 171875
+      },
+      {
+        "phase": "scan-compare-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-case-before",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-change-case-after",
+        "ui_us": 140625,
+        "process_us": 187500
+      },
+      {
+        "phase": "scan-change-case-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-attributes-before",
+        "ui_us": 15625,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-change-attributes-after",
+        "ui_us": 187500,
+        "process_us": 218750
+      },
+      {
+        "phase": "scan-change-attributes-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-file-list-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "scan-file-list-after",
+        "ui_us": 156250,
+        "process_us": 234375
+      },
+      {
+        "phase": "scan-file-list-closed",
+        "ui_us": 0,
+        "process_us": 0
+      }
+    ],
+    "raw_sha256": "4d4c7481d07963e9825761e2a5271b9cb9867a0f3c94a181b4b862f9d89c3909"
+  },
+  {
+    "variant": "candidate",
+    "capture": 2,
+    "ui_us": 2171875,
+    "process_us": 2593750,
+    "intervals": [
+      {
+        "phase": "popup-open-before",
+        "ui_us": 46875,
+        "process_us": 62500
+      },
+      {
+        "phase": "popup-open-after",
+        "ui_us": 109375,
+        "process_us": 171875
+      },
+      {
+        "phase": "popup-collapsed-before",
+        "ui_us": 31250,
+        "process_us": 109375
+      },
+      {
+        "phase": "popup-collapsed-after",
+        "ui_us": 93750,
+        "process_us": 93750
+      },
+      {
+        "phase": "popup-after-churn",
+        "ui_us": 1000000,
+        "process_us": 1078125
+      },
+      {
+        "phase": "popup-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "popup-hidden-end",
+        "ui_us": 31250,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-reshown",
+        "ui_us": 78125,
+        "process_us": 78125
+      },
+      {
+        "phase": "popup-destroyed",
+        "ui_us": 0,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-detail-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "issues-detail-after",
+        "ui_us": 31250,
+        "process_us": 78125
+      },
+      {
+        "phase": "issues-hidden-start",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-hidden-end",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-reshown",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-cleaned",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-compare-after",
+        "ui_us": 78125,
+        "process_us": 78125
+      },
+      {
+        "phase": "scan-compare-closed",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-change-case-before",
+        "ui_us": 46875,
+        "process_us": 93750
+      },
+      {
+        "phase": "scan-change-case-after",
+        "ui_us": 140625,
+        "process_us": 156250
+      },
+      {
+        "phase": "scan-change-case-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-attributes-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "scan-change-attributes-after",
+        "ui_us": 156250,
+        "process_us": 171875
+      },
+      {
+        "phase": "scan-change-attributes-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-file-list-before",
+        "ui_us": 62500,
+        "process_us": 78125
+      },
+      {
+        "phase": "scan-file-list-after",
+        "ui_us": 109375,
+        "process_us": 125000
+      },
+      {
+        "phase": "scan-file-list-closed",
+        "ui_us": 0,
+        "process_us": 0
+      }
+    ],
+    "raw_sha256": "b04ec9424822d2458177f59f1eb011e65052e3caee9047b6017641fd6d4737bd"
+  },
+  {
+    "variant": "candidate",
+    "capture": 3,
+    "ui_us": 2437500,
+    "process_us": 2781250,
+    "intervals": [
+      {
+        "phase": "popup-open-before",
+        "ui_us": 62500,
+        "process_us": 78125
+      },
+      {
+        "phase": "popup-open-after",
+        "ui_us": 187500,
+        "process_us": 234375
+      },
+      {
+        "phase": "popup-collapsed-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-collapsed-after",
+        "ui_us": 140625,
+        "process_us": 140625
+      },
+      {
+        "phase": "popup-after-churn",
+        "ui_us": 1046875,
+        "process_us": 1125000
+      },
+      {
+        "phase": "popup-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "popup-hidden-end",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-reshown",
+        "ui_us": 62500,
+        "process_us": 62500
+      },
+      {
+        "phase": "popup-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-detail-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "issues-detail-after",
+        "ui_us": 31250,
+        "process_us": 62500
+      },
+      {
+        "phase": "issues-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-hidden-end",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-reshown",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-cleaned",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "scan-compare-after",
+        "ui_us": 125000,
+        "process_us": 171875
+      },
+      {
+        "phase": "scan-compare-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-case-before",
+        "ui_us": 31250,
+        "process_us": 46875
+      },
+      {
+        "phase": "scan-change-case-after",
+        "ui_us": 234375,
+        "process_us": 281250
+      },
+      {
+        "phase": "scan-change-case-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-attributes-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-change-attributes-after",
+        "ui_us": 156250,
+        "process_us": 171875
+      },
+      {
+        "phase": "scan-change-attributes-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-file-list-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-file-list-after",
+        "ui_us": 125000,
+        "process_us": 171875
+      },
+      {
+        "phase": "scan-file-list-closed",
+        "ui_us": 0,
+        "process_us": 0
+      }
+    ],
+    "raw_sha256": "5d88f6dddc125d2ad55cef66ed6f1ff6fff8fa061f988d372418895353290176"
+  },
+  {
+    "variant": "candidate",
+    "capture": 4,
+    "ui_us": 2625000,
+    "process_us": 3062500,
+    "intervals": [
+      {
+        "phase": "popup-open-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-open-after",
+        "ui_us": 109375,
+        "process_us": 125000
+      },
+      {
+        "phase": "popup-collapsed-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-collapsed-after",
+        "ui_us": 125000,
+        "process_us": 171875
+      },
+      {
+        "phase": "popup-after-churn",
+        "ui_us": 1125000,
+        "process_us": 1296875
+      },
+      {
+        "phase": "popup-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "popup-hidden-end",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "popup-reshown",
+        "ui_us": 109375,
+        "process_us": 109375
+      },
+      {
+        "phase": "popup-destroyed",
+        "ui_us": 0,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-detail-before",
+        "ui_us": 31250,
+        "process_us": 46875
+      },
+      {
+        "phase": "issues-detail-after",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "issues-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-hidden-end",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-reshown",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-cleaned",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-before",
+        "ui_us": 78125,
+        "process_us": 93750
+      },
+      {
+        "phase": "scan-compare-after",
+        "ui_us": 187500,
+        "process_us": 234375
+      },
+      {
+        "phase": "scan-compare-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-case-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-change-case-after",
+        "ui_us": 218750,
+        "process_us": 234375
+      },
+      {
+        "phase": "scan-change-case-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-attributes-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-change-attributes-after",
+        "ui_us": 140625,
+        "process_us": 187500
+      },
+      {
+        "phase": "scan-change-attributes-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-file-list-before",
+        "ui_us": 62500,
+        "process_us": 93750
+      },
+      {
+        "phase": "scan-file-list-after",
+        "ui_us": 218750,
+        "process_us": 234375
+      },
+      {
+        "phase": "scan-file-list-closed",
+        "ui_us": 0,
+        "process_us": 0
+      }
+    ],
+    "raw_sha256": "907d9c6777c3c05ec54389a2f50602ca7086e3ba8ed08f6897e38ee7d4c0fc15"
+  },
+  {
+    "variant": "candidate",
+    "capture": 5,
+    "ui_us": 2515625,
+    "process_us": 2796875,
+    "intervals": [
+      {
+        "phase": "popup-open-before",
+        "ui_us": 78125,
+        "process_us": 78125
+      },
+      {
+        "phase": "popup-open-after",
+        "ui_us": 156250,
+        "process_us": 171875
+      },
+      {
+        "phase": "popup-collapsed-before",
+        "ui_us": 78125,
+        "process_us": 78125
+      },
+      {
+        "phase": "popup-collapsed-after",
+        "ui_us": 156250,
+        "process_us": 156250
+      },
+      {
+        "phase": "popup-after-churn",
+        "ui_us": 1234375,
+        "process_us": 1343750
+      },
+      {
+        "phase": "popup-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "popup-hidden-end",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "popup-reshown",
+        "ui_us": 46875,
+        "process_us": 62500
+      },
+      {
+        "phase": "popup-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-detail-before",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-detail-after",
+        "ui_us": 31250,
+        "process_us": 93750
+      },
+      {
+        "phase": "issues-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-hidden-end",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-reshown",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-cleaned",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-before",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-after",
+        "ui_us": 171875,
+        "process_us": 171875
+      },
+      {
+        "phase": "scan-compare-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-case-before",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-change-case-after",
+        "ui_us": 218750,
+        "process_us": 281250
+      },
+      {
+        "phase": "scan-change-case-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-attributes-before",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-attributes-after",
+        "ui_us": 93750,
+        "process_us": 109375
+      },
+      {
+        "phase": "scan-change-attributes-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-file-list-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "scan-file-list-after",
+        "ui_us": 140625,
+        "process_us": 140625
+      },
+      {
+        "phase": "scan-file-list-closed",
+        "ui_us": 0,
+        "process_us": 0
+      }
+    ],
+    "raw_sha256": "6859272f032d8a0d9d51716c744547255aff44ec230d9d2230ceab49167bb596"
+  },
+  {
+    "variant": "baseline-current-control",
+    "capture": 1,
+    "ui_us": 2937500,
+    "process_us": 3265625,
+    "intervals": [
+      {
+        "phase": "popup-open-before",
+        "ui_us": 62500,
+        "process_us": 62500
+      },
+      {
+        "phase": "popup-open-after",
+        "ui_us": 171875,
+        "process_us": 187500
+      },
+      {
+        "phase": "popup-collapsed-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-collapsed-after",
+        "ui_us": 125000,
+        "process_us": 125000
+      },
+      {
+        "phase": "popup-after-churn",
+        "ui_us": 1328125,
+        "process_us": 1437500
+      },
+      {
+        "phase": "popup-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "popup-hidden-end",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-reshown",
+        "ui_us": 78125,
+        "process_us": 78125
+      },
+      {
+        "phase": "popup-destroyed",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-detail-before",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-detail-after",
+        "ui_us": 62500,
+        "process_us": 93750
+      },
+      {
+        "phase": "issues-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-hidden-end",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-reshown",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-cleaned",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "scan-compare-after",
+        "ui_us": 140625,
+        "process_us": 171875
+      },
+      {
+        "phase": "scan-compare-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-case-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "scan-change-case-after",
+        "ui_us": 234375,
+        "process_us": 312500
+      },
+      {
+        "phase": "scan-change-case-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-attributes-before",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-change-attributes-after",
+        "ui_us": 187500,
+        "process_us": 203125
+      },
+      {
+        "phase": "scan-change-attributes-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-file-list-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "scan-file-list-after",
+        "ui_us": 250000,
+        "process_us": 296875
+      },
+      {
+        "phase": "scan-file-list-closed",
+        "ui_us": 0,
+        "process_us": 0
+      }
+    ],
+    "raw_sha256": "f6674cd55ae6592ffd6a4280c71d94eb1a899cc99891eb2d671ed959f2d026ec"
+  },
+  {
+    "variant": "baseline-current-control",
+    "capture": 2,
+    "ui_us": 2984375,
+    "process_us": 3406250,
+    "intervals": [
+      {
+        "phase": "popup-open-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-open-after",
+        "ui_us": 187500,
+        "process_us": 218750
+      },
+      {
+        "phase": "popup-collapsed-before",
+        "ui_us": 31250,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-collapsed-after",
+        "ui_us": 156250,
+        "process_us": 171875
+      },
+      {
+        "phase": "popup-after-churn",
+        "ui_us": 1328125,
+        "process_us": 1484375
+      },
+      {
+        "phase": "popup-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "popup-hidden-end",
+        "ui_us": 15625,
+        "process_us": 31250
+      },
+      {
+        "phase": "popup-reshown",
+        "ui_us": 78125,
+        "process_us": 93750
+      },
+      {
+        "phase": "popup-destroyed",
+        "ui_us": 0,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-detail-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "issues-detail-after",
+        "ui_us": 62500,
+        "process_us": 93750
+      },
+      {
+        "phase": "issues-hidden-start",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-hidden-end",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-reshown",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-destroyed",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-cleaned",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-compare-after",
+        "ui_us": 171875,
+        "process_us": 234375
+      },
+      {
+        "phase": "scan-compare-closed",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-change-case-before",
+        "ui_us": 62500,
+        "process_us": 62500
+      },
+      {
+        "phase": "scan-change-case-after",
+        "ui_us": 187500,
+        "process_us": 187500
+      },
+      {
+        "phase": "scan-change-case-closed",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-change-attributes-before",
+        "ui_us": 78125,
+        "process_us": 109375
+      },
+      {
+        "phase": "scan-change-attributes-after",
+        "ui_us": 187500,
+        "process_us": 187500
+      },
+      {
+        "phase": "scan-change-attributes-closed",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-file-list-before",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "scan-file-list-after",
+        "ui_us": 218750,
+        "process_us": 250000
+      },
+      {
+        "phase": "scan-file-list-closed",
+        "ui_us": 0,
+        "process_us": 0
+      }
+    ],
+    "raw_sha256": "304c24d7ad829780b36415dc5238164c4e4654419ccb37fff070251945477a4b"
+  },
+  {
+    "variant": "baseline-current-control",
+    "capture": 3,
+    "ui_us": 2750000,
+    "process_us": 3218750,
+    "intervals": [
+      {
+        "phase": "popup-open-before",
+        "ui_us": 109375,
+        "process_us": 109375
+      },
+      {
+        "phase": "popup-open-after",
+        "ui_us": 171875,
+        "process_us": 187500
+      },
+      {
+        "phase": "popup-collapsed-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "popup-collapsed-after",
+        "ui_us": 156250,
+        "process_us": 171875
+      },
+      {
+        "phase": "popup-after-churn",
+        "ui_us": 1078125,
+        "process_us": 1203125
+      },
+      {
+        "phase": "popup-hidden-start",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "popup-hidden-end",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-reshown",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "popup-destroyed",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "issues-detail-before",
+        "ui_us": 62500,
+        "process_us": 62500
+      },
+      {
+        "phase": "issues-detail-after",
+        "ui_us": 62500,
+        "process_us": 156250
+      },
+      {
+        "phase": "issues-hidden-start",
+        "ui_us": 15625,
+        "process_us": 15625
+      },
+      {
+        "phase": "issues-hidden-end",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-reshown",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-destroyed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "issues-cleaned",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-compare-before",
+        "ui_us": 31250,
+        "process_us": 31250
+      },
+      {
+        "phase": "scan-compare-after",
+        "ui_us": 156250,
+        "process_us": 187500
+      },
+      {
+        "phase": "scan-compare-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-case-before",
+        "ui_us": 62500,
+        "process_us": 109375
+      },
+      {
+        "phase": "scan-change-case-after",
+        "ui_us": 156250,
+        "process_us": 234375
+      },
+      {
+        "phase": "scan-change-case-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-change-attributes-before",
+        "ui_us": 62500,
+        "process_us": 62500
+      },
+      {
+        "phase": "scan-change-attributes-after",
+        "ui_us": 156250,
+        "process_us": 203125
+      },
+      {
+        "phase": "scan-change-attributes-closed",
+        "ui_us": 0,
+        "process_us": 0
+      },
+      {
+        "phase": "scan-file-list-before",
+        "ui_us": 46875,
+        "process_us": 46875
+      },
+      {
+        "phase": "scan-file-list-after",
+        "ui_us": 265625,
+        "process_us": 281250
+      },
+      {
+        "phase": "scan-file-list-closed",
+        "ui_us": 0,
+        "process_us": 0
+      }
+    ],
+    "raw_sha256": "ca91ea52109e56443c91e756e87b6165d42dea1034d89a1ab6a58bf41370cdd3"
+  }
+]

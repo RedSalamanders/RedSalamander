@@ -1,0 +1,76 @@
+{
+  "schema": 1,
+  "machineHash": "7d3a1247382a",
+  "profile": "test-enabled x64 Release",
+  "runId": "20261014T152533Z-42084-65c97c67f3754cfdb2b0293a1a8e84fd",
+  "receipt": "abbd693d6b993271b352381c7c6f30c67c3a2a6ddc417c36b5e7b85f28224d0e",
+  "sourceSnapshotId": "180bb20cdea4370b1c3376df556a6c1000e51c6a6e58386afeb63c4854d3a152",
+  "rawPath": "D:\\RedSalamander.Perf\\evidence\\folder-copy-progress-candidate-multiple-release-20261014-01\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "rawSha256": "08AA585D3CAFB6E9E6D01608B524EB9390A79F89E5E3C92E1C96D7FFFBFB5B4C",
+  "rawBytes": 447259,
+  "rawRows": 1274,
+  "originalReleaseBaseline": "unavailable",
+  "characterization": [
+    {
+      "route": "PerItem regular roots",
+      "operationUs": 3141000,
+      "reportedWrittenBytes": 8388608,
+      "legacyCallbacks": {
+        "callbackTotalUs": 222,
+        "callbackCount": 24,
+        "lockWaitTotalUs": 2,
+        "lockHoldTotalUs": 3
+      },
+      "observerCallbacks": {
+        "callbackTotalUs": 53,
+        "callbackCount": 50,
+        "lockWaitTotalUs": 10,
+        "lockHoldTotalUs": 33
+      },
+      "paints": {
+        "sampleCount": 25,
+        "buildSnapshotUs": {
+          "sampleCount": 25,
+          "median": 80,
+          "p95": 141,
+          "max": 199
+        },
+        "renderTotalUs": {
+          "sampleCount": 25,
+          "median": 3334,
+          "p95": 10208,
+          "max": 14400
+        }
+      }
+    }
+  ],
+  "allPaints": {
+    "sampleCount": 27,
+    "buildSnapshotUs": {
+      "sampleCount": 27,
+      "median": 80,
+      "p95": 199,
+      "max": 278
+    },
+    "renderTotalUs": {
+      "sampleCount": 27,
+      "median": 3267,
+      "p95": 10208,
+      "max": 14400
+    },
+    "wmPaintUs": {
+      "sampleCount": 27,
+      "median": 4582,
+      "p95": 13355,
+      "max": 22954
+    }
+  },
+  "method": "Process/UI-thread emission-order Snapshot/Total pairing; nearest-rank p95. Whole pair assigned by Total timestamp within operation timestamp minus duration through operation timestamp; operation-boundary proxy, not per-file attribution. Callback durations are task totals, not a callback distribution.",
+  "limitations": [
+    "Absolute Release characterization; no original Release pair and no Debug to Release speed claim.",
+    "Separate actual two-root regular-file fixture: one PerItem host operation window has 25 paints; 27 paints cover the whole case. Direct Native CopyItems is a separate API qualification, retaining the existing default message batch.",
+    "Direct Native CopyItems host callback totals unavailable.",
+    "Native semantic-link subcases remain explicitly unavailable with 1314 where recorded; top-level skipped zero does not imply coverage.",
+    "Three unrelated sandbox audit directories remain separate from the selected runner verdict."
+  ]
+}

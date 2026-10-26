@@ -1,0 +1,38 @@
+param(
+    [Parameter(Mandatory)][int]$OwnerPid,
+    [Parameter(Mandatory)][long]$OwnerStartedTicks,
+    [Parameter(Mandatory)][string]$Executable,
+    [Parameter(Mandatory)][string]$ServiceExecutable,
+    [Parameter(Mandatory)][string]$OutputPath,
+    [Parameter(Mandatory)][string]$StopPath
+)
+$ErrorActionPreference='Stop'
+$identities=@{}
+$ownedParents=[Collections.Generic.HashSet[int]]::new()
+[void]$ownedParents.Add($OwnerPid)
+$writer=[IO.StreamWriter]::new($OutputPath,$false,[Text.UTF8Encoding]::new($false))
+try {
+    while (-not (Test-Path -LiteralPath $StopPath)) {
+        $owner=Get-Process -Id $OwnerPid -ErrorAction SilentlyContinue
+        if (-not $owner -or $owner.StartTime.ToUniversalTime().Ticks -ne $OwnerStartedTicks) { break }
+        foreach ($candidate in @(Get-Process -Name RedSalamander,RedSalamanderSearchService -ErrorAction SilentlyContinue)) {
+            if ($candidate.Path -ne $Executable -and $candidate.Path -ne $ServiceExecutable) { continue }
+            $key=[string]$candidate.Id+':'+[string]$candidate.StartTime.ToUniversalTime().Ticks
+            if (-not $identities.ContainsKey($key)) {
+                $observed=Get-CimInstance Win32_Process -Filter ('ProcessId = '+$candidate.Id) -ErrorAction SilentlyContinue
+                if (-not $observed -or -not $ownedParents.Contains([int]$observed.ParentProcessId)) { continue }
+                $identities[$key]=[pscustomobject]@{pid=$candidate.Id;parentPid=$observed.ParentProcessId;startedUtc=$candidate.StartTime.ToUniversalTime().ToString('o');image=$candidate.Path}
+                [void]$ownedParents.Add($candidate.Id)
+            }
+            try {
+                $candidate.Refresh()
+                $writer.WriteLine(([ordered]@{timestampUtc=[DateTime]::UtcNow.ToString('o');identity=$identities[$key];privateBytes=$candidate.PrivateMemorySize64;workingSetBytes=$candidate.WorkingSet64;cpuSeconds=$candidate.CPU} | ConvertTo-Json -Depth 4 -Compress))
+            }
+            catch [System.InvalidOperationException] { continue } # A contained child can exit between samples.
+            catch [System.ComponentModel.Win32Exception] { continue } # Its process handle can disappear during retirement.
+        }
+        $writer.Flush()
+        Start-Sleep -Milliseconds 250
+    }
+}
+finally { $writer.Dispose() }

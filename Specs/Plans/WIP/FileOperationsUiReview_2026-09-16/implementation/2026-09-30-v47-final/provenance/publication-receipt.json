@@ -1,0 +1,204 @@
+{
+  "schema": "redsal-final-gallery-publication.v1",
+  "createdUtc": "2026-09-30T21:08:56.3515642Z",
+  "destination": "Z:\\src\\RedSalamander\\Specs\\Plans\\WIP\\FileOperationsUiReview_2026-09-16\\implementation\\2026-09-30-v47-final",
+  "staticGalleryRoot": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v47-gates\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery",
+  "interactionGalleryRoot": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v47-gates\\ProtectedInteraction\\gallery-interaction-protected-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery",
+  "pngPathCount": 560,
+  "totalGalleryFileCount": 566,
+  "uniquePngHashCount": 500,
+  "allUniquePngHashesReviewed": true,
+  "staticRunId": "20260930T205754Z-65632-890748afb5ff42869426f729d7b421bc",
+  "interactionRunId": "20260930T205252Z-73948-5c3a6bf63ef1405cb66eb5d36a40fa99",
+  "staticArchivedRunResultSha256": "c0697c3f529e1d0fad47cbf7c9946300f9031df885d8cceadb1bcfb7e1ced250",
+  "interactionArchivedRunResultSha256": "dedc4e6852595c0d6fd196ba5def9178053456abad92c0e89ad4487bdd78b43b",
+  "fixtureManifestSha256": "93f06a0c97e308d67eb01bf2a9eb6092fc4103a4f0c40fef92ddad35008ab603",
+  "buildReceiptSha256": "005af9beeb0b7674b6a8662746d1b04d3e4c99ba121924c8b28eaf8bed39cceb",
+  "buildAndFixtureReferences": [
+    {
+      "name": "buildReceipt",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v47-build\\build-receipt.json",
+      "sha256": "005af9beeb0b7674b6a8662746d1b04d3e4c99ba121924c8b28eaf8bed39cceb",
+      "bytes": 82586,
+      "jsonSchema": "red-salamander.build-receipt.v1"
+    },
+    {
+      "name": "staticRunReceipt",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v47-gates\\StaticGallery\\sequence.json",
+      "sha256": "464aed63e73fe7733d3de6bf9cf805273b29619eb60085ab79cd136779201d8a",
+      "bytes": 1431,
+      "jsonSchema": null
+    },
+    {
+      "name": "interactionRunReceipt",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v47-gates\\ProtectedInteraction\\sequence.json",
+      "sha256": "aaf9f98201e014cc17cfe82b74579d590a15a6c20f8aa40cb1ae3440c4e44182",
+      "bytes": 1475,
+      "jsonSchema": null
+    },
+    {
+      "name": "staticArchivedRunResult",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v47-gates\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "sha256": "c0697c3f529e1d0fad47cbf7c9946300f9031df885d8cceadb1bcfb7e1ced250",
+      "bytes": 2229,
+      "jsonSchema": "red-salamander.run-all-tests.v1"
+    },
+    {
+      "name": "interactionArchivedRunResult",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v47-gates\\ProtectedInteraction\\gallery-interaction-protected-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "sha256": "dedc4e6852595c0d6fd196ba5def9178053456abad92c0e89ad4487bdd78b43b",
+      "bytes": 2246,
+      "jsonSchema": "red-salamander.run-all-tests.v1"
+    },
+    {
+      "name": "fixtureManifest",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v47-20260930\\candidate-inputs.json",
+      "sha256": "93f06a0c97e308d67eb01bf2a9eb6092fc4103a4f0c40fef92ddad35008ab603",
+      "bytes": 13012,
+      "jsonSchema": null
+    },
+    {
+      "name": "fixtureReceipt",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v47-build\\build-provenance.json",
+      "sha256": "301e09637863278ccfc40a48ac7179e089189bba68a69f4f8152b2300a20bee6",
+      "bytes": 1620,
+      "jsonSchema": null
+    },
+    {
+      "name": "finalHashReviewReport",
+      "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v47-final-gallery-root-review\\final-gallery-review.json",
+      "sha256": "a72ff08ff477098db3405370709e4b27b9033e29c338d3501f2930876c229273",
+      "bytes": 152268,
+      "jsonSchema": "redsal-final-gallery-review.v1"
+    }
+  ],
+  "finalReviewReportSha256": "a72ff08ff477098db3405370709e4b27b9033e29c338d3501f2930876c229273",
+  "evidenceCopies": [
+    {
+      "role": "buildReceipt",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v47-build\\build-receipt.json",
+      "destinationRelativePath": "provenance\\evidence\\0001-build-receipt.json",
+      "bytes": 82586,
+      "sha256": "005af9beeb0b7674b6a8662746d1b04d3e4c99ba121924c8b28eaf8bed39cceb"
+    },
+    {
+      "role": "staticRunReceipt",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v47-gates\\StaticGallery\\sequence.json",
+      "destinationRelativePath": "provenance\\evidence\\0002-sequence.json",
+      "bytes": 1431,
+      "sha256": "464aed63e73fe7733d3de6bf9cf805273b29619eb60085ab79cd136779201d8a"
+    },
+    {
+      "role": "interactionRunReceipt",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v47-gates\\ProtectedInteraction\\sequence.json",
+      "destinationRelativePath": "provenance\\evidence\\0003-sequence.json",
+      "bytes": 1475,
+      "sha256": "aaf9f98201e014cc17cfe82b74579d590a15a6c20f8aa40cb1ae3440c4e44182"
+    },
+    {
+      "role": "staticArchivedRunResult",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v47-gates\\StaticGallery\\gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "destinationRelativePath": "provenance\\evidence\\0004-run-all-tests-results.json",
+      "bytes": 2229,
+      "sha256": "c0697c3f529e1d0fad47cbf7c9946300f9031df885d8cceadb1bcfb7e1ced250"
+    },
+    {
+      "role": "interactionArchivedRunResult",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v47-gates\\ProtectedInteraction\\gallery-interaction-protected-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "destinationRelativePath": "provenance\\evidence\\0005-run-all-tests-results.json",
+      "bytes": 2246,
+      "sha256": "dedc4e6852595c0d6fd196ba5def9178053456abad92c0e89ad4487bdd78b43b"
+    },
+    {
+      "role": "fixtureManifest",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-v47-20260930\\candidate-inputs.json",
+      "destinationRelativePath": "provenance\\evidence\\0006-candidate-inputs.json",
+      "bytes": 13012,
+      "sha256": "93f06a0c97e308d67eb01bf2a9eb6092fc4103a4f0c40fef92ddad35008ab603"
+    },
+    {
+      "role": "fixtureReceipt",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v47-build\\build-provenance.json",
+      "destinationRelativePath": "provenance\\evidence\\0007-build-provenance.json",
+      "bytes": 1620,
+      "sha256": "301e09637863278ccfc40a48ac7179e089189bba68a69f4f8152b2300a20bee6"
+    },
+    {
+      "role": "finalHashReviewReport",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v47-final-gallery-root-review\\final-gallery-review.json",
+      "destinationRelativePath": "provenance\\evidence\\0008-final-gallery-review.json",
+      "bytes": 152268,
+      "sha256": "a72ff08ff477098db3405370709e4b27b9033e29c338d3501f2930876c229273"
+    },
+    {
+      "role": "v24-review-authority",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v24-all-hash-review-union.json",
+      "destinationRelativePath": "provenance\\evidence\\0009-v24-all-hash-review-union.json",
+      "bytes": 1102,
+      "sha256": "b004e51e6f4ed616d51a15a3c636fbdd745f6abd662f5827327d23ead6c6ebae"
+    },
+    {
+      "role": "v24-review-authority",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v24-root-hash-reconciliation.json",
+      "destinationRelativePath": "provenance\\evidence\\0010-v24-root-hash-reconciliation.json",
+      "bytes": 365,
+      "sha256": "731f4d86cf810cf1495cf9e9d98b70685d4ca6e4581d062c96b8730a062f66ae"
+    },
+    {
+      "role": "v24-review-authority",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v24-current-prior-png-hash-map.json",
+      "destinationRelativePath": "provenance\\evidence\\0011-v24-current-prior-png-hash-map.json",
+      "bytes": 276217,
+      "sha256": "aa92fb3438a1fa56af1b2f78a4bc997b78dce5aba6a2a346d15180d1cb6fa0eb"
+    },
+    {
+      "role": "v24-review-authority",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v24-visual-batch-01.json",
+      "destinationRelativePath": "provenance\\evidence\\0012-v24-visual-batch-01.json",
+      "bytes": 33771,
+      "sha256": "c06a46df43e657a75eefa68a3d66f44f5c46ff27cb1c7cd8e5a0a9840415ac08"
+    },
+    {
+      "role": "v24-review-authority",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v24-visual-batch-02.json",
+      "destinationRelativePath": "provenance\\evidence\\0013-v24-visual-batch-02.json",
+      "bytes": 69349,
+      "sha256": "1402097af2f849416f1377a23b7ca852a233b9061679bcc9e87efac07b6d57d1"
+    },
+    {
+      "role": "v24-review-authority",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v24-visual-batch-03.json",
+      "destinationRelativePath": "provenance\\evidence\\0014-v24-visual-batch-03.json",
+      "bytes": 86321,
+      "sha256": "a206eb057f1a4e0802d2f1129a1d4cdd84643d1aa8e2b081280ee4ce5d477ab1"
+    },
+    {
+      "role": "v24-review-authority",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v24-visual-batch-04.json",
+      "destinationRelativePath": "provenance\\evidence\\0015-v24-visual-batch-04.json",
+      "bytes": 93115,
+      "sha256": "c184fa46925c179830ea2e8199d61a6b64f235d050121ffe5d347024cf263d03"
+    },
+    {
+      "role": "v24-review-authority",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v24-visual-batch-05.json",
+      "destinationRelativePath": "provenance\\evidence\\0016-v24-visual-batch-05.json",
+      "bytes": 93037,
+      "sha256": "5702a7f73b96869f37abf36023150ec264febd6d4526033c0f1b8117154a68af"
+    },
+    {
+      "role": "current-visual-review-ledger",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v43-static-hash-review\\sol-visual-0-28.json",
+      "destinationRelativePath": "provenance\\evidence\\0017-sol-visual-0-28.json",
+      "bytes": 18102,
+      "sha256": "dde1ad8b5dbf3b2250528494e5de02f19799ce3a3d88905b22eec412a312ad84"
+    },
+    {
+      "role": "current-visual-review-ledger",
+      "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\v43-static-hash-review\\sol-visual-29-57.json",
+      "destinationRelativePath": "provenance\\evidence\\0018-sol-visual-29-57.json",
+      "bytes": 18281,
+      "sha256": "989c2565cb0da7ae1f98f4297428224bb02aa60dad501b9576cbdd0cd100bf7e"
+    }
+  ]
+}

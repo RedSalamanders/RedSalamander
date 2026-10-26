@@ -1,0 +1,5 @@
+Observed Release attempt blocked before compilation on 2026-10-17:
+Build canceled because an independently launched process is using an exact target output.
+PID=33616; Path=Z:\src\RedSalamander\.build\x64\Release\RedSalamander.exe.
+The process was left running. The user subsequently agreed to close it for Release validation.
+This is a retained observation of the build-guard output, not a completed Release build log.

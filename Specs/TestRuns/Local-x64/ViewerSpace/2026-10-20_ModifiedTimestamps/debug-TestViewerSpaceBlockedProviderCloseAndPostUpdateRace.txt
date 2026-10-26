@@ -1,0 +1,31 @@
+[PASS] ViewerSpace blocked-provider test executable path resolves
+[PASS] ViewerSpace.dll is present for blocked-provider validation
+[PASS] ViewerSpace.dll loads for blocked-provider validation
+[PASS] ViewerSpace exposes factory, shutdown, and runtime unload-gate exports
+[PASS] ViewerSpace creates a viewer for the PostUpdate race
+[PASS] ViewerSpace opens the PostUpdate race fixture
+[PASS] ViewerSpace PostUpdate race window becomes visible
+[PASS] ViewerSpace arms the PostUpdate generation-race pause
+[PASS] ViewerSpace starts the paused scan generation
+[PASS] ViewerSpace producer pauses after the fast generation check
+[PASS] ViewerSpace invalidates and clears while the stale producer is paused
+[PASS] ViewerSpace replacement generation settles while the old producer remains paused
+[PASS] ViewerSpace inner generation check rejects the resumed stale update with an empty queue
+[PASS] ViewerSpace stale producer cannot contaminate replacement-generation queue diagnostics
+[PASS] ViewerSpace PostUpdate race window closes cleanly
+[PASS] ViewerSpace blocked-provider events are created
+[PASS] ViewerSpace creates a viewer for blocked-provider close
+[PASS] ViewerSpace opens the blocked provider fixture
+[PASS] ViewerSpace reaches blocked ReadDirectoryInfo while its window remains responsive
+[PASS] ViewerSpace Close returns within 500 ms while the provider remains blocked
+[PASS] ViewerSpace destroys its HWND before the blocked provider returns
+[PASS] ViewerSpace provider remains blocked after non-waiting Close
+[PASS] ViewerSpace reports ViewerClosed exactly once with the registered cookie
+[PASS] ViewerSpace detached worker retains the provider and viewer lifetime
+[PASS] ViewerSpace runtime unload gate rejects refresh while an abandoned worker exists
+[PASS] ViewerSpace module remains mapped while runtime unload is deferred
+[PASS] ViewerSpace blocked provider exits after the test releases it
+[PASS] ViewerSpace worker and provider self-references retire exactly once after unblock
+[PASS] ViewerSpace intentionally quarantines same-path runtime reload for the process after forced abandonment
+[PASS] ViewerSpace does not report a second close after worker retirement
+ViewerPETests passed.

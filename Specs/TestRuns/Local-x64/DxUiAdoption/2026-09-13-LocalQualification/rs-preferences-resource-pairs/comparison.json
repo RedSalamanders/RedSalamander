@@ -1,0 +1,165 @@
+{
+  "scope": "Whole test-enabled x64 Release process during ten repetitions of the byte-identical Plugins-page round-trip test; descriptive paired observations, not a DLL/static isolation experiment.",
+  "fixtureSha256": "640b226bc78b5eff7e935f8e21d2c78685a0daa845e504861fa090871ed6ccaf",
+  "tests": {
+    "passed": 40,
+    "failed": 0,
+    "skipped": 0
+  },
+  "metrics": {
+    "peakPrivateBytes": {
+      "baselineMedian": 272443392.0,
+      "candidateMedian": 273489920.0,
+      "change": 1046528.0,
+      "changePercent": 0.3841267693510453
+    },
+    "peakWorkingSetBytes": {
+      "baselineMedian": 200011776.0,
+      "candidateMedian": 197869568.0,
+      "change": -2142208.0,
+      "changePercent": -1.0710409371096241
+    },
+    "lastCpuMs": {
+      "baselineMedian": 6234.375,
+      "candidateMedian": 6289.0625,
+      "change": 54.6875,
+      "changePercent": 0.8771929824561431
+    },
+    "peakHandles": {
+      "baselineMedian": 2953.0,
+      "candidateMedian": 2815.5,
+      "change": -137.5,
+      "changePercent": -4.656281747375546
+    },
+    "peakThreads": {
+      "baselineMedian": 585.0,
+      "candidateMedian": 586.0,
+      "change": 1.0,
+      "changePercent": 0.17094017094017033
+    }
+  },
+  "pairs": [
+    {
+      "pair": "A1/B1",
+      "changePercent": {
+        "peakPrivateBytes": -0.07211105101856408,
+        "peakWorkingSetBytes": -1.2642225031605614,
+        "lastCpuMs": 15.28822055137844,
+        "peakHandles": -5.245460659045054,
+        "peakThreads": 0.17094017094017033
+      }
+    },
+    {
+      "pair": "A2/B2",
+      "changePercent": {
+        "peakPrivateBytes": 0.8410441585797068,
+        "peakWorkingSetBytes": -0.8761826408885232,
+        "lastCpuMs": -13.533834586466165,
+        "peakHandles": -4.05866302864939,
+        "peakThreads": 0.17094017094017033
+      }
+    },
+    {
+      "pair": "A1/A2",
+      "changePercent": {
+        "peakPrivateBytes": -0.14872904272579257,
+        "peakWorkingSetBytes": -0.8604869295705697,
+        "lastCpuMs": 0.0,
+        "peakHandles": -1.412239408204441,
+        "peakThreads": 0.0
+      }
+    },
+    {
+      "pair": "B1/B2",
+      "changePercent": {
+        "peakPrivateBytes": 0.7637260208070318,
+        "peakWorkingSetBytes": -0.4708603527322275,
+        "lastCpuMs": -25.0,
+        "peakHandles": -0.17743080198722172,
+        "peakThreads": 0.0
+      }
+    }
+  ],
+  "limitations": [
+    "Only two processes per version.",
+    "100 ms nominal samples can miss brief private-memory peaks.",
+    "lastCpuMs is the last live sample, not an exact process-exit CPU total.",
+    "Startup, driver, file-cache and UI Automation activity are included.",
+    "No GPU-memory, ordinary idle-memory, frame-latency or idle-wakeup claim.",
+    "Production code at 50d2c4e5 is measured; later f12acdba changes only the standalone viewer test and documentation."
+  ],
+  "runs": [
+    {
+      "label": "A1",
+      "repo": "Z:/RsI19Before",
+      "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+      "startedUtc": "2026-09-12T22:14:13.5445300Z",
+      "completedUtc": "2026-09-12T22:15:48.9450935Z",
+      "exitCode": 0,
+      "sampleCount": 554,
+      "peakPrivateBytes": 272646144.0,
+      "peakWorkingSetBytes": 200876032.0,
+      "lastCpuMs": 6234.375,
+      "peakHandles": 2974.0,
+      "peakThreads": 585.0,
+      "firstPrivateBytes": 3792896,
+      "lastPrivateBytes": 251949056,
+      "testRunId": "20260912T221415Z-82856-3e1454794a16450581e61ffe7fa2ac7d",
+      "testDurationMs": 74169
+    },
+    {
+      "label": "B1",
+      "repo": "Z:/RsI19Closeout",
+      "source": "50d2c4e5a099f2a46c13db8af487db28d4ce256b",
+      "startedUtc": "2026-09-12T22:15:51.9648018Z",
+      "completedUtc": "2026-09-12T22:17:28.6580916Z",
+      "exitCode": 0,
+      "sampleCount": 559,
+      "peakPrivateBytes": 272449536.0,
+      "peakWorkingSetBytes": 198336512.0,
+      "lastCpuMs": 7187.5,
+      "peakHandles": 2818.0,
+      "peakThreads": 586.0,
+      "firstPrivateBytes": 2699264,
+      "lastPrivateBytes": 254976000,
+      "testRunId": "20260912T221553Z-33076-feb8d874020c4da0bb1141468dfc42f8",
+      "testDurationMs": 75144
+    },
+    {
+      "label": "B2",
+      "repo": "Z:/RsI19Closeout",
+      "source": "50d2c4e5a099f2a46c13db8af487db28d4ce256b",
+      "startedUtc": "2026-09-12T22:17:31.6823524Z",
+      "completedUtc": "2026-09-12T22:19:07.8955900Z",
+      "exitCode": 0,
+      "sampleCount": 556,
+      "peakPrivateBytes": 274530304.0,
+      "peakWorkingSetBytes": 197402624.0,
+      "lastCpuMs": 5390.625,
+      "peakHandles": 2813.0,
+      "peakThreads": 586.0,
+      "firstPrivateBytes": 3801088,
+      "lastPrivateBytes": 253808640,
+      "testRunId": "20260912T221733Z-12836-b34db26075d3419fa8949d3e522ad8f1",
+      "testDurationMs": 75061
+    },
+    {
+      "label": "A2",
+      "repo": "Z:/RsI19Before",
+      "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+      "startedUtc": "2026-09-12T22:19:10.9171850Z",
+      "completedUtc": "2026-09-12T22:20:45.9876132Z",
+      "exitCode": 0,
+      "sampleCount": 555,
+      "peakPrivateBytes": 272240640.0,
+      "peakWorkingSetBytes": 199147520.0,
+      "lastCpuMs": 6234.375,
+      "peakHandles": 2932.0,
+      "peakThreads": 585.0,
+      "firstPrivateBytes": 3805184,
+      "lastPrivateBytes": 261095424,
+      "testRunId": "20260912T221912Z-25176-c0f5a13b48b2478c9098baf169fcee29",
+      "testDurationMs": 74493
+    }
+  ]
+}

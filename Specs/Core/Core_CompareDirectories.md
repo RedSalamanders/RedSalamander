@@ -81,6 +81,8 @@ The Compare Directories window uses an embedded `FolderWindow`:
 - The Compare Directories window is an independent top-level window (not a child/owned window).
 - Closing the Compare Directories window MUST restore focus to the invoking main-window folder view when that view still exists. The surrounding main navigation shell MUST return without lingering address-bar edit, history, suggestion, or full-path popup state, and the current path, focused item, selection count, item count, and refresh count for the invoking pane MUST remain stable across open/close.
 - When the application shuts down (main window closes), the host closes any remaining unowned top-level RedSalamander windows during shutdown teardown so Direct2D resources can be released before process exit.
+- The Compare Directories window owns its own `FolderWindow` and File Operations engine (sync Copy/Move and F5/F6/F8 in the Compare panes run there). Closing the window (every route posts or sends `WM_CLOSE`: title bar, **Close**, the options panel's Cancel before the first compare) while that engine has a cancelable task MUST ask "cancel and close, or keep running" (`IDS_CAPTION_FILEOPS_CLOSE_WINDOW`, `IDS_MSG_FILEOPS_CANCEL_ALL_CLOSE_WINDOW`) instead of silently canceling the work and blocking the UI thread on the worker join. Keeping it running leaves the window open. Accepting cancels the engine's tasks through the normal cancel path (durable Move breadcrumbs and per-item outcomes are kept), keeps the window open until they have stopped, then closes it; while that close is pending the window refuses new work like an accepted application exit does, with a window-close pane alert. When every task is already Stopping the close is deferred without asking.
+- The application exit consent counts, cancels and waits for every open Compare window's engine as well as the main one (`FolderWindow::SetApplicationExitFolderWindow` registers it). See `Specs/UI/UI_FileOperationsPopup.md` (Application close).
 
 ### Banner (Title + Actions + Progress)
 
@@ -325,7 +327,7 @@ and user-visible filtering exactly like other items. Artifact classification is 
 and does not create, clear, or replace a `CompareDirectoriesDiffBit`.
 
 Each visible side queries the shared artifact classifier and renders a
-`Possible interrupted-operation artifact` badge/status alongside the ordinary difference details.
+`Possibly incomplete file (left by an interrupted copy or move)` badge/status alongside the ordinary difference details.
 A cached compare/search classification is display-only and never proves ownership.
 
 Sync, Copy, Move, Rename, Delete, external Open/Edit, and any other touch of a Possible side require
@@ -624,7 +626,7 @@ Progress notifications use posted payload messages declared in `Common/WindowMes
 
 Notes:
 
-- Posted payload receivers must use `TakeMessagePayload<T>(lParam)` and windows must drain pending payloads in `WM_NCDESTROY`.
+- Posted payload receivers must use `TakeMessagePayload<T>(hwnd, message, lParam)` and windows must drain pending payloads in `WM_NCDESTROY`.
 - The compare window tags progress updates with a **run id** (the `_version` at scan start) and ignores stale updates whose run id does not match the current version.
 - Scan and content progress posts also carry that run id in `wParam`. The UI may reduce latest-wins progress
   payloads only while the unfiltered UI-thread queue head has the same window, message, and run id. A completion,
@@ -704,10 +706,10 @@ The Compare Directories Options panel reads/writes the same settings; Preference
 ## Testing
 
 - Engine self-tests live under `RedSalamander/SelfTest/CompareDirectories/` and run via `--compare-selftest` (or `--selftest`):
-  - `CompareDirectoriesEngine.SelfTest.cpp` + `CompareDirectoriesEngine.SelfTest.h` (harness/registration)
-  - `CompareDirectoriesEngine.SelfTest.Cases.CoreDiffs.cpp` (core difference cases)
-  - `CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp` (search/index cases)
-  - `CompareDirectoriesEngine.SelfTest.Cases.RuntimeAndRemote.cpp` (runtime and remote/plugin filesystem cases)
+  - `CompareDirectoriesEngine.Tests.Runner.cpp` + `CompareDirectoriesEngine.Tests.Runner.h` (harness/registration)
+  - `CompareDirectoriesEngine.Tests.Cases.CoreDiffs.cpp` (core difference cases)
+  - `CompareDirectoriesEngine.Tests.Cases.SearchAndIndex.cpp` (search/index cases)
+  - `CompareDirectoriesEngine.Tests.Cases.RuntimeAndRemote.cpp` (runtime and remote/plugin filesystem cases)
 - Required engine coverage includes empty-directory roots/folders, bounded wildcard matching for pathological ignore patterns, targeted invalidation that preserves unaffected sibling caches, and stale in-flight scan writeback suppression after scoped invalidation.
 - Manual UI checks:
   - Shortcuts (function keys, selection, copy/move/delete) behave like the main window.

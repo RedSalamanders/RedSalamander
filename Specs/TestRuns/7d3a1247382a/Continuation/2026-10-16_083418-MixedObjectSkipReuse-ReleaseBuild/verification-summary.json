@@ -1,0 +1,93 @@
+{
+  "schema": "red-salamander.release-build-verification.v1",
+  "verifiedUtc": "2026-10-16T06:35:07.8007796Z",
+  "qualification": "Targeted application and bundled-runtime build verification; no Release runtime tests",
+  "gitHead": "f93415e814dc4ba89c6f91aaf5d4e87c612769a6",
+  "sourceSnapshotId": "d3891f6593b1dcc79e95d69b6a894e1b89cfd0ec7ee4ceadec866538db873fa2",
+  "receiptId": "cb11b155b66d29a883366c3719c3cd5605072f352527274838144824634c1131",
+  "receiptSha256": "D37BCA4996B27A560F5776C11934B4FDB88F27D9F795A1AE3D726366D80D4790",
+  "platform": "x64",
+  "configuration": "Release",
+  "testsEnabled": false,
+  "durationMs": 311828,
+  "verifiedOutputs": 133,
+  "appRuntimeClosureMembers": 125,
+  "appSha256": "4d13a64c122273e92bc1aab9ce1ae22d9af609672435e1e5d3d55944a00d80da",
+  "dxuiCommit": "e0260dde04695f0794eed79708030798b7575e0c",
+  "dxuiApiRevision": 4,
+  "dxuiPublicHeadersGitTree": "f4ec79a4bdb840c4ea47452768c5f1df7a1a7b30",
+  "dxuiArchiveSha256": "4f9f97851a6bf5b9a2750c19b876c386e6f712c4158a892355e30f4c9bc08bd0",
+  "verifiedDxUiModules": 10,
+  "modules": [
+    {
+      "module": ".build/x64/Release/Plugins/Terminal.dll",
+      "moduleSha256": "B9D4929B1CB1EAAC83DF00DC352853ACEC470A3167E785C678E40D311DA22C36",
+      "sidecar": ".build/x64/Release/Plugins/Terminal.dll.DxUi.json",
+      "sidecarSha256": "8a639d09b0dcd2af2ee71b192403b2db142b391ee22b19646c6f676b46e81eef",
+      "linkCommandSha256": "06EEE0443ECDB4DDE46DAF7126BB55BD77ED8BEDDC4B4E988BB71B97BAF091FC"
+    },
+    {
+      "module": ".build/x64/Release/Plugins/ViewerImgRaw.dll",
+      "moduleSha256": "B969F238BCAEB54A18181D56880E38E72F1D040FB739B7314D0028F95AAF5003",
+      "sidecar": ".build/x64/Release/Plugins/ViewerImgRaw.dll.DxUi.json",
+      "sidecarSha256": "f246a5be35487a726e4e990d3e2ec6d45a44570c3c2c5ca676ad6fe7b6cacdf2",
+      "linkCommandSha256": "8438C363D5D2E28840ABBC9AAC517571C25889F7615E0503EF8DFAEBB916F492"
+    },
+    {
+      "module": ".build/x64/Release/Plugins/ViewerPE.dll",
+      "moduleSha256": "7B6EAE37A8E9B0DB54FB735140108F617FA1643DC8A958EC56CCD12701038CBA",
+      "sidecar": ".build/x64/Release/Plugins/ViewerPE.dll.DxUi.json",
+      "sidecarSha256": "3ef27736c112f99448fdbd3138447e04e9b78141597753624c03d602d578c7dc",
+      "linkCommandSha256": "130B9F704C1A2C786121F63CA2BC87B2A088F4D8A0D6C8A33809FA48FEAF674A"
+    },
+    {
+      "module": ".build/x64/Release/Plugins/ViewerSpace.dll",
+      "moduleSha256": "9D42556B27DB888A432E4B81BD73002AFB919EC372FE37E739F660729D7816FF",
+      "sidecar": ".build/x64/Release/Plugins/ViewerSpace.dll.DxUi.json",
+      "sidecarSha256": "5cee19f04475d934e312b887588d6670f79f9ccaa39e9319750904f0b01e6f69",
+      "linkCommandSha256": "33FEC831026BA06173B87A83911EB3E7F19139627772F68CE70CACE1732A935A"
+    },
+    {
+      "module": ".build/x64/Release/Plugins/ViewerSqlite.dll",
+      "moduleSha256": "4D778565F62F386647E215248AE26908B7E511BE862AFBD28898CE5E493F92D9",
+      "sidecar": ".build/x64/Release/Plugins/ViewerSqlite.dll.DxUi.json",
+      "sidecarSha256": "2dee8e57fab8634165fb668fd13e676592f1557a03dd2646cb275cab392ddafe",
+      "linkCommandSha256": "D49E0021073ACA8EE898361B47CA95A4E0F6F0A03B357497C172344B4F09C037"
+    },
+    {
+      "module": ".build/x64/Release/Plugins/ViewerText.dll",
+      "moduleSha256": "ACF57DDDBC69BBD00543DD35F38F4C209EF9DFAA61A92597C095A2CD9A432A5F",
+      "sidecar": ".build/x64/Release/Plugins/ViewerText.dll.DxUi.json",
+      "sidecarSha256": "d720a52e847f810b7d5ab14a5a005570f40a85a2d8d35a6e863453e905ab30b0",
+      "linkCommandSha256": "FF9926A879D27BD9ADF7F22B0A874DBB32CCDE579DB88DF0A27BD36ACDBFA812"
+    },
+    {
+      "module": ".build/x64/Release/Plugins/ViewerVLC.dll",
+      "moduleSha256": "0B16DD384E049EEC87FF886F96F1025FCA64174E68D72FC303E64AFF2495F437",
+      "sidecar": ".build/x64/Release/Plugins/ViewerVLC.dll.DxUi.json",
+      "sidecarSha256": "96a6e2cbe438f9bbe1813efdba814eb8f1cd8ddcf965aaa4f391f115a1df77fa",
+      "linkCommandSha256": "AF6805210DF5C7A23E99936D5FD5D230E0AA5A9A9CAFC88B98A69F68DF966B8A"
+    },
+    {
+      "module": ".build/x64/Release/Plugins/ViewerWeb.dll",
+      "moduleSha256": "FCEDD417776D721528857C64FDA1E5F06A5C1B6EA76C9AC8894B222FF79BD404",
+      "sidecar": ".build/x64/Release/Plugins/ViewerWeb.dll.DxUi.json",
+      "sidecarSha256": "f22d1b3b40172d2c269a87d20058d0e3d5c1120ec86bcc777826476dd0d6e315",
+      "linkCommandSha256": "0B140A1E40F3D41F536109EBC9FFBA024003A6810C455214C7D8A9C29F578A75"
+    },
+    {
+      "module": ".build/x64/Release/RedSalamander.exe",
+      "moduleSha256": "4D13A64C122273E92BC1AAB9CE1AE22D9AF609672435E1E5D3D55944A00D80DA",
+      "sidecar": ".build/x64/Release/RedSalamander.exe.DxUi.json",
+      "sidecarSha256": "a0ea4c22047bd7864606e845bc089e9554cc5ea36b2efd4970da9921443d15a2",
+      "linkCommandSha256": "9CDBC6E58C62AC2D00E28D6376C51E39E56FBE395221FA25EB8792583D59EB6F"
+    },
+    {
+      "module": ".build/x64/Release/RedSalamanderMonitor.exe",
+      "moduleSha256": "95D0B91F77B046F48A628B0373EE247731CB4D1870E45BAE0CF6E09A819F4AA4",
+      "sidecar": ".build/x64/Release/RedSalamanderMonitor.exe.DxUi.json",
+      "sidecarSha256": "b97f2ab568aa3a0fb9919175bfb58e65cdccd5b878785ce69e3d783bb525ba5b",
+      "linkCommandSha256": "AF342D58CF3B85F674379C353069CA3AB006F554F8B7DDA5DFCB9582EB2A8EEA"
+    }
+  ]
+}

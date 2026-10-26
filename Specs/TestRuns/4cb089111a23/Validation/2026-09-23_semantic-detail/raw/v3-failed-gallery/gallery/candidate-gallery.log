@@ -1,0 +1,76 @@
+Stale TestSandbox run cleanup: 1 removed, 0 failed.
+Skipping build (verified receipt 6990d547e799018af0f623c724cfb396ac147115b770ed126d16ce55efa53c5a).
+Validation plan: 940b1db2e557bfbcc4a04a22029b501697afd761f6ced826f626857979585a9d
+Entry fingerprints: 0bb602a131918708908b30f6861c9ca524a421bc169d59cd3fd9fc5673200841 (116 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: FileOperations
+======================================================================
+  Exe:  C:\RsI26Final\.build\x64\Release\RedSalamander.exe
+  Args: --fileops-selftest --selftest-no-activate --selftest-case=FileOps_VisualGallery
+
+  TERMINAL RESULT: FAILED (DECLARED_FAILURES, FAILURE_CLASSIFICATION, NONZERO_EXIT)
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [FAIL] 
+FileOperations
+  (1m 58,4s)
+         Passed: 0
+  Failed: 1
+  Skipped: 0
+         Classification: UNCLASSIFIED_FAILURE
+         Initial attempt failed and no retry classification evidence was collected.
+
+  -------------------------------------------------------
+
+  Overall: 
+FAILED
+  Total: 1
+  Passed: 0
+  Failed: 1
+  Skipped: 0
+  Wall time: 2m 10,0s
+  Classifications: 
+flaky=0 
+regression=0 
+isolation_suspect=0 
+unclassified_failure=1
+  Quarantine: 
+active=0 
+invalid=0 
+repair_attempts=0 
+repair_reproduced=0
+
+--- FAILURE DETAILS (1 failing case) ---
+
+  FAIL 
+[FileOperations] 
+FileOps_VisualGallery
+       Reason: 
+Scenario capture failed; see trace.
+       Duration: 1m 57,4s
+
+--- ARTIFACTS ---
+  Test root: E:\RedSalamander.Perf
+  Run id:    20260923T194953Z-86300-71db6e182bd1463a9c1f21363d8fd47a
+  Disk audit issues: 0
+  Last run: E:\RedSalamander.Perf\runs\20260923T194953Z-86300-71db6e182bd1463a9c1f21363d8fd47a\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.file-operations.json
+    workspace-final.json
+    fileops\results.json
+
+
+--- NEXT STEPS ---
+  1. Review failure reasons above
+  2. Check trace logs: E:\RedSalamander.Perf\runs\20260923T194953Z-86300-71db6e182bd1463a9c1f21363d8fd47a\artifacts\selftest\last_run\<suite>\trace.txt
+  3. Re-run a single failing case:
+     C:\RsI26Final\.build\x64\Release\RedSalamander.exe --<suite>-selftest --selftest-case=<case_name>
+  4. Compare with previous run:
+     .\Tools\CompareTestRuns.ps1 <old_run_path> <new_run_path>
+

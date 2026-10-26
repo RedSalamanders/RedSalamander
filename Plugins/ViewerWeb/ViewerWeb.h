@@ -31,6 +31,7 @@
 #include "PlugInterfaces/Host.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/Viewer.h"
+#include "ViewerMenuHost.h"
 #include "ViewerWebSecurity.h"
 #include <DxUi/DxUi.h>
 #include <DxUi/NativeMenuInterop.h>
@@ -238,6 +239,7 @@ private:
     bool _syncingFileCombo = false;
 
     wil::unique_hmenu _menuHandle;
+    RedSalamander::ViewerMenuHost::AttachResult _menuAttachResult;
     DxUi::NativeMenuBarHost _menuBarHost;
     wil::unique_hwnd _hFileComboHost;
     DxUi::WindowHost _fileComboHost;

@@ -1,0 +1,22 @@
+[
+  {
+    "Name": "navigationView_prefix",
+    "Filter": "cmd_pane_navigationView_",
+    "Exit": 0,
+    "Passed": 16,
+    "Failed": 0,
+    "Skipped": 0,
+    "Total": 16,
+    "Json": "Z:\\src\\RedSalamander\\.build\\codex-runs\\runall_commands_navigationView_prefix_after_nav_menu_waits_20260703.run-all.json"
+  },
+  {
+    "Name": "menuBar_prefix",
+    "Filter": "cmd_app_menuBar_",
+    "Exit": 0,
+    "Passed": 17,
+    "Failed": 0,
+    "Skipped": 0,
+    "Total": 17,
+    "Json": "Z:\\src\\RedSalamander\\.build\\codex-runs\\runall_commands_menuBar_prefix_after_nav_menu_waits_20260703.run-all.json"
+  }
+]

@@ -1,0 +1,68 @@
+{
+  "scope": "Independent completeness/count/reason audit of all copied Debug/ASan selftest cases; entire original Full JSONL parses",
+  "selftests": [
+    {
+      "file": "Debug-commands.results.json",
+      "sha256": "D092466E5710737726E93C5FE3DF11450C454100389C3BD55A645B02DA7CEB47",
+      "cases": 602,
+      "passed": 597,
+      "failed": 5,
+      "skipped": 0,
+      "everyFailureAndSkipHasReason": true
+    },
+    {
+      "file": "Debug-fileops.results.json",
+      "sha256": "8B65445CA24B38840A69B3A5210C3F4933488FBB8DA235D3781D35711A2A2954",
+      "cases": 322,
+      "passed": 5,
+      "failed": 2,
+      "skipped": 315,
+      "everyFailureAndSkipHasReason": true
+    },
+    {
+      "file": "Debug-compare.results.json",
+      "sha256": "70B373651FDAC372F16B4CDCE65E8D85A11C2B8F4E2E3C7E2E539ECB9FC7F0AA",
+      "cases": 275,
+      "passed": 249,
+      "failed": 0,
+      "skipped": 26,
+      "everyFailureAndSkipHasReason": true
+    },
+    {
+      "file": "ASan-commands.results.json",
+      "sha256": "EA713355D7641914D6C6FB5175480665157BB324CB30D9BB185603EC48E73541",
+      "cases": 959,
+      "passed": 938,
+      "failed": 15,
+      "skipped": 6,
+      "everyFailureAndSkipHasReason": true
+    },
+    {
+      "file": "ASan-fileops.results.json",
+      "sha256": "78CD2BE84D52587C0208942A112D87D2ECFE6C9AA6B7CC524B75F6446FAD12A8",
+      "cases": 322,
+      "passed": 3,
+      "failed": 2,
+      "skipped": 317,
+      "everyFailureAndSkipHasReason": true
+    },
+    {
+      "file": "ASan-compare.results.json",
+      "sha256": "A8E792319D64328094540137069FA703984EB36E2538A85CAAFB1394E3FF3ACC",
+      "cases": 275,
+      "passed": 249,
+      "failed": 0,
+      "skipped": 26,
+      "everyFailureAndSkipHasReason": true
+    }
+  ],
+  "fullCaseHistoryRows": 2579,
+  "fullCaseHistorySha256": "4A1531F5872D416CE5F8927BD447729BF84DC313619BAAB8A166F5DAA4A4FF48",
+  "reviewedUtc": "2026-10-23T16:22:40.6776218Z",
+  "fullAggregateAccounting": {
+    "namedCaseRows": 2579,
+    "processLevelUnits": 13,
+    "aggregateTotal": 2592,
+    "note": "Native executable/CppUnitTest gates without case arrays count once in the aggregate; their nested checks remain in retained complete output."
+  }
+}

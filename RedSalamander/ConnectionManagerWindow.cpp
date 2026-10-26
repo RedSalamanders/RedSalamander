@@ -1,4 +1,5 @@
 #include "Framework.h"
+#include "WindowActivation.h"
 
 #include "ConnectionManagerWindow.h"
 
@@ -75,8 +76,8 @@ using DxUi::GridDebugRowVisualState;
 using DxUi::GridRowStyle;
 using DxUi::GridSelectionMode;
 using DxUi::GridVisibleWorkMetrics;
-using DxUi::IDxGridDelegate;
-using DxUi::IDxGridModel;
+using DxUi::IGridDelegate;
+using DxUi::IGridModel;
 using DxUi::Label;
 using DxUi::Panel;
 using DxUi::ScrollPanel;
@@ -145,7 +146,7 @@ struct ConnectionListGridRow
     return value;
 }
 
-class ConnectionListGridModel final : public IDxGridModel
+class ConnectionListGridModel final : public IGridModel
 {
 public:
     ConnectionListGridModel()
@@ -876,7 +877,7 @@ struct OwnedMtpPickerWork
     UniqueMtpPickerWork work;
 };
 
-class WindowImpl final : public IDxGridDelegate
+class WindowImpl final : public IGridDelegate
 {
 public:
     WindowImpl(FolderWindow& applicationFolderWindow,
@@ -921,9 +922,9 @@ public:
         _modalResult   = resultPtr;
     }
 
-    using IDxGridDelegate::OnGridRowActivated;
-    using IDxGridDelegate::OnGridSelectionChanged;
-    using IDxGridDelegate::OnGridSortRequested;
+    using IGridDelegate::OnGridRowActivated;
+    using IGridDelegate::OnGridSelectionChanged;
+    using IGridDelegate::OnGridSortRequested;
     void OnGridSelectionChanged(Grid& sender) override;
     void OnGridRowActivated(Grid& sender, size_t rowIndex) override;
     void OnGridSortRequested(const DxUi::GridSortSpec& sortSpec) override;
@@ -1273,7 +1274,7 @@ bool WindowImpl::Create() noexcept
     const bool hasPlacement = _settings && _settings->windows.contains(std::wstring(kWindowSettingsId));
     const int showCmd       = hasPlacement ? WindowPlacementPersistence::Restore(*_settings, kWindowSettingsId, hwnd) : SW_SHOWNORMAL;
     ::ShowWindow(hwnd, showCmd);
-    SetForegroundWindow(hwnd);
+    Common::RequestForegroundWindow(hwnd);
     return true;
 }
 
@@ -3508,7 +3509,7 @@ void WindowImpl::RestoreOwnerFocusAfterClose() noexcept
             ::ShowWindow(restoreOwner, SW_RESTORE);
         }
         static_cast<void>(SetActiveWindow(restoreOwner));
-        static_cast<void>(SetForegroundWindow(restoreOwner));
+        static_cast<void>(Common::RequestForegroundWindow(restoreOwner));
         static_cast<void>(SetFocus(restoreOwner));
     }
 
@@ -4283,7 +4284,7 @@ LRESULT WindowImpl::WindowProc(UINT msg, WPARAM wp, LPARAM lp) noexcept
             break;
         case WM_CLOSE: OnClose(); return 0;
         case WndMsg::kConnectionManagerMtpPickerComplete:
-            OnMtpPickerResult(static_cast<uint64_t>(wp), TakeMessagePayload<MtpPickerResultPayload>(lp));
+            OnMtpPickerResult(static_cast<uint64_t>(wp), TakeMessagePayload<MtpPickerResultPayload>(_hwnd.get(), msg, lp));
             return 0;
         case WndMsg::kSettingsReloadedFromDisk: OnSettingsReloadedFromDisk(); return 0;
         default: break;
@@ -4360,7 +4361,7 @@ bool ShowWindow(HWND owner,
             {
                 ::ShowWindow(existing, SW_SHOW);
             }
-            SetForegroundWindow(existing);
+            Common::RequestForegroundWindow(existing);
             return true;
         }
     }
@@ -4446,7 +4447,7 @@ HRESULT ShowDialog(HWND owner,
     if (disabledOwner)
     {
         EnableWindow(disabledOwner, TRUE);
-        SetForegroundWindow(disabledOwner);
+        Common::RequestForegroundWindow(disabledOwner);
     }
 
     selectedConnectionNameOut = std::move(result.connectionName);

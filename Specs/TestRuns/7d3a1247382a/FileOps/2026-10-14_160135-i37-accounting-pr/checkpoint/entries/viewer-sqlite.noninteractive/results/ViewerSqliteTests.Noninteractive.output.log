@@ -1,0 +1,107 @@
+[ RUN      ] TestListTables
+[PASS] table enumeration succeeds
+[PASS] table enumeration does not return an error
+[PASS] bigdata table is present
+[PASS] bigdata_view is present
+[        OK ] TestListTables
+[ RUN      ] TestPagedReads
+[PASS] middle page load succeeds
+[PASS] middle page contains exactly 200 rows
+[PASS] middle page reports more rows
+[PASS] middle page starts at row id 401
+[PASS] last page load succeeds
+[PASS] last page contains remaining 150 rows
+[PASS] last page does not report extra rows
+[PASS] last page ends at row id 750
+[        OK ] TestPagedReads
+[ RUN      ] TestSortedPagedReads
+[PASS] descending table preview succeeds
+[PASS] descending table preview starts at row id 750
+[PASS] descending table preview emits source-side ORDER BY
+[PASS] ascending sorted page with offset succeeds
+[PASS] ascending sorted page offset is preserved
+[        OK ] TestSortedPagedReads
+[ RUN      ] TestReadOnlyQueries
+[PASS] read-only SELECT query is accepted
+[PASS] read-only SELECT executes successfully
+[PASS] read-only SELECT returns three rows
+[PASS] read-only SELECT returns two columns
+[PASS] read-only SELECT preserves ordering
+[PASS] write query is rejected
+[PASS] multiple statements are rejected
+[        OK ] TestReadOnlyQueries
+[ RUN      ] TestSnapshotConnectionBoundsCancellationAndSanitization
+[PASS] bounded table enumeration succeeds
+[PASS] table enumeration preserves the exact control-bearing SQLite identifier internally
+[PASS] table display text removes control characters
+[PASS] table enumeration preserves the exact bidi-control identifier internally
+[PASS] table display text removes Arabic-letter-mark, direction-mark, and isolate controls
+[PASS] a long valid identifier keeps its exact query identity while only display text is bounded
+[PASS] the long exact table identifier remains queryable after display truncation
+[PASS] control-bearing table identifier remains queryable through exact internal identity
+[PASS] column header display text removes control characters
+[PASS] page containing an oversized TEXT value loads
+[PASS] oversized TEXT materialization remains bounded near the 4K display cap
+[PASS] oversized column headers are converted and truncated without proportional application allocation
+[PASS] out-of-range sort ordinals are rejected before SQL construction
+[PASS] row offsets above SQLite's signed 64-bit range are rejected
+[PASS] stale page generations cancel before proportional work
+[PASS] SQLite VM work is interrupted at the deterministic operation budget
+[PASS] concurrent callers complete through the serialized cached connection
+[PASS] all pages and queries reuse exactly one read-only SQLite connection
+[PASS] the NOMUTEX SQLite connection is never used concurrently
+[PASS] cancellation and bounded-work diagnostics record rejected operations
+[        OK ] TestSnapshotConnectionBoundsCancellationAndSanitization
+[ RUN      ] TestLocalWalSnapshotVirtualLimitsAndStaleScavenging
+[PASS] WAL snapshot test opens the live writer
+[PASS] WAL snapshot test enables WAL mode
+[PASS] WAL snapshot test disables automatic checkpoints
+[PASS] WAL snapshot test commits a row before opening the viewer snapshot
+[PASS] a live private snapshot is available while stale-artifact scavenging runs
+[PASS] the resolved ViewerSqlite snapshot directory is available
+[PASS] the test creates a closed stale ViewerSqlite snapshot artifact
+[PASS] local SQLite backup opens a consistent snapshot while WAL is live
+[PASS] opening a snapshot scavenges a closed exact-prefix artifact from the resolved temp directory
+[PASS] scavenging cannot delete a live snapshot whose lifetime handle denies FILE_SHARE_DELETE
+[PASS] local open owns a private stale-scavenged snapshot instead of exposing the live path
+[PASS] local open records the SQLite backup snapshot kind
+[PASS] the backup includes the committed WAL row present at open
+[PASS] the live database accepts a concurrent post-snapshot commit
+[PASS] the private snapshot remains immutable after later WAL commits
+[PASS] local snapshot preflight rejects a database above a deterministic tiny byte cap
+[PASS] the fixture creates an identifier above the exact-identity cap
+[PASS] snapshot opening rejects an identifier that cannot be retained exactly
+[PASS] the fixture removes the overlong identifier
+[PASS] virtual byte-copy refuses a WAL-mode main file without an atomic sidecar snapshot
+[PASS] closing the source deterministically removes its private temporary snapshot
+[PASS] closing the live guard deterministically removes its private snapshot
+[PASS] WAL snapshot fixture removes concurrent rows
+[PASS] WAL snapshot fixture checkpoints cleanup changes
+[PASS] WAL snapshot fixture returns to single-file rollback mode
+[PASS] virtual single-file rollback database opens through a bounded private byte snapshot
+[PASS] virtual open records the byte-copy snapshot limitation
+[PASS] virtual snapshot cleanup removes its temporary file
+[PASS] virtual snapshots reject an advertised size above the byte ceiling before allocating a copy buffer
+[PASS] virtual snapshots require the reader rewind to report position zero
+[PASS] virtual snapshots reject a provider that reports more bytes than the requested chunk
+[PASS] virtual snapshot copying honors generation cancellation before proportional I/O
+[        OK ] TestLocalWalSnapshotVirtualLimitsAndStaleScavenging
+[ RUN      ] TestViewerWindowUsesDxUiHostWithNoVisibleChildControls
+[PASS] test executable path resolves
+[PASS] ViewerSqlite.dll is present for viewer-window validation
+[PASS] ViewerSqlite.dll loads successfully
+[PASS] ViewerSqlite factory export is available
+[PASS] ViewerSqlite factory creates an IViewer instance
+[PASS] viewer callback registration succeeds
+[PASS] viewer window open succeeds
+[PASS] viewer window becomes visible
+[PASS] viewer window does not expose visible child controls
+[PASS] viewer window answers WM_GETOBJECT
+[PASS] clearing the viewer callback before close does not deliver ViewerClosed immediately
+[PASS] viewer window close succeeds
+[PASS] viewer window closes cleanly
+[PASS] viewer does not invoke ViewerClosed after SetCallback(nullptr, nullptr) returns
+[PASS] viewer COM instance releases cleanly
+[PASS] ViewerSqlite.dll unload returns
+[        OK ] TestViewerWindowUsesDxUiHostWithNoVisibleChildControls
+ViewerSqliteTests passed.

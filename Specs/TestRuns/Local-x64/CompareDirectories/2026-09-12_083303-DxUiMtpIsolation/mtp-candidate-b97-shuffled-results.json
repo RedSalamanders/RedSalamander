@@ -1,0 +1,739 @@
+{
+    "run_started_utc": "2026-09-12T08:33:03.006Z",
+    "suite": "CompareDirectories",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\I19-work\\artifacts\\selftest\\last_run\\compare",
+    "duration_ms": 55205,
+    "passed": 118,
+    "failed": 0,
+    "skipped": 2,
+    "cases": [
+        {
+            "name": "mtp_fake_backend_injection_uses_isolated_instance",
+            "status": "passed",
+            "duration_ms": 10,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_factory_single_mode_id_contract",
+            "status": "passed",
+            "duration_ms": 5,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_copy_move_overwrite_uses_temp_puid_swap",
+            "status": "passed",
+            "duration_ms": 27,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_writer_commit_times_out",
+            "status": "passed",
+            "duration_ms": 2044,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_json_return_buffers_are_bounded",
+            "status": "passed",
+            "duration_ms": 6,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_atomic_writer_offers_conditional_replace_only",
+            "status": "passed",
+            "duration_ms": 5,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_wpd_overwrite_occupancy_is_live_on_stale_path_cache",
+            "status": "passed",
+            "duration_ms": 8,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_fake_backend_enumerate_read_and_capabilities",
+            "status": "passed",
+            "duration_ms": 13,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_backend_command_worker_is_reused",
+            "status": "passed",
+            "duration_ms": 165,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_drive_info_and_disconnect_menu",
+            "status": "passed",
+            "duration_ms": 4,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_property_fetch_is_batched",
+            "status": "passed",
+            "duration_ms": 6,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_overwrite_journal_destination_identity_mismatch_quarantines",
+            "status": "passed",
+            "duration_ms": 20,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_overwrite_journal_write_failure_aborts_before_upload",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_hung_device_times_out",
+            "status": "passed",
+            "duration_ms": 2035,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_path_scheme_and_device_key_normalization",
+            "status": "passed",
+            "duration_ms": 33,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_overwrite_journal_replay_temp_cleanup_delete_failure_retries",
+            "status": "passed",
+            "duration_ms": 22,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_copy_overwrite_refuses_occupant_replaced_during_temp_copy",
+            "status": "passed",
+            "duration_ms": 16,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_public_writer_and_reader_memory_is_bounded",
+            "status": "passed",
+            "duration_ms": 109,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_rename_overwrite_uses_temp_puid_swap",
+            "status": "passed",
+            "duration_ms": 17,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_overwrite_byte_verify_level_matches_capability",
+            "status": "passed",
+            "duration_ms": 39,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_reader_streams_on_read_not_open",
+            "status": "passed",
+            "duration_ms": 9,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_menu_and_directory_size_time_out",
+            "status": "passed",
+            "duration_ms": 4081,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_writer_overwrite_uses_temp_puid_swap",
+            "status": "passed",
+            "duration_ms": 16,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_runtime_refresh_defers_when_worker_quarantined",
+            "status": "passed",
+            "duration_ms": 5128,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_concurrency_is_serialized",
+            "status": "passed",
+            "duration_ms": 294,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_public_writer_stages_until_commit",
+            "status": "passed",
+            "duration_ms": 12,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_reader_seek_contract",
+            "status": "passed",
+            "duration_ms": 9,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_overwrite_refuses_occupant_replaced_during_upload",
+            "status": "passed",
+            "duration_ms": 14,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_wpd_cache_failure_reopens_session_and_refreshes_size",
+            "status": "passed",
+            "duration_ms": 25,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_r0c_exact_recovery_identity",
+            "status": "passed",
+            "duration_ms": 343,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_move_fallback_delete_source_failure_leaves_duplicate_and_reports_partial",
+            "status": "passed",
+            "duration_ms": 12,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_overwrite_verify_input_by_source_kind",
+            "status": "passed",
+            "duration_ms": 46,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_batch_callbacks_report_item_indices",
+            "status": "passed",
+            "duration_ms": 6,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_queryinterface_matrix",
+            "status": "passed",
+            "duration_ms": 4,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_live_device_smoke",
+            "status": "skipped",
+            "duration_ms": 3,
+            "repeat_index": 1,
+            "skip_class": "declared-capability",
+            "reason": "MTP live smoke skipped: set REDSALAMANDER_SELFTEST_MTP_DEVICE to run against an approved device."
+        },
+        {
+            "name": "mtp_overwrite_journal_recovers_rename_temp_failure",
+            "status": "passed",
+            "duration_ms": 18,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_mutating_item_commands_time_out",
+            "status": "passed",
+            "duration_ms": 8172,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_overwrite_never_duplicates_or_halfwrites",
+            "status": "passed",
+            "duration_ms": 81,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_overwrite_journal_replay_rename_rejection_is_bounded",
+            "status": "passed",
+            "duration_ms": 22,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_overwrite_journal_without_temp_puid_quarantines_without_mutation",
+            "status": "passed",
+            "duration_ms": 37,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_overwrite_journal_generation_and_absent_cache_are_constant_cost",
+            "status": "passed",
+            "duration_ms": 15,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_overwrite_temp_upload_failure_keeps_original_and_allows_retry",
+            "status": "passed",
+            "duration_ms": 24,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_duplicate_names_require_stable_suffix",
+            "status": "passed",
+            "duration_ms": 12,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_mutating_create_directory_times_out",
+            "status": "passed",
+            "duration_ms": 2048,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_fake_backend_mutations_roundtrip",
+            "status": "passed",
+            "duration_ms": 21,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_overwrite_refuses_occupant_replaced_before_delete",
+            "status": "passed",
+            "duration_ms": 15,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_disconnect_mid_enumeration_surfaces_error",
+            "status": "passed",
+            "duration_ms": 6,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_transfer_cancel_is_prompt",
+            "status": "passed",
+            "duration_ms": 1010,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_fake_backend_move_rejects_directory_transfer_fallback",
+            "status": "passed",
+            "duration_ms": 18,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_unload_quiet_point_no_callback_after_clear",
+            "status": "passed",
+            "duration_ms": 216,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_overwrite_empty_temp_puid_keeps_original_and_blocks_later_upload",
+            "status": "passed",
+            "duration_ms": 19,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_watchdog_requests_backend_cancel",
+            "status": "passed",
+            "duration_ms": 124,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_copy_move_overwrite_temp_copy_failure_keeps_original_and_allows_retry",
+            "status": "passed",
+            "duration_ms": 40,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_overwrite_journal_clears_completed_swap_without_temp",
+            "status": "passed",
+            "duration_ms": 16,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_wpd_session_and_path_cache_reuse",
+            "status": "passed",
+            "duration_ms": 5,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_copy_to_device_accounting",
+            "status": "passed",
+            "duration_ms": 8,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_capabilities_are_instance_honest",
+            "status": "passed",
+            "duration_ms": 7,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_overwrite_delete_original_failure_keeps_original_and_allows_retry",
+            "status": "passed",
+            "duration_ms": 27,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_fake_backend_readonly_configuration_blocks_mutations",
+            "status": "passed",
+            "duration_ms": 7,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_copy_from_device_accounting",
+            "status": "passed",
+            "duration_ms": 8,
+            "repeat_index": 1
+        },
+        {
+            "name": "mtp_fake_backend_injection_uses_isolated_instance",
+            "status": "passed",
+            "duration_ms": 10,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_factory_single_mode_id_contract",
+            "status": "passed",
+            "duration_ms": 4,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_copy_move_overwrite_uses_temp_puid_swap",
+            "status": "passed",
+            "duration_ms": 28,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_writer_commit_times_out",
+            "status": "passed",
+            "duration_ms": 2046,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_json_return_buffers_are_bounded",
+            "status": "passed",
+            "duration_ms": 8,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_atomic_writer_offers_conditional_replace_only",
+            "status": "passed",
+            "duration_ms": 6,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_wpd_overwrite_occupancy_is_live_on_stale_path_cache",
+            "status": "passed",
+            "duration_ms": 9,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_fake_backend_enumerate_read_and_capabilities",
+            "status": "passed",
+            "duration_ms": 14,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_backend_command_worker_is_reused",
+            "status": "passed",
+            "duration_ms": 161,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_drive_info_and_disconnect_menu",
+            "status": "passed",
+            "duration_ms": 4,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_property_fetch_is_batched",
+            "status": "passed",
+            "duration_ms": 6,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_overwrite_journal_destination_identity_mismatch_quarantines",
+            "status": "passed",
+            "duration_ms": 19,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_overwrite_journal_write_failure_aborts_before_upload",
+            "status": "passed",
+            "duration_ms": 29,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_hung_device_times_out",
+            "status": "passed",
+            "duration_ms": 2038,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_path_scheme_and_device_key_normalization",
+            "status": "passed",
+            "duration_ms": 35,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_overwrite_journal_replay_temp_cleanup_delete_failure_retries",
+            "status": "passed",
+            "duration_ms": 22,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_copy_overwrite_refuses_occupant_replaced_during_temp_copy",
+            "status": "passed",
+            "duration_ms": 18,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_public_writer_and_reader_memory_is_bounded",
+            "status": "passed",
+            "duration_ms": 99,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_rename_overwrite_uses_temp_puid_swap",
+            "status": "passed",
+            "duration_ms": 15,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_overwrite_byte_verify_level_matches_capability",
+            "status": "passed",
+            "duration_ms": 33,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_reader_streams_on_read_not_open",
+            "status": "passed",
+            "duration_ms": 8,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_menu_and_directory_size_time_out",
+            "status": "passed",
+            "duration_ms": 4072,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_writer_overwrite_uses_temp_puid_swap",
+            "status": "passed",
+            "duration_ms": 16,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_runtime_refresh_defers_when_worker_quarantined",
+            "status": "passed",
+            "duration_ms": 5169,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_concurrency_is_serialized",
+            "status": "passed",
+            "duration_ms": 300,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_public_writer_stages_until_commit",
+            "status": "passed",
+            "duration_ms": 11,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_reader_seek_contract",
+            "status": "passed",
+            "duration_ms": 8,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_overwrite_refuses_occupant_replaced_during_upload",
+            "status": "passed",
+            "duration_ms": 14,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_wpd_cache_failure_reopens_session_and_refreshes_size",
+            "status": "passed",
+            "duration_ms": 12,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_r0c_exact_recovery_identity",
+            "status": "passed",
+            "duration_ms": 331,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_move_fallback_delete_source_failure_leaves_duplicate_and_reports_partial",
+            "status": "passed",
+            "duration_ms": 12,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_overwrite_verify_input_by_source_kind",
+            "status": "passed",
+            "duration_ms": 48,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_batch_callbacks_report_item_indices",
+            "status": "passed",
+            "duration_ms": 6,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_queryinterface_matrix",
+            "status": "passed",
+            "duration_ms": 4,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_live_device_smoke",
+            "status": "skipped",
+            "duration_ms": 3,
+            "repeat_index": 2,
+            "skip_class": "declared-capability",
+            "reason": "MTP live smoke skipped: set REDSALAMANDER_SELFTEST_MTP_DEVICE to run against an approved device."
+        },
+        {
+            "name": "mtp_overwrite_journal_recovers_rename_temp_failure",
+            "status": "passed",
+            "duration_ms": 16,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_mutating_item_commands_time_out",
+            "status": "passed",
+            "duration_ms": 8161,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_overwrite_never_duplicates_or_halfwrites",
+            "status": "passed",
+            "duration_ms": 91,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_overwrite_journal_replay_rename_rejection_is_bounded",
+            "status": "passed",
+            "duration_ms": 23,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_overwrite_journal_without_temp_puid_quarantines_without_mutation",
+            "status": "passed",
+            "duration_ms": 36,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_overwrite_journal_generation_and_absent_cache_are_constant_cost",
+            "status": "passed",
+            "duration_ms": 14,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_overwrite_temp_upload_failure_keeps_original_and_allows_retry",
+            "status": "passed",
+            "duration_ms": 23,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_duplicate_names_require_stable_suffix",
+            "status": "passed",
+            "duration_ms": 12,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_mutating_create_directory_times_out",
+            "status": "passed",
+            "duration_ms": 2049,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_fake_backend_mutations_roundtrip",
+            "status": "passed",
+            "duration_ms": 25,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_overwrite_refuses_occupant_replaced_before_delete",
+            "status": "passed",
+            "duration_ms": 17,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_disconnect_mid_enumeration_surfaces_error",
+            "status": "passed",
+            "duration_ms": 8,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_transfer_cancel_is_prompt",
+            "status": "passed",
+            "duration_ms": 1014,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_fake_backend_move_rejects_directory_transfer_fallback",
+            "status": "passed",
+            "duration_ms": 19,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_unload_quiet_point_no_callback_after_clear",
+            "status": "passed",
+            "duration_ms": 212,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_overwrite_empty_temp_puid_keeps_original_and_blocks_later_upload",
+            "status": "passed",
+            "duration_ms": 20,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_watchdog_requests_backend_cancel",
+            "status": "passed",
+            "duration_ms": 127,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_copy_move_overwrite_temp_copy_failure_keeps_original_and_allows_retry",
+            "status": "passed",
+            "duration_ms": 48,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_overwrite_journal_clears_completed_swap_without_temp",
+            "status": "passed",
+            "duration_ms": 24,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_wpd_session_and_path_cache_reuse",
+            "status": "passed",
+            "duration_ms": 6,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_copy_to_device_accounting",
+            "status": "passed",
+            "duration_ms": 8,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_capabilities_are_instance_honest",
+            "status": "passed",
+            "duration_ms": 7,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_overwrite_delete_original_failure_keeps_original_and_allows_retry",
+            "status": "passed",
+            "duration_ms": 28,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_fake_backend_readonly_configuration_blocks_mutations",
+            "status": "passed",
+            "duration_ms": 8,
+            "repeat_index": 2
+        },
+        {
+            "name": "mtp_copy_from_device_accounting",
+            "status": "passed",
+            "duration_ms": 8,
+            "repeat_index": 2
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 2,
+    "shuffle_seed": 190912
+}

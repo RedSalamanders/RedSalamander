@@ -1,0 +1,5 @@
+Warm quiescence probe: trial=0 quiet=true pending=false paintsAtReturn=1 renderDelta=1.
+Warm quiescence probe: trial=1 quiet=true pending=false paintsAtReturn=1 renderDelta=1.
+Warm quiescence probe: trial=2 quiet=true pending=false paintsAtReturn=1 renderDelta=1.
+Warm quiescence probe: trial=3 quiet=true pending=false paintsAtReturn=1 renderDelta=1.
+Warm quiescence probe: trial=4 quiet=true pending=true paintsAtReturn=0 renderDelta=0.

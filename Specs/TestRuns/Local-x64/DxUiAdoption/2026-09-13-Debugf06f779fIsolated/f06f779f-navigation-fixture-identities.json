@@ -1,0 +1,35 @@
+{
+  "scope": "Exact function bytes from Git, from function declaration to the next nodiscard bool declaration. Fixture identity does not establish product equivalence or failure causality.",
+  "functions": [
+    {
+      "file": "RedSalamander/SelfTest/Commands/Commands.SelfTest.Navigation.cpp",
+      "function": "TestRefreshKeepsNavigationShellStable",
+      "versions": [
+        {
+          "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+          "functionUtf8Sha256": "dc4acac0623ce7bb7efdd9d3612f654a26c7a77fbbb06cd3c7dcce20d0b3a2ee"
+        },
+        {
+          "source": "f06f779fd45105d251c2761a82138e7c8215326e",
+          "functionUtf8Sha256": "dc4acac0623ce7bb7efdd9d3612f654a26c7a77fbbb06cd3c7dcce20d0b3a2ee"
+        }
+      ],
+      "equal": true
+    },
+    {
+      "file": "RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp",
+      "function": "TestAppOpenDriveMenusKeepsNavigationShellStable",
+      "versions": [
+        {
+          "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+          "functionUtf8Sha256": "63cd7cc4f0a4433d27eab2c4f3a4030aefc458330d1f31b70d2c894d93c7b72b"
+        },
+        {
+          "source": "f06f779fd45105d251c2761a82138e7c8215326e",
+          "functionUtf8Sha256": "63cd7cc4f0a4433d27eab2c4f3a4030aefc458330d1f31b70d2c894d93c7b72b"
+        }
+      ],
+      "equal": true
+    }
+  ]
+}

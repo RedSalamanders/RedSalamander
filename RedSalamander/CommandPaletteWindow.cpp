@@ -1,4 +1,5 @@
 #include "Framework.h"
+#include "WindowActivation.h"
 
 #include "CommandPaletteWindow.h"
 
@@ -21,8 +22,8 @@ using DxUi::GridCellData;
 using DxUi::GridColumnDesc;
 using DxUi::GridSelectionMode;
 using DxUi::GridSortSpec;
-using DxUi::IDxGridDelegate;
-using DxUi::IDxGridModel;
+using DxUi::IGridDelegate;
+using DxUi::IGridModel;
 using DxUi::Label;
 using DxUi::Panel;
 using DxUi::TextField;
@@ -53,7 +54,7 @@ struct PaletteRow final
     uint32_t rank = 0u;
 };
 
-class PaletteGridModel final : public IDxGridModel
+class PaletteGridModel final : public IGridModel
 {
 public:
     PaletteGridModel()
@@ -132,7 +133,7 @@ private:
     std::vector<PaletteRow> _rows;
 };
 
-class CommandPaletteWindow final : public IDxGridDelegate
+class CommandPaletteWindow final : public IGridDelegate
 {
 public:
     CommandPaletteWindow()                                       = default;
@@ -250,7 +251,7 @@ HWND CommandPaletteWindow::Create(HWND owner, const Common::Settings::ShortcutsS
     if (! _window)
         _window.reset(hwnd);
     ShowWindow(hwnd, SW_SHOWNORMAL);
-    SetForegroundWindow(hwnd);
+    Common::RequestForegroundWindow(hwnd);
     Debug::Perf::EmitDurationUs(L"app.command_palette.open_to_visible_us", Debug::Perf::ElapsedUs(openStartedAt), _catalog.size(), 0u);
     return hwnd;
 }
@@ -553,7 +554,7 @@ void ShowCommandPaletteWindow(HWND owner, const Common::Settings::ShortcutsSetti
 {
     if (g_palette && g_palette->GetHwnd() && IsWindow(g_palette->GetHwnd()) != FALSE)
     {
-        SetForegroundWindow(g_palette->GetHwnd());
+        Common::RequestForegroundWindow(g_palette->GetHwnd());
         return;
     }
     g_palette = std::make_unique<CommandPaletteWindow>();

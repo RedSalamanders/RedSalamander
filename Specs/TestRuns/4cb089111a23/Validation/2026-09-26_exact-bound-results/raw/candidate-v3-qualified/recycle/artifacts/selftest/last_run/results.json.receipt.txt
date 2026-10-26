@@ -1,0 +1,45 @@
+{
+    "run_started_utc": "2026-09-26T10:24:35.357Z",
+    "duration_ms": 2725,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "Phase10_DeferredConsentAndRecycleEscalation",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "E:\\RedSalamander.Perf\\runs\\20260926T102415Z-37620-cdb691b468294ef6a6a98613e8954b7b\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 2218,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "Phase10_DeferredConsentAndRecycleEscalation",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1140,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase10_DeferredConsentAndRecycleEscalation",
+                    "status": "passed",
+                    "duration_ms": 985,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 93,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

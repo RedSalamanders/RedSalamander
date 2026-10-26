@@ -4,7 +4,7 @@
        archive compiler host equal to the consumer and the restore fingerprint, including overrides. -->
   <ItemGroup Condition="'$(DxUiRoot)'!=''">
     <ProjectReference Update="$(DxUiResolvedRoot)src\DxUi.vcxproj">
-      <AdditionalProperties>%(ProjectReference.AdditionalProperties);PreferredToolArchitecture=$(PreferredToolArchitecture)</AdditionalProperties>
+      <AdditionalProperties>%(ProjectReference.AdditionalProperties);PreferredToolArchitecture=$(PreferredToolArchitecture);WholeProgramOptimization=$(WholeProgramOptimization);VCToolsVersion=$(VCToolsVersion)</AdditionalProperties>
     </ProjectReference>
   </ItemGroup>
   <!-- Directory.Build.targets adds Common for generated version headers. Keep the canonical

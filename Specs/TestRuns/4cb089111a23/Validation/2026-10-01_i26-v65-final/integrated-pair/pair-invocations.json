@@ -1,0 +1,74 @@
+[
+  {
+    "label": "A78-1",
+    "variant": "A",
+    "exitCode": 0,
+    "verified": true,
+    "qualification": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\integrated-a78-b19-embedded-final\\A78-1\\qualification.json",
+    "hostConditionsSha256": "8f94434dc5482817023b50a689f633398f6bffc1268ce8957d00edd9fac82392",
+    "dependencyProvenanceSha256": "a17d0b17fc782a6e8735dd37e721655f4f04126c16478733e824d4575ac1e48d"
+  },
+  {
+    "label": "B19-1",
+    "variant": "B",
+    "exitCode": 0,
+    "verified": true,
+    "qualification": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\integrated-a78-b19-embedded-final\\B19-1\\qualification.json",
+    "hostConditionsSha256": "608c982cd1e88d17fd28bb4019a62da8148b483dd312ad12b6e549d6c0eb25ad",
+    "dependencyProvenanceSha256": "0cf881e12cebf626005c88bd0b115ea1369bda6649f6253901c91f1e64e95f8b"
+  },
+  {
+    "label": "B19-2",
+    "variant": "B",
+    "exitCode": 0,
+    "verified": true,
+    "qualification": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\integrated-a78-b19-embedded-final\\B19-2\\qualification.json",
+    "hostConditionsSha256": "1108e41d767bfcd48c3d1d84b783ffc56eb4048a73fee127ab86ead402e8004c",
+    "dependencyProvenanceSha256": "31365602aeb36d14fe853ebdb9b6cb09013679d64dfc253c3e12329068c9a796"
+  },
+  {
+    "label": "A78-2",
+    "variant": "A",
+    "exitCode": 0,
+    "verified": true,
+    "qualification": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\integrated-a78-b19-embedded-final\\A78-2\\qualification.json",
+    "hostConditionsSha256": "5e4d5fc26adf936ed24102c1de6d2d7dc017413c99f8a4e5c36c239d3c3e5807",
+    "dependencyProvenanceSha256": "032e292e5be7a69c9cba414d5240eb87bc2501d01b22704b03858fd54a9d96d7"
+  },
+  {
+    "label": "B19-3",
+    "variant": "B",
+    "exitCode": 0,
+    "verified": true,
+    "qualification": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\integrated-a78-b19-embedded-final\\B19-3\\qualification.json",
+    "hostConditionsSha256": "386d9e25965e8bba2737c94796296dfe1cabca7a96bc0321d05b65e4cd515c88",
+    "dependencyProvenanceSha256": "7bed8f231177b31af4febc14fe467f0ef15acdc1067c03d3659ef0a39ea35db1"
+  },
+  {
+    "label": "A78-3",
+    "variant": "A",
+    "exitCode": 0,
+    "verified": true,
+    "qualification": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\integrated-a78-b19-embedded-final\\A78-3\\qualification.json",
+    "hostConditionsSha256": "7315c3b4bc6cc96b461647e7cb4c5c5c62b591f73e811f3cdb4feff26cc21a99",
+    "dependencyProvenanceSha256": "fd71ad8a0c3b523d0432f235983907b09e86348ee3db322f0636a2b234b05946"
+  },
+  {
+    "label": "A78-4",
+    "variant": "A",
+    "exitCode": 0,
+    "verified": true,
+    "qualification": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\integrated-a78-b19-embedded-final\\A78-4\\qualification.json",
+    "hostConditionsSha256": "8e80fe1b2e0692de877b5763770e30ffc06126aa9b29bc75b28527996aeb3af2",
+    "dependencyProvenanceSha256": "67b89adb8bfa1b926f028cc252dc9b23bad863dbae160398358dc1b5ccf78cee"
+  },
+  {
+    "label": "B19-4",
+    "variant": "B",
+    "exitCode": 0,
+    "verified": true,
+    "qualification": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\integrated-a78-b19-embedded-final\\B19-4\\qualification.json",
+    "hostConditionsSha256": "52931e48d59fdc13e9291fc7d9f4bad4a2dad2732e1caf9d4590ef4ac76ad2e3",
+    "dependencyProvenanceSha256": "5d43c4196e390daebd748189daae4e92d9956dcfba054655b80a2b26c2439340"
+  }
+]

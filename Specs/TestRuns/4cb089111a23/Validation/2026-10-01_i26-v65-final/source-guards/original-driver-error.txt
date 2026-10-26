@@ -1,0 +1,8 @@
+Get-Content: C:\RedSalamander.Perf\evidence\i26-ui\final-gates-drivers-20260930\run-v58-source-guards-draft.ps1:113
+Line |
+ 113 |      $v1=Get-Content -LiteralPath (Join-Path $lastRun 'run-all-tests-r …
+     |          ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Cannot find path
+     | 'C:\RedSalamander.Perf\evidence\i26-ui\final-gates-drivers-20260930\debug-v58-source-guards\runner-run\artifacts\selftest\last_run\run-all-tests-results-v1.json' because it does not exist.
+
+

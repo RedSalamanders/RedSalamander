@@ -1,0 +1,58 @@
+[
+  {
+    "name": "results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-connect-diagnostics-final-lookup-debug-20260905\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "bytes": 880,
+    "sha256": "06af32e23dd6546946a69bca5e65cd91cbcfe46829df9b61d4493c5cebdc8b66",
+    "transform": "none"
+  },
+  {
+    "name": "trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-connect-diagnostics-final-lookup-debug-20260905\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "bytes": 5480,
+    "sha256": "669bab29f2a97080d20b8f047657b7542bc4966a128508edfe9d5b01d44c92aa",
+    "transform": "none"
+  },
+  {
+    "name": "root-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-connect-diagnostics-final-lookup-debug-20260905\\artifacts\\selftest\\last_run\\results.json",
+    "bytes": 1405,
+    "sha256": "5f9e6771fcee2e7c43614fb0c89a628807bd183d4bccb83967e14e06e2fb1f4f",
+    "transform": "none"
+  },
+  {
+    "name": "suite-trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-connect-diagnostics-final-lookup-debug-20260905\\artifacts\\selftest\\last_run\\trace.txt",
+    "bytes": 20008,
+    "sha256": "192ddd5ce5d0c6cfa917256803822cc44101c8da76bfaae324bf6923d010115f",
+    "transform": "none"
+  },
+  {
+    "name": "run-all-tests-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-connect-diagnostics-final-lookup-debug-20260905\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "bytes": 33402,
+    "sha256": "a66dda087a416ddaf0c24c7ab507286ff0322b22ab8f6cb8a56f29b0505c296c",
+    "transform": "none"
+  },
+  {
+    "name": "entry-fingerprints.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-connect-diagnostics-final-lookup-debug-20260905\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+    "bytes": 1695,
+    "sha256": "bc0489bedf1c1518cdf1140ca943070b7a415bebe58602b2857002f36d521488",
+    "transform": "none"
+  },
+  {
+    "name": "source-resource-contracts.xml",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-connect-diagnostics-final-policy-20260905\\scratch\\policy\\source-resources\\source-resource-contracts.xml",
+    "bytes": 62221,
+    "sha256": "eaa1d320f0092c2ffd11b4aaa1b3e0ddec5c518b0201c180d18351dcc0a588ad",
+    "transform": "none"
+  },
+  {
+    "name": "perf_metrics.jsonl",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-connect-diagnostics-final-lookup-debug-20260905\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+    "bytes": 166499,
+    "sha256": "7bfef91085504ccbabc46122e456cdce180ce5100f608526691c81f8a0dce91e",
+    "transform": "none"
+  }
+]

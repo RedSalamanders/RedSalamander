@@ -1,0 +1,11 @@
+{
+  "source": "a20f6680dd5f82835a549f4c231e5666e4047eda",
+  "configuration": "ASan Debug",
+  "platform": "x64",
+  "runId": "20260913T054610Z-95756-605d08f0a71e45ac91d7d81bac52cdab",
+  "startedUtc": "2026-09-13T05:46:09.5565212Z",
+  "completedUtc": "2026-09-13T07:20:37.1568264Z",
+  "exitCode": 1,
+  "retained": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a20f6680-isolated-x64-ASan-Debug-Full",
+  "noHostedCi": true
+}

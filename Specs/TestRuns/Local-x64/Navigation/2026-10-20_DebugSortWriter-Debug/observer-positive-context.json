@@ -1,0 +1,7 @@
+{
+  "ProcessId": 43748,
+  "ParentProcessId": 68884,
+  "CreationDate": "2026-10-20T21:51:45.314854+02:00",
+  "ExecutablePath": "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\amd64\\MSBuild.exe",
+  "CommandLine": "\"C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\MSBuild\\Current\\Bin\\amd64\\MSBuild.exe\" S:\\RedSalamander.SortValidation-20261020\\debug-sort-writer-validation\\RedSalamander.sln /t:Rebuild /p:Configuration=Debug /p:Platform=x64 /m:4 /v:minimal /nologo /p:SolutionDir=S:\\RedSalamander.SortValidation-20261020\\debug-sort-writer-validation\\ /p:RSVersionBuildNumber=1 /p:RSBuildEnableTests=true /p:RSBuildCompilerDebugInformation=ProgramDatabase /p:RSBuildArtifactManifestRoot=S:\\RedSalamander.SortValidation-20261020\\debug-sort-writer-validation\\.build\\BuildArtifactManifests\\91b2344cfa2245809bb3b05c1b232a63\\ /nr:false"
+}

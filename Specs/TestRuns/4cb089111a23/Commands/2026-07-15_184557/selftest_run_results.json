@@ -1,0 +1,33 @@
+{
+    "run_started_utc": "2026-07-15T16:45:55.833Z",
+    "duration_ms": 2071,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "cmd_compare_directories_progress_perf",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260715T164555Z-26644-b96612366a8c4451bbead146b504e25f\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 1519,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "cmd_compare_directories_progress_perf",
+            "cases": [
+                {
+                    "name": "cmd_compare_directories_progress_perf",
+                    "status": "passed",
+                    "duration_ms": 1511,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

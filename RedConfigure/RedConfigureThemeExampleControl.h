@@ -30,6 +30,11 @@ using DxUi::WindowHost;
 class ThemeExampleControl final : public Control
 {
 public:
+    ThemeExampleControl(const ThemeExampleControl&)            = delete;
+    ThemeExampleControl(ThemeExampleControl&&)                 = delete;
+    ThemeExampleControl& operator=(const ThemeExampleControl&) = delete;
+    ThemeExampleControl& operator=(ThemeExampleControl&&)      = delete;
+
     explicit ThemeExampleControl(HINSTANCE instance)
         : _navText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_NAV)),
           _menuText(LoadAppString(instance, IDS_REDCONFIGURE_THEME_PREVIEW_MENU)),

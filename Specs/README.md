@@ -48,10 +48,22 @@ Do not copy a public ABI definition, generated inventory, mutable count, depende
 ## Plan lifecycle
 
 - New scoped work lives in `Specs/Plans/WIP/` and is indexed exactly once as `ACTIVE`, `HOLD`, `DECISION`, or `RETIRED`.
+- A WIP index `Rank` is unique and never reused, including an ID that an archived plan claims in its Done H1 (`# <ID> ...`). Done text is frozen, so the active plan takes a new ID on a clash.
 - WIP files cannot override current contracts. An implementation plan must name the normative specs it expects to change.
 - Durable requirements discovered during work move into the appropriate domain contract before closeout.
 - A completed plan moves to `Specs/Plans/Done/`; it is then immutable history. Corrections to current behavior belong in current specs or a new WIP, never by rewriting Done history.
 - The same closeout change adds the exact new Done path to the reviewed `Test-RSProtectedDoneHistory` additional-path allowlist and its focused admission test; the test also rejects an unreviewed sibling path. This authorizes only that new immutable file and does not permit modifying existing Done history.
+- The [2026-10-16 File Operations card hierarchy record](Plans/Done/FileOperations_CardInformationHierarchy_2026-10-16.md) uses this exact-file admission; adjacent dates and additional companion artifacts remain unreviewed.
+- The [October 20 waiting-card record](Plans/Done/FileOperations_WaitingCards_2026-10-20.md) has exact-file admission with sibling and companion rejection; its scoped validation does not establish Full or platform qualification.
+- The five 2026-10-19 File Operations UI/screenshot closeout records and the
+  [five-stash review](Plans/Done/StashReview_2026-10-19.md) have individual exact-file
+  admissions. Tests reject each date-shifted sibling and an additional review
+  companion. Admission records reviewed history; runtime qualification remains
+  subject to its owning validation contract.
+- Reviewed capture companions use the same exact-path admission. List each original
+  artifact and generated navigation path individually; a gallery directory does not
+  authorize additional images. The focused test also rejects an unreviewed image
+  inside the admitted collection. Capture/build provenance remains separate proof.
 - A retired WIP tombstone is bounded, names its retirement date/reason/current owner, and gives a `git show` recovery command.
 - The exact human-managed `Specs/Plans/WIP/Notes_Scratch.md` file is excluded
   from WIP indexing and content analysis. Other scratch notes and continuation
@@ -98,4 +110,8 @@ Invoke-Pester .\Tools\Tests\DocumentationDriftContracts.Tests.ps1 -PassThru
 .\Tools\Run-AllTests.ps1 -Suite Full
 ```
 
-`-FailOnFindings` requires every normative file to have a `VERIFIED_MATCH` consistency row, every direct WIP file to be indexed exactly once, all current local links/anchors to resolve, normative plan markers to be explicitly reviewed, and the protected Done baseline to remain byte-identical.
+`-FailOnFindings` requires every normative file to have a `VERIFIED_MATCH` consistency row, every direct WIP file to be indexed exactly once, WIP index ranks to be unique and not to reuse an ID claimed by an archived plan title, all current local links/anchors to resolve, normative plan markers to be explicitly reviewed, and the protected Done baseline to remain byte-identical.
+
+The [Changes workflow](Core/Core_Changes.md) owns fragment format, validation and immediate folding before PrePush/final handoff and after integration.
+
+The snapshot migration retains the original 133-file protected Done baseline as parentless commit 4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853. Its Specs/Plans/Done tree is byte-identical to the former baseline. Both integrated master and the public source snapshot retain that commit in ancestry, so ordinary fresh clones can enforce the existing guard without importing DualTail history or changing completed documents.

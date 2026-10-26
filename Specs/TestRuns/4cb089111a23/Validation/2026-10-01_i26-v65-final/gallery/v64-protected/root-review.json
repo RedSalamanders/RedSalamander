@@ -1,0 +1,38 @@
+{
+  "schema": "i26-v64-protected-root-review.v1",
+  "reviewUtc": "2026-10-01T09:05:14.3897704+00:00",
+  "sequenceSha256": "224bc6b90ad04c39090f7638a417bc95d463a29157eae5852b4f31febe8d9eed",
+  "runnerSha256": "35e20cfd42d81d97a0edbb86b8b4e1cd5da938fa8ade7d37d54702fcbce22140",
+  "runId": "20261001T090259Z-87868-9a93d2a753794f9490d57400b1a022f9",
+  "counts": [
+    1,
+    0,
+    0
+  ],
+  "sandboxClean": true,
+  "hops": [
+    {
+      "display": "2",
+      "beforeDpi": "144",
+      "afterDpi": "96",
+      "beforeAutomationId": "FileOperations.Action.25.0.0",
+      "afterAutomationId": "FileOperations.Action.25.0.0",
+      "hostedHasFocus": "1",
+      "nativeFocusOwned": "1"
+    },
+    {
+      "display": "1",
+      "beforeDpi": "96",
+      "afterDpi": "144",
+      "beforeAutomationId": "FileOperations.Action.25.0.0",
+      "afterAutomationId": "FileOperations.Action.25.0.0",
+      "hostedHasFocus": "1",
+      "nativeFocusOwned": "1"
+    }
+  ],
+  "pngCount": 10,
+  "allPngsMatchReviewedV55": true,
+  "comparisonSha256": "ad5956d4657456e55d679cee926c415ea7d2369400108fbcde21e15d07636653",
+  "coverage": "FooterOptions/native HWND mixed-DPI; task prepaint focus separately qualified by Commands.",
+  "wholePlanComplete": false
+}

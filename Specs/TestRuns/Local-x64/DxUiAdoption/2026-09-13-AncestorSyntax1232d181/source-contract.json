@@ -1,0 +1,9 @@
+{
+  "source": "4792cbe86f56e21bf4bb99fc22ef58ca55ebfa18",
+  "nativeFixtureSha256": "0DCF9DD73A7718D8B9E401F946A79AEA7281AFB0598B5F0684CFAA2EB7C6BAE0",
+  "passed": 188,
+  "failed": 0,
+  "skipped": 0,
+  "total": 188,
+  "scope": "Source-contract preflight for the uncommitted diagnostic syntax correction; native qualification is separate."
+}

@@ -2,6 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+Import-Module (Join-Path $PSScriptRoot '../Modules/Build/RedMonitorDependency.psm1') -Force
 $script:RSResourceRoots = @(
     'Common',
     'Plugins',
@@ -18,7 +19,7 @@ function Read-RSResourceText {
         [string]$Path
     )
 
-    $bytes = [System.IO.File]::ReadAllBytes($Path)
+    $bytes = [System.IO.File]::ReadAllBytes((Resolve-RSRedMonitorTestInput -RepoRoot $repoRoot -Path $Path))
     if ($bytes.Length -ge 2 -and $bytes[0] -eq 0xff -and $bytes[1] -eq 0xfe) {
         return [System.Text.Encoding]::Unicode.GetString($bytes, 2, $bytes.Length - 2)
     }
@@ -123,7 +124,6 @@ function Get-RSResourceFiles {
 function Get-RSMenuOwnerContracts {
     return @(
         [pscustomobject]@{ Owner = 'RedSalamander'; Base = 'RedSalamander\RedSalamander.rc'; SatelliteDirectory = 'RedSalamander\Lang' },
-        [pscustomobject]@{ Owner = 'RedSalamanderMonitor'; Base = 'RedSalamanderMonitor\RedSalamanderMonitor.rc'; SatelliteDirectory = 'RedSalamanderMonitor\Lang' },
         [pscustomobject]@{ Owner = 'RedConfigure'; Base = 'RedConfigure\RedConfigure.rc'; SatelliteDirectory = 'RedConfigure\Lang' },
         [pscustomobject]@{ Owner = 'ViewerText'; Base = 'Plugins\ViewerText\ViewerTextResources.rc'; SatelliteDirectory = 'Plugins\ViewerText\Lang' },
         [pscustomobject]@{ Owner = 'ViewerImgRaw'; Base = 'Plugins\ViewerImgRaw\ViewerImgRawResources.rc'; SatelliteDirectory = 'Plugins\ViewerImgRaw\Lang' },
@@ -462,9 +462,12 @@ function Get-RSLanguageNeutralStringIdsByOwner {
             'IDS_CONNECTIONS_SECTION_S3',
             'IDS_CONNECTIONS_SECTION_SSH',
             'IDS_FIND_ACTION_HELP',
+            'IDS_FMT_FILEOPS_CONFLICT_STATUS',
             'IDS_FMT_FILEOPS_OP_COUNTS',
             'IDS_FMT_FILEOPS_OP_COUNTS_UNKNOWN_TOTAL',
             'IDS_FMT_FILEOPS_OP_STATUS',
+            'IDS_FMT_FILEOPS_TERMINAL_FACT_AXIS',
+            'IDS_FMT_FILEOPS_TERMINAL_FACT_JOIN',
             'IDS_FMT_FILEOPS_SIZE_PROGRESS',
             'IDS_FMT_HRESULT_DETAILS',
             'IDS_FMT_STATUS_SELECTED_SINGLE_DIR_ATTRS',
@@ -516,7 +519,6 @@ function Get-RSLanguageNeutralStringIdsByOwner {
             'IDS_FILESYSTEMS3_NAME'
         )
         'Plugins\ViewerSpace' = @(
-            'IDS_VIEWERSPACE_HEADER_FORMAT',
             'IDS_VIEWERSPACE_TOOLTIP_SHARE_UNKNOWN'
         )
         'Plugins\ViewerSqlite' = @(
@@ -629,11 +631,16 @@ function Get-RSSatelliteBaseEntries {
 Describe 'Resource localization contracts' {
     It 'requires every top-level RC resource root to be explicitly allowlisted' {
         $excludedRoots = @('.build', 'vcpkg_installed', 'packages', '.claude', '.git')
+        # Review active tracked/untracked source inputs, excluding ignored dependency/checkouts.
+        # A recursive disk walk also picked up independent nested .wt builds and their resources.
+        $resourcePaths = @(& git -c core.quotepath=false -C $repoRoot ls-files --cached --others --exclude-standard -- '*.rc')
+        if ($LASTEXITCODE -ne 0) { throw 'Cannot enumerate active RC source inputs.' }
         $unexpectedRoots = @(
-            Get-ChildItem -LiteralPath $repoRoot -Directory |
-                Where-Object { $_.Name -notin $excludedRoots -and $_.Name -notin $script:RSResourceRoots } |
-                Where-Object { @(Get-ChildItem -LiteralPath $_.FullName -Recurse -Filter '*.rc' -File -ErrorAction SilentlyContinue).Count -gt 0 } |
-                Select-Object -ExpandProperty Name
+            $resourcePaths |
+                Where-Object { Test-Path -LiteralPath (Join-Path $repoRoot $_) -PathType Leaf } |
+                ForEach-Object { $_.Split('/')[0] } |
+                Where-Object { $_ -notin $excludedRoots -and $_ -notin $script:RSResourceRoots } |
+                Sort-Object -Unique
         )
 
         if ($unexpectedRoots.Count -ne 0) {
@@ -862,12 +869,62 @@ Describe 'Resource localization contracts' {
         }
     }
 
+    It 'passes file-operations diagnostic resource text typed instead of pre-rendered' {
+        # Q9 (UI_FileOperationsPopup.md, Problem text rule 0): a producer whose diagnostic message is
+        # a localized resource passes LocalizedDiagnosticText, so Issues and the card's Last note show
+        # exactly that sentence in the live language. A pre-rendered LoadStringResource or
+        # FormatStringResource argument would compile and silently fall back to class or HRESULT text.
+        $sourceRoot = Join-Path $repoRoot 'RedSalamander'
+        $files = @(Get-ChildItem -LiteralPath $sourceRoot -Filter 'FolderWindow.FileOperations*.cpp' -File)
+        if ($files.Count -lt 5) {
+            throw "Expected the File Operations sources under $sourceRoot, found $($files.Count)."
+        }
+        $callPattern = [regex]'\b(?:LogDiagnostic|RecordDiagnostic|RecordTaskDiagnostic|MarkManagedSourceRetained)\s*\('
+        $renderedPattern = [regex]'\b(?:LoadStringResource|FormatStringResource)\s*\('
+        $violations = [System.Collections.Generic.List[string]]::new()
+        $callCount = 0
+        $typedCount = 0
+        foreach ($file in $files) {
+            $text = Read-RSResourceText -Path $file.FullName
+            foreach ($match in $callPattern.Matches($text)) {
+                $depth = 1
+                $index = $match.Index + $match.Length
+                while ($index -lt $text.Length -and $depth -gt 0) {
+                    $character = $text[$index]
+                    if ($character -eq [char]'(') {
+                        $depth++
+                    }
+                    elseif ($character -eq [char]')') {
+                        $depth--
+                    }
+                    $index++
+                }
+                $call = $text.Substring($match.Index, $index - $match.Index)
+                $callCount++
+                if ($call.Contains('LocalizedDiagnosticText{')) {
+                    $typedCount++
+                }
+                if ($renderedPattern.IsMatch($call)) {
+                    $line = ($text.Substring(0, $match.Index) -split "`n").Count
+                    $violations.Add("$($file.Name):$line")
+                }
+            }
+        }
+
+        if ($violations.Count -ne 0) {
+            throw "File Operations diagnostics pass pre-rendered resource text; pass LocalizedDiagnosticText{IDS_...} instead:`r`n$($violations -join "`r`n")"
+        }
+        if ($callCount -lt 50 -or $typedCount -lt 12) {
+            throw "The File Operations diagnostic scan looks vacuous: $callCount calls, $typedCount typed resource calls."
+        }
+    }
+
     It 'keeps base and satellite MENU structures identical' {
         $findings = [System.Collections.Generic.List[string]]::new()
         foreach ($contract in @(Get-RSMenuOwnerContracts)) {
-            $basePath = Join-Path $repoRoot $contract.Base
+            $basePath = Resolve-RSRedMonitorTestInput -RepoRoot $repoRoot -Path $contract.Base
             $baseFile = Get-Item -LiteralPath $basePath
-            $satelliteRoot = Join-Path $repoRoot $contract.SatelliteDirectory
+            $satelliteRoot = Resolve-RSRedMonitorTestInput -RepoRoot $repoRoot -Path $contract.SatelliteDirectory
             $satelliteFiles = @(Get-ChildItem -LiteralPath $satelliteRoot -Recurse -Filter '*.rc')
             if ($satelliteFiles.Count -eq 0) {
                 $findings.Add("$($contract.Owner) has no satellite menu resources below $satelliteRoot")
@@ -892,7 +949,7 @@ Describe 'Resource localization contracts' {
                 [Parameter(Mandatory = $true)] [string]$MenuId
             )
 
-            $menus = Get-RSMenuStructures -File (Get-Item -LiteralPath (Join-Path $repoRoot $RelativePath))
+            $menus = Get-RSMenuStructures -File (Get-Item -LiteralPath (Resolve-RSRedMonitorTestInput -RepoRoot $repoRoot -Path $RelativePath))
             if (-not $menus.Contains($MenuId)) {
                 throw "$RelativePath does not contain $MenuId."
             }
@@ -966,7 +1023,16 @@ Describe 'Resource localization contracts' {
             'IDM_VIEWERPE_FILE_EXIT', 'IDM_VIEWERPE_VIEW_GOTO_TOP', 'IDM_VIEWERPE_VIEW_GOTO_BOTTOM'
         )
         Assert-ExactMenuCommandIds -RelativePath 'Plugins\ViewerSpace\ViewerSpaceResources.rc' -MenuId 'IDR_VIEWERSPACE_MENU' -Expected @(
-            'IDM_VIEWERSPACE_FILE_REFRESH', 'IDM_VIEWERSPACE_NAV_UP', 'IDM_VIEWERSPACE_FILE_EXIT'
+            'IDM_VIEWERSPACE_FILE_REFRESH', 'IDM_VIEWERSPACE_FILE_REBUILD', 'IDM_VIEWERSPACE_COPY_PATH',
+            'IDM_VIEWERSPACE_EXPORT', 'IDM_VIEWERSPACE_MARK_CLEANUP', 'IDM_VIEWERSPACE_MARK_MATCHING',
+            'IDM_VIEWERSPACE_REVIEW_CLEANUP', 'IDM_VIEWERSPACE_SEND_RECYCLE', 'IDM_VIEWERSPACE_SEND_DELETE',
+            'IDM_VIEWERSPACE_CLEAR_MARKS', 'IDM_VIEWERSPACE_OPEN_OTHER_PANE', 'IDM_VIEWERSPACE_FILE_EXIT',
+            'IDM_VIEWERSPACE_NAV_BACK', 'IDM_VIEWERSPACE_NAV_FORWARD', 'IDM_VIEWERSPACE_NAV_UP',
+            'IDM_VIEWERSPACE_VIEW_EXPLORER', 'IDM_VIEWERSPACE_VIEW_ANALYST', 'IDM_VIEWERSPACE_VIEW_SHOW_ANALYSIS',
+            'IDM_VIEWERSPACE_EXCLUDE', 'IDM_VIEWERSPACE_RESTORE_ALL', 'IDM_VIEWERSPACE_PROBLEMS',
+            'IDM_VIEWERSPACE_FILTERS', 'IDM_VIEWERSPACE_TYPE_BREAKDOWN', 'IDM_VIEWERSPACE_WEIGHT_SIZE',
+            'IDM_VIEWERSPACE_WEIGHT_COUNT', 'IDM_VIEWERSPACE_WEIGHT_DISK', 'IDM_VIEWERSPACE_COLOR_FOLDER',
+            'IDM_VIEWERSPACE_COLOR_TYPE', 'IDM_VIEWERSPACE_COLOR_AGE', 'IDM_VIEWERSPACE_COLOR_NEWEST'
         )
         Assert-ExactMenuCommandIds -RelativePath 'Plugins\ViewerWeb\ViewerWebResources.rc' -MenuId 'IDR_VIEWERWEB_MENU' -Expected @(
             'IDM_VIEWERWEB_FILE_SAVE_AS', 'IDM_VIEWERWEB_FILE_REFRESH', 'IDM_VIEWERWEB_OTHER_PREVIOUS', 'IDM_VIEWERWEB_OTHER_NEXT',
@@ -977,24 +1043,14 @@ Describe 'Resource localization contracts' {
             'IDM_VIEWERWEB_TOOLS_JSON_EXPAND_ALL', 'IDM_VIEWERWEB_TOOLS_JSON_COLLAPSE_ALL', 'IDM_VIEWERWEB_TOOLS_MARKDOWN_TOGGLE_SOURCE'
         )
 
-        $monitorIds = @(Get-MenuCommandIds -RelativePath 'RedSalamanderMonitor\RedSalamanderMonitor.rc' -MenuId 'IDC_REDSALAMANDERMONITOR')
-        $expectedMonitorTail = @(
-            'IDM_OPTION_AUTO_SCROLL', 'IDM_OPTION_ID', 'IDM_OPTION_TOP',
-            'IDM_FILTER_ERROR', 'IDM_FILTER_WARNING', 'IDM_FILTER_INFO', 'IDM_FILTER_PERF', 'IDM_FILTER_DEBUG', 'IDM_FILTER_TEXT',
-            'IDM_FILTER_PRESET_ERRORS_ONLY', 'IDM_FILTER_PRESET_ERRORS_WARNINGS', 'IDM_FILTER_PRESET_ERRORS_DEBUG', 'IDM_FILTER_PRESET_ALL'
-        )
-        $monitorPlacement = @($monitorIds | Where-Object { $_ -in $expectedMonitorTail })
-        if (($monitorPlacement -join '|') -cne ($expectedMonitorTail -join '|')) {
-            throw "RedSalamanderMonitor Options command order was '$($monitorPlacement -join ', ')'."
-        }
     }
 
     It 'keeps actionable static sibling menu access keys present and unique' {
         $findings = [System.Collections.Generic.List[string]]::new()
         foreach ($contract in @(Get-RSMenuOwnerContracts)) {
             $files = [System.Collections.Generic.List[System.IO.FileInfo]]::new()
-            $files.Add((Get-Item -LiteralPath (Join-Path $repoRoot $contract.Base)))
-            foreach ($satelliteFile in @(Get-ChildItem -LiteralPath (Join-Path $repoRoot $contract.SatelliteDirectory) -Recurse -Filter '*.rc')) {
+            $files.Add((Get-Item -LiteralPath (Resolve-RSRedMonitorTestInput -RepoRoot $repoRoot -Path $contract.Base)))
+            foreach ($satelliteFile in @(Get-ChildItem -LiteralPath (Resolve-RSRedMonitorTestInput -RepoRoot $repoRoot -Path $contract.SatelliteDirectory) -Recurse -Filter '*.rc')) {
                 $files.Add($satelliteFile)
             }
             foreach ($file in $files) {

@@ -9,20 +9,71 @@ BEGIN
     POPUP "&Fichier"
     BEGIN
         MENUITEM "&Actualiser\tF5", IDM_VIEWERSPACE_FILE_REFRESH
-        MENUITEM "&Monter\tBackspace", IDM_VIEWERSPACE_NAV_UP
+        MENUITEM "&Reconstruire (abandonner la vue précédente)", IDM_VIEWERSPACE_FILE_REBUILD
+        MENUITEM "Copy &path\tAlt+Insert", IDM_VIEWERSPACE_COPY_PATH
+        MENUITEM "&Export current view…", IDM_VIEWERSPACE_EXPORT
+        MENUITEM "&Mark for cleanup", IDM_VIEWERSPACE_MARK_CLEANUP
+        MENUITEM "Mark ma&tching items", IDM_VIEWERSPACE_MARK_MATCHING
+        MENUITEM "Review &cleanup…", IDM_VIEWERSPACE_REVIEW_CLEANUP
+        MENUITEM "Mo&ve reviewed targets to Recycle Bin", IDM_VIEWERSPACE_SEND_RECYCLE
+        MENUITEM "&Delete reviewed targets permanently", IDM_VIEWERSPACE_SEND_DELETE
+        MENUITEM "C&lear cleanup marks", IDM_VIEWERSPACE_CLEAR_MARKS
+        MENUITEM "Open folder in ot&her pane", IDM_VIEWERSPACE_OPEN_OTHER_PANE
         MENUITEM SEPARATOR
         MENUITEM "&Quitter\tEsc", IDM_VIEWERSPACE_FILE_EXIT
+    END
+    POPUP "&Navigation"
+    BEGIN
+        MENUITEM "&Précédent\tAlt+Left", IDM_VIEWERSPACE_NAV_BACK
+        MENUITEM "&Suivant\tAlt+Right", IDM_VIEWERSPACE_NAV_FORWARD
+        MENUITEM "&Monter\tBackspace", IDM_VIEWERSPACE_NAV_UP
+    END
+    POPUP "&Affichage"
+    BEGIN
+        MENUITEM "Panel &right\tCtrl+1", IDM_VIEWERSPACE_VIEW_EXPLORER
+        MENUITEM "Panel &bottom\tCtrl+2", IDM_VIEWERSPACE_VIEW_ANALYST
+        MENUITEM SEPARATOR
+        MENUITEM "&Map only", IDM_VIEWERSPACE_VIEW_SHOW_ANALYSIS
+        MENUITEM "E&xclude selected item", IDM_VIEWERSPACE_EXCLUDE
+        MENUITEM "Restore all &excluded items", IDM_VIEWERSPACE_RESTORE_ALL
+        MENUITEM "Scan &problems…", IDM_VIEWERSPACE_PROBLEMS
+        MENUITEM "Type and age &filters…", IDM_VIEWERSPACE_FILTERS
+        MENUITEM "File type break&down…", IDM_VIEWERSPACE_TYPE_BREAKDOWN
+        MENUITEM SEPARATOR
+        POPUP "Map &area"
+        BEGIN
+            MENUITEM "&Size", IDM_VIEWERSPACE_WEIGHT_SIZE
+            MENUITEM "File &count", IDM_VIEWERSPACE_WEIGHT_COUNT
+            MENUITEM "Size on &disk", IDM_VIEWERSPACE_WEIGHT_DISK
+        END
+        POPUP "&Color by"
+        BEGIN
+            MENUITEM "Folder &groups", IDM_VIEWERSPACE_COLOR_FOLDER
+            MENUITEM "File &type", IDM_VIEWERSPACE_COLOR_TYPE
+            MENUITEM "Age · &Modified date", IDM_VIEWERSPACE_COLOR_AGE
+            MENUITEM "Age · &newest file inside", IDM_VIEWERSPACE_COLOR_NEWEST
+        END
     END
 END
 
 STRINGTABLE
 BEGIN
+    IDS_VIEWERSPACE_NAV_FOLDERS "Choisir un dossier"
+    IDS_VIEWERSPACE_ANALYSIS_MODE "Mode d’analyse"
+    IDS_VIEWERSPACE_HIDE_PANEL "Masquer le panneau"
+    IDS_VIEWERSPACE_SHOW_PANEL "Afficher le panneau"
+
     IDS_VIEWERSPACE_NAME "Espace"
+    IDS_VIEWERSPACE_REBUILD_REQUIRED "L’actualisation nécessite plus de mémoire. Reconstruisez pour abandonner la vue précédente."
+    IDS_VIEWERSPACE_REFRESH_FAILED "Échec de l’actualisation ; vue précédente conservée."
+    IDS_VIEWERSPACE_NAV_UP "Dossier parent"
+    IDS_VIEWERSPACE_NAV_ANCESTORS "Dossiers précédents"
     IDS_VIEWERSPACE_DESCRIPTION "Visionneuse d’utilisation du disque en carte proportionnelle"
     IDS_VIEWERSPACE_TITLE_FORMAT "{0} - Espace"
     IDS_VIEWERSPACE_STATUS_SCANNING "Analyse..."
     IDS_VIEWERSPACE_STATUS_QUEUED "En attente…"
     IDS_VIEWERSPACE_STATUS_DONE "Terminé"
+    IDS_VIEWERSPACE_STATUS_DONE_WITH_UNREADABLE_FORMAT "Terminé ({0:L} dossiers illisibles)"
     IDS_VIEWERSPACE_OTHER_BUCKET_FORMAT "Autres éléments ({0:L})"
     IDS_VIEWERSPACE_STATUS_NOT_STARTED "Non démarré"
     IDS_VIEWERSPACE_STATUS_ERROR "Erreur"
@@ -32,7 +83,6 @@ BEGIN
     IDS_VIEWERSPACE_TOOLTIP_FORMAT_NO_PATH "{0}\r\nTaille : {1}\r\nPart : {2}\r\nÉtat : {3}"
     IDS_VIEWERSPACE_TOOLTIP_FORMAT_WITH_PATH_NO_STATE "{0}\r\n{1}\r\nTaille : {2}\r\nPart : {3}"
     IDS_VIEWERSPACE_TOOLTIP_FORMAT_NO_PATH_NO_STATE "{0}\r\nTaille : {1}\r\nPart : {2}"
-    IDS_VIEWERSPACE_HEADER_SCANNING_FORMAT "Analyse de {0} - {1}"
     IDS_VIEWERSPACE_HEADER_PROCESSING_FORMAT "Traitement : {0}"
     IDS_VIEWERSPACE_HEADER_COUNTS_FORMAT "{0:L} éléments ({1:L} dossiers, {2:L} fichiers)"
     IDS_VIEWERSPACE_HEADER_SIZE_FORMAT "{0} ({1:L} octets)"
@@ -45,4 +95,160 @@ BEGIN
     IDS_VIEWERSPACE_CONTEXT_ZOOM_IN "Zoom avant"
     IDS_VIEWERSPACE_CONTEXT_ZOOM_OUT "Zoom arrière"
     IDS_VIEWERSPACE_OVERLAY_SCAN_COMPLETED "Analyse terminée"
+    IDS_VIEWERSPACE_NAV_BACK "Précédent"
+    IDS_VIEWERSPACE_NAV_FORWARD "Suivant"
+    IDS_VIEWERSPACE_MODE_EXPLORER "Panel right"
+    IDS_VIEWERSPACE_MODE_ANALYST "Panel bottom"
+    IDS_VIEWERSPACE_SHOW_ANALYSIS "Afficher l’analyse"
+    IDS_VIEWERSPACE_ANALYSIS_FILTER_LABEL "Filtrer ce dossier"
+    IDS_VIEWERSPACE_ANALYSIS_FILTER_PLACEHOLDER "Saisir un nom"
+    IDS_VIEWERSPACE_ANALYSIS_FILTER_SCOPE "Retained names only; summarized names are not searchable."
+    IDS_VIEWERSPACE_ANALYSIS_COLUMN_NAME "Nom"
+    IDS_VIEWERSPACE_ANALYSIS_COLUMN_LOGICAL_BYTES "Size"
+    IDS_VIEWERSPACE_ANALYSIS_COLUMN_PARENT_SHARE "Part du parent"
+    IDS_VIEWERSPACE_ANALYSIS_COLUMN_KIND "Type"
+    IDS_VIEWERSPACE_ANALYSIS_COLUMN_STATE "État"
+    IDS_VIEWERSPACE_ANALYSIS_INSPECTOR_TITLE "Sélection"
+    IDS_VIEWERSPACE_ANALYSIS_FIELD_PATH "Chemin"
+    IDS_VIEWERSPACE_ANALYSIS_FIELD_NAME "Nom"
+    IDS_VIEWERSPACE_ANALYSIS_FIELD_KIND "Type"
+    IDS_VIEWERSPACE_ANALYSIS_FIELD_LOGICAL_BYTES "Octets logiques"
+    IDS_VIEWERSPACE_ANALYSIS_FIELD_PARENT_SHARE "Part du parent"
+    IDS_VIEWERSPACE_ANALYSIS_FIELD_STATE "État"
+    IDS_VIEWERSPACE_ANALYSIS_FIELD_MODIFIED "Modifié le"
+    IDS_VIEWERSPACE_TOOLTIP_MODIFIED_FORMAT "{0}\r\nModifié le : {1}"
+    IDS_VIEWERSPACE_ANALYSIS_KIND_FILE "Fichier"
+    IDS_VIEWERSPACE_ANALYSIS_KIND_FOLDER "Dossier"
+    IDS_VIEWERSPACE_ANALYSIS_KIND_OTHER "Autres"
+    IDS_VIEWERSPACE_ANALYSIS_STATE_UNAVAILABLE "Indisponible"
+    IDS_VIEWERSPACE_ANALYSIS_STATE_PARTIAL "Partiel"
+    IDS_VIEWERSPACE_ANALYSIS_STATE_REFRESHING "Actualisation"
+    IDS_VIEWERSPACE_ANALYSIS_STATE_CACHED "En cache"
+    IDS_VIEWERSPACE_ANALYSIS_STATE_UNREADABLE "Illisible"
+    IDS_VIEWERSPACE_ANALYSIS_CONTENTS_NOT_MEASURED "Contenu non mesuré"
+    IDS_VIEWERSPACE_ANALYSIS_OBSERVED_COUNTS_FORMAT "{0:L} fichiers, {1:L} dossiers observés"
+    IDS_VIEWERSPACE_ANALYSIS_DETAIL_LIMITATION "Certains noms ou détails sont regroupés sous Autres ou indisponibles."
+    IDS_VIEWERSPACE_ANALYSIS_CLEAR_FILTER "Effacer le filtre"
+    IDS_VIEWERSPACE_ANALYSIS_REBUILD "Reconstruire les détails"
+    IDS_VIEWERSPACE_ANALYSIS_REVEAL "Afficher sur la carte"
+    IDS_VIEWERSPACE_ANALYSIS_FOCUS_IN_PANE "Afficher dans le volet"
+    IDS_VIEWERSPACE_ANALYSIS_CLOSE "Fermer l’analyse"
+    IDS_VIEWERSPACE_ANALYSIS_SELECTION_HELP "Sélectionnez un élément pour l’inspecter. Entrée ouvre les dossiers ; Maj+F10 ouvre les actions."
+    IDS_VIEWERSPACE_ANALYSIS_CACHE_AGE_FORMAT "En cache depuis {0}"
+    IDS_VIEWERSPACE_ANALYSIS_EMPTY_STATE "Aucune entrée conservée dans ce dossier."
+    IDS_VIEWERSPACE_ANALYSIS_NO_MATCHES "Aucune entrée conservée ne correspond à ce filtre."
+    IDS_VIEWERSPACE_ANALYSIS_GRID_ACCESSIBLE_NAME "Résultats de l’analyse"
+    IDS_VIEWERSPACE_WAITING_FOR_PREVIOUS_VIEW "En attente de la fermeture de la vue précédente"
+    IDS_VIEWERSPACE_SWITCH_TO_EXPLORER "Passer à l’exploration"
+    IDS_VIEWERSPACE_SWITCH_TO_ANALYST "Passer à l’analyse"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERSPACE_LAYOUT_MAP_ONLY "Map only"
+    IDS_VIEWERSPACE_HEADER_DISCOVERED "Discovered: {0}"
+    IDS_VIEWERSPACE_HEADER_SHOWN "This folder: {0}"
+    IDS_VIEWERSPACE_COPY_PATH "Copy path"
+    IDS_VIEWERSPACE_COPY_FAILED "The path could not be copied to the clipboard."
+    IDS_VIEWERSPACE_EXCLUDE "Exclude from view"
+    IDS_VIEWERSPACE_RESTORE_ITEM "Restore to calculation"
+    IDS_VIEWERSPACE_RESTORE_ALL "Restore all excluded items"
+    IDS_VIEWERSPACE_EXCLUDED "Excluded"
+    IDS_VIEWERSPACE_EXCLUSION_SUMMARY "Shown: {0} · {1:L} excluded"
+    IDS_VIEWERSPACE_EXCLUSION_PENDING "{0:L} exclusions await retained details"
+    IDS_VIEWERSPACE_EXCLUSION_LIMIT "The viewer’s exclusion detail budget is full. Restore an item before excluding another."
+    IDS_VIEWERSPACE_EXCLUDED_PARENT "This item is excluded by a parent folder. Restore that folder or choose Restore all."
+    IDS_VIEWERSPACE_MARK_CLEANUP "&Mark for cleanup"
+    IDS_VIEWERSPACE_UNMARK_CLEANUP "Remove cleanup mark"
+    IDS_VIEWERSPACE_REVIEW_CLEANUP "Review cleanup"
+    IDS_VIEWERSPACE_MARK_MATCHING "Mark ma&tching items"
+    IDS_VIEWERSPACE_REVIEW_EMPTY "No items are marked. Use the cleanup column or Mark matching items after filtering this folder."
+    IDS_VIEWERSPACE_REVIEW_MESSAGE "Review {0:L} targets ({1}). Folder targets include all their contents, including files outside the current filter. Nested items count once."
+    IDS_VIEWERSPACE_REVIEW_RECYCLE "Move to Recycle Bin"
+    IDS_VIEWERSPACE_REVIEW_DELETE "Delete permanently"
+    IDS_VIEWERSPACE_REVIEW_SEND "Send to File Operations"
+    IDS_VIEWERSPACE_EXPORT "Export current view"
+    IDS_VIEWERSPACE_EXPORT_JSON "JSON file"
+    IDS_VIEWERSPACE_EXPORT_CSV "CSV file"
+    IDS_VIEWERSPACE_EXPORT_FAILED "The current view could not be exported: {0}"
+    IDS_VIEWERSPACE_PROBLEMS "Scan problems"
+    IDS_VIEWERSPACE_PROBLEMS_SUMMARY "{0:L} folders could not be read. Some details may also be summarized as Other."
+    IDS_VIEWERSPACE_PROBLEMS_NONE "No unreadable folders were recorded."
+    IDS_VIEWERSPACE_OPEN_OTHER_PANE "Open folder in ot&her pane"
+    IDS_VIEWERSPACE_WEIGHT_SIZE "Size"
+    IDS_VIEWERSPACE_WEIGHT_COUNT "File count"
+    IDS_VIEWERSPACE_WEIGHT_DISK "Size on disk"
+    IDS_VIEWERSPACE_COLOR_FOLDER "Folder groups"
+    IDS_VIEWERSPACE_COLOR_TYPE "File type"
+    IDS_VIEWERSPACE_COLOR_AGE "Age · Modified date"
+    IDS_VIEWERSPACE_COLOR_NEWEST "Age · newest file inside"
+    IDS_VIEWERSPACE_AGE_ANY "Any age"
+    IDS_VIEWERSPACE_AGE_MONTH "Not modified in 30 days"
+    IDS_VIEWERSPACE_AGE_YEAR "Not modified in one year"
+    IDS_VIEWERSPACE_TYPE_ALL "All file types"
+    IDS_VIEWERSPACE_TYPE_BUILD "Build files"
+    IDS_VIEWERSPACE_TYPE_ARCHIVES "Archives"
+    IDS_VIEWERSPACE_TYPE_MEDIA "Media"
+    IDS_VIEWERSPACE_TYPE_DATA "Data"
+    IDS_VIEWERSPACE_TYPE_CODE "Source code"
+    IDS_VIEWERSPACE_TYPE_DOCUMENTS "Documents"
+    IDS_VIEWERSPACE_TYPE_OTHER "Unclassified"
+    IDS_VIEWERSPACE_ALLOCATION_UNAVAILABLE "Unavailable"
+    IDS_VIEWERSPACE_ALLOCATION_PARTIAL "Known allocation only; unknown values are unavailable."
+    IDS_VIEWERSPACE_FILTERS "Type and age filters"
+    IDS_VIEWERSPACE_TYPE_BREAKDOWN "File type breakdown"
+    IDS_VIEWERSPACE_FILTER_HIGHLIGHT "Filter highlights · totals unchanged"
+    IDS_VIEWERSPACE_FILE_COUNT_FORMAT "{0:L} files"
+    IDS_VIEWERSPACE_SIZE_KNOWN_FORMAT "At least {0}"
+    IDS_VIEWERSPACE_SCAN_RATE "{0:L} items/s"
+    IDS_VIEWERSPACE_AGE_RECENT "Last 7 days"
+    IDS_VIEWERSPACE_AGE_MONTH_LEGEND "7–30 days"
+    IDS_VIEWERSPACE_AGE_YEAR_LEGEND "30 days–1 year"
+    IDS_VIEWERSPACE_AGE_OLD "Over one year"
+    IDS_VIEWERSPACE_PREFERENCES_NOTE "ViewerSpace defaults are configured in the application Preferences, under Plugins → Space."
+    IDS_VIEWERSPACE_EXCLUDED_STATE "Excluded from shown sizes"
+    IDS_VIEWERSPACE_REVIEW_STALE "The scan changed while reviewing cleanup. Review the current items again."
+    IDS_VIEWERSPACE_TARGET_UNAVAILABLE "This action is unavailable for the current provider or selection."
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERSPACE_CLEANUP_LIMIT "Mark at most 128 targets at a time. Narrow this folder’s filter or mark fewer items."
+    IDS_VIEWERSPACE_CLEANUP_SENT "Sent to File Operations. Refresh this scan after the operation finishes."
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERSPACE_VIEW_FACTS "Area: {0} · Colors: {1}"
+    IDS_VIEWERSPACE_FACTS_PENDING "Derived detail is unavailable while scanning or above the detail-memory limit."
+    IDS_VIEWERSPACE_PROBLEMS_SCOPE "Unreadable or summarized folders · first {0:L} retained entries. Enter locates a folder; Copy path and Focus in pane are available."
+    IDS_VIEWERSPACE_BREAKDOWN_ROW "{0} — {1} · {2:L} items"
+    IDS_VIEWERSPACE_BREAKDOWN_SCOPE "Direct entries of this folder; mixed folder contents and Other remain explicit."
+    IDS_VIEWERSPACE_EXPORT_LIMIT "Export is limited to 20,000 retained rows and 8 MiB. Narrow the filter or choose a smaller folder."
+    IDS_VIEWERSPACE_EXPORT_DONE "The current view was exported."
+    IDS_VIEWERSPACE_DISK_UNAVAILABLE "Size on disk is unavailable until allocation and shared hard-link identity can be reported reliably."
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERSPACE_EXPORT_BUSY "An export is already in progress. Try again when it finishes."
+    IDS_VIEWERSPACE_EXPORT_STALE "The scan changed while preparing the export. Export the current view again."
+    IDS_VIEWERSPACE_EXPORT_IO_ERROR "The export could not be saved. Check the destination and try again."
+    IDS_VIEWERSPACE_EXPORT_WAIT "Finish or cancel scanning and wait for the current folder’s analysis before exporting."
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERSPACE_HEADER_PROBLEMS "{0} · {1:L} unreadable"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERSPACE_SUMMARIZED_SHORT "Summarized"
+    IDS_VIEWERSPACE_UNMEASURED_SHORT "Unmeasured"
+END
+
+STRINGTABLE
+BEGIN
+    IDS_VIEWERSPACE_CLEANUP_COLUMN "Cleanup"
 END

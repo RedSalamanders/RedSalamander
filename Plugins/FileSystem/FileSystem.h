@@ -25,9 +25,9 @@
 #include <wil/resource.h>
 #pragma warning(pop)
 
+#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/DriveInfo.h"
 #include "PlugInterfaces/FileSystem.h"
-#include "FileSystemRouteProviderBase.h"
 #include "PlugInterfaces/Informations.h"
 #include "PlugInterfaces/NavigationMenu.h"
 
@@ -117,6 +117,7 @@ private:
 class FileSystem final : public IFileSystem,
                          public FileSystemRouteCapabilitiesBase,
                          public IFileSystemObjectBinding,
+                         public IFileSystemIdentityDelete,
                          public IFileSystemSearch,
                          public IFileSystemIO,
                          public IFileSystemItemStreams,
@@ -228,19 +229,36 @@ public:
     HRESULT STDMETHODCALLTYPE GetItemProperties(const wchar_t* path, const char** jsonUtf8) noexcept override;
     HRESULT STDMETHODCALLTYPE DeleteItemStream(const wchar_t* path, const wchar_t* streamName) noexcept override;
 
-    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
-                                                  FileSystemOperation operation,
-                                                  const char** jsonUtf8) noexcept override;
-    HRESULT STDMETHODCALLTYPE BindObject(const wchar_t* path,
-                                         FileSystemBindFlags flags,
-                                         IFileSystemBoundObject** bound) noexcept override;
+#if defined(ENABLE_TESTS)
+    HRESULT STDMETHODCALLTYPE GetRouteFacts(const wchar_t* path,
+                                            FileSystemOperation operation,
+                                            FileSystemArena* arena,
+                                            FileSystemRouteFacts* facts) noexcept override;
+    HRESULT STDMETHODCALLTYPE IsTransferPeerAllowed(
+        const wchar_t* path, FileSystemOperation operation, FileSystemTransferPeerRole role, const wchar_t* peerPluginId, BOOL* allowed) noexcept override;
+#endif
+
+    HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept override;
+    HRESULT STDMETHODCALLTYPE BindObject(const wchar_t* path, FileSystemBindFlags flags, IFileSystemBoundObject** bound) noexcept override;
+    // I35 R7.3 (D-7.3): only for an object this location opens but cannot identify (no FileIdInfo, or an
+    // all-zero id); ResolveDeleteIdentity refuses with ERROR_NOT_SUPPORTED an object BindObject can bind,
+    // so a delete by name never replaces exact authority.
+    HRESULT STDMETHODCALLTYPE ResolveDeleteIdentity(const wchar_t* path,
+                                                    const FileSystemOptions* options,
+                                                    FileSystemDeleteIdentity* identity) noexcept override;
+    HRESULT STDMETHODCALLTYPE DeleteIfIdentity(const wchar_t* path,
+                                               const FileSystemDeleteIdentity* identity,
+                                               FileSystemFlags flags,
+                                               const FileSystemOptions* options,
+                                               IFileSystemCallback* callback,
+                                               void* cookie) noexcept override;
     HRESULT STDMETHODCALLTYPE CreateExclusiveWriter(const wchar_t* stagePath,
-                                                     const FileSystemOptions* options,
-                                                     IFileWriter** writer,
-                                                     IFileSystemBoundObject** ownedStage) noexcept override;
+                                                    const FileSystemOptions* options,
+                                                    IFileWriter** writer,
+                                                    IFileSystemBoundObject** ownedStage) noexcept override;
     HRESULT STDMETHODCALLTYPE CreateExclusiveDirectory(const wchar_t* stagePath,
-                                                        const FileSystemOptions* options,
-                                                        IFileSystemBoundObject** ownedStage) noexcept override;
+                                                       const FileSystemOptions* options,
+                                                       IFileSystemBoundObject** ownedStage) noexcept override;
     HRESULT STDMETHODCALLTYPE ReadBoundLink(IFileSystemBoundObject* boundLink,
                                             const FileSystemLinkTransform* transform,
                                             const FileSystemOptions* options,
@@ -256,9 +274,7 @@ public:
     HRESULT STDMETHODCALLTYPE GetStorageCharacteristics(const wchar_t* path, FileSystemStorageCharacteristics* characteristics) noexcept override;
 
 protected:
-    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path,
-                                           FileSystemOperation operation,
-                                           FileSystemRouteDescriptor& descriptor) noexcept override;
+    HRESULT BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept override;
 
 private:
     ~FileSystem();
@@ -288,7 +304,7 @@ private:
       "key": "copyMoveMaxConcurrency",
       "type": "value",
       "label": "Copy/Move max concurrency",
-      "description": "Maximum Copy/Move worker budget for selected items and recursive directory contents. 1 disables internal parallelism.",
+      "description": "Manual-mode Copy/Move worker budget for selected items and recursive directory contents. 1 disables internal parallelism in Manual mode.",
       "default": 4,
       "min": 1,
       "max": 16

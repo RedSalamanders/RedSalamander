@@ -1,0 +1,16 @@
+{
+  "schema": "i26-v58-binder-root-review.v1",
+  "reviewer": "root",
+  "scriptPath": "C:/RedSalamander.Perf/evidence/i26-ui/final-gates-drivers-20260930/bind-v58-acceptance-results-draft.ps1",
+  "scriptSha256": "a0d01422eb42306b45551cfa5ba33df7cf0bd6e723df24f6de3c05236761684c",
+  "parserPassed": true,
+  "finalManifestSnapshotAndRootReviewRequireExplicitSha": true,
+  "originalV55V56V57ProvenanceRetained": true,
+  "exactEightPathDeltaRequired": true,
+  "logicalAndPhysicalAliasCountsCorrected": true,
+  "pesterReviewMarkdownHashedWithoutJsonParsing": true,
+  "nativeAndPesterRootProofsRequired": true,
+  "caseMapSha256": "ddb9a310fdf1ff3fdb97127cab6f3361287131fa12f041989b6a2da1aef0ffbc",
+  "executed": false,
+  "next": "Run bounded read-only source-stage preflight after V58 freeze; final binder requires actual passing Full and pair evidence."
+}

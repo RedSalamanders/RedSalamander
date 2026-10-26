@@ -1,0 +1,139 @@
+{
+  "verified_utc": "2026-09-06T02:59:02.6975672Z",
+  "checks_passed": 268,
+  "checks_failed": 0,
+  "scope": "Archive raw-copy hashes, ordered metric projection, receipt identity, result/native counts, tested source manifests, current code identity, helpers and policy. Not final Full or live transport qualification.",
+  "runs": [
+    {
+      "archive": "2026-09-06_c0_imap_listing_attributes_baseline_debug",
+      "exact_copies": 8,
+      "selected_metric_rows": 578,
+      "receipt_id": "d7ed1766deae1596153c685b1985a307bdc72fc2b630a5330c34790d3f9c726d",
+      "source_snapshot_id": "39cac13589c038ea41b93e2be271f3dcd77f360faa4e2934af117c11497af5d9",
+      "passed": 2,
+      "failed": 1,
+      "skipped": 0
+    },
+    {
+      "archive": "2026-09-06_c0_imap_listing_attributes_candidate_debug",
+      "exact_copies": 11,
+      "selected_metric_rows": 890,
+      "receipt_id": "a3b75f8ef4e4590e2f4fb84014dd9839ba368322e37cdd2cb071b35485a2d319",
+      "source_snapshot_id": "57bc7d9f6a1ddc2e80539eec07b74433272555dedc3d9cc4d842d78a580c756c",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "archive": "2026-09-06_c0_imap_listing_attributes_broad_debug",
+      "exact_copies": 7,
+      "selected_metric_rows": 2408,
+      "receipt_id": "a3b75f8ef4e4590e2f4fb84014dd9839ba368322e37cdd2cb071b35485a2d319",
+      "source_snapshot_id": "57bc7d9f6a1ddc2e80539eec07b74433272555dedc3d9cc4d842d78a580c756c",
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "archive": "2026-09-06_c0_imap_listing_attributes_candidate_release",
+      "exact_copies": 9,
+      "selected_metric_rows": 890,
+      "receipt_id": "c38aa434016840c80c9f10fdc99067005f64010deb8e33b3883156bbf243e373",
+      "source_snapshot_id": "57bc7d9f6a1ddc2e80539eec07b74433272555dedc3d9cc4d842d78a580c756c",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0
+    },
+    {
+      "archive": "2026-09-06_c0_imap_listing_attributes_broad_release",
+      "exact_copies": 7,
+      "selected_metric_rows": 2408,
+      "receipt_id": "c38aa434016840c80c9f10fdc99067005f64010deb8e33b3883156bbf243e373",
+      "source_snapshot_id": "57bc7d9f6a1ddc2e80539eec07b74433272555dedc3d9cc4d842d78a580c756c",
+      "passed": 18,
+      "failed": 0,
+      "skipped": 0
+    }
+  ],
+  "candidate_sources": [
+    {
+      "path": "Plugins/FileSystemCurl/FileSystemCurl.Imap.cpp",
+      "tested_sha256": "9b03f62849ac5ce4efc6f3e1215958d25e6b205b9978b8a81b80c7f2741a2da2",
+      "current_sha256": "9b03f62849ac5ce4efc6f3e1215958d25e6b205b9978b8a81b80c7f2741a2da2",
+      "post_test_documentation_annotation": false
+    },
+    {
+      "path": "Plugins/FileSystemCurl/FileSystemCurl.ImapHelpers.h",
+      "tested_sha256": "4b242b196edd4b9c83b1b66ad941904f28868ab3110aa57526164f8fad40c38a",
+      "current_sha256": "4b242b196edd4b9c83b1b66ad941904f28868ab3110aa57526164f8fad40c38a",
+      "post_test_documentation_annotation": false
+    },
+    {
+      "path": "Plugins/FileSystemCurl/FileSystemCurl.Internal.h",
+      "tested_sha256": "8e7f198ca8c5c7fef4798198f84a3a3ef7f4aa8d6e63c07027841b917cd5a0f5",
+      "current_sha256": "8e7f198ca8c5c7fef4798198f84a3a3ef7f4aa8d6e63c07027841b917cd5a0f5",
+      "post_test_documentation_annotation": false
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp",
+      "tested_sha256": "cba879aa0e40fd01f5bba081ee059631ec0cc93ac66e949a367ab4388d553621",
+      "current_sha256": "cba879aa0e40fd01f5bba081ee059631ec0cc93ac66e949a367ab4388d553621",
+      "post_test_documentation_annotation": false
+    },
+    {
+      "path": "Specs/Core/Core_SharedHelpers.md",
+      "tested_sha256": "82e41f5595f64d38045bb1e64b7131d5c7f899e3aafcdc83c5718a2d8f3f7aa0",
+      "current_sha256": "82e41f5595f64d38045bb1e64b7131d5c7f899e3aafcdc83c5718a2d8f3f7aa0",
+      "post_test_documentation_annotation": false
+    },
+    {
+      "path": "Specs/FileSystem/FileSystem_Imap.md",
+      "tested_sha256": "00fb7327148d07233fc8a75db76b35b52819ee8e1ef7b758e1f22677863740a7",
+      "current_sha256": "faee4d7b39a7a1bdda266c1d9c068cbc762588e74548a216d0f5921d489bab43",
+      "post_test_documentation_annotation": true
+    },
+    {
+      "path": "Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md",
+      "tested_sha256": "5c6750f4ca37f8e9bd8181402b16b88d23856acd46b443ab6d6eb5ef681b4a63",
+      "current_sha256": "a415cd28df745ce66fddde77c010aef63215403f1ea37ff9f6a620603673468b",
+      "post_test_documentation_annotation": true
+    },
+    {
+      "path": "Specs/Testing/Testing_PerformanceValidation.md",
+      "tested_sha256": "71508a22d27826e8a63d2f77cd3fe306857491c4a91aadfa615b726e15d45ad0",
+      "current_sha256": "71508a22d27826e8a63d2f77cd3fe306857491c4a91aadfa615b726e15d45ad0",
+      "post_test_documentation_annotation": false
+    }
+  ],
+  "helper_runs": [
+    {
+      "run_id": "c0-imap-attributes-helpers-debug-20260906",
+      "configuration": "Debug",
+      "receipt_id": "a3b75f8ef4e4590e2f4fb84014dd9839ba368322e37cdd2cb071b35485a2d319",
+      "source_snapshot_id": "57bc7d9f6a1ddc2e80539eec07b74433272555dedc3d9cc4d842d78a580c756c",
+      "git_head": "f5858fbe0a56c99fd825958ae6434fda0e37e394",
+      "artifacts_verified": 177,
+      "exit_code": 0,
+      "pass_marker": true,
+      "test_functions": 12,
+      "duration_ms": 114.6734
+    },
+    {
+      "run_id": "c0-imap-attributes-helpers-release-20260906",
+      "configuration": "Release",
+      "receipt_id": "c38aa434016840c80c9f10fdc99067005f64010deb8e33b3883156bbf243e373",
+      "source_snapshot_id": "57bc7d9f6a1ddc2e80539eec07b74433272555dedc3d9cc4d842d78a580c756c",
+      "git_head": "f5858fbe0a56c99fd825958ae6434fda0e37e394",
+      "artifacts_verified": 177,
+      "exit_code": 0,
+      "pass_marker": true,
+      "test_functions": 12,
+      "duration_ms": 112.8822
+    }
+  ],
+  "source_resource_policy_passed": 197,
+  "additional_post_test_documentation": [
+    ".gitattributes",
+    "Specs/NormativeConsistency.json"
+  ]
+}

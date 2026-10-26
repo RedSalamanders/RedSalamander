@@ -1,0 +1,52 @@
+{
+  "schema": "i26-v64-completed-green-diagnostic.v1",
+  "diagnosticOnly": true,
+  "acceptanceEffect": "none",
+  "status": "green-diagnostic-pass",
+  "configuration": "Debug",
+  "runId": "20261001T085927Z-103256-b05d4c43e77e40e8af274ac3706ad122",
+  "exitCode": 0,
+  "candidateBefore": {
+    "head": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+    "receiptId": "d11e8a903b2b0c06974f135f03dceed862c5c9fbb483ff5769a1e7912886123f",
+    "receiptSha256": "a1aac8b0279afbcc8baa5c17cb7922c5853358abd66bdc3fa945a16be1a5121a",
+    "manifestSha256": "55b1d53c4e12b631dd66609d9d4390bc2dcc0eed50949bd636739793c4063730",
+    "manifestRows": 85,
+    "sourceSnapshotId": "3ce4faf02bd5be620b8087fb1483fbf1d80caa35c795308957463b7084398a5e"
+  },
+  "candidateAfter": {
+    "head": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+    "receiptId": "d11e8a903b2b0c06974f135f03dceed862c5c9fbb483ff5769a1e7912886123f",
+    "receiptSha256": "a1aac8b0279afbcc8baa5c17cb7922c5853358abd66bdc3fa945a16be1a5121a",
+    "manifestSha256": "55b1d53c4e12b631dd66609d9d4390bc2dcc0eed50949bd636739793c4063730",
+    "manifestRows": 85,
+    "sourceSnapshotId": "3ce4faf02bd5be620b8087fb1483fbf1d80caa35c795308957463b7084398a5e"
+  },
+  "names": [
+    "cmd_pane_fileops_completed_group_and_navigation"
+  ],
+  "repeatCount": 1,
+  "executions": 1,
+  "passed": 1,
+  "failed": 0,
+  "skipped": 0,
+  "sandboxClean": true,
+  "runnerResultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v64-completed-green\\runner-run\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+  "runnerResultSha256": "b12cbdc34fa296134e0c3e860af7ec59f3bfb2c6d2457899dea260d06dc8e5cf",
+  "nativeResultPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v64-completed-green\\runner-run\\artifacts\\selftest\\last_run\\commands\\results.json",
+  "nativeResultSha256": "ede66c8b1c874acdfea0484175902cede1687e31e704d641f3c0b49f09275531",
+  "expectedTestSha256": "89bf23a6cb7d3b062bf8a15895dead2a76210715eeb267627a4dddf521d81ec3",
+  "tracePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\debug-v64-completed-green\\runner-run\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+  "traceSha256": "b54af3f5cfa1999db0e57a25eba94c593377c968484f2832079b77f888eea9c5",
+  "twoFocusDiagnosticLines": [
+    "Two focus requests before paint must reveal the final group disclosure: painted=0, lower=48, group=20, top=6, height=27, viewport=[0,348]."
+  ],
+  "firstFrameRetirementLines": [
+    "First collapsed frame must retire all three tasks' raw hosted UIA controls, including offscreen descendants; traversal=true, providers=0/0/0 for task IDs 1/2/3."
+  ],
+  "failureObservations": [],
+  "originalV58FullPreserved": true,
+  "originalV63RedPreserved": true,
+  "doesNotReplaceFull": true,
+  "wholePlanComplete": false
+}

@@ -1,0 +1,28 @@
+[
+  {
+    "Case": "FileOps_ReviewRemediationContracts",
+    "RunId": "20261019T210522Z-67760-2c92e0c642464ba7964ad89ae923ce73",
+    "ExitCode": 0,
+    "Passed": 3,
+    "Failed": 0,
+    "Skipped": 0,
+    "ElapsedMs": 42669,
+    "SourceSnapshotId": "93df716e0b0adff85edb0d0426cee76a0aeeab97a239721d04753e5c80db817f",
+    "ReceiptId": "e05e132f6676eb1b99b4886bff56d28d155b056328e942bfff7d2cb9dcaad6b9",
+    "NoActivation": true,
+    "DesktopInput": false
+  },
+  {
+    "Case": "DiscoveryScope_FolderLiveProgress",
+    "RunId": "20261019T210717Z-44008-0fb5286938e649fc9ef80fba7df0cc77",
+    "ExitCode": 0,
+    "Passed": 3,
+    "Failed": 0,
+    "Skipped": 0,
+    "ElapsedMs": 87583,
+    "SourceSnapshotId": "93df716e0b0adff85edb0d0426cee76a0aeeab97a239721d04753e5c80db817f",
+    "ReceiptId": "e05e132f6676eb1b99b4886bff56d28d155b056328e942bfff7d2cb9dcaad6b9",
+    "NoActivation": true,
+    "DesktopInput": false
+  }
+]

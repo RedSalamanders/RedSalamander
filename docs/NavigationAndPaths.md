@@ -1,5 +1,16 @@
 # Navigation & Path Syntax
 
+File and folder names use Windows natural sorting: `file1`, `file2`, `file10`.
+Pane sort toggles reuse the loaded folder's ordering information without enumerating it again.
+This applies to pane names and extensions, Find Name/Path columns, address suggestions,
+breadcrumb sibling folders, and Batch Rename's name/path columns and folder collection.
+Batch Rename preserves explicit selection order and keeps each proposed name paired with
+its source when sorting. Time sorts by the modification timestamp and Size by
+the numeric byte count. In the main panes, equal values use natural name order;
+folders stay first, and Size orders folders by name. Find keeps arrival order for
+equal date or size values. Displayed date formats and size separators do not
+affect numeric sorting.
+
 ## Quick navigation
 
 - Focus the address bar: `Ctrl+L` or `Alt+D`
@@ -19,8 +30,6 @@
 - Jump to a drive root: `Shift` + a drive letter (example: `Shift+C` → `C:\`)
 - Set path from other pane: `Ctrl+.`
 - Filter current folder: `Ctrl+F12`
-
-![Drive/menu dropdown](res/drive-menu.png)
 
 ### Hot Paths details
 
@@ -43,6 +52,8 @@ The path is shown as a breadcrumb: each folder in the current path is a clickabl
 ### Separator / sibling dropdown
 
 - The chevron separator between two folders is itself clickable. Clicking it opens a dropdown of the **sibling folders** at that level — the other folders inside the same parent.
+- Sibling folders use Windows Explorer-style natural ordering: `Folder2` appears before `Folder10`, ignoring case. The same ordering applies in dialog breadcrumbs and the full-path popup. Large lists keep the first 99 folders in that order, retaining the current folder and offering a path-navigation action for the rest.
+- ViewerSpace's separate breadcrumb folder menus use the same natural ordering for their retained directory choices (up to 512). They read the retained scan model and reject stale navigation targets.
 - For example, clicking the `›` after `Documents` lists the siblings of `Documents` (such as `Pictures` and `Downloads`). The folder you are currently in is marked with an accent bar; hover and keyboard selection move independently of that marker.
 - Pick an entry to navigate into that sibling. The dropdown only commits on click or `Enter`; clicking outside or pressing `Esc` cancels without navigating.
 
@@ -134,8 +145,6 @@ is treated as “mount this archive and open its root”.
 
 RedSalamander maintains a shared “most recently used” folder history list and uses it for the History dropdown.
 
-![History dropdown](res/history-dropdown.png)
-
 ### Filter state in history
 
 - When a pane filter is active, the filter state is persisted in folder history.
@@ -151,10 +160,14 @@ When browsing a local drive (the `file` file system), the disk info section can 
 
 The disk info text and usage bar are also visible in the navigation bar:
 
-![Navigation bar disk info](res/navigation-view.png)
-
 ## Preview Pane
 
 **Left/Right -> Preview Pane** opens the named pane's preview in the opposite pane. The host pane shows Folder and Preview tabs, follows the source pane's focused item, and extends to the function bar or to the bottom of the window when the function bar is hidden.
 
 See: [Main window](MainWindow.md)
+
+## Workspace example
+
+The breadcrumbs and filenames below belong to an in-memory demonstration provider.
+
+![Extra Detailed and Brief panes using synthetic Demo paths](res/folder-view-extra-detailed.png)

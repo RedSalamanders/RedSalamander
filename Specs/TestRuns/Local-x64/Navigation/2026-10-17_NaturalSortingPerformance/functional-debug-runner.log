@@ -1,0 +1,3 @@
+Native test naming: 118 files checked.
+Stale TestSandbox run cleanup: 2 removed, 0 failed, 0 retained (unlinkable reparse point or test-owned VHDX receipt).
+BLOCKED ATTESTATION: -SkipBuild requires a compatible full-solution build receipt and byte-identical artifacts. Run build.ps1 for Debug|x64, or import a verified same-workflow portable attestation.

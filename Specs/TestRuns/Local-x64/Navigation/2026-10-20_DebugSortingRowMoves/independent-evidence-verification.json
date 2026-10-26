@@ -1,0 +1,108 @@
+{
+  "verified_utc": "2026-10-20T13:44:43.3598574Z",
+  "status": "passed",
+  "verified_bindings": 222,
+  "phases": [
+    {
+      "phase": "baseline-debug-03",
+      "accepted": false,
+      "selected_rows": 197,
+      "sort_samples": 50,
+      "benchmark_snapshots": 397,
+      "contaminated_snapshots": 18,
+      "all_relevant_rows_preserved": true,
+      "all_samples_and_request_statistics_verified": true,
+      "all_measurement_snapshots_preserved": true
+    },
+    {
+      "phase": "baseline-debug-04",
+      "accepted": false,
+      "selected_rows": 197,
+      "sort_samples": 50,
+      "benchmark_snapshots": 421,
+      "contaminated_snapshots": 0,
+      "all_relevant_rows_preserved": true,
+      "all_samples_and_request_statistics_verified": true,
+      "all_measurement_snapshots_preserved": true
+    },
+    {
+      "phase": "baseline-release-01",
+      "accepted": false,
+      "selected_rows": 198,
+      "sort_samples": 50,
+      "benchmark_snapshots": 352,
+      "contaminated_snapshots": 258,
+      "all_relevant_rows_preserved": true,
+      "all_samples_and_request_statistics_verified": true,
+      "all_measurement_snapshots_preserved": true
+    },
+    {
+      "phase": "baseline-release-03",
+      "accepted": false,
+      "selected_rows": 198,
+      "sort_samples": 50,
+      "benchmark_snapshots": 371,
+      "contaminated_snapshots": 340,
+      "all_relevant_rows_preserved": true,
+      "all_samples_and_request_statistics_verified": true,
+      "all_measurement_snapshots_preserved": true
+    },
+    {
+      "phase": "candidate-debug-02",
+      "accepted": false,
+      "selected_rows": 315,
+      "sort_samples": 50,
+      "benchmark_snapshots": 437,
+      "contaminated_snapshots": 381,
+      "all_relevant_rows_preserved": true,
+      "all_samples_and_request_statistics_verified": true,
+      "all_measurement_snapshots_preserved": true
+    },
+    {
+      "phase": "paired-baseline-debug-02",
+      "accepted": true,
+      "selected_rows": 196,
+      "sort_samples": 50,
+      "benchmark_snapshots": 386,
+      "contaminated_snapshots": 0,
+      "all_relevant_rows_preserved": true,
+      "all_samples_and_request_statistics_verified": true,
+      "all_measurement_snapshots_preserved": true
+    },
+    {
+      "phase": "paired-baseline-release-01",
+      "accepted": true,
+      "selected_rows": 198,
+      "sort_samples": 50,
+      "benchmark_snapshots": 359,
+      "contaminated_snapshots": 0,
+      "all_relevant_rows_preserved": true,
+      "all_samples_and_request_statistics_verified": true,
+      "all_measurement_snapshots_preserved": true
+    },
+    {
+      "phase": "paired-candidate-debug-01",
+      "accepted": true,
+      "selected_rows": 315,
+      "sort_samples": 50,
+      "benchmark_snapshots": 377,
+      "contaminated_snapshots": 0,
+      "all_relevant_rows_preserved": true,
+      "all_samples_and_request_statistics_verified": true,
+      "all_measurement_snapshots_preserved": true
+    },
+    {
+      "phase": "paired-candidate-release-01",
+      "accepted": true,
+      "selected_rows": 314,
+      "sort_samples": 50,
+      "benchmark_snapshots": 360,
+      "contaminated_snapshots": 0,
+      "all_relevant_rows_preserved": true,
+      "all_samples_and_request_statistics_verified": true,
+      "all_measurement_snapshots_preserved": true
+    }
+  ],
+  "pair_profile_checkout_toolchain_dependency_flags_and_observer_identities_match": true,
+  "scope": "Independent raw-row, copy, summary, observation and receipt comparison. Native functional verdicts and current executable hashes are separate evidence."
+}

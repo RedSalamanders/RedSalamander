@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-09-21T11:33:34.042Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\i26-clipboard-reviewed-native-20260921\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 11212,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Retained rich format must expose its complete global-memory payload.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_global_summary_ignores_finished_tasks",
+            "status": "passed",
+            "duration_ms": 1,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_progress_contracts",
+            "status": "passed",
+            "duration_ms": 2,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "failed",
+            "duration_ms": 9951,
+            "repeat_index": 1,
+            "reason": "Retained rich format must expose its complete global-memory payload."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 1
+}

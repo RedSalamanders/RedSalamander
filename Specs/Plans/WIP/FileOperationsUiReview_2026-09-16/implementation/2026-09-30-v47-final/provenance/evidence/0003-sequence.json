@@ -1,0 +1,34 @@
+{
+  "group": "ProtectedInteraction",
+  "name": "gallery-interaction-protected-x64-debug",
+  "filter": "FileOps_VisualGalleryInteraction",
+  "exitCode": 0,
+  "runId": "20260930T205252Z-73948-5c3a6bf63ef1405cb66eb5d36a40fa99",
+  "result": {
+    "suite": "FileOps",
+    "configuration": "Debug",
+    "filter": "FileOps_VisualGalleryInteraction",
+    "runId": "20260930T205252Z-73948-5c3a6bf63ef1405cb66eb5d36a40fa99",
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cleanSandbox": true
+  },
+  "provenanceBefore": {
+    "head": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+    "receiptId": "1606402fa029ceab2d5ea775ab75869217b1583d54e908fb1f7106e698c611cc",
+    "receiptSha256": "005af9beeb0b7674b6a8662746d1b04d3e4c99ba121924c8b28eaf8bed39cceb",
+    "manifestSha256": "93f06a0c97e308d67eb01bf2a9eb6092fc4103a4f0c40fef92ddad35008ab603",
+    "manifestRows": 81,
+    "sourceSnapshotId": "5b76a052a1ef9c7805b79aa1286a5c43a63f184f6c89effacaab4828f029ff9e"
+  },
+  "provenanceAfter": {
+    "head": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+    "receiptId": "1606402fa029ceab2d5ea775ab75869217b1583d54e908fb1f7106e698c611cc",
+    "receiptSha256": "005af9beeb0b7674b6a8662746d1b04d3e4c99ba121924c8b28eaf8bed39cceb",
+    "manifestSha256": "93f06a0c97e308d67eb01bf2a9eb6092fc4103a4f0c40fef92ddad35008ab603",
+    "manifestRows": 81,
+    "sourceSnapshotId": "5b76a052a1ef9c7805b79aa1286a5c43a63f184f6c89effacaab4828f029ff9e"
+  }
+}

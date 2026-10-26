@@ -1,0 +1,18 @@
+{
+  "schema": "red-salamander.i26-redraw-curation.v1",
+  "rawPath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\candidate-v2\\perf_metrics.jsonl",
+  "rawSha256": "18059F4C2A263B292F634A126380576850242476F547730409F17741D0230791",
+  "rawBytes": 10764336,
+  "rawRows": 28840,
+  "retainedRows": 5,
+  "retainedOneBasedRowIndices": [
+    3730,
+    3891,
+    4052,
+    4213,
+    4374
+  ],
+  "retainedSha256": "E93291CED209DC510F906C9120C92351B617E40BB782859F4FA25CB196D0183B",
+  "fixtureSha256": "91364B97CF190E44C930ED1C68E99C6832135EF243F8A1A346513DAB7A82AE58",
+  "scope": "All five ActionsWitness redraw batches retained in original order; other metrics stay in the local raw artifact. No broader resource claim."
+}

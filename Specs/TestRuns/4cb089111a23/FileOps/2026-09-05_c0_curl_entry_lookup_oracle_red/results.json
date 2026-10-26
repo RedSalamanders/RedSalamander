@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-09-05T17:01:27.845Z",
+    "suite": "FileOperations",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-curl-entry-lookup-baseline-fixed-debug-20260905\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 17687,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "C0 Curl native safety test failed; see FileOps.Curl metrics for the exact route.",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1390,
+            "repeat_index": 1
+        },
+        {
+            "name": "C0_CurlEntryLookupTruth",
+            "status": "failed",
+            "duration_ms": 16266,
+            "repeat_index": 1,
+            "reason": "C0 Curl native safety test failed; see FileOps.Curl metrics for the exact route."
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-08-23T23:59:10.067Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-skip-release-fixed\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 4250,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 2422,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase5_SwitchParallelToWaitDuringDiscovery",
+            "status": "passed",
+            "duration_ms": 937,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 891,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

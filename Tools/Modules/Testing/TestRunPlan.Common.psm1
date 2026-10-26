@@ -42,7 +42,7 @@ function Get-RSTestRunPlanEntryPolicy {
     )
 
     $family = $Id.Split('.')[0]
-    $impactTags = @("test.$family")
+    $impactTags = @("test.$family", "test.$Id")
     $inputSets = @("source.$family")
     $artifactIds = if ($Kind -in @('Pester', 'PowerShellScript')) { @() } else { @("artifact.$Id") }
     $artifactReads = @($artifactIds)
@@ -293,12 +293,26 @@ function ConvertTo-RSValidationPlanEntry {
     }
 }
 
+function Get-RSPrDeferredTestPlan {
+    # Only complete contract identity permits delegation; an equal display name or executable is insufficient.
+    [CmdletBinding()]
+    param([object[]]$FullPlan, [object[]]$PrPlan, [string]$RepoRoot)
+    $covered = @{}
+    foreach ($entry in $PrPlan) {
+        $covered[$entry.Id] = Get-RSCanonicalJsonDigest (ConvertTo-RSValidationPlanEntry -Entry $entry -RepoRoot $RepoRoot)
+    }
+    foreach ($entry in $FullPlan) {
+        $digest = Get-RSCanonicalJsonDigest (ConvertTo-RSValidationPlanEntry -Entry $entry -RepoRoot $RepoRoot)
+        if (-not $covered.ContainsKey($entry.Id) -or $covered[$entry.Id] -cne $digest) { $entry }
+    }
+}
+
 function New-RSValidationPlan {
     [CmdletBinding()]
     param(
         [Parameter(Mandatory = $true)][string]$RepoRoot,
         [Parameter(Mandatory = $true)][string]$RequestedSuite,
-        [Parameter(Mandatory = $true)][object[]]$Entries,
+        [Parameter(Mandatory = $true)][AllowEmptyCollection()][object[]]$Entries,
         [ValidateSet('Fresh', 'Resume', 'Affected')][string]$ValidationMode = 'Fresh',
         [ValidateSet('complete', 'filtered', 'family', 'capability-reduced')][string]$CoverageScope = 'complete'
     )
@@ -387,6 +401,10 @@ function ConvertFrom-RSTestRunId {
         $format = 'HarnessFallback'
     }
     if (-not $match.Success) {
+        $match = [regex]::Match($RunId, '^adhoc-(?<pid>\d+)$')
+        $format = 'NativeFallback'
+    }
+    if (-not $match.Success) {
         return $null
     }
 
@@ -462,4 +480,5 @@ Export-ModuleMember -Function @(
     'New-RSTestRunId',
     'ConvertFrom-RSTestRunId',
     'Get-RSLiveProcessSnapshots'
+    'Get-RSPrDeferredTestPlan'
 )

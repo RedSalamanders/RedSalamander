@@ -1,0 +1,18 @@
+[PASS] ViewerVLC test executable path resolves
+[PASS] ViewerVLC.dll is present for runtime validation
+[PASS] ViewerVLC.dll loads successfully
+[PASS] ViewerVLC factory export is available
+[PASS] ViewerVLC factory creates an IViewer instance
+[PASS] ViewerVLC fixture TestSandbox root is available
+[PASS] ViewerVLC window open succeeds
+[PASS] ViewerVLC window becomes visible
+[PASS] ViewerVLC exposes a visible video child that can take initial focus
+[PASS] ViewerVLC exposes a HUD child that can take focus
+[PASS] ViewerVLC exposes visible video and HUD child surfaces
+[PASS] ViewerVLC video surface can take keyboard focus
+[INFO] ViewerVLC parent focus routed into the video surface without fallback.
+[PASS] ViewerVLC Tab transfers focus from the video surface into the HUD
+[PASS] ViewerVLC HUD keeps keyboard focus while cycling its internal controls
+[PASS] ViewerVLC window close succeeds
+[PASS] ViewerVLC window closes cleanly
+ViewerPETests passed.

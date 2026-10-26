@@ -1,0 +1,9 @@
+{
+  "source": "C:/RedSalamander.Perf/evidence/i26-ui/issues-live-locale-full-20260921/fileops-hang/perf-before-stop.jsonl",
+  "sourceSha256": "48F297E4D0DBEE98C6EAD5928286FD42CC1AB53D657A37FAE2C32C75B955858A",
+  "sourceBytes": 79107573,
+  "sourceRows": 207778,
+  "selectedRows": 27,
+  "selection": "Original order; thread 113712 or 38316; FileOps.InlineRename.*, FileOps.Pause.*, FileOps.Interlock.*",
+  "note": "Historical Full timeout witness; strengthened later fixture has additional live Queue reapplication assertions. No comparable throughput/FPS/memory claim."
+}

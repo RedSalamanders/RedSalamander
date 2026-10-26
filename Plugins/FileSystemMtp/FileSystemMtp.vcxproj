@@ -143,7 +143,7 @@
     <ClCompile Include="FilesInformationMtp.cpp" />
     <ClCompile Include="FileSystemMtp.Core.cpp" />
     <ClCompile Include="FileSystemMtp.Device.cpp" />
-    <ClCompile Include="FileSystemMtp.FakeBackend.cpp" />
+    <ClCompile Include="FileSystemMtp.Tests.FakeBackend.cpp" />
     <ClCompile Include="FileSystemMtp.Shared.cpp" />
     <ClInclude Include="FileSystemMtp.h" />
     <ClInclude Include="FileSystemMtp.Internal.h" />

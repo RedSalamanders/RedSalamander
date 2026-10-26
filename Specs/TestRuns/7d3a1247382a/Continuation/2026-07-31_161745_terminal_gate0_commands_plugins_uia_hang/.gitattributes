@@ -1,0 +1,6 @@
+# Captured evidence is SHA-256-addressed and must retain its exact bytes.
+* -text -diff
+
+# Keep the human-readable archive records reviewable with deterministic LF.
+.gitattributes text eol=lf diff
+*.md text eol=lf diff

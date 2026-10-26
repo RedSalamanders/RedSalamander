@@ -13,6 +13,21 @@
 - **Package Manager**: vcpkg
 - **Graphics APIs**: Direct2D, DirectWrite, Direct3D 11, DXGI
 
+## Drive-root output policy
+
+Do not create scratch, caches, evidence, copied checkouts, or other output directories directly at a drive root.
+Use repository-local build outputs or an existing approved workspace, subject to the stricter test-sandbox
+contract below. The only permitted new drive-root output name is `<Project>.Perf` (for example
+`RedSalamander.Perf`, `RedPrism.Perf`, or another project's own name), and the user must explicitly authorize
+the exact path before its first creation or initialization. A matching name, environment variable, low disk
+space, or authorization for another drive/project is not authorization. Keep outputs beneath the approved
+root, never in a sibling root folder. Test runners still require their ownership marker and dedicated layout.
+Filesystem-specific tests inspect their acquired sandbox and skip when its filesystem is unsuitable; they
+must not discover another volume and create an unapproved root there. Historical cleanup inventories and
+preserves useful evidence/recovery data, checks process use, repairs live junction/worktree references, and
+verifies preservation before removal. Never follow junctions during cleanup or leave compatibility junctions
+at forbidden old drive-root paths.
+
 ## Canonical Agent Guidance
 
 - `AGENTS.md` (this file) is the canonical agent guidance for this repository. `CLAUDE.md` and `.github/copilot-instructions.md` are thin pointers to it; do not let them accumulate divergent content.
@@ -63,6 +78,10 @@ Application screenshots for specifications, documentation, and UI reviews MUST b
 harness with deterministic scenarios and no desktop takeover. Reuse or extend harness capture support rather
 than using Computer Use or manual desktop screenshots. Save scenario/build provenance with the captures and
 label proposal mockups separately from actual application screenshots.
+All published screenshots MUST use realistic invented fixture data for paths, filenames, accounts,
+hostnames and other identifying content. Never publish personal or environment-derived data, or
+replace it with redaction labels such as `[path hidden]`; seed synthetic values before capture.
+See `Specs/Testing/Testing_SelfTests.md` for the screenshot data and privacy contract.
 Default to no activation. When the user explicitly authorizes brief focus for interaction captures, use
 the harness’s existing warning and interactive desktop lease, target only owned test windows, and restore
 cursor and foreground focus. Never substitute Computer Use or manual desktop screenshots.
@@ -112,7 +131,17 @@ paths with thin compatibility shims when they may have external consumers.
   alternate-volume FileOps coverage require explicit initialization plus the
   ownership marker. Repository `.build` is a build-input/output location, never
   a test-data sandbox. Test tooling never enumerates, writes, or cleans legacy runtime
-  data outside the selected root.
+  data outside the selected root. Tests never mount, link (junction, symbolic or hard
+  link), share, `subst` or otherwise expose a directory or volume that is not itself
+  inside a marked sandbox; the only mountable volume is a test-owned virtual disk file
+  inside one, and no test passes a volume GUID it did not create to
+  `SetVolumeMountPointW`. Every link a test creates targets a path inside the same
+  marked sandbox (native `Common::Testing::RequireSandboxedLinkTarget` or the guarded
+  creators beside it, PowerShell `New-RSTestSandboxLink`), and sandbox cleanup never
+  follows links or mount points. `Tools\Tests\TestHarnessSourceContracts.Tests.ps1`
+  allowlists every such call site in test code. A test item moved to the user's
+  Recycle Bin is purged by the case that recycled it (`SelfTest::PurgeRecycledTestItems`
+  at every case boundary); never empty or enumerate the Recycle Bin.
 - **Shared-helper reuse is mandatory:** before adding a consumer-local utility, search
   `Specs/Core/Core_SharedHelpers.md`, `Common/`, and (for test code) `Tests/TestSupport/`. Reuse or extend the
   canonical helper when its semantics match; do not reimplement it under a different name. A local variant is
@@ -132,7 +161,7 @@ paths with thin compatibility shims when they may have external consumers.
 - **COM ownership:** never store owning raw COM interface pointers (no manual `Release()`); use `wil::com_ptr<T>` for members and locals.
 - **COM ref-counting:** never do `obj->AddRef(); ptr.attach(obj);` (two-step hazard); prefer `ptr = obj;` / `wil::com_ptr<T> ptr = obj;`.
 - **`wil::unique_hwnd` ownership:** never call `DestroyWindow(_hWnd.get())` on a `wil::unique_hwnd` owner; use `_hWnd.reset()` (or `.release()` only when transferring ownership explicitly).
-- **Cross-thread `PostMessageW` payloads:** use `PostMessagePayload(...)` + `TakeMessagePayload<T>(lParam)`; never `PostMessageW(...payload.release())` or raw `new` payload posts. A helper-owned nonzero `lParam` is an opaque registry token, never a pointer: do not cast or adopt it directly. If a nonzero token yields null, it is stale/drained/type-mismatched and must be ignored before message-specific work. Zero is reserved for an explicitly posted payload-less fallback only when that message defines one. Capture every payload field needed for `msg`/`wParam`/other arguments before the call; never dereference a `unique_ptr` in the same function-call expression that also passes `std::move(payload)`, because argument evaluation may move it first. For windows that receive payload messages, call `InitPostedPayloadWindow(hwnd)` during create (`WM_NCCREATE`/`WM_CREATE`) and `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`; the drain closes posting, invalidates all registered tokens, and deletes the registered storage. A stale queued token can survive numeric HWND reuse but can never be adopted. Every UI-host cross-thread change must review: payload ownership, UI-thread boundary, cancellation path, teardown drain, and a focused teardown stress/selftest when the touched host can queue payloads.
+- **Cross-thread `PostMessageW` payloads:** use `PostMessagePayload(...)` + `TakeMessagePayload<T>(hwnd, message, lParam)`; never `PostMessageW(...payload.release())` or raw `new` payload posts. A helper-owned nonzero `lParam` is an opaque registry token, never a pointer: do not cast or adopt it directly. If a nonzero token yields null, it is stale/drained/type-mismatched and must be ignored before message-specific work. Zero is reserved for an explicitly posted payload-less fallback only when that message defines one. Capture every payload field needed for `msg`/`wParam`/other arguments before the call; never dereference a `unique_ptr` in the same function-call expression that also passes `std::move(payload)`, because argument evaluation may move it first. For windows that receive payload messages, call `InitPostedPayloadWindow(hwnd)` during create (`WM_NCCREATE`/`WM_CREATE`) and `DrainPostedPayloadsForWindow(hwnd)` in `WM_NCDESTROY`; the drain closes posting, invalidates all registered tokens, and deletes the registered storage. Tokens use cryptographic entropy and are unique among live entries. Destination HWND, message and type must match under the registry lock before removal; rejected claims preserve ownership. Draining invalidates old entries; random token reuse has negligible collision probability, rather than a mathematical never-reuse guarantee. Every UI-host cross-thread change must review: payload ownership, UI-thread boundary, cancellation path, teardown drain, and a focused teardown stress/selftest when the touched host can queue payloads.
 - **IconCache COM contract:** `IconCache::Initialize(...)` stays UI-thread/STA responsibility; any worker thread calling `IconCache::ExtractSystemIcon()` must initialize COM as MTA (`wil::CoInitializeEx(COINIT_MULTITHREADED)`).
 - **MTP/WPD worker contract:** portable-device workers must initialize COM as MTA before using WPD, serialize each device session, honor watchdog/cancel/quarantine teardown, and keep `GetCapabilities()` honest for read-only, writable, invalid-profile, and disconnected states.
 - **File-action IDs:** treat viewer/editor/user-menu action IDs as stable but case-insensitive identifiers. Uniqueness and lookup are case-insensitive, IDs that differ only by case are invalid duplicates, and parameterized command dispatch or association resolution must never require exact casing.
@@ -179,7 +208,7 @@ paths with thin compatibility shims when they may have external consumers.
 
 ```text
 RedSalamander/             # Main file manager application (incl. SelfTest\ suites)
-RedSalamanderMonitor/      # ETW monitoring/debug tool with ColorTextView
+ThirdParty/RedMonitor/    # Pinned producer header and MIT notice; independent viewer is installed separately
 RedSalamanderSearchService/# Background search/index Windows service (named pipe + SQLite)
 RedConfigure/              # Standalone configuration tool
 RedLauncher/               # Launcher app
@@ -187,7 +216,8 @@ Common/                    # Shared library (utilities, settings, product UI ada
   └── PlugInterfaces/      # COM-style plugin interfaces (IFileSystem, IViewer, ...)
 Plugins/                   # All plugin DLLs
   ├── FileSystem, FileSystem7z, FileSystemCurl, FileSystemS3,
-  │   FileSystemGoogleDrive, FileSystemMicrosoftDrive, FileSystemDummy
+  │   FileSystemGoogleDrive, FileSystemMicrosoftDrive, FileSystemMtp, FileSystemDummy
+  ├── Terminal
   └── ViewerText, ViewerSqlite, ViewerSpace, ViewerImgRaw,
       ViewerVLC, ViewerPE, ViewerWeb
 Tests/                     # Standalone test projects (ProductUiTests, PerformanceTests2, ...)
@@ -201,7 +231,7 @@ The solution additionally contains ~90 per-language localization satellite resou
 ### Project Dependencies
 
 - **Common** → no dependencies (shared library)
-- **RedSalamanderMonitor** → Common
+- **RedMonitor** is independent; this solution verifies its vendored header and never builds the helper.
 - **RedSalamander** → Common + all plugins
 - **Plugins** → independent DLLs using PlugInterfaces
 
@@ -211,7 +241,7 @@ The solution additionally contains ~90 per-language localization satellite resou
 |-----------|----------|---------|
 | FolderWindow | RedSalamander/ | Main window with dual-pane layout |
 | FolderView | RedSalamander/ | File list rendering, selection, drag-drop (split into ~10 .cpp files) |
-| ColorTextView | RedSalamanderMonitor/ | High-performance D2D text editor (~200KB implementation) |
+| RedMonitor client | ThirdParty/RedMonitor/include/RedMonitor/Client.h | Normalized diagnostics and optional installed-helper discovery |
 | PlugInterfaces | Common/PlugInterfaces/ | COM-style interfaces for plugins |
 | Helpers.h | Common/ | Core utilities, Debug logging, TraceLogging |
 | SettingsStore | Common/ | Registry-based settings persistence |
@@ -275,3 +305,16 @@ When working with this codebase:
 - Respect the Windows-specific architecture
 - Suggest modern C++ patterns
 - Reference appropriate skills for detailed patterns
+
+## Scoped testing policy (2026-10-05)
+
+The user's accepted workflow replaces unconditional full-test iteration. Use `Test-Changes.ps1 -Explain` and the affected default while editing; use `-Mode PrePush` to account for full local/PR coverage without duplicate identical obligations. A forthcoming enabled CI gate is pending acceptance, never an already passed result. Explicit Full remains available. Active native test files use `Scope.Tests.Something.h/.cpp` and the native file inventory. Follow [Specs/Testing/Testing_ValidationEvidence.md](Specs/Testing/Testing_ValidationEvidence.md) and [the test guide](Tests/README.md). Focus-taking work requires agreement to the time; no scoped pass closes that gate. Build/runtime/platform qualification still applies to changed behavior, with exact prior evidence reusable only under the owning contract.
+
+## Changes workflow
+
+Record each change as one dated Markdown fragment under `Changes/`; follow [Changes/README.md](Changes/README.md)
+and [Specs/Core/Core_Changes.md](Specs/Core/Core_Changes.md). Do not hand-edit generated `CHANGELOG.md` entries.
+Run `Tools/Test-Changelog.ps1` while editing. Before PrePush and final handoff, and immediately after every
+merge/rebase that introduces fragments, run `Tools/Fold-Changelog.ps1` and then `Tools/Fold-Changelog.ps1 -Check`,
+even for one fragment. Include the generated changelog and fragment removals in the current change; do not wait
+for release batches or a separate cleanup PR. Validation is read-only; `-WhatIf` previews folding without writes.

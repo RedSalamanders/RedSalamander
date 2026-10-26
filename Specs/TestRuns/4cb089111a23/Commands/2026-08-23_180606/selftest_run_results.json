@@ -1,0 +1,33 @@
+{
+    "run_started_utc": "2026-08-23T16:06:05.453Z",
+    "duration_ms": 1115,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "file_operations_phase0_typed_contract_source_guard",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260823T160542Z-75164-b7f4b0b95fef490496b88ccc894f26b0\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 534,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "file_operations_phase0_typed_contract_source_guard",
+            "cases": [
+                {
+                    "name": "file_operations_phase0_typed_contract_source_guard",
+                    "status": "passed",
+                    "duration_ms": 170,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

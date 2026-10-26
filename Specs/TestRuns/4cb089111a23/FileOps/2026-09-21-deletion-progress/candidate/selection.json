@@ -1,0 +1,30 @@
+{
+  "raw_path": "C:/RedSalamander.Perf/evidence/i26-ui/deletion-graph-candidate-20260921/perf/perf_metrics.jsonl",
+  "raw_sha256": "6c0b88a822916e54d6b376e98412b6c1e7673dfa213fdcac7512d868ea0ff955",
+  "raw_bytes": 5624062,
+  "raw_lines": 14992,
+  "retained_lines_one_based": [
+    919,
+    1009,
+    1098,
+    1187,
+    1276,
+    1435,
+    1525,
+    1614,
+    1703,
+    1792,
+    7948,
+    8038,
+    8127,
+    8216,
+    8305,
+    8464,
+    8553,
+    8643,
+    8732,
+    8821
+  ],
+  "retained_sha256": "45cb2757c0e40548d6c24d8aeb8ce0b2260eb1b250f45fae64bb2addc23d09e7",
+  "fixture_sha256": "6611c6abfa3123f9a8fc50858e2ca6a2bb23ad7196a2f09630f65ff14eeddebe"
+}

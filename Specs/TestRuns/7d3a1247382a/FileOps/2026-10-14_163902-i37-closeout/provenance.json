@@ -1,0 +1,56 @@
+{
+  "schema": 1,
+  "qualification": "ADMINISTRATIVE_GUARD_PASSED; historical native passes and broader failures remain separate",
+  "files": [
+    {
+      "path": "delivery-source-closure.json",
+      "bytes": 3807,
+      "sha256": "507CE73AC065558542E071880A74BD23E64CC6EF414D4824A51CA2E0962AE38B"
+    },
+    {
+      "path": "done-admission-focused-results.json",
+      "bytes": 7394,
+      "sha256": "26488A415405AD636C905E175A272683321D78B56B790FEAC37F00CE98A29ECC"
+    },
+    {
+      "path": "done-admission-focused-transcript.txt.gz",
+      "bytes": 2494,
+      "sha256": "6D25AC8A5B8768C35E8D6D04E0964F1AE93AA3CB5CCDB47FBF4DC5BC12A18E64"
+    },
+    {
+      "path": "normative-consistency.json",
+      "bytes": 133193,
+      "sha256": "941EBFA3F5380268091819465263487B1345BC7F9D4A73015F97CB57C27440BA"
+    },
+    {
+      "path": "qualified-input-source-manifest.json",
+      "bytes": 4069,
+      "sha256": "F74EEEB958AD7EF927066ABE495828FE17D8FD34FCA7B2D45F2A9803F92E94F6"
+    },
+    {
+      "path": "raw-text-preservation.json",
+      "bytes": 823,
+      "sha256": "C486F1E8293518B90F9FA8DD2015F42B6D8B6E291433C6012ED2D12A125D44AB"
+    },
+    {
+      "path": "README.md",
+      "bytes": 1977,
+      "sha256": "0A4B822E16132F2BD1939150E004E0AC66AFFF12FBE3BE254FF0DF6A69EF1DE1"
+    },
+    {
+      "path": "spec-inventory-summary.json",
+      "bytes": 195395,
+      "sha256": "B923963A017491A85A6AC1FC6518E63AAAA35926A217FD1167F27C1A5623F734"
+    },
+    {
+      "path": "spec-inventory.md",
+      "bytes": 19317,
+      "sha256": "AB1AF7149ED91CEA22AB8061FD1721DF82AD250E54F174BA9F1A7CB7B1E18EDC"
+    },
+    {
+      "path": "test-inventory.json",
+      "bytes": 106261,
+      "sha256": "B439A22666BCAC954A94BF28B5FD3250B2833A64289B76C5E3DBBA0837D0ECE6"
+    }
+  ]
+}

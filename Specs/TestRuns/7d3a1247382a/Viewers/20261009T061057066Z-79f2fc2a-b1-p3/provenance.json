@@ -1,0 +1,60 @@
+{
+  "sourceRunId": "20261009T061718Z-27216-78361f2af8f6483e955dae885f1ec77a",
+  "platform": "x64",
+  "configuration": "Release",
+  "caseFilter": "viewer_space_perf_",
+  "buildReceiptId": "039e7389819621e3195ffeb57013b76c98cd1c3b4050cd42645235ea3ef043e5",
+  "sourceWorkspace": {
+    "acquisition_after": "17c73d11118294b1ce91d97c62a1d5cb36dd4652a9111c477fdcc1c9a24833e8",
+    "acquisition_attempts": 1,
+    "acquisition_before": "17c73d11118294b1ce91d97c62a1d5cb36dd4652a9111c477fdcc1c9a24833e8",
+    "base": "c9dd2be6fcb6152d3cef9e2ae7ac91eca76d37c3",
+    "canonicalization": "rs-canonical-json-v1",
+    "canonicalization_ms": 2,
+    "computation_ms": 3250,
+    "content_hashing_ms": 0,
+    "created_utc": "2026-10-09T06:18:45.5034429Z",
+    "files": [],
+    "git_discovery_ms": 1391,
+    "git_head": "c9dd2be6fcb6152d3cef9e2ae7ac91eca76d37c3",
+    "repo_identity": "9b85678a3692c3dbce66c433e30c09308bbf3d53ad1c8d62cf9021c3246ec660",
+    "schema": "red-salamander.workspace-snapshot.v1",
+    "snapshot_id": "17c73d11118294b1ce91d97c62a1d5cb36dd4652a9111c477fdcc1c9a24833e8"
+  },
+  "validationDecision": {
+    "advisory_build_action": "none",
+    "canonicalization": "rs-canonical-json-v1",
+    "changed_paths": [],
+    "decision_digest": "74c24b2bf64df5014ac5453a04e7a34b9b1bab2737d4d61581abe23f379a8cd8",
+    "entries": [
+      {
+        "affected": false,
+        "decision": "EXECUTE",
+        "estimated_duration_ms": 0,
+        "expected_fingerprint": "06553e60f7a03d07af12d13c46fb2ce3efb90b3a33529b53746429e7767f29f1",
+        "id": "selftest.commands",
+        "matched_impact_tags": [],
+        "ordinal": 0,
+        "origin_evidence_digest": null,
+        "origin_run_id": null,
+        "reason_codes": [
+          "FORCED"
+        ]
+      }
+    ],
+    "estimated_avoided_duration_ms": 0,
+    "estimated_executed_duration_ms": 0,
+    "estimated_fresh_duration_ms": 0,
+    "matched_impact_rules": [],
+    "plan_digest": "ad5394aa0f37ecbb51efab3b298fffde695e4bc78776d6c529b37fbf0a58d704",
+    "planner_mode": "shadow",
+    "schema": "red-salamander.validation-plan-decision.v1",
+    "snapshot_id": "17c73d11118294b1ce91d97c62a1d5cb36dd4652a9111c477fdcc1c9a24833e8"
+  },
+  "sourceSha256": "17c73d11118294b1ce91d97c62a1d5cb36dd4652a9111c477fdcc1c9a24833e8",
+  "sourceShaKind": "red-salamander.workspace-snapshot.v1 snapshot_id",
+  "rawCaptureProvenance": null,
+  "captureFiles": {},
+  "relatedCaptureArchive": null,
+  "captureQualification": "Unreviewed diagnostic capture; case status and whole-frame review must both qualify publication."
+}

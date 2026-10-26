@@ -1,8 +1,41 @@
-# RedSalamanderMonitor Contract
+# RedMonitor consumer contract
 
+The viewer, model, listener, rendering, resources and native viewer tests are owned by
+[RedSalamanders/RedMonitor](https://github.com/RedSalamanders/RedMonitor).
+RedSalamander vendors only ThirdParty/RedMonitor/include/RedMonitor/Client.h and its MIT notice.
+Dependencies/RedMonitor.lock.json records the exact upstream commit, API and SHA-256 values.
+Tools/Verify-RedMonitorClient.ps1 performs local-only verification; explicit
+Tools/Update-RedMonitorClient.ps1 -Commit FULL_SHA updates the two files and lock together.
+The former Restore-RedMonitor command is a read-only compatibility verifier.
+
+There are no viewer/test/satellite projects in this solution. Builds, tests and app packages never
+clone, compile, stage or require a viewer. ZIP/MSI/MSIX carry only the client MIT notice; stale old
+viewer executables/satellites must not enter packages. The standalone Release package owns installation.
+
+Existing per-module providers remain registered through their original lifetime and ABI.
+Debug::detail::EmitEtwEvent calls the shared WriteNormalizedEvent with RedSalamander as application label,
+preserving severity and copied PID/TID/FILETIME. Existing fields/GUID/name remain compatible; Application
+is additive and the text prefix is normalized. Local/debug/crash/performance behavior remains owned here.
+
+Debug bare startup may asynchronously launch an available production Release helper from
+LocalAppData/Programs/RedMonitor/RedMonitor.exe or ProgramFiles/RedMonitor/RedMonitor.exe.
+Explicit --redmonitor uses the same discovery. Release, help/test/probe command lines never auto-launch.
+Missing/invalid helpers are harmless to normal application startup. No PATH/adjacent/.build fallback,
+viewer rebuild, synchronous wait or independent process termination is allowed.
+
+Preferences retains the legacy monitor settings adapter. In every consumer configuration its storage
+path is RedSalamanderMonitor-7.0.settings.json, matching the installed Release viewer. Existing live
+filter/mask signaling remains compatible. Native settings-path and consented real Preferences interaction
+are separate checks. Independent settings/support narrowing remains tracked in the canonical WIP plan.
+
+## Historical viewer requirements transferred to the independent owner
+
+The following retained requirements document the original behavior. Their legacy source/build paths
+describe origin, not active projects in this repository. Current implementation and viewer qualification
+belong to RedMonitor; consumer acceptance covers logging, installed discovery, Preferences and app packaging.
 ## Shared UI dependency
 
-Monitor builds against the exact external `DxUi.lib` pin through the product MSBuild
+The independent Monitor owner builds against its own exact external `DxUi.lib` pin through its supported MSBuild
 imports. `MakeMonitorDxPalette` remains the application adapter for resolved Monitor
 colors and density. Toolbar/status hosts and the neutral frame clock use public DxUi
 headers; no shared implementation sources are compiled in this application. Existing
@@ -156,6 +189,7 @@ When filtering is active, the VisibleLine architecture provides:
   - Batch processing moves the drained chunk into `Document::AppendInfoLines(...)`, taking the document write lock once and performing a single mode-specific update at the end of the batch.
 - Single main window with menu and toolbar: New/Open/Save As, Copy, toggle toolbar, toggle line numbers, show/hide IDs, auto-scroll, always-on-top; debug builds can start a random message generator.
 - Display surface is `ColorTextView` rendered with Direct2D/DirectWrite on a D3D11/DXGI swap chain; per-monitor DPI aware; supports line numbers, colored metadata prefixes, keyword colorization for Error/Warning/Debug, and optional auto-scroll.
+- `ColorTextView` creates its D3D11 device through `DxUi::CreateD3D11DeviceWithWarpFallback` (hardware, then WARP). Debug builds request the optional D3D11 SDK debug layer; when Windows reports it missing (`DXGI_ERROR_SDK_COMPONENT_MISSING`, as on native ARM64 CI runners), the helper retries once without it, so a missing developer component never leaves the log view without a renderer.
 - Input pipeline normalizes CR/LF, appends text to the document, caches prefixes per line, and updates gutter width; selection and clipboard copy are supported (Ctrl+C, Ctrl+A); find bar via Ctrl+F with F3 navigation; mouse wheel scroll with Shift for horizontal.
 - File open is cancellable worker I/O with strict streaming UTF-8/UTF-16LE validation, encoded/decoded-byte and
   line budgets, and move-publication of one decoded immutable record snapshot. Save As captures one exact start
@@ -386,6 +420,7 @@ tables are not acceptance evidence. Any new performance claim follows
 ## Communication (ETW/TraceLogging only)
 - Uses TraceLogging provider to emit structured events for every debug message (type, pid, tid, filetime, payload).
 - `RedSalamander.exe` Debug and ASan Debug builds emit Info/Perf/Debug ETW diagnostics and write JSONL perf capture to the default path by default; Release builds require `--etw` for ETW and use `--perf` for the default JSONL path or `--perf=PATH` for a custom path.
+- The shared synchronous JSONL writer in `Common/Common/PerfJsonl.cpp` must preserve complete successfully appended records, their existing field names/types/order, UTC timestamp, strict Unicode escaping/fallback, full-width numeric values and zero-duration counter semantics. Prepare escaped run metadata once per configuration and reuse bounded row scratch (at most 64 KiB retained after a write); oversized records remain complete and release excess scratch afterward. Serialize configuration, handle lifetime and whole-row append under one mutex so concurrent writers cannot interleave and clearing/reconfiguring cannot leave a stale writer/handle behind. Writes remain immediately readable through the OS file cache; do not defer, sample, suppress metrics or change ETW delivery to obtain lower timings. Disabled capture keeps its atomic fast path. `folderView_perf_jsonl_writer_contracts` covers schema, Unicode/control characters, large records, counters, concurrent writers, clear/reconfigure and same-path rotation.
 - Normal Debug and Release builds of `RedSalamanderMonitor` do not emit their own Info/Perf/debug-style ETW diagnostics unless launched with `--etw`. Error and warning diagnostics remain eligible for ETW visibility.
 - Normal Debug and Release builds of `RedSalamanderMonitor` must keep its own display quiet: no startup/sample status text, and ETW events whose process id matches the monitor process are filtered out. Launching with `--etw` may display the monitor's own startup status and self-originated ETW events. Explicit JSONL perf capture uses `--perf` for the default path or `--perf=PATH` for a custom path.
 - Debug-build call tracing and indentation: `TRACER`/`TRACER_CTX` adjust per-thread indentation and (by default) only log the Exiting message; use `TRACER_INOUT`/`TRACER_INOUT_CTX` to log Entering+Exiting 
@@ -407,7 +442,7 @@ tables are not acceptance evidence. Any new performance claim follows
 - `MonitorTest.exe --document-model-selftest` owns document batching/filtering,
   retention eviction, exact canonical and cancellable file reads, immutable-snapshot lifetime/scaling, transactional export,
   Unicode clipboard construction, and ETW shutdown lifetime.
-- `RedSalamanderMonitor.exe --chrome-selftest` owns live window chrome, filter
+- `RedSalamanderMonitor.exe --chrome-selftest` owns live window chrome, the log view's renderer creation, filter
   status, bounded queue/search-frontier/Show IDs behavior, transactional worker admission, retained-state I/O metric presence, payload-safe bounded
   open close, fixture cleanup, queue drain, and required frame metrics.
 - `--monitor-etw-burst-mode=latency` and `--monitor-scrollback-selftest` own the

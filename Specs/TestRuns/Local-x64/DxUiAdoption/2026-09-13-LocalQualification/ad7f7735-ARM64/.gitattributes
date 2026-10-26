@@ -1,0 +1,2 @@
+# Preserve original build banners and CRLF diagnostic bytes.
+*.log -text whitespace=-blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol

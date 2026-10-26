@@ -1,0 +1,732 @@
+   ____          _ ____        _                                _           
+  |  _ \ ___  __| / ___|  __ _| | __ _ _ __ ___   __ _ _ __   __| | ___ _ __ 
+  | |_) / _ \/ _` \___ \ / _` | |/ _` | '_ ` _ \ / _` | '_ \ / _` |/ _ \ '__|
+  |  _ <  __/ (_| |___) | (_| | | (_| | | | | | | (_| | | | | (_| |  __/ |   
+  |_| \_\___|\__,_|____/ \__,_|_|\__,_|_| |_| |_|\__,_|_| |_|\__,_|\___|_|   
+                     Build, package, and validate with confidence
+
+Locating MSBuild...
+  Found vswhere: C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe
+Found: Visual Studio Professional 2026 (18.11.12224.323)
+MSBuild: C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\amd64\MSBuild.exe
+Detection method: vswhere
+
+Build Configuration:
+  Solution:      C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\RedSalamander.sln
+  Target:        All Projects
+  Configuration: Release
+  Platform:      x64
+  Build workers: 6
+  Version:       7.0.233 beta Release (x64)
+  Build number:  233
+  Version state: C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\version\current-version.json
+  Action:        Build
+  Package:       None
+  Monitor diag:  Runtime flag (--etw)
+
+Computing build evidence identity...
+Visual Studio: C:\Program Files\Microsoft Visual Studio\18\Insiders
+MSVC toolset:  14.51.36231, the default MSBuild compiles with; vcpkg is pinned to 14.51
+Overlay triplet C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\dependencies\DxUi\5859fa89f82a8ff5\vcpkg-triplets\x64\x64-windows.cmake unchanged
+Installing DxUi dependencies (x64-windows)
+Detecting compiler hash for triplet x64-windows...
+Compiler found: C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe
+The following packages are already installed:
+  * vcpkg-cmake:x64-windows@2024-04-23
+  * vcpkg-cmake-config:x64-windows@2026-07-21
+    wil:x64-windows@1.0.260126.7
+wil provides CMake targets:
+
+  # this is heuristically generated, and may not be correct
+  find_package(wil CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE WIL::WIL)
+
+All requested installations completed successfully in: 358 us
+vcpkg dependencies are ready.
+DxUi pin and main diverge; review C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\Dependencies\DxUi.lock.json before any change. (Checked 2026-10-09 09:55:14Z)
+DxUi restored at 6c436c213ac0fac181b2faafd1daf6085bdedc23 for x64; output identity 5859fa89f82a8ff50d5d5997d041b7f413aff9122200c51e2d760d7896056a66.
+No compatible build receipt exists; first attestation requires Rebuild.
+Starting build...
+
+  Common.cpp
+  Blake3Digest.cpp
+  LocalizationManager.cpp
+  MinimumOsVersion.cpp
+  RegistryUtils.cpp
+  PerfJsonl.cpp
+  PluginConfiguration.cpp
+  SettingsStore.cpp
+  ThemeDefinitionIo.cpp
+  ThemeExpression.cpp
+  TraceProvider.cpp
+  WslDistributionCatalog.cpp
+  dllmain.cpp
+  RedSalamanderMonitor-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-ja-JP.dll
+  RedSalamander-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\RedSalamander-fr-FR.dll
+  Terminal-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\Terminal-ja-JP.dll
+  Terminal-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\Terminal-fr-FR.dll
+  RedSalamander-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\RedSalamander-ja-JP.dll
+  RedSalamanderMonitor-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-fr-FR.dll
+  dllmain.cpp
+  dllmain.cpp
+  Factory.cpp
+  Factory.cpp
+  Main.cpp
+  dllmain.cpp
+  Factory.cpp
+  Terminal-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\Terminal-sk-SK.dll
+  Terminal-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\Terminal-cs-CZ.dll
+  ViewerText-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerText-fr-FR.dll
+  compilation header save succeeded; see C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\dependencies\DxUi\5859fa89f82a8ff5\Intermediate\x64\Release\DxUi\DxUiCompositeVS.h
+  compilation object save succeeded; see C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\dependencies\DxUi\5859fa89f82a8ff5\Intermediate\x64\Release\DxUi\DxUiCompositeVS.cso
+  compilation header save succeeded; see C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\dependencies\DxUi\5859fa89f82a8ff5\Intermediate\x64\Release\DxUi\DxUiCompositePS.h
+  compilation object save succeeded; see C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\dependencies\DxUi\5859fa89f82a8ff5\Intermediate\x64\Release\DxUi\DxUiCompositePS.cso
+  ControlCatalog.cpp
+  FileSystem-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystem-fr-FR.dll
+  FileSystem7z-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystem7z-fr-FR.dll
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 1126 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemCurl-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-fr-FR.dll
+  FileSystemDummy-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-fr-FR.dll
+  RedLauncher.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\RedLauncher.exe
+  FileSystem7z.cpp
+  FileSystemDummy.cpp
+  FilesInformationGoogleDrive.cpp
+  FileSystemGoogleDrive-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-fr-FR.dll
+  FileSystemMicrosoftDrive-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-fr-FR.dll
+  FileSystemMtp-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-fr-FR.dll
+  FileSystemS3-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemS3-fr-FR.dll
+  NativeMenuInterop.cpp
+  ViewerImgRaw-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-fr-FR.dll
+  ViewerPE-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerPE-fr-FR.dll
+  ViewerSpace-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerSpace-fr-FR.dll
+  ViewerSqlite-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-fr-FR.dll
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Common.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Common.exp
+  Generating code
+  ViewerVLC-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerVLC-fr-FR.dll
+  Previous IPDB not found, fall back to full compilation.
+  FileSystemGoogleDrive.cpp
+  FileSystem7z-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystem7z-ja-JP.dll
+  ViewerWeb-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerWeb-fr-FR.dll
+  FileSystem-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystem-ja-JP.dll
+  Embedded.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemDummy.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemDummy.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  FileSystemCurl-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-ja-JP.dll
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystem7z.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystem7z.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  FileSystemDummy-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-ja-JP.dll
+  FileSystemGoogleDrive-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-ja-JP.dll
+  FileSystemMicrosoftDrive-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-ja-JP.dll
+  FileSystemMtp-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-ja-JP.dll
+  FileSystemS3-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemS3-ja-JP.dll
+  FrameRuntime.cpp
+  All 3679 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemGoogleDrive.Tests.FakeDrive.cpp
+  ViewerImgRaw-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-ja-JP.dll
+  ViewerPE-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerPE-ja-JP.dll
+  DxUi.Accessibility.cpp
+  FileSystem7z.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystem7z.dll
+  All 3745 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerSpace-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerSpace-ja-JP.dll
+  ViewerSqlite-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-ja-JP.dll
+  ViewerText-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerText-ja-JP.dll
+  FileSystemDummy.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemDummy.dll
+  ViewerVLC-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerVLC-ja-JP.dll
+  ViewerWeb-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerWeb-ja-JP.dll
+  ls1.cpp
+  FileSystemMtp-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-cs-CZ.dll
+  FileSystemMtp-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-sk-SK.dll
+  ls2.cpp
+  ls3.cpp
+  FlipSequentialDiscard.cpp
+  RedConfigure-ja-JP.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\RedConfigure-ja-JP.dll
+  ViewerPE.Tests.Runner.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 236 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemCurl.ImapHelpers.cpp
+  ls1.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\ls1.exe
+  LocalizationTests-fr-FR.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\LocalizationTests-fr-FR.dll
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 234 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystem-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystem-cs-CZ.dll
+  ls2.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\ls2.exe
+  All 10256 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  DxUi.ComboBox.cpp
+  Finished generating code
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  FileSystem-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystem-sk-SK.dll
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 301 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  Common.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Common.dll
+  FileSystem7z-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystem7z-cs-CZ.dll
+  ls3.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\ls3.exe
+  LocalSearchIndexCore.cpp
+  dllmain.cpp
+  FileSystem7z-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystem7z-sk-SK.dll
+  All 1219 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemCurl.Tests.Runner.cpp
+  dllmain.cpp
+  Factory.cpp
+  Factory.cpp
+  FileSystemCurl-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-cs-CZ.dll
+  FlipSequentialDiscard.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\FlipSequentialDiscard.exe
+  SettingsSchema.Tests.Runner.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemGoogleDrive.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemGoogleDrive.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  DxUi.Controls.cpp
+  CrashHandling.Tests.Runner.cpp
+  All 5985 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FilesInformationMtp.cpp
+  FilesInformationMicrosoftDrive.cpp
+  FileSystemGoogleDrive.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemGoogleDrive.dll
+  ViewerPE.Tests.Scope.Tests.ViewerSpaceListingValidation.cpp
+  SearchServiceBroker.cpp
+  PluginContract.Tests.Runner.cpp
+  ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp
+  CrashQuarantine.cpp
+  SettingsSchemaParser.cpp
+  DxUi.EditorControls.cpp
+  FileSystemMtp.Core.cpp
+  FileSystemMicrosoftDrive.cpp
+  TestSupport.Tests.WindowScreenshot.cpp
+  SqliteIndexStore.cpp
+  FileSystemPathIdentity.cpp
+  CrashHandler.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  DxUi.cpp
+  FileSystemRouteContract.cpp
+  FileSystemMtp.Device.cpp
+  All 4681 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  SearchTextHelpers.cpp
+  SettingsSchemaTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\SettingsSchemaTests.exe
+  FileSystemMicrosoftDrive.Tests.FakeGraph.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  dllmain.cpp
+  CrashHandling.Tests.CrashQuarantine.Stubs.cpp
+  DxUi.Grid.cpp
+  All 3847 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemMtp.Tests.FakeBackend.cpp
+  PluginContractTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\PluginContractTests.exe
+  dllmain.cpp
+  Factory.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 1380 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemCurlTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\FileSystemCurlTests.exe
+  ViewerSqlite.Engine.cpp
+  Generating code
+  Document.cpp
+  DxUi.Menu.cpp
+  Previous IPDB not found, fall back to full compilation.
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  Factory.cpp
+  FileSystemMtp.Shared.cpp
+  All 2821 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystem.cpp
+  CrashHandlingTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\CrashHandlingTests.exe
+  dllmain.cpp
+  Factory.cpp
+  ViewerSqlite.Tests.Runner.cpp
+  EtwListener.cpp
+  All 8380 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerPETests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\ViewerPETests.exe
+  DxUi.NativeTextInput.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SearchTextHelpers.cpp
+  SqliteIndexStore.cpp
+  Main.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemMicrosoftDrive.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemMicrosoftDrive.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  FileSystem.DirectoryOps.cpp
+  FilesInformationS3.cpp
+  MonitorFileReader.cpp
+  FileSystemCurl.CopyMove.cpp
+  All 6723 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  DxUi.PointerInput.cpp
+  FileSystemMicrosoftDrive.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemMicrosoftDrive.dll
+  DxUi.Scrollbar.cpp
+  MonitorFileExporter.cpp
+  All 3780 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystem.FileOps.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemMtp.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemMtp.exp
+  Generating code
+  ViewerSqliteTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\ViewerSqliteTests.exe
+  Previous IPDB not found, fall back to full compilation.
+  FileSystemCurl.DirectoryOps.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  DxUi.SingleLineTextEditing.cpp
+  FileSystemCurl-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-sk-SK.dll
+  FileSystemS3.Configuration.cpp
+  Monitor.Tests.Runner.cpp
+  All 7054 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemDummy-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-cs-CZ.dll
+  FileSystemMtp.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemMtp.dll
+  FileSystemDummy-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-sk-SK.dll
+  FileSystemGoogleDrive-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-cs-CZ.dll
+  FileSystemGoogleDrive-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-sk-SK.dll
+  FileSystemMicrosoftDrive-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-cs-CZ.dll
+  DxUi.TextInput.cpp
+  FileSystem.Menu.cpp
+  FileSystemCurl.Imap.cpp
+  FileSystemMicrosoftDrive-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-sk-SK.dll
+  FileSystemS3-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemS3-cs-CZ.dll
+  FileSystemS3-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\FileSystemS3-sk-SK.dll
+  ViewerImgRaw-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-cs-CZ.dll
+  ViewerImgRaw-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-sk-SK.dll
+  ViewerPE-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerPE-cs-CZ.dll
+  ViewerPE-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerPE-sk-SK.dll
+  FileSystemS3.Core.cpp
+  DxUi.TextStoreACP.cpp
+  ViewerSpace-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerSpace-cs-CZ.dll
+  All 7775 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  FileSystem.Path.cpp
+  ViewerSpace-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerSpace-sk-SK.dll
+  ViewerSqlite-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-cs-CZ.dll
+  Finished generating code
+  ViewerSqlite-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-sk-SK.dll
+  RedSalamanderSearchService.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\RedSalamanderSearchService.exe
+  ViewerText-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerText-cs-CZ.dll
+  ViewerText-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerText-sk-SK.dll
+  FileSystemCurl.ImapHelpers.cpp
+  ViewerVLC-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerVLC-cs-CZ.dll
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  ViewerVLC-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerVLC-sk-SK.dll
+  ViewerWeb-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerWeb-cs-CZ.dll
+  ViewerWeb-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\ViewerWeb-sk-SK.dll
+  TextInputServices.cpp
+  RedSalamander-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\RedSalamander-cs-CZ.dll
+  RedSalamander-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\RedSalamander-sk-SK.dll
+  All 3500 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystem.Search.cpp
+  RedSalamanderMonitor-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-cs-CZ.dll
+  MonitorTest.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\MonitorTest.exe
+  RedSalamanderMonitor-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-sk-SK.dll
+  LocalizationTests-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\LocalizationTests-cs-CZ.dll
+  LocalizationTests-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\LocalizationTests-sk-SK.dll
+  FileSystemCurl.Shared.cpp
+  RedConfigure-cs-CZ.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\RedConfigure-cs-CZ.dll
+  RedConfigure-sk-SK.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Lang\RedConfigure-sk-SK.dll
+  Localization.Tests.Runner.cpp
+  FileSystemS3.Directory.cpp
+  TextClipboard.cpp
+  FileSystem.Watch.cpp
+  FileSystemCurl.Tests.Ftp.cpp
+  DxUi.Theme.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 2395 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  LocalizationTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\LocalizationTests.exe
+  FileSystemS3.DirectoryOps.cpp
+  Generating Code...
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystem.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystem.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 11644 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemCurl.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemCurl.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  FileSystem.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystem.dll
+  FileSystemS3.DriveInfo.cpp
+  ls4.cpp
+  All 10835 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemCurl.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemCurl.dll
+  Compiling...
+  DxUi.Tree.cpp
+  FileSystemS3.IO.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 1319 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ls4.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\ls4.exe
+  DxUi.Typeahead.cpp
+  DxUi.WindowHost.cpp
+  FileSystemS3.Menu.cpp
+  Generating Code...
+  FileSystemS3.S3.cpp
+  DxUi.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\dependencies\DxUi\5859fa89f82a8ff5\x64\Release\DxUi.lib
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  dllmain.cpp
+  dllmain.cpp
+  Factory.cpp
+  Performance.Tests.pch.cpp
+  Factory.cpp
+  Factory.cpp
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  dllmain.cpp
+  dllmain.cpp
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  RcWriter.cpp
+  Main.cpp
+  RedConfigureApp.cpp
+  RedConfigurePagePresenters.cpp
+  RedConfigureRoot.cpp
+  RedConfigureSession.cpp
+  RedConfigureWorkflow.cpp
+  RedConfigureSplashScreen.cpp
+  RedConfigureTraceProvider.cpp
+  RedConfigureUiHelpers.cpp
+  ThemeCatalog.cpp
+  ThemePreviewModel.cpp
+  WorkspaceDiscovery.cpp
+  Factory.cpp
+  Factory.cpp
+  ViewerPE.cpp
+  FileSystemS3.S3Table.cpp
+  ViewerSqlite.Engine.cpp
+  ViewerSpace.cpp
+  ViewerVLC.cpp
+  ViewerImgRaw.Decode.cpp
+  TraceProvider.cpp
+  dllmain.cpp
+  Factory.cpp
+  ViewerSqlite.cpp
+  dllmain.cpp
+  Common.Tests.LatencyHooks.cpp
+  ViewerImgRaw.Export.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerPE.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerPE.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  FileSystemS3.Shared.cpp
+  FileSystemPluginManager.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerVLC.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerVLC.exp
+  Generating code
+  ViewerSpace.Layout.cpp
+  Previous IPDB not found, fall back to full compilation.
+  ViewerWeb.cpp
+  All 4468 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerPE.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerPE.dll
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  AppTheme.cpp
+  ViewerImgRaw.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerSqlite.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerSqlite.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 4212 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerVLC.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerVLC.dll
+  All 4566 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  PluginModuleLifecycle.cpp
+  Finished generating code
+  ViewerSpace.Analysis.cpp
+  ViewerSqlite.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerSqlite.dll
+  FileSystemS3.Tests.FakeS3.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  UiMetrics.cpp
+  dllmain.cpp
+  Factory.cpp
+  ViewerPluginManager.cpp
+  All 10156 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  Finished generating code
+  ColorTextView.cpp
+  Configuration.cpp
+  Document.cpp
+  EtwListener.cpp
+  MonitorFileReader.cpp
+  MonitorFileExporter.cpp
+  RedSalamanderMonitor.cpp
+  ViewerSpace.Model.cpp
+  RedConfigure.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\RedConfigure.exe
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerImgRaw.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerImgRaw.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  ProductUi.Tests.Runner.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerWeb.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerWeb.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  ViewerText.Encoding.cpp
+  All 5541 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerImgRaw.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerImgRaw.dll
+  Performance.Tests.FolderView.Enumeration.Access.cpp
+  ViewerSpace.AnalysisHost.cpp
+  All 5104 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerWeb.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerWeb.dll
+  ViewerText.MenuTheme.cpp
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemS3.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemS3.exp
+  Generating code
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  Previous IPDB not found, fall back to full compilation.
+  ViewerSpace.NavigationHost.cpp
+  All 9928 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerText.cpp
+  RedSalamanderMonitor.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\RedSalamanderMonitor.exe
+  IconCache.cpp
+  All 4509 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ProductUiTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\ProductUiTests.exe
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  ViewerSpace.Hosts.cpp
+  RcWriter.cpp
+  RedConfigureApp.cpp
+  Performance.Tests.FolderIconEnumerationDuplicatePathPerfTest.cpp
+  All 10182 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  ViewerText.Text.cpp
+  Finished generating code
+  FileSystemS3.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\FileSystemS3.dll
+  RedConfigurePagePresenters.cpp
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerSpace.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerSpace.exp
+  Generating code
+  Performance.Tests.FolderIconEnumerationPerfTest.cpp
+  Previous IPDB not found, fall back to full compilation.
+  Performance.Tests.FolderViewColumnLayout.cpp
+  Performance.Tests.FolderViewRefreshDuplicatePathPerfTest.cpp
+  RedConfigureRoot.cpp
+  ViewerText.Hex.cpp
+  All 11267 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerSpace.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerSpace.dll
+  Performance.Tests.Runner.cpp
+  Ghostty terminal runtime ready: mode=Product platform=x64 pairedRaw=cb84ae8fc116e2721d0e1b1d82396c8b898c5364ddb98faf47434ddc22048088 normalizedDiagnostic=a65a45989fb75954489538ff37a98e0722022c08798c5c0a0c2ab0d775dc2599
+  Performance.Tests.PluginManager.Stubs.cpp
+  RedConfigureSession.cpp
+  dllmain.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerText.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerText.exp
+  Generating code
+  Factory.cpp
+  Previous IPDB not found, fall back to full compilation.
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\PerformanceTests2.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\PerformanceTests2.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 7822 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerText.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\ViewerText.dll
+  Terminal.cpp
+  RedConfigureWorkflow.cpp
+  All 9971 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  PerformanceTests2.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\PerformanceTests2.dll
+  RedConfigureTraceProvider.cpp
+  TerminalAccessibility.cpp
+  RedConfigureUiHelpers.cpp
+  TerminalInternal.cpp
+  ThemeCatalog.cpp
+  TerminalKittyImagePipeline.cpp
+  ThemePreviewModel.cpp
+  TerminalCommandSurfaceModel.cpp
+  WorkspaceDiscovery.cpp
+  TerminalRuntimeLoader.cpp
+  RedConfigure.Tests.Runner.cpp
+  TerminalSecurity.cpp
+  TerminalSession.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  TerminalVt.cpp
+  All 11823 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  RedConfigureTests.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\RedConfigureTests.exe
+  Terminal.Tests.VtUpgrade.cpp
+     Creating library C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\Terminal.lib and object C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\Terminal.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 7379 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  Terminal.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Plugins\Terminal.dll
+  DxUi pin verified: 6c436c213ac0fac181b2faafd1daf6085bdedc23
+  FileSystemPathIdentity.cpp
+  FileSystemRouteContract.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  SearchTextHelpers.cpp
+  AppDataPaths.cpp
+  AppTheme.cpp
+  CrashQuarantine.cpp
+  CrashHandler.cpp
+  D2DHdcPaint.cpp
+  ChangeCase.cpp
+  FileSystemRenameBatch.cpp
+  BatchRenameEngine.cpp
+  BatchRenameExecutionEngine.cpp
+  FileOperationArtifactRegistry.cpp
+  FileOperationMoveBreadcrumb.cpp
+  BatchRenameMenus.cpp
+  BatchRenameWindow.cpp
+  Commands.Tests.Runner.cpp
+  ConnectionProfileUtils.cpp
+  DirectoryInfoCache.cpp
+  FileSystemPluginManager.cpp
+  PluginModuleLifecycle.cpp
+  FunctionBar.cpp
+  FolderView.cpp
+  FolderView.DragDrop.cpp
+  FolderView.Enumeration.cpp
+  FolderView.ErrorOverlay.cpp
+  FileOperationConfirmation.cpp
+  FolderView.FileOps.cpp
+  FolderView.Icons.cpp
+  FolderView.Interaction.cpp
+  FolderView.Layout.cpp
+  FolderView.Menus.cpp
+  FolderView.Rendering.cpp
+  FolderView.Selection.cpp
+  FolderWindow.cpp
+  FolderWindow.FileOperations.cpp
+  FolderWindow.FileOperations.Dialog.cpp
+  FolderWindow.FileOperations.IssuesPane.cpp
+  FolderWindow.FileOperations.Popup.cpp
+  FolderWindow.FileOperations.Popup.PathDetail.cpp
+  FolderWindow.FileOperations.State.Conflict.cpp
+  FileOperationsConflictBroker.cpp
+  FolderWindow.FileOperations.IssuesProjection.cpp
+  FolderWindow.FileOperations.Tests.Runner.cpp
+  TestSupport.Tests.WindowScreenshot.cpp
+  FolderWindow.FileOperations.State.cpp
+  FolderWindow.FileOperations.Tests.OwnedShutdown.cpp
+  FolderWindow.ItemProperties.cpp
+  FolderWindow.FileSystem.cpp
+  FolderWindow.Interaction.cpp
+  FolderWindow.Layout.cpp
+  FolderWindow.SelectionSize.cpp
+  FolderWindow.StatusBar.cpp
+  FolderWindow.Viewers.cpp
+  FolderWatcher.cpp
+  FileActionLauncher.cpp
+  FileActionResolver.cpp
+  ConnectionSecrets.cpp
+  ConnectionManagerWindow.cpp
+  ConnectionCredentialPromptDialog.cpp
+  WindowsHello.cpp
+  HostServices.cpp
+  IconCache.cpp
+  AlertOverlayWindow.cpp
+  ThemeCycleOverlayWindow.cpp
+  CommandRegistry.cpp
+  CommandVisuals.cpp
+  CommandPaletteWindow.cpp
+  FloatingTerminalWindow.cpp
+  CompareDirectoriesEngine.Tests.Runner.cpp
+  CompareDirectoriesEngine.cpp
+  FindFilesWindow.cpp
+  SearchFallbackEngine.cpp
+  CompareDirectoriesWindow.cpp
+  CompareDirectoriesWindow.Menu.cpp
+  CompareDirectoriesWindow.Options.cpp
+  CompareDirectoriesWindow.Progress.cpp
+  ManagePluginsDialog.cpp
+  MaskSyntax.cpp
+  NavigationView.cpp
+  SessionState.cpp
+  NavigationView.Breadcrumb.cpp
+  NavigationView.Edit.cpp
+  NavigationView.FullPathPopup.cpp
+  NavigationView.Interaction.cpp
+  NavigationView.Menus.cpp
+  NavigationView.Rendering.cpp
+  Preferences.cpp
+  Preferences.Dialog.cpp
+  Preferences.Internal.cpp
+  Preferences.Advanced.cpp
+  Preferences.Monitor.cpp
+  Preferences.CompareDirectories.cpp
+  Preferences.FileOperations.cpp
+  Preferences.FileActions.cpp
+  Preferences.HotPaths.cpp
+  Preferences.Editors.cpp
+  Preferences.UserMenu.cpp
+  Preferences.General.cpp
+  Preferences.Mouse.cpp
+  Preferences.Panes.cpp
+  Preferences.Plugins.cpp
+  Preferences.Plugin.Configuration.cpp
+  Preferences.Keyboard.cpp
+  Preferences.Themes.cpp
+  Preferences.Viewers.cpp
+  StartupMetrics.cpp
+  SettingsSchemaParser.cpp
+  SettingsHotReload.cpp
+  SettingsFileLauncher.cpp
+  ShortcutsWindow.cpp
+  RedSalamander.cpp
+  SettingsSchemaExport.cpp
+  UiMetrics.cpp
+  ThemedInputFrames.cpp
+  ShortcutDefaults.cpp
+  ShortcutManager.cpp
+  ShortcutCommandCatalog.cpp
+  TerminalHostSupport.cpp
+  ShortcutText.cpp
+  Common.Tests.Runner.cpp
+  Common.Tests.LatencyHooks.cpp
+  SplashScreen.cpp
+  ViewerPluginManager.cpp
+  WSLDistro.cpp
+  FolderWindow.FileSystem.Commands.cpp
+  FolderWindow.FileSystem.Navigation.cpp
+  FolderWindow.FileOperations.State.Runtime.cpp
+  FolderWindow.FileOperations.State.Diagnostics.cpp
+  FolderWindow.FileOperations.State.Queue.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 156494 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  RedSalamander.vcxproj -> C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\RedSalamander.exe
+Captured log: C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\logs\msbuild-20261009_115522_152-pid14180-2164f454.log
+Diagnostics: 0 warning(s), 0 error(s)
+Build artifacts attested: 753df43abafc1939cd72afb70983f1b4bb043a2bc1dd5a6ef5e90948cf77b158
+
+========================================
+Build completed successfully!
+Configuration: Release | Platform: x64
+Build time: 08:39
+========================================
+Outputs (copy/paste any PowerShell command to run):
+& "C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\RedLauncher.exe" # 0.39 MiB
+& "C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\RedSalamander.exe" # 32.05 MiB
+& "C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\RedSalamanderMonitor.exe" # 1.43 MiB

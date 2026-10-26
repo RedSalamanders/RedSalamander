@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-09-09T16:44:49.808Z",
+    "suite": "CompareDirectories",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\I19-work\\artifacts\\selftest\\last_run\\compare",
+    "duration_ms": 55,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "MTP property batching camera: ReadDirectoryInfo('/Fake Phone/Internal Storage/DCIM/Camera') failed. hr=0x800700B7",
+    "cases": [
+        {
+            "name": "mtp_property_fetch_is_batched",
+            "status": "failed",
+            "duration_ms": 19,
+            "repeat_index": 1,
+            "reason": "MTP property batching camera: ReadDirectoryInfo('/Fake Phone/Internal Storage/DCIM/Camera') failed. hr=0x800700B7"
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

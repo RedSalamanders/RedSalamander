@@ -1,0 +1,62 @@
+[
+  {
+    "file": "removal-focus-asan-a20f6680-before.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\removal-focus-asan-a20f6680-before.log",
+    "bytes": 2581,
+    "sha256": "48a7dbda407188ca545d983cfe01f2a5c4a984624c8dcd1b25bfcf58859b32cb"
+  },
+  {
+    "file": "removal-focus-asan-a20f6680-before-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\removal-focus-asan-a20f6680-before-summary.json",
+    "bytes": 518,
+    "sha256": "30980db5099e1552100ec23a3b40a204f568ce123cec4b17e6c653aa8a7b302b"
+  },
+  {
+    "file": "removal-focus-asan-a20f6680-before-cdb.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\removal-focus-asan-a20f6680-before-cdb.log",
+    "bytes": 17380,
+    "sha256": "a7742aa56607dc8447b859199d9520540d4114424bcf6365493e7a9fad0ce3b5"
+  },
+  {
+    "file": "removal-focus-asan-a20f6680-before-cdb-symbols.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\removal-focus-asan-a20f6680-before-cdb-symbols.log",
+    "bytes": 52931,
+    "sha256": "fa5b06e45a8c654d52a6c6cc21e2128afbff25bef443831b6341be114391521b"
+  },
+  {
+    "file": "removal-focus-asan-a20f6680-before-cdb-symbols2.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\removal-focus-asan-a20f6680-before-cdb-symbols2.log",
+    "bytes": 13727,
+    "sha256": "dcc9a01da7df9aeced76a9abb60f8ab7032d713e12c3ff9960a9eea9ff05a59d"
+  },
+  {
+    "file": "removal-focus-asan-a20f6680-before-artifact-identities.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\removal-focus-asan-a20f6680-before-artifact-identities.json",
+    "bytes": 725,
+    "sha256": "371f3591aaaaedfa8c39c2382b0d5c734b0f73d26e5d5e66dfe3a3593bb3e063"
+  },
+  {
+    "file": "removal-focus-source-comparison.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\removal-focus-source-comparison.json",
+    "bytes": 816,
+    "sha256": "1282c36d22328f25e5c77f0ef4c88f44ad1ba6d9cebe2d86b0edf81498ea6975"
+  },
+  {
+    "file": "run-all-tests-results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\removal-focus-asan-a20f6680-before\\final-results\\run-all-tests-results.json",
+    "bytes": 9955,
+    "sha256": "10b01909f735a37608c888a927d2e1684c02b9b77718944a886d9c2595003afd"
+  },
+  {
+    "file": "commands_trace.txt",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\removal-focus-asan-a20f6680-before\\final-results\\trace.txt",
+    "bytes": 5488,
+    "sha256": "d714c213069c75a49f71a52c926516c57d709ee03866ce873ff1df9b04648a21"
+  },
+  {
+    "file": "run-removal-focus-asan-cases.ps1.txt",
+    "source": "Z:\\RedSalamander.Perf\\runs\\I19-work\\scratch\\run-removal-focus-asan-cases.ps1",
+    "bytes": 3226,
+    "sha256": "c11a082e54cd919980a0448a9e622edb1ceed2a2e482842a30e5b5a545a6cf2f"
+  }
+]

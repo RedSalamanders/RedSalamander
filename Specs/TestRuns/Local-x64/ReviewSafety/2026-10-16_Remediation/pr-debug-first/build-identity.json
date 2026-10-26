@@ -1,0 +1,11 @@
+{
+  "receipt_id": "348a7e1e83961e61d0b4168bcfc2e7165a15336671e003e6c922ce63fb35dd88",
+  "source_snapshot_id": "6ef84832cf288a872ea4f7b477ae7d725d9f5653c00f64f7a417e621f32b396f",
+  "configuration": "Debug",
+  "platform": "x64",
+  "tests_enabled": true,
+  "toolchain_identity_digest": "270491a7822f6732b3fab0f322710a3d063368ace4d2ee50f8bea88e1401cb50",
+  "git_head": "cca51ab0935a7d2b8f23eae7c4498fadca523904",
+  "started_utc": "2026-10-16T09:32:40.1150836Z",
+  "ended_utc": "2026-10-16T09:37:21.0469729Z"
+}

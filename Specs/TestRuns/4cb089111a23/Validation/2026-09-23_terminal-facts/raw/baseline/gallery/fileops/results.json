@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-09-23T18:16:54.608Z",
+    "suite": "FileOperations",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20260923T181633Z-93268-40bb71ba5e4c4785813e497d96ea2367\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 140391,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "FileOps_VisualGallery",
+            "status": "passed",
+            "duration_ms": 140391,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

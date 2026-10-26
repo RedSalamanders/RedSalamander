@@ -1,5 +1,29 @@
 # Scenario inventory and capture coverage
 
+Published capture inventory: [October 1 V55 gallery](implementation/2026-10-01-v55-final/README.md)
+contains **562 static PNGs** and **ten interaction PNGs**. Its original manifests remain the V55
+capture inventory: [static](implementation/2026-10-01-v55-final/static/scenarios.tsv) and
+[interaction](implementation/2026-10-01-v55-final/interaction/scenarios.tsv). Native DPI is 96/144;
+representative popup widths are 480/760 DIP, with dialogs reporting width `0` for their independently
+measured client. Theme representatives are dark, light, high-contrast and rainbow. This is a finite
+semantic matrix, not every Cartesian combination. All 512 unique image hashes are reviewed; V65 did
+not recapture these images. The [I26 checkpoint](../../Done/UI_FileOperationsReview_2026-09-16.md) and [V65 packet](../../../TestRuns/4cb089111a23/Validation/2026-10-01_i26-v65-final/README.md)
+record current behavior and performance separately. Native 192-DPI, external AT, consumer ARM64/ASan,
+I19 and H4 remain separate limits and owners.
+
+**Current full-path detail coverage:** the implementation adds root and scrolled
+views of a >4Ki French UNC path containing combining text, Hebrew and an emoji. The harness matrix
+uses 480 DIP, dark/light and each physical monitor, plus a same-HWND monitor round trip preserving
+text, selection and hosted focus without activation. The Commands journey adds exact selected/full
+copy, keyboard traversal, read-only input, stale-provider retirement and 40 open/close cycles.
+These cases are included in V55; the older V47 captures and their narrower coverage remain unchanged.
+
+Historical follow-up: [September 20 interaction review](interaction-review-2026-09-20/README.md),
+[309 fresh French captures](interaction-review-2026-09-20/gallery.html) and M01–M32 cover the revised
+interaction inventory. The table below describes the historical September 16 catalog. Captured
+display states do not establish that every action or its failure/return path was executed. The new
+review identifies unqualified synthetic conflict seeds and the needed admitted production fixtures.
+
 **124 named scenarios, 437 native PNGs, three revised French concept images.** Open the [gallery](gallery.html), [proposal](proposal.md), or [manifest](capture-manifest.json).
 
 ## Meaning of coverage

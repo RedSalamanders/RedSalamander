@@ -1,0 +1,61 @@
+{
+  "source": "fac05d5b70b9a5933b12093c1b2337f76aee8cdc",
+  "ownerPid": 91020,
+  "scope": "focused diagnostic only; never Full qualification",
+  "label": "seed-memory-baseline-release-1",
+  "suite": "Compare",
+  "configuration": "Release",
+  "filter": "local_index_core_sqlite_cold_start_stale_root_refreshes_before_query",
+  "repeat": 1,
+  "runId": "20261026T080320Z-91020-ef445430ec364f27a277659617828962",
+  "root": "E:\\RedSalamander.Perf",
+  "buildReceipt": "675c219df7136060e992b5980d16c57d23be4da53a758e66b873886ce01537bf",
+  "sourceSnapshot": "c0b8dc10e6e7a20d53e1756a01265ba1fcc437ac2c5733d790c1cbcee3f75430",
+  "artifacts": [
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\Release\\RedSalamander.exe",
+      "sha256": "2DAD7C5D05A1126E6F21CDCC53F96E7D0203CCB3EB6C9991C4B123EEE123C09C"
+    },
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\Release\\RedSalamanderSearchService.exe",
+      "sha256": "A8D5A7534FA6831A5620F12E76DEB87B5E57C066B9632C6FD154D44120F95EB9"
+    },
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\Release\\Common.dll",
+      "sha256": "1D21C8E58386BD51CEFAA2F187038FF409AA19A5FB5B34BD7D31349531C45CC6"
+    },
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\Release\\Plugins\\ViewerSpace.dll",
+      "sha256": "E62FFAB7D6FC769AA9BF9950FA87BD797C68F7D38D92F0077DABFBE59DD865C0"
+    }
+  ],
+  "desktopOperationSourceSha256": "F96309169EB717FC69D1EACF77228F3BAE66FC87ED7EA0FD6767122190C6D0D5",
+  "startedUtc": "2026-10-26T08:03:20.9125943Z",
+  "outcome": "focused_pass_only",
+  "log": "E:\\RedSalamander.Perf\\runs\\20261026T080320Z-91020-ef445430ec364f27a277659617828962\\artifacts\\residual-observer\\native-output.txt",
+  "errorLog": "E:\\RedSalamander.Perf\\runs\\20261026T080320Z-91020-ef445430ec364f27a277659617828962\\artifacts\\residual-observer\\native-error.txt",
+  "requestedMetricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T080320Z-91020-ef445430ec364f27a277659617828962\\artifacts\\residual-observer\\residual-perf.jsonl",
+  "exitCode": 0,
+  "finishedUtc": "2026-10-26T08:03:30.3836550Z",
+  "arguments": [
+    "--compare-selftest",
+    "--selftest-case=local_index_core_sqlite_cold_start_stale_root_refreshes_before_query",
+    "--selftest-repeat=1",
+    "--selftest-no-activate"
+  ],
+  "nativeResults": "E:\\RedSalamander.Perf\\runs\\20261026T080320Z-91020-ef445430ec364f27a277659617828962\\artifacts\\selftest\\last_run\\compare\\results.json",
+  "nativeResultsSha256": "0741A910E55C92C26E18E9E48B67D2B9ED0255C166884966DC39525F837EF77B",
+  "nativePassed": 1,
+  "nativeFailed": 0,
+  "nativeSkipped": 0,
+  "exactCaseCounts": true,
+  "metricsPaths": [
+    "E:\\RedSalamander.Perf\\runs\\20261026T080320Z-91020-ef445430ec364f27a277659617828962\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl"
+  ],
+  "memorySamplesPath": "E:\\RedSalamander.Perf\\runs\\20261026T080320Z-91020-ef445430ec364f27a277659617828962\\artifacts\\residual-observer\\owned-memory-samples.jsonl",
+  "memorySamplesSha256": "7843AD4F6B8A6302B0E4A064DDAE5F145C8D259F1088BCDC7DB5DB197B02B8AE",
+  "memorySampleCount": 30,
+  "sampledPeakPrivateBytes": 844038144.0,
+  "sampledPeakWorkingSetBytes": 861392896.0,
+  "memorySamplerSourceSha256": "496EBF4DC07E912083EF4F26393609FB1602A350910A34B7FDD0A19E87A9B8A2"
+}

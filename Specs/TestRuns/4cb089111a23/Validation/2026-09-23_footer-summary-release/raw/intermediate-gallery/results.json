@@ -1,0 +1,35 @@
+{
+    "run_started_utc": "2026-09-23T10:36:38.854Z",
+    "duration_ms": 52035,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "FileOps_VisualGallery",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "E:\\RedSalamander.Perf\\runs\\20260923T103616Z-67904-46457ccb3f714e938e01bf715db184f7\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 51453,
+            "passed": 0,
+            "failed": 1,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "FileOps_VisualGallery",
+            "failureMessage": "Confirmation capture failed: variant 0, hr 0x00000000, result 2",
+            "cases": [
+                {
+                    "name": "FileOps_VisualGallery",
+                    "status": "failed",
+                    "duration_ms": 51438,
+                    "repeat_index": 1,
+                    "reason": "Confirmation capture failed: variant 0, hr 0x00000000, result 2"
+                }
+            ]
+        }
+    ],
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0
+}

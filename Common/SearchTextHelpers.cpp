@@ -815,7 +815,9 @@ bool MatchDecodedText(
             }
             catch (const std::regex_error&)
             {
-                result.matched = false;
+                // Keep the engine's bound; callers surface the unevaluated text as a warning.
+                result.matched                   = false;
+                result.regexEvaluationIncomplete = true;
             }
             break;
         }

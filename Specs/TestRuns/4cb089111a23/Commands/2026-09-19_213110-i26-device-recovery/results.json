@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-09-19T19:31:13.331Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\i26-device-recovery\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 13867,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "passed",
+            "duration_ms": 4236,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "passed",
+            "duration_ms": 4213,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "passed",
+            "duration_ms": 4166,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

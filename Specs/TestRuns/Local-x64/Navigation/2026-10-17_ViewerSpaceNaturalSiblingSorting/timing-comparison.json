@@ -1,0 +1,336 @@
+{
+  "baseline": {
+    "samples": [
+      {
+        "sample": 0,
+        "elapsed_ns": 60000,
+        "returned": 12
+      },
+      {
+        "sample": 1,
+        "elapsed_ns": 26200,
+        "returned": 12
+      },
+      {
+        "sample": 2,
+        "elapsed_ns": 25700,
+        "returned": 12
+      },
+      {
+        "sample": 3,
+        "elapsed_ns": 25200,
+        "returned": 12
+      },
+      {
+        "sample": 4,
+        "elapsed_ns": 25000,
+        "returned": 12
+      },
+      {
+        "sample": 5,
+        "elapsed_ns": 25100,
+        "returned": 12
+      },
+      {
+        "sample": 6,
+        "elapsed_ns": 25300,
+        "returned": 12
+      },
+      {
+        "sample": 7,
+        "elapsed_ns": 25100,
+        "returned": 12
+      },
+      {
+        "sample": 8,
+        "elapsed_ns": 25100,
+        "returned": 12
+      },
+      {
+        "sample": 9,
+        "elapsed_ns": 25500,
+        "returned": 12
+      },
+      {
+        "sample": 10,
+        "elapsed_ns": 25000,
+        "returned": 12
+      },
+      {
+        "sample": 11,
+        "elapsed_ns": 25300,
+        "returned": 12
+      },
+      {
+        "sample": 12,
+        "elapsed_ns": 25200,
+        "returned": 12
+      },
+      {
+        "sample": 13,
+        "elapsed_ns": 25100,
+        "returned": 12
+      },
+      {
+        "sample": 14,
+        "elapsed_ns": 25200,
+        "returned": 12
+      },
+      {
+        "sample": 15,
+        "elapsed_ns": 25100,
+        "returned": 12
+      },
+      {
+        "sample": 16,
+        "elapsed_ns": 24800,
+        "returned": 12
+      },
+      {
+        "sample": 17,
+        "elapsed_ns": 25400,
+        "returned": 12
+      },
+      {
+        "sample": 18,
+        "elapsed_ns": 25000,
+        "returned": 12
+      },
+      {
+        "sample": 19,
+        "elapsed_ns": 25100,
+        "returned": 12
+      },
+      {
+        "sample": 20,
+        "elapsed_ns": 25000,
+        "returned": 12
+      },
+      {
+        "sample": 21,
+        "elapsed_ns": 24900,
+        "returned": 12
+      },
+      {
+        "sample": 22,
+        "elapsed_ns": 25800,
+        "returned": 12
+      },
+      {
+        "sample": 23,
+        "elapsed_ns": 25300,
+        "returned": 12
+      },
+      {
+        "sample": 24,
+        "elapsed_ns": 25100,
+        "returned": 12
+      },
+      {
+        "sample": 25,
+        "elapsed_ns": 25100,
+        "returned": 12
+      },
+      {
+        "sample": 26,
+        "elapsed_ns": 24800,
+        "returned": 12
+      },
+      {
+        "sample": 27,
+        "elapsed_ns": 24800,
+        "returned": 12
+      },
+      {
+        "sample": 28,
+        "elapsed_ns": 24800,
+        "returned": 12
+      },
+      {
+        "sample": 29,
+        "elapsed_ns": 25000,
+        "returned": 12
+      },
+      {
+        "sample": 30,
+        "elapsed_ns": 25000,
+        "returned": 12
+      },
+      {
+        "sample": 31,
+        "elapsed_ns": 62000,
+        "returned": 12
+      }
+    ],
+    "p50_ns": 25100,
+    "p95_ns": 60000,
+    "maximum_ns": 62000
+  },
+  "candidate-debug": {
+    "samples": [
+      {
+        "sample": 0,
+        "elapsed_ns": 63600,
+        "returned": 12
+      },
+      {
+        "sample": 1,
+        "elapsed_ns": 30700,
+        "returned": 12
+      },
+      {
+        "sample": 2,
+        "elapsed_ns": 28900,
+        "returned": 12
+      },
+      {
+        "sample": 3,
+        "elapsed_ns": 28800,
+        "returned": 12
+      },
+      {
+        "sample": 4,
+        "elapsed_ns": 28800,
+        "returned": 12
+      },
+      {
+        "sample": 5,
+        "elapsed_ns": 28900,
+        "returned": 12
+      },
+      {
+        "sample": 6,
+        "elapsed_ns": 28600,
+        "returned": 12
+      },
+      {
+        "sample": 7,
+        "elapsed_ns": 28800,
+        "returned": 12
+      },
+      {
+        "sample": 8,
+        "elapsed_ns": 28600,
+        "returned": 12
+      },
+      {
+        "sample": 9,
+        "elapsed_ns": 28800,
+        "returned": 12
+      },
+      {
+        "sample": 10,
+        "elapsed_ns": 28700,
+        "returned": 12
+      },
+      {
+        "sample": 11,
+        "elapsed_ns": 28600,
+        "returned": 12
+      },
+      {
+        "sample": 12,
+        "elapsed_ns": 41200,
+        "returned": 12
+      },
+      {
+        "sample": 13,
+        "elapsed_ns": 28900,
+        "returned": 12
+      },
+      {
+        "sample": 14,
+        "elapsed_ns": 28700,
+        "returned": 12
+      },
+      {
+        "sample": 15,
+        "elapsed_ns": 28800,
+        "returned": 12
+      },
+      {
+        "sample": 16,
+        "elapsed_ns": 29000,
+        "returned": 12
+      },
+      {
+        "sample": 17,
+        "elapsed_ns": 28800,
+        "returned": 12
+      },
+      {
+        "sample": 18,
+        "elapsed_ns": 28600,
+        "returned": 12
+      },
+      {
+        "sample": 19,
+        "elapsed_ns": 28700,
+        "returned": 12
+      },
+      {
+        "sample": 20,
+        "elapsed_ns": 28800,
+        "returned": 12
+      },
+      {
+        "sample": 21,
+        "elapsed_ns": 28700,
+        "returned": 12
+      },
+      {
+        "sample": 22,
+        "elapsed_ns": 29300,
+        "returned": 12
+      },
+      {
+        "sample": 23,
+        "elapsed_ns": 28700,
+        "returned": 12
+      },
+      {
+        "sample": 24,
+        "elapsed_ns": 28700,
+        "returned": 12
+      },
+      {
+        "sample": 25,
+        "elapsed_ns": 28600,
+        "returned": 12
+      },
+      {
+        "sample": 26,
+        "elapsed_ns": 28900,
+        "returned": 12
+      },
+      {
+        "sample": 27,
+        "elapsed_ns": 28700,
+        "returned": 12
+      },
+      {
+        "sample": 28,
+        "elapsed_ns": 28700,
+        "returned": 12
+      },
+      {
+        "sample": 29,
+        "elapsed_ns": 28600,
+        "returned": 12
+      },
+      {
+        "sample": 30,
+        "elapsed_ns": 28800,
+        "returned": 12
+      },
+      {
+        "sample": 31,
+        "elapsed_ns": 28500,
+        "returned": 12
+      }
+    ],
+    "p50_ns": 28800,
+    "p95_ns": 41200,
+    "maximum_ns": 63600
+  }
+}

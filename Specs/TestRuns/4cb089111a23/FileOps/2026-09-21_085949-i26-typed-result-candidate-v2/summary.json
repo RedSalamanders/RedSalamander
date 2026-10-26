@@ -1,0 +1,69 @@
+{
+  "variant": "typed-result-candidate-v2",
+  "passed": 9,
+  "failed": 0,
+  "skipped": 0,
+  "source_snapshot": "32750fa7229aacac161be2439d87a846c29be550b68cec2fa542a425a45bebff",
+  "metrics": {
+    "FileOps.SelfTest.InlineRenameRetainedAuthorityNodes": {
+      "samples_us": [
+        10,
+        10,
+        10
+      ],
+      "median_us": 10,
+      "p95_us": 10
+    },
+    "FileOps.InlineRename.ExecuteUs": {
+      "samples_us": [
+        145321,
+        4163,
+        108868,
+        3736,
+        56845,
+        81207,
+        4357,
+        124754,
+        4202,
+        55433,
+        128907,
+        5738,
+        126508,
+        5385,
+        66158
+      ],
+      "median_us": 56845,
+      "p95_us": 145321
+    },
+    "FileOps.InlineRename.SilentCleanSuccessMs": {
+      "samples_us": [
+        0,
+        0,
+        0,
+        0,
+        0,
+        0
+      ],
+      "median_us": 0.0,
+      "p95_us": 0
+    },
+    "FileOps.SelfTest.InlineRenameSilentCleanCompletion": {
+      "samples_us": [
+        500,
+        500,
+        500
+      ],
+      "median_us": 500,
+      "p95_us": 500
+    },
+    "FileOps.SelfTest.InlineRenameConflictReveal": {
+      "samples_us": [
+        500,
+        500,
+        500
+      ],
+      "median_us": 500,
+      "p95_us": 500
+    }
+  }
+}

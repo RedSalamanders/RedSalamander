@@ -1,0 +1,56 @@
+{
+  "schema": "viewer-space.campaign-archive-copy.v1",
+  "archive_folder": "cached-200-224059615z-9e53a14b-overview",
+  "archive_kind": "overview",
+  "campaign_id": "20261009T224059615Z-9e53a14b",
+  "campaign_mode": "CachedReopen200",
+  "campaign_schema": "viewer-space.memory-qualification.v1",
+  "campaign_scope_state": "campaign-state-preserved",
+  "campaign_manifest_sha256": "c6c09e24e1118d6384c3fdb8250123639766a8136a7dbda9b6640ef071270600",
+  "expected_receipts": {
+    "baseline": null,
+    "candidate": "37dae646d3557dd0b5ac7618b76b136f0740f1be80dad2744b28236083f98ddd"
+  },
+  "expected_build_source_snapshot_ids": {
+    "baseline": null,
+    "candidate": "9addaf53d4d88d618223a7f2d8554ac0b73f2472946c3a3e0875b1fd94ac9554"
+  },
+  "repository_verdict": "NOT_EVALUATED",
+  "sibling_archive_folders": [
+    "cached-200-224059615z-9e53a14b-b00-p01-candidate"
+  ],
+  "runs": [
+    {
+      "archive_folder": "cached-200-224059615z-9e53a14b-b00-p01-candidate",
+      "manifest_run_index": 0,
+      "archived_file_count": 11,
+      "archived_payload_bytes": 932389,
+      "block": 0,
+      "label": "20261009T224059615Z-9e53a14b-b0-p1-candidate",
+      "mode": "CachedReopen200",
+      "position": 1,
+      "role": "measurement",
+      "run_id": "20261009T224102Z-43236-26566751591f4c62bbb2370dea3e1e75",
+      "side": "candidate",
+      "source_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-cachedreopen200-20261009T224059615Z-9e53a14b\\runs\\20261009T224059615Z-9e53a14b-b0-p1-candidate",
+      "status": "PASSED",
+      "case_status": "passed",
+      "curation_status": "qualified",
+      "qualification_status": null,
+      "curation_errors": [],
+      "source_files": [
+        "build-log-index.json",
+        "build-receipt.json",
+        "metric-replay-map.json",
+        "perf-metrics-curated.jsonl",
+        "provenance.json",
+        "raw-metrics-source-index.json",
+        "results.json",
+        "run-all-tests-results.json",
+        "runner-stdout.log",
+        "viewer_space_cached_reopen_200_first_map.json",
+        "workspace-final.json"
+      ]
+    }
+  ]
+}

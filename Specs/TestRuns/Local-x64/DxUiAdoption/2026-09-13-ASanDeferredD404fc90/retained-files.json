@@ -1,0 +1,110 @@
+[
+  {
+    "file": "d404fc90-isolated-x64-ASan-Debug-build.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-build.log",
+    "bytes": 29043,
+    "sha256": "c588255818b6dadce926e3afc4e39acf8f53c7a745822849205fe7b65cc48b68"
+  },
+  {
+    "file": "d404fc90-isolated-x64-ASan-Debug-seeded-heap.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-seeded-heap.log",
+    "bytes": 3747,
+    "sha256": "4badf35025c1a1e8ec72f53e274b10ffeaab41876067ab373217d7c824a0d9c5"
+  },
+  {
+    "file": "d404fc90-isolated-x64-ASan-Debug-seeded-heap.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-seeded-heap.json",
+    "bytes": 409,
+    "sha256": "7058013701a412452ec9043cb9397edbe6d567e63795496d70f4ddfd3ca18771"
+  },
+  {
+    "file": "driver.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-driver.log",
+    "bytes": 4776,
+    "sha256": "bd1c213c7a829cfc9152aade79ed34848da0114237a65356a1e90668b64b3ae6"
+  },
+  {
+    "file": "d404fc90-isolated-x64-ASan-Debug-pending-gate-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-pending-gate-summary.json",
+    "bytes": 507,
+    "sha256": "ec0d2ff25ec63427d7c517482840e4489ba00fd701c64dd07d7524f9736b1eea"
+  },
+  {
+    "file": "pending-gate.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-pending-gate.log",
+    "bytes": 1796,
+    "sha256": "d3e124f7a87c4cca766d41c961943ef41e1724fd0c2566ba3153852bfeb61e05"
+  },
+  {
+    "file": "compare_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-pending-gate\\archive\\4cb089111a23\\CompareDirectories\\2026-09-13_102902\\compare_results.json",
+    "bytes": 2022,
+    "sha256": "d96e3801612db8428a0756b27d1de14755cd74936740e236fd0215ce50b03924"
+  },
+  {
+    "file": "pending-gate-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-pending-gate\\final-results\\run-all-tests-results.json",
+    "bytes": 11414,
+    "sha256": "6838eea481e226e018de34961ce89ca9881285cd796812f1be96b1ee4380a0d4"
+  },
+  {
+    "file": "d404fc90-isolated-x64-ASan-Debug-post-pending-gate-module-identities.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-post-pending-gate-module-identities.json",
+    "bytes": 7279,
+    "sha256": "83ace42a47dc3888cf27ad1cc2c950a2f7a80b2e8e93d73304fc105bedbbd99e"
+  },
+  {
+    "file": "d404fc90-isolated-x64-ASan-Debug-removal-focus-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-removal-focus-summary.json",
+    "bytes": 552,
+    "sha256": "ec12506964a4b07cba954d9ad972c4ba6751300e041e9196667ee8f40c1b672c"
+  },
+  {
+    "file": "removal-focus.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-removal-focus.log",
+    "bytes": 1735,
+    "sha256": "271c56f1c5513981b752aba14f9ce4e2788ad8872b04b6a7251bcfb600af38cd"
+  },
+  {
+    "file": "commands_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-removal-focus\\archive\\4cb089111a23\\Commands\\2026-09-13_102939\\commands_results.json",
+    "bytes": 2453,
+    "sha256": "13081027ca4649e253a73def47e2fc53083b4b31923fcb6d927fe5e04bef25ed"
+  },
+  {
+    "file": "removal-focus-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-removal-focus\\final-results\\run-all-tests-results.json",
+    "bytes": 11890,
+    "sha256": "1e3aed7ca28272158a3a7e946e82a9a33748ea2bc4e679bd0b746a7a59a86c35"
+  },
+  {
+    "file": "d404fc90-isolated-x64-ASan-Debug-post-removal-focus-module-identities.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-post-removal-focus-module-identities.json",
+    "bytes": 7280,
+    "sha256": "dc082da31869307cc41f53ab0baec69780c7f76e13f7e06b408a1c53722b192e"
+  },
+  {
+    "file": "d404fc90-isolated-x64-ASan-Debug-bandwidth-clock-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-bandwidth-clock-summary.json",
+    "bytes": 517,
+    "sha256": "3d63ba0cb86619f300335a8651bdee3da08131169e2cb541588e47015a2ebf78"
+  },
+  {
+    "file": "bandwidth-clock.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-bandwidth-clock.log",
+    "bytes": 2648,
+    "sha256": "e7f8ce91697e9dfafb50dd54d2b0509e7c8e837d2cf8b8f5d20c21a9a5c638fc"
+  },
+  {
+    "file": "fileops_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-bandwidth-clock\\archive\\4cb089111a23\\FileOps\\2026-09-13_103109\\fileops_results.json",
+    "bytes": 5421,
+    "sha256": "1f143a4c73cb214d6a0ba2b31bf4d4d607b2895fcadc714f600d08f1d63dfc3f"
+  },
+  {
+    "file": "bandwidth-clock-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-bandwidth-clock\\final-results\\run-all-tests-results.json",
+    "bytes": 15388,
+    "sha256": "cdbdb61059ac0d3905dfd3f557419fb958d1efb255b28a4047ab9acca5c56071"
+  }
+]

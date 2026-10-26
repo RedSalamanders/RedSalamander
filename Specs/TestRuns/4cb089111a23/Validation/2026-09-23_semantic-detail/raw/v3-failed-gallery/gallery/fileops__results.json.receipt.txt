@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-09-23T19:50:14.224Z",
+    "suite": "FileOperations",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20260923T194953Z-86300-71db6e182bd1463a9c1f21363d8fd47a\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 117421,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Scenario capture failed; see trace.",
+    "cases": [
+        {
+            "name": "FileOps_VisualGallery",
+            "status": "failed",
+            "duration_ms": 117421,
+            "repeat_index": 1,
+            "reason": "Scenario capture failed; see trace."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

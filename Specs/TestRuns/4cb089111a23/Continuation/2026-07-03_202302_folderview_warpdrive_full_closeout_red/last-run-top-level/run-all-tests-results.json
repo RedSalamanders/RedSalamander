@@ -1,0 +1,2414 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-07-03T17:03:06.8756178Z",
+  "run_ended_utc": "2026-07-03T18:20:17.9768008Z",
+  "duration_ms": 4631101,
+  "suite": "Full",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run",
+  "fail_fast": false,
+  "timeout_scale": 2.0,
+  "case_filter": "",
+  "exit_code": 1,
+  "passed": 320,
+  "failed": 4,
+  "skipped": 50,
+  "total": 374,
+  "suites": [
+    {
+      "suite": "CompareDirectories",
+      "kind": "SelfTest",
+      "exit_code": 1,
+      "duration_ms": 271536,
+      "passed": 206,
+      "failed": 2,
+      "skipped": 30,
+      "output_log_path": "",
+      "cases": [
+        {
+          "name": "windows_hello_cache",
+          "status": "skipped",
+          "reason": "Windows Hello cache requires initialized host connection UI; host returned ERROR_INVALID_WINDOW_HANDLE (hr=0x80070578).",
+          "duration_ms": 13
+        },
+        {
+          "name": "oauth_refresh_token_storage",
+          "status": "skipped",
+          "reason": "OAuth refresh token persisted store requires initialized host connection UI; host returned ERROR_INVALID_WINDOW_HANDLE (hr=0x80070578).",
+          "duration_ms": 0
+        },
+        {
+          "name": "oauth_authmode_roundtrip",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 10
+        },
+        {
+          "name": "google_drive_plugin_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "google_drive_navigation_menu_callback_clear_drains",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2
+        },
+        {
+          "name": "google_drive_cleared_client_id_requires_configuration",
+          "status": "skipped",
+          "reason": "Google Drive clientId gate requires initialized host connection UI; host returned ERROR_INVALID_WINDOW_HANDLE (hr=0x80070578).",
+          "duration_ms": 0
+        },
+        {
+          "name": "google_drive_connection_requires_refresh_token",
+          "status": "skipped",
+          "reason": "Google Drive refresh-token gate requires initialized host connection UI; host returned ERROR_INVALID_WINDOW_HANDLE (hr=0x80070578).",
+          "duration_ms": 0
+        },
+        {
+          "name": "onedrive_personal_cleared_client_id_requires_configuration",
+          "status": "skipped",
+          "reason": "OneDrive Personal clientId gate requires initialized host connection UI; host returned ERROR_INVALID_WINDOW_HANDLE (hr=0x80070578).",
+          "duration_ms": 0
+        },
+        {
+          "name": "unique",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 22
+        },
+        {
+          "name": "typemismatch",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5
+        },
+        {
+          "name": "size",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6
+        },
+        {
+          "name": "time",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6
+        },
+        {
+          "name": "attributes",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 7
+        },
+        {
+          "name": "content",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 26
+        },
+        {
+          "name": "content_dual_io",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 31
+        },
+        {
+          "name": "content_equal_size_equal_mtime_differs",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 30
+        },
+        {
+          "name": "content_unknown_size_streaming_compare",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 42
+        },
+        {
+          "name": "content_no_io_disables_compareContent",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 7
+        },
+        {
+          "name": "content_size_mismatch_no_pending",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6
+        },
+        {
+          "name": "zero_vs_nonzero_content",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6
+        },
+        {
+          "name": "unicode_filenames",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 30
+        },
+        {
+          "name": "content short reads",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 23
+        },
+        {
+          "name": "subdir pending",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 7995
+        },
+        {
+          "name": "subdirs",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 10
+        },
+        {
+          "name": "select_subdirs_only_in_one_pane",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 9
+        },
+        {
+          "name": "sync_manifest_nested_differences_only",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 32
+        },
+        {
+          "name": "sync_manifest_move_preserves_identical_children",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 17
+        },
+        {
+          "name": "sync_manifest_not_ready_without_cached_decision",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 9
+        },
+        {
+          "name": "sync_manifest_pending_blocks_and_schedules",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2024
+        },
+        {
+          "name": "no_sync_deep_scan",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 7
+        },
+        {
+          "name": "subdirattrs",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4
+        },
+        {
+          "name": "missing folder",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6
+        },
+        {
+          "name": "missing_side_empty_enumeration",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6
+        },
+        {
+          "name": "failed_enumeration_retries_without_version_bump",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5
+        },
+        {
+          "name": "reparse",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 8
+        },
+        {
+          "name": "dummy_content",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 17
+        },
+        {
+          "name": "normalized_name_collision_preserves_same_side_entries",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1
+        },
+        {
+          "name": "deep_tree",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5116
+        },
+        {
+          "name": "invalidate",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 376
+        },
+        {
+          "name": "concurrent_get_or_compute_decision",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 20
+        },
+        {
+          "name": "empty_directories",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 3
+        },
+        {
+          "name": "ignore",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 9
+        },
+        {
+          "name": "ignore_direct_navigation_subtree",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 17
+        },
+        {
+          "name": "ignore_multiple_patterns",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 10
+        },
+        {
+          "name": "ignore_pattern_length_cap",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4
+        },
+        {
+          "name": "ignore_pattern_count_cap",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4
+        },
+        {
+          "name": "ignore_wildcard_pathology_runtime_bound",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1155
+        },
+        {
+          "name": "crash_quarantine_synthetic_marker",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 11
+        },
+        {
+          "name": "showIdentical",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 7
+        },
+        {
+          "name": "content_pending_elided",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 659
+        },
+        {
+          "name": "setCompareEnabled",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 7
+        },
+        {
+          "name": "invalidateForPath",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 16
+        },
+        {
+          "name": "decisionUpdatedCallback",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 30
+        },
+        {
+          "name": "uiVersion",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6
+        },
+        {
+          "name": "accessors",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1
+        },
+        {
+          "name": "plugin_path_math",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "connection_display_url",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "try_make_relative_outside_root",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2
+        },
+        {
+          "name": "baseInterfaces",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1
+        },
+        {
+          "name": "contentCacheHit",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6
+        },
+        {
+          "name": "content_cache_hit_skips_io",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 24
+        },
+        {
+          "name": "root_decision_empty_directories",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2
+        },
+        {
+          "name": "zeroByteContent",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6
+        },
+        {
+          "name": "setSettingsInvalidates",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6
+        },
+        {
+          "name": "setRoots_resets_and_bumps_version",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 14
+        },
+        {
+          "name": "dircache_not_polluted_by_compare_scan",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 3512
+        },
+        {
+          "name": "content_queue_bounded_hi_lo",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5054
+        },
+        {
+          "name": "decision_cache_eviction_budget_pins_visible",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5980
+        },
+        {
+          "name": "decision_cache_eviction_budget_pending_wide_tree",
+          "status": "failed",
+          "reason": "pending budget: failed to drain pending subtree updates. pendingSubdirUpdates=41 contentPendingCompares=540 contentQueueSize=536 contentInFlightSize=540.",
+          "duration_ms": 24364
+        },
+        {
+          "name": "decision_cache_evicted_content_update_reaches_ancestor",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 71
+        },
+        {
+          "name": "cancel_completes_bounded",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 36
+        },
+        {
+          "name": "invalid_directory_entry_buffer",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6
+        },
+        {
+          "name": "invalidate_drops_stale_inflight_scan_writeback",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4247
+        },
+        {
+          "name": "scan_inflight_stamp_guards_restart",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4038
+        },
+        {
+          "name": "content_inflight_stamp_guards_restart",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 58
+        },
+        {
+          "name": "worker_shutdown_joins_before_state_teardown",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 85
+        },
+        {
+          "name": "directory_size_local_callback_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4
+        },
+        {
+          "name": "directory_size_dummy_callback_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "directory_size_7z_callback_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4
+        },
+        {
+          "name": "remote_file_s3",
+          "status": "skipped",
+          "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3').",
+          "duration_ms": 0
+        },
+        {
+          "name": "remote_s3_directory_size_callback_contract",
+          "status": "skipped",
+          "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3').",
+          "duration_ms": 0
+        },
+        {
+          "name": "remote_s3_pagination",
+          "status": "skipped",
+          "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3').",
+          "duration_ms": 0
+        },
+        {
+          "name": "remote_file_onedrive_personal",
+          "status": "skipped",
+          "reason": "OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal').",
+          "duration_ms": 0
+        },
+        {
+          "name": "remote_onedrive_personal_directory_size_callback_contract",
+          "status": "skipped",
+          "reason": "OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal').",
+          "duration_ms": 0
+        },
+        {
+          "name": "remote_file_onedrive_business",
+          "status": "skipped",
+          "reason": "OneDrive Business: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS or create 'FileOpsSelfTest OneDrive Business').",
+          "duration_ms": 0
+        },
+        {
+          "name": "remote_onedrive_business_directory_size_callback_contract",
+          "status": "skipped",
+          "reason": "OneDrive Business: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS or create 'FileOpsSelfTest OneDrive Business').",
+          "duration_ms": 0
+        },
+        {
+          "name": "remote_file_sharepoint",
+          "status": "skipped",
+          "reason": "SharePoint: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SHAREPOINT or create 'FileOpsSelfTest SharePoint').",
+          "duration_ms": 0
+        },
+        {
+          "name": "remote_sharepoint_directory_size_callback_contract",
+          "status": "skipped",
+          "reason": "SharePoint: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SHAREPOINT or create 'FileOpsSelfTest SharePoint').",
+          "duration_ms": 0
+        },
+        {
+          "name": "remote_file_ftp",
+          "status": "skipped",
+          "reason": "FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP').",
+          "duration_ms": 0
+        },
+        {
+          "name": "remote_ftp_directory_size_callback_contract",
+          "status": "skipped",
+          "reason": "FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP').",
+          "duration_ms": 0
+        },
+        {
+          "name": "remote_ftp_continue_on_error_partial",
+          "status": "skipped",
+          "reason": "FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP').",
+          "duration_ms": 0
+        },
+        {
+          "name": "remote_s3_metadata_smoke",
+          "status": "skipped",
+          "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3').",
+          "duration_ms": 0
+        },
+        {
+          "name": "remote_s3_delete_missing",
+          "status": "skipped",
+          "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3').",
+          "duration_ms": 0
+        },
+        {
+          "name": "mtp_factory_single_mode_id_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "mtp_live_device_smoke",
+          "status": "skipped",
+          "reason": "MTP live smoke skipped: set REDSALAMANDER_SELFTEST_MTP_DEVICE to run against an approved device.",
+          "duration_ms": 0
+        },
+        {
+          "name": "mtp_queryinterface_matrix",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1
+        },
+        {
+          "name": "mtp_json_return_buffers_are_bounded",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 12
+        },
+        {
+          "name": "mtp_capabilities_are_instance_honest",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2
+        },
+        {
+          "name": "mtp_path_scheme_and_device_key_normalization",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 24
+        },
+        {
+          "name": "mtp_duplicate_names_require_stable_suffix",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6
+        },
+        {
+          "name": "mtp_disconnect_mid_enumeration_surfaces_error",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 3
+        },
+        {
+          "name": "mtp_unload_quiet_point_no_callback_after_clear",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 218
+        },
+        {
+          "name": "mtp_drive_info_and_disconnect_menu",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "mtp_hung_device_times_out",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2040
+        },
+        {
+          "name": "mtp_watchdog_requests_backend_cancel",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 125
+        },
+        {
+          "name": "mtp_runtime_refresh_defers_when_worker_quarantined",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5250
+        },
+        {
+          "name": "mtp_mutating_create_directory_times_out",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2058
+        },
+        {
+          "name": "mtp_mutating_item_commands_time_out",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 8255
+        },
+        {
+          "name": "mtp_writer_commit_times_out",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2047
+        },
+        {
+          "name": "mtp_menu_and_directory_size_time_out",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4102
+        },
+        {
+          "name": "mtp_reader_seek_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2
+        },
+        {
+          "name": "mtp_concurrency_is_serialized",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 293
+        },
+        {
+          "name": "mtp_property_fetch_is_batched",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 3
+        },
+        {
+          "name": "mtp_public_writer_stages_until_commit",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 10
+        },
+        {
+          "name": "mtp_fake_backend_enumerate_read_and_capabilities",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 18
+        },
+        {
+          "name": "mtp_overwrite_byte_verify_level_matches_capability",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 26
+        },
+        {
+          "name": "mtp_writer_overwrite_uses_temp_puid_swap",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 10
+        },
+        {
+          "name": "mtp_overwrite_temp_upload_failure_keeps_original_and_allows_retry",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 17
+        },
+        {
+          "name": "mtp_overwrite_empty_temp_puid_keeps_original_and_blocks_later_upload",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 14
+        },
+        {
+          "name": "mtp_overwrite_delete_original_failure_keeps_original_and_allows_retry",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 16
+        },
+        {
+          "name": "mtp_overwrite_journal_write_failure_aborts_before_upload",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 33
+        },
+        {
+          "name": "mtp_overwrite_journal_recovers_rename_temp_failure",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 12
+        },
+        {
+          "name": "mtp_overwrite_journal_replay_removes_temp_when_final_exists",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 16
+        },
+        {
+          "name": "mtp_overwrite_journal_replay_temp_cleanup_delete_failure_retries",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 16
+        },
+        {
+          "name": "mtp_overwrite_journal_recovers_committed_temp_without_tempPuid",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 34
+        },
+        {
+          "name": "mtp_overwrite_journal_replay_rename_rejection_is_bounded",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 25
+        },
+        {
+          "name": "mtp_overwrite_never_duplicates_or_halfwrites",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 83
+        },
+        {
+          "name": "mtp_overwrite_verify_input_by_source_kind",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 37
+        },
+        {
+          "name": "mtp_copy_move_overwrite_uses_temp_puid_swap",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 24
+        },
+        {
+          "name": "mtp_copy_move_overwrite_temp_copy_failure_keeps_original_and_allows_retry",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 35
+        },
+        {
+          "name": "mtp_move_fallback_delete_source_failure_leaves_duplicate_and_reports_partial",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6
+        },
+        {
+          "name": "mtp_transfer_cancel_is_prompt",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1011
+        },
+        {
+          "name": "mtp_batch_callbacks_report_item_indices",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5
+        },
+        {
+          "name": "mtp_copy_from_device_accounting",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2
+        },
+        {
+          "name": "mtp_copy_to_device_accounting",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4
+        },
+        {
+          "name": "mtp_fake_backend_mutations_roundtrip",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 21
+        },
+        {
+          "name": "mtp_fake_backend_readonly_configuration_blocks_mutations",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1
+        },
+        {
+          "name": "mtp_fake_backend_injection_uses_isolated_instance",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4
+        },
+        {
+          "name": "local_search_qi_and_capabilities",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "local_search_callback_contract",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 537
+        },
+        {
+          "name": "local_search_backend_preferences_roundtrip",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 540
+        },
+        {
+          "name": "local_search_scan_follow_symlink_loop_guard",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5
+        },
+        {
+          "name": "local_search_fallback_follow_symlink_loop_guard",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5
+        },
+        {
+          "name": "local_search_fallback_single_pass_large_directory",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 136
+        },
+        {
+          "name": "local_search_fallback_malformed_entry_skips_with_warning",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1
+        },
+        {
+          "name": "local_search_scan_wide_tree_parallel_walk_name_only",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 20918
+        },
+        {
+          "name": "local_search_scan_deferred_path_materialization",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1653
+        },
+        {
+          "name": "local_search_name_wildcard_recursive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 555
+        },
+        {
+          "name": "local_search_name_windows_filesystem_case_parity",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 45
+        },
+        {
+          "name": "local_search_content_literal",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 16
+        },
+        {
+          "name": "local_search_name_and_content_and_semantics",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 19
+        },
+        {
+          "name": "local_search_invalid_query_rejected",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "local_index_core_snapshot_reload",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 22
+        },
+        {
+          "name": "local_index_core_query_honors_cancel_check",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1944
+        },
+        {
+          "name": "local_index_core_refs_probe_and_query_if_available",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 23
+        },
+        {
+          "name": "local_index_core_journal_replay_rename_delete_create",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 200
+        },
+        {
+          "name": "local_index_core_journal_replay_directory_moves_snapshot",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 366
+        },
+        {
+          "name": "local_index_core_journal_replay_invalidated_rebuilds",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 146
+        },
+        {
+          "name": "local_index_core_snapshot_corruption_rebuild",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 37
+        },
+        {
+          "name": "local_index_core_usn_record_bounds_reject_corruption",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "search_service_broker_query_batch_rejects_oversized_count",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 15
+        },
+        {
+          "name": "search_service_broker_buffered_query_caps_unbounded_stream",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 634
+        },
+        {
+          "name": "search_source_allocation_and_folding_guard",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 40
+        },
+        {
+          "name": "search_low_hardening_smoke",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 86
+        },
+        {
+          "name": "search_service_broker_stalled_query_honors_cancel",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 56
+        },
+        {
+          "name": "search_service_broker_streaming_query_honors_cancel",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1
+        },
+        {
+          "name": "sqlite_index_store_bootstrap_creates_schema",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 19
+        },
+        {
+          "name": "sqlite_index_store_manual_compaction_reclaims_space",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 175
+        },
+        {
+          "name": "sqlite_index_store_automatic_checkpoint_truncates_wal",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 198
+        },
+        {
+          "name": "sqlite_index_store_automatic_compaction_is_bounded",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 351
+        },
+        {
+          "name": "sqlite_index_store_automatic_rewrites_legacy_auto_vacuum",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 45
+        },
+        {
+          "name": "search_service_rejects_device_root_and_continues",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 217
+        },
+        {
+          "name": "search_service_slow_partial_client_does_not_block_next_client",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 486
+        },
+        {
+          "name": "search_service_sqlite_legacy_auto_vacuum_queues_idle_maintenance",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1497
+        },
+        {
+          "name": "sqlite_index_store_upgrade_paths",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 59
+        },
+        {
+          "name": "sqlite_index_store_load_and_apply_journal_delta",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 73
+        },
+        {
+          "name": "sqlite_index_store_root_lookup_case_insensitive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 38
+        },
+        {
+          "name": "local_index_core_sqlite_option_keeps_snapshot_runtime_store",
+          "status": "skipped",
+          "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness.",
+          "duration_ms": 31
+        },
+        {
+          "name": "local_index_core_sqlite_cold_start_bypasses_snapshot_runtime_store",
+          "status": "skipped",
+          "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness.",
+          "duration_ms": 29
+        },
+        {
+          "name": "local_index_core_sqlite_authoritative_replays_without_snapshot_runtime_store",
+          "status": "skipped",
+          "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness.",
+          "duration_ms": 229
+        },
+        {
+          "name": "local_index_core_sqlite_authoritative_replays_directory_moves",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 337
+        },
+        {
+          "name": "local_index_core_sqlite_authoritative_reseeds_after_store_loss_during_replay",
+          "status": "skipped",
+          "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness.",
+          "duration_ms": 269
+        },
+        {
+          "name": "local_index_core_sqlite_cold_start_stale_root_refreshes_before_query",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 57
+        },
+        {
+          "name": "local_index_core_sqlite_direct_query_freshness_policy",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "local_index_core_sqlite_cutover_blocked_by_pending_legacy_import",
+          "status": "skipped",
+          "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness.",
+          "duration_ms": 29
+        },
+        {
+          "name": "local_index_core_sqlite_sidecar_imports_legacy_snapshot",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 85
+        },
+        {
+          "name": "local_index_core_sqlite_prefilter_classifies_name_patterns",
+          "status": "skipped",
+          "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness.",
+          "duration_ms": 36
+        },
+        {
+          "name": "sqlite_index_store_read_queries_stay_readonly_under_writer_lock",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 30
+        },
+        {
+          "name": "sqlite_index_store_prefix_prefilter_uses_range_and_literal_metacharacters",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 34
+        },
+        {
+          "name": "local_search_native_matches_host_fallback",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 528
+        },
+        {
+          "name": "local_search_native_unicode_long_path_matches_host_fallback",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 33
+        },
+        {
+          "name": "search_service_help_lists_cli_options",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 140
+        },
+        {
+          "name": "search_service_compact_cli_runs_manual_sqlite_maintenance",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 363
+        },
+        {
+          "name": "search_service_compact_request_roundtrip",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1340
+        },
+        {
+          "name": "search_service_sqlite_status_reports_maintenance_history",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 458
+        },
+        {
+          "name": "search_service_sqlite_idle_maintenance_queue_and_completion",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1910
+        },
+        {
+          "name": "search_service_sqlite_delete_burst_maintenance_preserves_query_parity",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5263
+        },
+        {
+          "name": "search_service_sqlite_bootstrap_status_roundtrip",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 348
+        },
+        {
+          "name": "search_service_sqlite_cold_start_bypasses_snapshot_runtime_store",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 344
+        },
+        {
+          "name": "search_service_sqlite_ntfs_traversal_seed_stays_degraded",
+          "status": "failed",
+          "reason": "Forced NTFS traversal-seed service did not finish startup warmup.",
+          "duration_ms": 30658
+        },
+        {
+          "name": "search_service_sqlite_cold_start_stale_root_refreshes_before_query",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5467
+        },
+        {
+          "name": "search_service_sqlite_invalid_store_falls_back_live_scan",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 400
+        },
+        {
+          "name": "search_service_sqlite_query_failure_falls_back_live_scan",
+          "status": "skipped",
+          "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness.",
+          "duration_ms": 14
+        },
+        {
+          "name": "search_service_sqlite_midquery_failure_restarts_live_scan_without_duplicates",
+          "status": "skipped",
+          "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness.",
+          "duration_ms": 16
+        },
+        {
+          "name": "search_service_sqlite_prefilter_roundtrip",
+          "status": "skipped",
+          "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness.",
+          "duration_ms": 17
+        },
+        {
+          "name": "search_service_sqlite_status_reports_pending_legacy_import",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 349
+        },
+        {
+          "name": "search_service_binary_uses_console_subsystem",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 13
+        },
+        {
+          "name": "search_service_default_identity_matches_build",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "search_service_sqlite_default_store_uses_build_specific_programdata_root",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 400
+        },
+        {
+          "name": "search_service_sqlite_seeded_default_store_reuses_build_specific_programdata_root",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 313
+        },
+        {
+          "name": "search_service_discovers_fixed_local_roots_on_start",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 289
+        },
+        {
+          "name": "search_service_sqlite_startup_warms_overridden_roots",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1174
+        },
+        {
+          "name": "search_service_sqlite_startup_warmup_failure_status_roundtrip",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6459
+        },
+        {
+          "name": "search_service_foreground_rejects_second_instance",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1672
+        },
+        {
+          "name": "search_service_foreground_logs_request_status",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 537
+        },
+        {
+          "name": "search_service_query_reports_live_progress",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 306
+        },
+        {
+          "name": "search_service_filters_cached_descendants_denied_to_client",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 340
+        },
+        {
+          "name": "search_service_status_and_query_roundtrip",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 240
+        },
+        {
+          "name": "local_search_service_single_request_uses_query",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1761
+        },
+        {
+          "name": "local_search_service_content_early_stop_stats",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 908
+        },
+        {
+          "name": "local_search_service_indexed_name_latency_and_parity",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 286
+        },
+        {
+          "name": "local_search_service_matches_host_fallback",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 285
+        },
+        {
+          "name": "local_search_service_protocol_mismatch_falls_back_local_index",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 576
+        },
+        {
+          "name": "local_search_service_disconnect_falls_back_local_index",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 80959
+        },
+        {
+          "name": "search_service_multi_client_and_rebuild_control",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 325
+        },
+        {
+          "name": "search_text_helpers_decoding_and_binary",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "search_invariant_case_folding_consistency",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 20
+        },
+        {
+          "name": "search_text_helpers_chunk_overlap_literal_and_regex",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "host_fallback_regex_rejected_single_completion",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6
+        },
+        {
+          "name": "host_fallback_regex_oversized_content_reports_overflow",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 20
+        },
+        {
+          "name": "host_fallback_regex_cancel_before_after_name_candidate",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4
+        },
+        {
+          "name": "host_fallback_search_local_plugin_path_root",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 11
+        },
+        {
+          "name": "host_fallback_search_content_degraded_without_io",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2
+        },
+        {
+          "name": "host_fallback_search_access_denied_warning",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 7
+        },
+        {
+          "name": "host_fallback_search_short_read_and_cancel",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 22
+        },
+        {
+          "name": "host_fallback_search_dummy_name_only",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "host_fallback_search_7z_name_only",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 3
+        },
+        {
+          "name": "host_fallback_search_remote_ftp_name_only",
+          "status": "skipped",
+          "reason": "FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP').",
+          "duration_ms": 0
+        }
+      ],
+      "failures": [
+        {
+          "name": "decision_cache_eviction_budget_pending_wide_tree",
+          "status": "failed",
+          "reason": "pending budget: failed to drain pending subtree updates. pendingSubdirUpdates=41 contentPendingCompares=540 contentQueueSize=536 contentInFlightSize=540.",
+          "duration_ms": 24364
+        },
+        {
+          "name": "search_service_sqlite_ntfs_traversal_seed_stays_degraded",
+          "status": "failed",
+          "reason": "Forced NTFS traversal-seed service did not finish startup warmup.",
+          "duration_ms": 30658
+        }
+      ]
+    },
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 3264515,
+      "passed": 0,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "FileOperations",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 802387,
+      "passed": 102,
+      "failed": 0,
+      "skipped": 20,
+      "output_log_path": "",
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 63689
+        },
+        {
+          "name": "FileOps_CopyMergeIntoExistingFolder",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 203
+        },
+        {
+          "name": "FileOps_MoveMergeIntoExistingFolderSameVolume",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 125
+        },
+        {
+          "name": "FileOps_ReparseDirectoryMergeIntoExistingFolder",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 62
+        },
+        {
+          "name": "FileOps_ProviderCapabilityMatrix",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 407
+        },
+        {
+          "name": "FileOps_ParallelGraphFairColorWeight",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "FileOps_CrossVolumeMovePartialFailureStatus",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 47
+        },
+        {
+          "name": "FileOps_ReparseRetargetDestinationContainment",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 78
+        },
+        {
+          "name": "FileOps_DeleteToctouSwapGuard",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 47
+        },
+        {
+          "name": "FileOps_ResolvedItemsExactDestinations",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 125
+        },
+        {
+          "name": "Riptide_MoveDistinctSameSizeFilePreservesSource",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 110
+        },
+        {
+          "name": "Riptide_ReparseMoveRollbackKeepsOverwrittenDestination",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 78
+        },
+        {
+          "name": "Fairstream_MoveFallbackPreservesUncopiedNewFiles",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 14797
+        },
+        {
+          "name": "Fairstream_MoveMergeReadonlyDestinationFolder",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 125
+        },
+        {
+          "name": "Fairstream_OverwriteGrantIsOneShot",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 750
+        },
+        {
+          "name": "Fairstream_ConflictPromptsSerializedUnderParallelism",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 375
+        },
+        {
+          "name": "Fairstream_ReparseReplaceNonEmptyDirRequiresConsent",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 390
+        },
+        {
+          "name": "Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 188
+        },
+        {
+          "name": "Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 172
+        },
+        {
+          "name": "Riptide_ReparseMoveSourceNeverUsesDirectoryMerge",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 140
+        },
+        {
+          "name": "Fairstream_MovedTreeRetargetsInternalLinks",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 47
+        },
+        {
+          "name": "Fairstream_CrossFsConcurrentMoveUsesBridge",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 375
+        },
+        {
+          "name": "Fairstream_RerunCopyIsResumeAware",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 375
+        },
+        {
+          "name": "Fairstream_MoveFallbackSameSizeCollisionPrompts",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 188
+        },
+        {
+          "name": "Fairstream_GraphBandsFairUnderParallelCopy",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 62
+        },
+        {
+          "name": "Fairstream_MergeMoveRenamesChildren",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 203
+        },
+        {
+          "name": "Fairstream_JunctionMergeTargetRequiresConsent",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 110
+        },
+        {
+          "name": "Fairstream_CopyIntoSelfAliasRejected",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 78
+        },
+        {
+          "name": "Fairstream_StorageKindProbed",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 12672
+        },
+        {
+          "name": "Fairstream_ParallelDeleteContinuesPastLockedChild",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 125
+        },
+        {
+          "name": "Fairstream_BridgePerFileConflictSkips",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 250
+        },
+        {
+          "name": "Riptide_BridgeNestedDirVsFileSkipContinuesSiblings",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 250
+        },
+        {
+          "name": "Riptide_BridgeDirectoryOverReadOnlyFileRequiresReplaceReadOnly",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 250
+        },
+        {
+          "name": "Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPartial",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 250
+        },
+        {
+          "name": "Fairstream_SaturationConcurrentCopiesMakeProgress",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 9078
+        },
+        {
+          "name": "Fairstream_EarlyAdmissionOverlapsPreCalc",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4547
+        },
+        {
+          "name": "Riptide_EarlyAdmissionThreadStartFailureFallsBack",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 140
+        },
+        {
+          "name": "Riptide_EarlyAdmissionDisabledDoesNotStartThread",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 110
+        },
+        {
+          "name": "Riptide_LiveFinishedSnapshotCarriesDiagnostics",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 250
+        },
+        {
+          "name": "Riptide_BridgeSequentialContinueOnErrorCopiesSiblings",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 125
+        },
+        {
+          "name": "Floodgate_CrossFsCopyGetSizeFailureRefusesCommit",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 125
+        },
+        {
+          "name": "Floodgate_CrossFsMoveGetSizeFailurePreservesSource",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 125
+        },
+        {
+          "name": "Floodgate_CrossFsMoveCleanupDetectsDestinationCorruption",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 172
+        },
+        {
+          "name": "Floodgate_CrossFsDirectoryMoveCleanupPreservesChangedSource",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 140
+        },
+        {
+          "name": "Floodgate_LocalWriterOverwriteIsStaged",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 78
+        },
+        {
+          "name": "Floodgate_LocalCopyOverwriteIsStaged",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 63
+        },
+        {
+          "name": "Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 312
+        },
+        {
+          "name": "Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 266
+        },
+        {
+          "name": "Phase5_PreCalcSettingsApplied",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 67922
+        },
+        {
+          "name": "Phase5_PreCalcCancelReleasesSlot",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 390
+        },
+        {
+          "name": "Phase5_PreCalcCancelLatencyLocal",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 453
+        },
+        {
+          "name": "Phase5_PreCalcSkipContinues",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 187
+        },
+        {
+          "name": "Phase5_CancelQueuedTask",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 500
+        },
+        {
+          "name": "Phase5_SwitchParallelToWaitDuringPreCalc",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 735
+        },
+        {
+          "name": "Phase5_SwitchWaitToParallelResume",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 140
+        },
+        {
+          "name": "Phase6_PopupRateSmoothing",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "Phase6_PopupSmokeResizeAndPause",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1312
+        },
+        {
+          "name": "Phase6_DeleteBytesMeaningful",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 313
+        },
+        {
+          "name": "Phase6_LocalBandwidthThrottle",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4562
+        },
+        {
+          "name": "Phase6_ParallelBandwidthThrottleFairness",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 16875
+        },
+        {
+          "name": "Phase7_WatcherChurn",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1500
+        },
+        {
+          "name": "Phase7_CacheBorrowNoWatchInvalidation",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 78
+        },
+        {
+          "name": "Phase7_CrossPaneVisibleRefreshLocal",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 641
+        },
+        {
+          "name": "Phase7_CrossPaneVisibleRefreshDummy",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 281
+        },
+        {
+          "name": "Phase7_CrossPaneRelocateLocal",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 157
+        },
+        {
+          "name": "Phase7_LargeDirectoryEnumeration",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 3062
+        },
+        {
+          "name": "Phase7_ParallelCopyMoveKnobs",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 87594
+        },
+        {
+          "name": "Phase7_CopyMoveConcurrency16Perf",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 500
+        },
+        {
+          "name": "Phase7_AutoConcurrencyHints",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1422
+        },
+        {
+          "name": "Phase7_PerItemDirectoryCopyInFlightLines",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 8750
+        },
+        {
+          "name": "Phase7_CopyItemsSingleFolderRecursiveParallelism",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 219
+        },
+        {
+          "name": "Phase7_CopyItemsMultiRootUnevenRecursiveParallelism",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 31
+        },
+        {
+          "name": "Phase7_CopyRecursiveParallelismMatrix",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 297
+        },
+        {
+          "name": "Phase7_SharedPerItemScheduler",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 937
+        },
+        {
+          "name": "Phase7_ParallelDeleteKnobs",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1063
+        },
+        {
+          "name": "Phase7_RecycleBinBatchDelete",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 8750
+        },
+        {
+          "name": "Phase7_RecycleBinBatchDeleteMultiBatch",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 2875
+        },
+        {
+          "name": "Phase8_DefaultBandwidthLimitFromSettings",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4516
+        },
+        {
+          "name": "Phase8_TightDefaults_NoOverwrite",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 250
+        },
+        {
+          "name": "Phase8_InvalidDestinationRejected",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "Phase8_InvalidSizeBytesRejected",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 78
+        },
+        {
+          "name": "Phase8_PerItemOrchestration",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 18781
+        },
+        {
+          "name": "Phase9_ConflictPrompt_OverwriteReplaceReadonly",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 187
+        },
+        {
+          "name": "Phase9_ConflictPrompt_ApplyToAllUiCache",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 625
+        },
+        {
+          "name": "Phase9_ConflictPrompt_OverwriteAutoCap",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 266
+        },
+        {
+          "name": "Phase9_ConflictPrompt_SkipAll",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 172
+        },
+        {
+          "name": "Phase9_ConflictPrompt_RetryCap",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1000
+        },
+        {
+          "name": "Phase9_ConflictPrompt_SkipContinuesDirectoryCopy",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 297
+        },
+        {
+          "name": "Phase9_PerItemConcurrency",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 17078
+        },
+        {
+          "name": "Phase10_PermanentDelete",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1281
+        },
+        {
+          "name": "Phase11_CrossFileSystemBridge",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 11422
+        },
+        {
+          "name": "Phase11_BridgeSingleFolderParallelCopyInFlightLines",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 24578
+        },
+        {
+          "name": "Phase11_BridgeMultiFolderParallelCopyInFlightLines",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 194204
+        },
+        {
+          "name": "Phase11_BridgePipelineDummyToDummyPerf",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 137829
+        },
+        {
+          "name": "Phase11_ConnectionOverridePrecedence",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 968
+        },
+        {
+          "name": "Phase11_ConnectionOverrideGlobalGate",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 40578
+        },
+        {
+          "name": "Phase11_ConnectionOverrideClamp",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 15750
+        },
+        {
+          "name": "Phase12_ReparsePointPolicy",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 781
+        },
+        {
+          "name": "Phase13_PostMortemDiagnostics",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 672
+        },
+        {
+          "name": "Phase14_PopupHostLifetimeGuard",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 437
+        },
+        {
+          "name": "Phase15_FileSystem7zReadSeekSmoke",
+          "status": "skipped",
+          "reason": "7z read/seek smoke skipped in the file-operations suite; 7z coverage remains in compare selftests.",
+          "duration_ms": 0
+        },
+        {
+          "name": "Phase15_FileSystem7zMountPathImpact",
+          "status": "skipped",
+          "reason": "7z mount-path impact skipped in the file-operations suite; 7z coverage remains in compare selftests.",
+          "duration_ms": 47
+        },
+        {
+          "name": "Phase16_RemoteWatchContractExposure",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 0
+        },
+        {
+          "name": "Phase16_RemoteFtpSecret",
+          "status": "skipped",
+          "reason": "FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP').",
+          "duration_ms": 31
+        },
+        {
+          "name": "Phase16_RemoteFtpSandbox",
+          "status": "skipped",
+          "reason": "FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP').",
+          "duration_ms": 63
+        },
+        {
+          "name": "Phase16_RemoteSftpSecret",
+          "status": "skipped",
+          "reason": "SFTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SFTP or create 'FileOpsSelfTest SFTP').",
+          "duration_ms": 62
+        },
+        {
+          "name": "Phase16_RemoteSftpSandbox",
+          "status": "skipped",
+          "reason": "SFTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SFTP or create 'FileOpsSelfTest SFTP').",
+          "duration_ms": 32
+        },
+        {
+          "name": "Phase16_RemoteScpSecret",
+          "status": "skipped",
+          "reason": "SCP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SCP or create 'FileOpsSelfTest SCP').",
+          "duration_ms": 47
+        },
+        {
+          "name": "Phase16_RemoteScpSandbox",
+          "status": "skipped",
+          "reason": "SCP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SCP or create 'FileOpsSelfTest SCP').",
+          "duration_ms": 0
+        },
+        {
+          "name": "Phase16_RemoteImapSecret",
+          "status": "skipped",
+          "reason": "IMAP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_IMAP or create 'FileOpsSelfTest IMAP').",
+          "duration_ms": 62
+        },
+        {
+          "name": "Phase16_RemoteImapSandbox",
+          "status": "skipped",
+          "reason": "IMAP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_IMAP or create 'FileOpsSelfTest IMAP').",
+          "duration_ms": 63
+        },
+        {
+          "name": "Phase16_RemoteS3Secret",
+          "status": "skipped",
+          "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3').",
+          "duration_ms": 62
+        },
+        {
+          "name": "Phase16_RemoteS3Sandbox",
+          "status": "skipped",
+          "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3').",
+          "duration_ms": 63
+        },
+        {
+          "name": "Phase16_RemoteS3FileOps",
+          "status": "skipped",
+          "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3').",
+          "duration_ms": 62
+        },
+        {
+          "name": "Phase16_RemoteOneDrivePersonalSecret",
+          "status": "skipped",
+          "reason": "OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal').",
+          "duration_ms": 63
+        },
+        {
+          "name": "Phase16_RemoteOneDrivePersonalSandbox",
+          "status": "skipped",
+          "reason": "OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal').",
+          "duration_ms": 62
+        },
+        {
+          "name": "Phase16_RemoteOneDrivePersonalFileOps",
+          "status": "skipped",
+          "reason": "OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal').",
+          "duration_ms": 63
+        },
+        {
+          "name": "Phase16_RemoteOneDriveBusinessSecret",
+          "status": "skipped",
+          "reason": "OneDrive Business: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS or create 'FileOpsSelfTest OneDrive Business').",
+          "duration_ms": 62
+        },
+        {
+          "name": "Phase16_RemoteOneDriveBusinessSandbox",
+          "status": "skipped",
+          "reason": "OneDrive Business: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS or create 'FileOpsSelfTest OneDrive Business').",
+          "duration_ms": 63
+        },
+        {
+          "name": "Phase16_RemoteSharePointSecret",
+          "status": "skipped",
+          "reason": "SharePoint: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SHAREPOINT or create 'FileOpsSelfTest SharePoint').",
+          "duration_ms": 31
+        },
+        {
+          "name": "Phase16_RemoteSharePointSandbox",
+          "status": "skipped",
+          "reason": "SharePoint: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SHAREPOINT or create 'FileOpsSelfTest SharePoint').",
+          "duration_ms": 63
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 3502
+        }
+      ],
+      "failures": []
+    },
+    {
+      "suite": "DxUiTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 85060,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\DxUiTests.output.log",
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "FileSystemCurlTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 44,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\FileSystemCurlTests.output.log",
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "ViewerPETests",
+      "kind": "Executable",
+      "exit_code": 1,
+      "duration_ms": 38209,
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "output_log_path": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\ViewerPETests.output.log",
+      "cases": [],
+      "failures": [
+        {
+          "name": "ViewerPETests",
+          "status": "failed",
+          "reason": "Process exited with code 1.",
+          "duration_ms": 38209
+        }
+      ]
+    },
+    {
+      "suite": "ViewerSqliteTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 8402,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\ViewerSqliteTests.output.log",
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "MonitorTest",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 4643,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\MonitorTest.output.log",
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "LocalizationTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 165,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\LocalizationTests.output.log",
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "RedConfigureTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 401,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\RedConfigureTests.output.log",
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "PluginContractTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 608,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\PluginContractTests.output.log",
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "SettingsSchemaTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 80,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\SettingsSchemaTests.output.log",
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "CrashHandlingTests",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 94,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\CrashHandlingTests.output.log",
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "RedSalamanderMonitorEtwLatency",
+      "kind": "Executable",
+      "exit_code": 0,
+      "duration_ms": 1953,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\RedSalamanderMonitorEtwLatency.output.log",
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "PerformanceTests2",
+      "kind": "CppUnitTest",
+      "exit_code": 0,
+      "duration_ms": 16879,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\PerformanceTests2.output.log",
+      "cases": [],
+      "failures": []
+    },
+    {
+      "suite": "ToolsPesterTests",
+      "kind": "Pester",
+      "exit_code": 1,
+      "duration_ms": 135819,
+      "passed": 0,
+      "failed": 1,
+      "skipped": 0,
+      "output_log_path": "",
+      "cases": [],
+      "failures": [
+        {
+          "name": "ToolsPesterTests",
+          "status": "failed",
+          "reason": "Process exited with code 1.",
+          "duration_ms": 135819
+        }
+      ]
+    },
+    {
+      "suite": "VcpkgMergeSynthetic",
+      "kind": "PowerShellScript",
+      "exit_code": 0,
+      "duration_ms": 93,
+      "passed": 1,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "cases": [],
+      "failures": []
+    }
+  ]
+}

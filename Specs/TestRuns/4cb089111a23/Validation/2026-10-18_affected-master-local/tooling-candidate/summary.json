@@ -1,0 +1,27 @@
+{
+  "commit": "9a4d243416fa503899c2f44e4242a1276db1cef9",
+  "source_snapshot_id": "aeae66efb25b50ba6b8bdaf4a1119b54fee400a5477bb4398f05b7f43c4cf443",
+  "source_before_reference": "pipeline-source.json and each preceding viewer post-entry barrier",
+  "source_after_tests": "aeae66efb25b50ba6b8bdaf4a1119b54fee400a5477bb4398f05b7f43c4cf443",
+  "source_stable": true,
+  "receipt_id": "d26c1a3b04bb9469c36e907e5315730dc7793d4979bd07aa11ae78704e79ba66",
+  "all_attested_artifacts_match": true,
+  "passed": 421,
+  "failed": 0,
+  "skipped": 0,
+  "total": 421,
+  "files": [
+    "RunAllTestsPlan",
+    "HistoricalTerminalProfile",
+    "TestHarnessSourceContracts",
+    "SpecInformationArchitecture",
+    "DocumentationDriftContracts",
+    "ToolInventory",
+    "ToolingGovernance",
+    "ReleaseWorkflowPolicy",
+    "ScopedTesting"
+  ],
+  "excluded_tag": "RequiresBuildToolchain",
+  "qualification": "Focused tooling only; no formal Resume/promotion claim",
+  "reporting_repair": "Pester unloaded the snapshot module after all assertions. Reimported the canonical module and completed the barrier against the archived pre-tooling source and immutable solution receipt; assertions were not rerun."
+}

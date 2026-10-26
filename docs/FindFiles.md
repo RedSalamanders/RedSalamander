@@ -1,12 +1,14 @@
 # Find Files and Directories
 
+Name and Path columns use Windows natural sorting (`file2` before `file10`, and
+`folder2` before `folder10`). Equal names or paths keep arrival order in either
+direction, and sorting preserves the selected result.
+
 Use **Find Files and Directories** to search from the current pane without leaving your current location.
 
 Open it with:
 - **Commands → Find Files and Directories…**
 - `Alt+F7`
-
-![Find Files and Directories window](res/find-files.png)
 
 ## Scope
 
@@ -36,6 +38,8 @@ Common options:
 If both name and content are enabled, a result must match both.
 
 ## Result actions
+
+![Find Files with five synthetic document matches](res/find-files.png)
 
 The result list updates while the search is running.
 
@@ -92,3 +96,9 @@ The dialog remembers:
 - window placement.
 
 To reset this history manually, remove the `search` section from the settings file and optionally remove `windows.FindFilesWindow`. See [Settings File & Advanced Configuration](SettingsFile.md).
+
+## No matching results
+
+An empty completed search keeps the query and destination visible so you can change the mask or search scope and try again.
+
+![Find Files after a completed search with no matches](res/find-files-empty.png)

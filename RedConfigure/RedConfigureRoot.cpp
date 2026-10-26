@@ -51,8 +51,8 @@ using DxUi::GridRowTone;
 using DxUi::GridSelectionMode;
 using DxUi::GridSortSpec;
 using DxUi::GridVisualMode;
-using DxUi::IDxGridDelegate;
-using DxUi::IDxGridModel;
+using DxUi::IGridDelegate;
+using DxUi::IGridModel;
 using DxUi::Label;
 using DxUi::MakeDefaultThemePalette;
 using DxUi::Panel;
@@ -266,7 +266,7 @@ BOOL CALLBACK CollectLocaleNameProc(LPWSTR localeName, DWORD, LPARAM userData) n
     return Common::Strings::Utf16FromUtf8StrictOrEmpty(text);
 }
 
-class RedConfigureRoot final : public Panel, public RedConfigureRootController, public IDxGridDelegate
+class RedConfigureRoot final : public Panel, public RedConfigureRootController, public IGridDelegate
 {
 public:
     RedConfigureRoot(HINSTANCE instance, RedConfigure::RedConfigureSession& session, std::filesystem::path initialRoot)

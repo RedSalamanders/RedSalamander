@@ -1,0 +1,24 @@
+{
+  "beforeSource": "2f4fb03fffb9484783ac0badb47f2f9b9f61c739",
+  "file": "RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp",
+  "afterFixtureSha256": "8262376c4eb5430e44778420f39d7a38c45959177146b90be7a9f688d9e03729",
+  "protectedAncestorNavigationSuffixSha256": "8bc594463af3faa8c2a84444cf7466498f454e684c96e90399253da9c14aaa5c",
+  "postClickPredicateUnchanged": true,
+  "scaledDeadlinesMsUnchanged": [
+    "3000",
+    "3000",
+    "3000",
+    "3000",
+    "3000",
+    "3000",
+    "3000",
+    "3000",
+    "3000"
+  ],
+  "onlyAncestorFixtureChanged": true,
+  "sourceContractChecks": {
+    "passed": 188,
+    "failed": 0
+  },
+  "scope": "The existing bounded snapshot waiter now requires ten unchanged ellipsis/client and navigation/window geometry observations before the click. Failure details are evaluated after the unchanged popup predicate. The original Full failure did not record which predicate failed; the precondition correction is not proof of its cause. Added settling is fixture setup, not application latency. Native validation is pending."
+}

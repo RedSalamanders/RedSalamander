@@ -1,0 +1,3 @@
+{"metric":"build.production.release.ms","elapsed_ms":164299,"receipt_id":"6af048447fb32e79182634085a2ee3367f0234f31c3225567e2588c57eef6341","source_snapshot_id":"dd4b8a8b40736ba27199adad66d858f7d91b31a6507fb9233522a511eb255652","tests_enabled":false,"sample":1}
+{"metric":"build.production.search-service-help.ms","elapsed_ms":142.4598,"exit_code":0,"receipt_id":"6af048447fb32e79182634085a2ee3367f0234f31c3225567e2588c57eef6341","sample":1}
+{"metric":"build.production.plugin-package-smoke.ms","elapsed_ms":437.3845,"exit_code":0,"receipt_id":"6af048447fb32e79182634085a2ee3367f0234f31c3225567e2588c57eef6341","sample":1}

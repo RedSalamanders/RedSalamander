@@ -1,0 +1,13 @@
+DxUi CI evidence receipts
+Repository: RedSalamanders/DxUi; PR #69
+Workflow run: 37862075647; head d404ec1b0f656818338d868a30b7e8ece644e8ab
+Workflow attempt 1: x64 Release job 113600002236 failed in Menu test; paired job 113599953709 inconclusive.
+Workflow attempt 2: only failed x64 Release job rerun, 113609797975, passed; the previously inconclusive paired result was not rerun in this attempt.
+Workflow attempt 3: only paired job rerun, 113614291427, remained inconclusive; all other profile jobs showed success.
+
+Artifact receipts (original ZIPs remain in the marked D:\RedSalamander.Perf evidence root):
+- x64 Release failure attempt 1, artifact 11587405602, SHA-256 4A399AFC7832DE06197C11102D988D5B3080753832404D749C00D17170B3BF5A
+- x64 Release retry attempt 2, artifact 11588402059, SHA-256 735BA4C74EB66BAE55A63DB131A67D43A8A36FEEB2FB12CDB90BF228A821B031
+- paired attempt 1, artifact 11586982511, SHA-256 0DEB0DFA210A3BD803ACC8F795B2CB54CC337461F132D5EEDFDCE5CD30E0B0D5
+- paired single retry attempt 3, artifact 11589235893, SHA-256 3492809760BB5CEF9F70DD13F77440A66F132459CC3F264972A05CCB8D95847C
+Curated reports are byte copies from the listed artifact entries; manifest.txt records their SHA-256 and byte lengths.

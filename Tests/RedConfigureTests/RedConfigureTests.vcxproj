@@ -112,7 +112,7 @@
     <ClCompile Include="..\..\RedConfigure\Themes\ThemeCatalog.cpp" />
     <ClCompile Include="..\..\RedConfigure\Themes\ThemePreviewModel.cpp" />
     <ClCompile Include="..\..\RedConfigure\Workspace\WorkspaceDiscovery.cpp" />
-    <ClCompile Include="RedConfigureTests.cpp" />
+    <ClCompile Include="RedConfigure.Tests.Runner.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Common\Common\Common.vcxproj">

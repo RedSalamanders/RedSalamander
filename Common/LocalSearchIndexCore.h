@@ -187,6 +187,20 @@ struct QueryStats final
     uint32_t executeQueryDurationMs       = 0u;
     QueryExecutionMode queryExecutionMode = QueryExecutionMode::Unknown;
     FallbackReason fallbackReason         = FallbackReason::None;
+#ifdef ENABLE_TESTS
+    // Cumulative probe count plus the last direct-route attempt. A retry that
+    // cannot inspect a store or journal leaves those last-attempt facts unknown.
+    // Diagnostics only, never a freshness override.
+    uint32_t directSqliteFreshnessChecks     = 0u;
+    uint32_t directSqliteStoredVolumeState   = 0u;
+    bool directSqliteCurrentJournalKnown     = false;
+    bool directSqliteCurrentJournalAvailable = false;
+    uint64_t directSqliteStoredJournalId     = 0u;
+    uint64_t directSqliteStoredNextUsn       = 0u;
+    uint64_t directSqliteCurrentJournalId    = 0u;
+    uint64_t directSqliteCurrentFirstUsn     = 0u;
+    uint64_t directSqliteCurrentNextUsn      = 0u;
+#endif
     std::wstring snapshotPath;
 };
 
@@ -256,7 +270,9 @@ struct DirectSqliteFreshnessProbe final
 };
 
 [[nodiscard]] bool ShouldAllowDirectSqliteQueryForTests(const DirectSqliteFreshnessProbe& probe) noexcept;
-[[nodiscard]] bool TryParseUsnRecordForTests(const void* recordBytes, size_t recordBytesSize) noexcept;
+[[nodiscard]] bool TryParseUsnRecordForTests(const void* recordBytes, size_t recordBytesSize, bool useSeedArena = false) noexcept;
+[[nodiscard]] bool ValidateUsnRecordFailureResetForTests() noexcept;
+[[nodiscard]] bool VerifyNativeSeedScratchStorageForTests() noexcept;
 [[nodiscard]] bool TryParseFileFullDirectoryInformationForTests(const void* entryBytes, size_t entryBytesSize) noexcept;
 
 struct SyntheticJournalRecordForTests final
@@ -295,6 +311,8 @@ public:
                       QueryStats* outStats,
                       ProgressCallbackFn progressCallback = nullptr,
                       void* progressCookie                = nullptr) noexcept;
+    // Busy warmup volumes never delay this path. Authoritative SQLite routing
+    // bypasses the optional in-memory index; a busy legacy cache falls back live.
     HRESULT EnumerateNoWait(const QueryPlan& plan,
                             CancelCheckFn cancelCheck,
                             void* cancelCookie,
@@ -307,6 +325,8 @@ public:
     void CollectCachedRoots(std::vector<std::wstring>& outRoots) noexcept;
     void GetStatus(RepositoryStatus& outStatus) noexcept;
     bool TryGetCachedPersistentStoreInfo(PersistentStoreInfo& outInfo) noexcept;
+    // Optional status enrichment: a busy volume returns no snapshot or partial
+    // counts, rather than waiting for a seeding/query worker's volume mutex.
     bool TryBuildInMemoryPersistentStoreInfo(PersistentStoreInfo& outInfo) noexcept;
     HRESULT EnsureReadyForRoot(std::wstring_view rootPath,
                                CancelCheckFn cancelCheck,
@@ -323,6 +343,7 @@ public:
     HRESULT ApplySyntheticJournalForTests(std::wstring_view rootPath, std::span<const SyntheticJournalRecordForTests> records, QueryStats* outStats) noexcept;
     HRESULT QueryPersistedVolumeForTests(const QueryPlan& plan, std::vector<Candidate>& outCandidates, QueryStats* outStats) noexcept;
     void SetNextJournalStateForTests(uint64_t id, uint64_t firstUsn, uint64_t nextUsn) noexcept;
+    void ClearNextJournalStateForTests() noexcept;
     void SetNextJournalReplayReadFailureForTests(DWORD error) noexcept;
 #endif
 

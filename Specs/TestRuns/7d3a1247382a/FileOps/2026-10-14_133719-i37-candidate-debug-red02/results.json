@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-10-14T13:37:40.624Z",
+    "suite": "FileOperations",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261014T133719Z-49180-415f400a68bc46fe996004d41b87aa69\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 61719,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "A real folder copy lost its child totals or individual-file progress; see recorded facts and captures.",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 3188,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_FolderLiveProgress",
+            "status": "failed",
+            "duration_ms": 58484,
+            "repeat_index": 1,
+            "reason": "A real folder copy lost its child totals or individual-file progress; see recorded facts and captures."
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 47,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

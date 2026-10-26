@@ -1,0 +1,22 @@
+[
+  {
+    "path": "Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp",
+    "bytes": 394760,
+    "sha256": "549a944f263014433f88af191aec99ba62b6c5a85f6d84666d69e1f754f0ec36"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp",
+    "bytes": 719580,
+    "sha256": "14131a6f2183a1c63f401fa23f76f93be4c5aa8c836146b85286ca548742dbc8"
+  },
+  {
+    "path": "Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md",
+    "bytes": 56008,
+    "sha256": "2a1aef03806b49459f7fe4c14dae25b0baf3902af9635692745a19e894a36dbb"
+  },
+  {
+    "path": "Specs/Testing/Testing_PerformanceValidation.md",
+    "bytes": 105632,
+    "sha256": "7e70c75ded19db80d273679311073e60462465aaf9b4f3fc63e51cebbb0883ce"
+  }
+]

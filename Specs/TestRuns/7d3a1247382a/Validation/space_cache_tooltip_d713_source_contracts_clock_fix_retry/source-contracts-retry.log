@@ -1,0 +1,37 @@
+**********************
+PowerShell transcript start
+Start time: 20261009113303
+Username: QTSEL\PVB
+RunAs User: QTSEL\PVB
+Configuration Name: 
+Machine: LT-PF5VDAGE (Microsoft Windows NT 10.0.26200.0)
+Host Application: C:\Program Files\WindowsApps\OpenAI.CodexPrimaryRuntime.v26-1007-641-0_26.1007.641.0_x64__3k8sg7r9htsxt\dependencies\native\powershell\pwsh.dll -NoProfile -Command try { [Console]::OutputEncoding=[System.Text.Encoding]::UTF8 } catch {}
+$ErrorActionPreference='Stop'; Import-Module ./Tools/Modules/Testing/TestSandbox.psm1 -Force; Import-Module ./Tools/Modules/Testing/TestInvocation.psm1 -Force; $rootPath=Get-RSTestSandboxRoot -TestRootOverride D:/RedSalamander.Perf -RepoRoot (Get-Location).Path; $logPath=Assert-RSTestSandboxContainedPath -TestRoot $rootPath -Path D:/RedSalamander.Perf/evidence/viewer-space-final-qualification-d713/source-contracts-clock-fix-retry.log -RequireDescendant; Start-Transcript -LiteralPath $logPath; try { foreach($casePath in @('./Tools/Tests/PluginLifetimeConsolidationSourceContracts.Tests.ps1','./Tools/Tests/VerifyNoProductionGetCursorPos.Tests.ps1')) { $params=New-RSPesterInvokeParameters -Path $casePath; $params.PassThru=$true; $result=Invoke-Pester @params; if($result.FailedCount -gt 0){exit 1} } } finally { Stop-Transcript }; Get-Content .build/space-hover-clock-release-build.launch.log -Tail 6
+Process ID: 17020
+PSVersion: 7.6.5
+PSEdition: Core
+GitCommitId: 7.6.5
+OS: Microsoft Windows 10.0.26200
+Platform: Win32NT
+PSCompatibleVersions: 1.0, 2.0, 3.0, 4.0, 5.0, 5.1, 6.0, 7.0
+PSRemotingProtocolVersion: 2.4
+SerializationVersion: 1.1.0.1
+WSManStackVersion: 3.0
+**********************
+Transcript started, output file is D:\RedSalamander.Perf\evidence\viewer-space-final-qualification-d713\source-contracts-clock-fix-retry.log
+
+Describing Plugin lifetime consolidation source contracts
+ [+] uses the shared generation and drain state for the two equivalent navigation callback families 2.15s
+ [+] centralizes callback-return module-pin transfer 360ms
+ [+] exposes one case-insensitive manager lookup with an explicit pointer lease 38ms
+Tests completed in 2.55s
+Passed: 3 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0
+
+Describing VerifyNoProductionGetCursorPos
+ [+] finds no production GetCursorPos() usage outside SelfTest/Tests sources 9.28s
+Tests completed in 9.28s
+Passed: 1 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0
+**********************
+PowerShell transcript end
+End time: 20261009113323
+**********************

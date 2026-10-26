@@ -102,10 +102,10 @@
     </ResourceCompile>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="LocalizationTests.cpp" />
+    <ClCompile Include="Localization.Tests.Runner.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="resource.h" />
+    <ClInclude Include="Localization.Tests.resource.h" />
   </ItemGroup>
   <ItemGroup>
     <ResourceCompile Include="LocalizationTests.rc" />

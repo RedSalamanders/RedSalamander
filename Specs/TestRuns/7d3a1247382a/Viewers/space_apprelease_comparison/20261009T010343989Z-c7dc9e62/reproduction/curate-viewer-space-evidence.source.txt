@@ -1,0 +1,232 @@
+import collections
+import hashlib
+import json
+import math
+import pathlib
+import shutil
+import sys
+
+root = pathlib.Path(sys.argv[1])
+run = sys.argv[2]
+label = sys.argv[3]
+raw = pathlib.Path("D:/RedSalamander.Perf/runs") / run / "artifacts/selftest/last_run"
+source = raw / "perf/perf_metrics.jsonl"
+payload = source.read_bytes()
+lines = payload.splitlines()
+rows = [json.loads(line) for line in lines if line.strip()]
+machines = {row.get("machineHash") for row in rows if row.get("machineHash")}
+if len(machines) != 1:
+    raise RuntimeError("Expected one machine identity")
+machine = next(iter(machines))
+target = root / "Specs/TestRuns" / machine / "Viewers" / label
+target.mkdir(parents=True, exist_ok=True)
+for name in ["results.json", "trace.txt", "run-all-tests-results.json",
+             "commands/results.json", "commands/trace.txt",
+             "perf/viewer_space_perf_small_progressive_metrics.json",
+             "perf/viewer_space_perf_large_optin_metrics.json",
+             "perf/viewer_space_input_present_metrics.json",
+             "perf/viewer_space_navigation_present_metrics.json",
+             "perf/viewer_space_memory_20_cycle_metrics.json",
+             "perf/viewer_space_layout_50k_visible_optin.json"]:
+    file = raw / name
+    if file.is_file():
+        destination = target / name
+        destination.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(file, destination)
+captures = raw / "perf/viewer_space_captures"
+boundary_target = None
+boundary_capture_files = []
+boundary_frames = []
+if captures.is_dir():
+    for file in sorted(captures.iterdir()):
+        if file.is_file() and file.suffix in {".png", ".json"}:
+            if file.suffix == ".png" and file.name.startswith("boundary-"):
+                boundary_label = label[:-6] + "_boundary_captures" if label.endswith("_cases") else label + "_boundary_captures"
+                boundary_target = target.parent / boundary_label
+                destination = boundary_target / "captures" / file.name
+                boundary_capture_files.append({
+                    "file": file.name,
+                    "sourceFile": str(file),
+                    "archivePath": f"../{boundary_label}/captures/{file.name}",
+                    "sha256": hashlib.sha256(file.read_bytes()).hexdigest(),
+                    "bytes": file.stat().st_size,
+                })
+            else:
+                destination = target / "captures" / file.name
+            destination.parent.mkdir(parents=True, exist_ok=True)
+            shutil.copyfile(file, destination)
+    capture_manifest = captures / "provenance.json"
+    if boundary_target is not None and capture_manifest.is_file():
+        capture_provenance = json.loads(capture_manifest.read_text(encoding="utf-8-sig"))
+        boundary_names = {item["file"] for item in boundary_capture_files}
+        boundary_frames = [frame for frame in capture_provenance.get("frames", []) if frame.get("file") in boundary_names]
+        for frame in boundary_frames:
+            frame["archivePath"] = f"captures/{frame['file']}"
+# Preserve every claim-bearing row in original order. Queue per-post counter rows
+# are represented by their exact metric counts; no latency claim uses them.
+retained = [(index + 1, line, row) for index, (line, row) in enumerate(zip(lines, rows))
+            if row.get("metric", "").startswith("viewer.space.")
+            and row["metric"] not in {"viewer.space.queue.posted_count",
+                                     "viewer.space.queue.coalesced_count",
+                                     "viewer.space.queue.pending_bytes",
+                                     "viewer.space.queue.lock_hold_us",
+                                     "viewer.space.scan.active_workers",
+                                     "viewer.space.scan.frontier_depth",
+                                     "viewer.space.scan.summary_stage_bytes",
+                                     "viewer.space.scan.summary_chunk_max_bytes",
+                                     "viewer.space.scan.summary_committed_count",
+                                     "viewer.space.scan.enumerate_us",
+                                     "viewer.space.scan.frontier_lock_wait_us",
+                                     "viewer.space.model.directory_count",
+                                     "viewer.space.model.file_candidate_count",
+                                     "viewer.space.model.synthetic_count",
+                                     "viewer.space.queue.pending_peak_bytes",
+                                     "viewer.space.render.tile_draw_count",
+                                     "viewer.space.render.text_draw_count",
+                                     "viewer.space.layout.visible_tiles",
+                                     "viewer.space.scan.progress_bytes",
+                                     "viewer.space.scan.progress_files",
+                                     "viewer.space.scan.progress_folders"}]
+kept = b"\n".join(line for _, line, _ in retained) + b"\n"
+sampling = "all selected rows"
+if len(kept) > 2 * 1024 * 1024:
+    # Preserve all lifecycle/fault/memory/scan totals. For high-frequency timing
+    # families retain endpoints and each field's min/p50/p95/max witness. Exact
+    # distributions below still use every source row, never this sampled subset.
+    groups = collections.defaultdict(list)
+    for item in retained:
+        groups[item[2]["metric"]].append(item)
+    sampled = {}
+    for metric, items in groups.items():
+        if len(items) <= 200 or metric in {"viewer.space.scan.total_us", "viewer.space.memory.process_phase"}:
+            for item in items:
+                sampled[item[0]] = item
+            continue
+        witnesses = items[:3] + items[-3:] + [item for item in items if item[2].get("hr", 0) != 0]
+        for field in ("durationUs", "value0", "value1"):
+            ordered = sorted(items, key=lambda item: item[2].get(field, 0))
+            for ordinal in (0, math.ceil(.50*len(ordered))-1, math.ceil(.95*len(ordered))-1, len(ordered)-1):
+                witnesses.append(ordered[ordinal])
+        for item in witnesses:
+            sampled[item[0]] = item
+    retained = [sampled[index] for index in sorted(sampled)]
+    kept = b"\n".join(line for _, line, _ in retained) + b"\n"
+    sampling = "high-frequency family endpoints and exact min/p50/p95/max source witnesses; distributions computed from all raw rows"
+    if len(kept) > 2 * 1024 * 1024:
+        raise RuntimeError(f"Witness subset exceeds archive file budget: {len(kept)}")
+(target / "perf_metrics.jsonl").write_bytes(kept)
+summary = {
+    "schema": "viewer-space.compact-evidence.v1",
+    "sourceRunId": run,
+    "machineHash": machine,
+    "sourceSha256": hashlib.sha256(payload).hexdigest(),
+    "sourceBytes": len(payload),
+    "sourceRows": len(rows),
+    "retainedRows": len(retained),
+    "retainedSourceLineNumbers": [index for index, _, _ in retained],
+    "retainedSha256": hashlib.sha256(kept).hexdigest(),
+    "retentionPolicy": sampling,
+    "metricCounts": dict(collections.Counter(row.get("metric") for row in rows)),
+    "metricSummary": {},
+    "scanTotalUs": [row["durationUs"] for _, _, row in retained
+                    if row["metric"] == "viewer.space.scan.total_us"],
+    "scope": "Selected ViewerSpace scenarios; no Full repository or whole-process memory claim.",
+    "caveats": ["Original baseline processes share a machine with an independently opened Debug app.",
+                "See run-all-tests-results.json for sandbox-audit issues and exact verdict.",
+                "Last-repetition metrics JSON is a convenience; exact scan totals and source-wide distributions preserve all repetitions."]
+}
+for metric in sorted(summary["metricCounts"]):
+    if not metric.startswith("viewer.space."):
+        continue
+    values = [row for row in rows if row.get("metric") == metric]
+    summary["metricSummary"][metric] = {}
+    for field in ("durationUs", "value0", "value1"):
+        samples = sorted(row[field] for row in values if isinstance(row.get(field), (int, float)))
+        if samples:
+            summary["metricSummary"][metric][field] = {
+                "n": len(samples), "min": samples[0], "p50": samples[math.ceil(.50*len(samples))-1],
+                "p95": samples[math.ceil(.95*len(samples))-1], "max": samples[-1]
+            }
+aggregate = json.loads((raw / "run-all-tests-results.json").read_text(encoding="utf-8-sig"))
+snapshot_file = raw / "workspace-final.json"
+decision_file = raw.parent / "previous_run/validation-plan-decision.json"
+provenance = {
+    "sourceRunId": run, "platform": aggregate["platform"], "configuration": aggregate["configuration"],
+    "caseFilter": aggregate.get("case_filter", ""), "buildReceiptId": sys.argv[4] if len(sys.argv) > 4 else None,
+    "sourceWorkspace": json.loads(snapshot_file.read_text(encoding="utf-8-sig")) if snapshot_file.is_file() else None,
+    "validationDecision": json.loads(decision_file.read_text(encoding="utf-8-sig")) if decision_file.is_file() else None,
+    "sourceSha256": (json.loads(snapshot_file.read_text(encoding="utf-8-sig")).get("snapshot_id")
+                     if snapshot_file.is_file() else None),
+    "sourceShaKind": "red-salamander.workspace-snapshot.v1 snapshot_id",
+    "captureFiles": {
+        **{p.name: {"sha256": hashlib.sha256(p.read_bytes()).hexdigest(), "bytes": p.stat().st_size,
+                    "archivePath": f"captures/{p.name}"}
+           for p in sorted((target / "captures").glob("*.png"))},
+        **{item["file"]: {"sha256": item["sha256"], "bytes": item["bytes"], "archivePath": item["archivePath"]}
+           for item in boundary_capture_files},
+    },
+    "relatedCaptureArchive": None,
+    "captureQualification": "Unreviewed diagnostic capture; case status and whole-frame review must both qualify publication."
+}
+if boundary_target is not None:
+    boundary_label = boundary_target.name
+    archived_capture_manifest = target / "captures/provenance.json"
+    if archived_capture_manifest.is_file():
+        archived_capture_provenance = json.loads(archived_capture_manifest.read_text(encoding="utf-8-sig"))
+        for frame in archived_capture_provenance.get("frames", []):
+            frame["archivePath"] = (f"../../{boundary_label}/captures/{frame['file']}"
+                                    if frame.get("file") in {item["file"] for item in boundary_capture_files}
+                                    else frame.get("file", ""))
+        archived_capture_provenance["relatedCaptureArchive"] = f"../../{boundary_label}"
+        archived_capture_provenance["captureQualification"] = (
+            "Unreviewed diagnostic capture; case status and whole-frame review must both qualify publication.")
+        archived_capture_manifest.write_text(json.dumps(archived_capture_provenance, indent=2) + "\n", encoding="utf-8")
+    provenance["relatedCaptureArchive"] = {
+        "path": f"../{boundary_label}",
+        "results": f"../{boundary_label}/results.json",
+        "provenance": f"../{boundary_label}/provenance.json",
+        "captureFiles": [item["file"] for item in boundary_capture_files],
+    }
+(target / "provenance.json").write_text(json.dumps(provenance, indent=2) + "\n", encoding="utf-8")
+(target / "evidence.json").write_text(json.dumps(summary, indent=2) + "\n", encoding="utf-8")
+if boundary_target is not None:
+    boundary_target.mkdir(parents=True, exist_ok=True)
+    try:
+        commands_results = json.loads((raw / "commands/results.json").read_text(encoding="utf-8-sig"))
+        capture_case = next((case for case in commands_results.get("cases", [])
+                             if case.get("name") == "cmd_viewer_space_explorer_analyst_exact_nested_detail"), None)
+    except (OSError, json.JSONDecodeError):
+        capture_case = None
+    boundary_results = {
+        "schema": "red-salamander.capture-companion-results.v1",
+        "sourceRunId": run,
+        "machineHash": machine,
+        "overallResultsPath": f"../{target.name}/results.json",
+        "captureCaseResultsPath": f"../{target.name}/commands/results.json",
+        "overallPassed": aggregate.get("passed"),
+        "overallFailed": aggregate.get("failed"),
+        "captureCase": capture_case,
+        "captureQualification": "Unreviewed diagnostic capture; case status and whole-frame review must both qualify publication.",
+        "captures": [{"file": item["file"], "sha256": item["sha256"], "bytes": item["bytes"]}
+                     for item in boundary_capture_files],
+    }
+    (boundary_target / "results.json").write_text(json.dumps(boundary_results, indent=2) + "\n", encoding="utf-8")
+    boundary_provenance = {
+        "schema": "red-salamander.capture-companion-provenance.v1",
+        "sourceRunId": run,
+        "machineHash": machine,
+        "platform": aggregate.get("platform"),
+        "configuration": aggregate.get("configuration"),
+        "buildReceiptId": sys.argv[4] if len(sys.argv) > 4 else None,
+        "sourceSha256": provenance["sourceSha256"],
+        "sourceShaKind": provenance["sourceShaKind"],
+        "sourceWorkspaceSnapshotId": (provenance.get("sourceWorkspace") or {}).get("snapshot_id"),
+        "sourceResultsPath": f"../{target.name}/results.json",
+        "sourceProvenancePath": f"../{target.name}/provenance.json",
+        "captureManifestPath": f"../{target.name}/captures/provenance.json",
+        "captureFiles": [{**item, "archivePath": f"captures/{item['file']}"} for item in boundary_capture_files],
+        "frameProvenance": boundary_frames,
+        "captureQualification": "Unreviewed diagnostic capture; case status and whole-frame review must both qualify publication.",
+    }
+    (boundary_target / "provenance.json").write_text(json.dumps(boundary_provenance, indent=2) + "\n", encoding="utf-8")
+print(json.dumps({"path": str(target), "bytes": len(kept), "rows": len(retained), "scanUs": summary["scanTotalUs"]}))

@@ -1,0 +1,11 @@
+# Pending conflict pane navigation: candidate
+
+Result: **18 passed, 0 failed, 0 skipped**, x64 Debug, six native Commands cases repeated three times. Source/build receipt identities match.
+
+Retained pre-change baseline: [qualified target final](../2026-09-20_160358-i26-inspection-target-final/README.md), 18/18. Common renderer median/p95 66561/66843 us; differing 66564/66846 us. Same machine, 480/640/760 DIP French fixture, five batches of eight redraws at each width, three repeats and 45 ordered samples per presentation.
+
+The owner dispatches qualified parent navigation into the captured active pane. Accepted requests complete through the enumeration settlement hook, rechecking original visit, live endpoint and pending prompt before exact selection. One request is retained; duplicates report busy, cancellation/new pane navigation report stale. Missing file, failed folder enumeration/restoration and unavailable qualification are distinct results. No worker/timer/polling or OS focus takeover is added. Callback composition preserves existing listeners. The caller still owns visible controls, popup hide/return and the final guarded foreground commit.
+
+Native coverage invokes real pending-conflict requests for both pane/role combinations, checks exact selection and unchanged OS focus, duplicate/cancel behavior, newer navigation, missing-item and failed-folder rollback, and stale prompt refusal. The harness alters only display inspection facts for missing targets; engine paths, bindings, decision and scope remain unchanged. Broader remote/provider switching, rollback failure, focus-transfer/UIA/AT and completed UI acceptance remain open.
+
+Navigation/qualification timings are candidate-only; compare retained renderer samples in summary.json, not as proof of full resource acceptance. Full raw captures/metrics/results: `S:/RedSalamander.Perf/evidence/i26-inspection-navigation-candidate-20260920`. Compacted metrics preserve raw hash and original row numbers. Original runner `C:/RedSalamander.Perf/evidence/i26-ui/inspection-navigation-candidate.log`, SHA256 `d5c44946ce73af783ecbb5bf9bd22e186d5403d59b04a488bab068650a65194b`; normalization only strips trailing whitespace and normalizes line endings.

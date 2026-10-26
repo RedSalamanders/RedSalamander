@@ -1,0 +1,9 @@
+{
+  "buildReceiptId": "521a2032717eb2e2f9f0bfc87cb30d0028e3c056d69b5cae7da7e84a32ac6440",
+  "scope": "Archive byte bindings and post-Full frozen source/all receipt outputs",
+  "status": "passed",
+  "repositoryVerdict": "FAILED",
+  "sourceSnapshotId": "987c7d7419c3db4f57c39a7c38ad1c3a5a00397c3f8893059d67a782cbe5b5cd",
+  "checkedBindings": 32,
+  "artifactOutputCount": 192
+}

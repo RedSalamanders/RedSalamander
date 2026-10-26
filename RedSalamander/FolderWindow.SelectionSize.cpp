@@ -271,7 +271,7 @@ void FolderWindow::RequestSelectionSizeComputation(Pane pane)
     CancelSelectionSizeComputation(pane);
 #ifdef ENABLE_TESTS
     ++state.debugSelectionSizeRequestCount;
-    state.debugSelectionSizeLastCompletionStatus = E_PENDING;
+    state.debugSelectionSizeLastCompletionStatus       = E_PENDING;
     state.debugSelectionSizeLastRequestedSelectedPaths = state.folderView.GetSelectedPaths();
     state.debugSelectionSizeLastRequestedFolderPaths.clear();
 #endif
@@ -395,7 +395,7 @@ void FolderWindow::SelectionSizeWorkerMain(Pane pane, std::stop_token stopToken)
 
 LRESULT FolderWindow::OnPaneSelectionSizeComputed(LPARAM lp) noexcept
 {
-    auto payload = TakeMessagePayload<SelectionSizePayload>(lp);
+    auto payload = TakeMessagePayload<SelectionSizePayload>(_hWnd.get(), WndMsg::kPaneSelectionSizeComputed, lp);
     if (! payload)
     {
         return 0;
@@ -419,7 +419,7 @@ LRESULT FolderWindow::OnPaneSelectionSizeComputed(LPARAM lp) noexcept
 
 LRESULT FolderWindow::OnPaneSelectionSizeProgress(LPARAM lp) noexcept
 {
-    auto payload = TakeMessagePayload<SelectionSizeProgressPayload>(lp);
+    auto payload = TakeMessagePayload<SelectionSizeProgressPayload>(_hWnd.get(), WndMsg::kPaneSelectionSizeProgress, lp);
     if (! payload)
     {
         return 0;
@@ -451,37 +451,34 @@ FolderWindow::DebugSelectionSizeSnapshot FolderWindow::DebugGetSelectionSizeSnap
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     DebugSelectionSizeSnapshot snapshot{};
-    snapshot.generation = state.selectionSizeGeneration;
-    snapshot.requestCount = state.debugSelectionSizeRequestCount;
-    snapshot.folderBytesPending = state.selectionFolderBytesPending;
-    snapshot.folderBytesValid = state.selectionFolderBytesValid;
-    snapshot.folderBytes = state.selectionFolderBytes;
-    snapshot.lastCompletionStatus = state.debugSelectionSizeLastCompletionStatus;
+    snapshot.generation                 = state.selectionSizeGeneration;
+    snapshot.requestCount               = state.debugSelectionSizeRequestCount;
+    snapshot.folderBytesPending         = state.selectionFolderBytesPending;
+    snapshot.folderBytesValid           = state.selectionFolderBytesValid;
+    snapshot.folderBytes                = state.selectionFolderBytes;
+    snapshot.lastCompletionStatus       = state.debugSelectionSizeLastCompletionStatus;
     snapshot.lastRequestedSelectedPaths = state.debugSelectionSizeLastRequestedSelectedPaths;
-    snapshot.lastRequestedFolderPaths = state.debugSelectionSizeLastRequestedFolderPaths;
+    snapshot.lastRequestedFolderPaths   = state.debugSelectionSizeLastRequestedFolderPaths;
     {
         std::scoped_lock lock(state.selectionSizeMutex);
-        snapshot.workerRequestPending = state.selectionSizeWorkPending;
+        snapshot.workerRequestPending    = state.selectionSizeWorkPending;
         snapshot.workerRequestGeneration = state.selectionSizeWorkGeneration;
     }
     return snapshot;
 }
 
-bool FolderWindow::DebugPostSelectionSizeCompletionForSelfTest(Pane pane,
-                                                                uint64_t generation,
-                                                                uint64_t folderBytes,
-                                                                HRESULT status) noexcept
+bool FolderWindow::DebugPostSelectionSizeCompletionForSelfTest(Pane pane, uint64_t generation, uint64_t folderBytes, HRESULT status) noexcept
 {
     if (! _hWnd)
     {
         return false;
     }
 
-    auto payload = std::make_unique<SelectionSizePayload>();
-    payload->pane = pane;
-    payload->generation = generation;
+    auto payload         = std::make_unique<SelectionSizePayload>();
+    payload->pane        = pane;
+    payload->generation  = generation;
     payload->folderBytes = folderBytes;
-    payload->status = status;
+    payload->status      = status;
     return PostMessagePayload(_hWnd.get(), WndMsg::kPaneSelectionSizeComputed, 0, std::move(payload)) != 0;
 }
 #endif

@@ -1,0 +1,16 @@
+{
+  "commit": "a48e7d7880cb37ea6898d462ae188a6213a5f3f8",
+  "source_snapshot_id": "3725a0492d81ea4ec0796bf3741923e7858ead8f5aa0b25cfe54421c097792ea",
+  "receipt_id": "0e2153e829e31fdc13f72eb83d3e6be914b4681bd51f4eecd4fcc61424c87008",
+  "configuration": "Release",
+  "platform": "x64",
+  "suite": "FileOps",
+  "repeat_count": 1,
+  "filter": "FileOps_SmbNativeRouteConcurrencyBudget",
+  "run_id": "20261019T061314Z-58644-4eed764f8b794a8baf7e2293a7d295f6",
+  "exit_code": 0,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "raw_archive": "Z:\\RedSalamander.Perf\\evidence\\final-cancellation-release-2026-10-19\\20261019T061314Z-58644-4eed764f8b794a8baf7e2293a7d295f6"
+}

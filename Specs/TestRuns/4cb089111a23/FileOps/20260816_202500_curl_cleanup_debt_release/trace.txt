@@ -1,0 +1,9 @@
+run=1 passed=221 failed=0 hr=0x00000000 exit=0 unload_quiet=true
+run=2 passed=221 failed=0 hr=0x00000000 exit=0 unload_quiet=true
+run=3 passed=221 failed=0 hr=0x00000000 exit=0 unload_quiet=true
+run=4 passed=221 failed=0 hr=0x00000000 exit=0 unload_quiet=true
+run=5 passed=221 failed=0 hr=0x00000000 exit=0 unload_quiet=true
+metric=FileOps.Curl.CleanupDebtGuard samples=5 durations_us=60000,60000,59000,59000,62000 endpoint_commands=320,320,320,320,320 retained_artifacts=9,9,9,9,9 hr=0x00000000
+metric=FileOps.Curl.CleanupDebt samples=95 rows_per_process=19,19,19,19,19 retained_item_count_sum_per_process=22,22,22,22,22 fixed_detail_content_free=true forbidden_matches=0
+cleanup_debt_distribution_per_process=count1_mask1_hr0x80070032:11,count2_mask1_hr0x80070032:3,count1_mask2_hr0x8007003A:2,count1_mask4_hr0x80070032:3
+perf_metrics_sha256=4f8cb519d6de71dd727cbf4e8c0b3311000590434da10958ff1d193968008247 raw_lines=350 raw_bytes=179409 invalid_json_lines=0 processes=5

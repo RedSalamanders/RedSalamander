@@ -1,0 +1,14 @@
+{
+  "beforeSource": "e61d5e34b4877e8d7377a5843617d9169f5ca994",
+  "afterSource": "1232d181e74ae7118d3fce7974196811b3cd4398",
+  "file": "RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp",
+  "beforeGitBlobSha256": "84253defd91510e6635d2f887316ca2e61306aa443d85f663195d39087e79113",
+  "afterGitBlobSha256": "248867cd97295e3a26941090e9b04e35e6542c7da8b9a6ef975daa6eeff8f2cf",
+  "onlyChange": "Remove one extra closing parenthesis in the diagnostic Require/format call.",
+  "sourceChecks": {
+    "passed": 188,
+    "failed": 0,
+    "skipped": 0
+  },
+  "scope": "The e61d5e34 root build failed with C2059 at line 5125, 0 warnings and 1 error. No native context ran. The correction changes syntax only; runtime validation at 1232d181 is separate."
+}

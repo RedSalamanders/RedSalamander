@@ -1,0 +1,38 @@
+{
+  "runId": "20261019T211157Z-62324-eafe0c8f010448a881e97c3543e65be1",
+  "archive": "D:\\RedSalamander.Perf\\evidence\\screenshot-gaps-20261019\\vlc-black-layer-failed-run.zip",
+  "sha256": "753d8c07961f501368ecc2a3dc8fe34d19ea946935da5678e25f286b112924e7",
+  "files": [
+    {
+      "path": "artifacts/viewer-pe/documentation-playback/playback-observations.tsv",
+      "sha256": "767bac99a0801941e0e1f653bb3fec7ae006a68595f809f89e000b5d41bebd53",
+      "bytes": 169
+    },
+    {
+      "path": "artifacts/viewer-pe/documentation-playback/rejected-missing-video-layer.png",
+      "sha256": "859c15f9c7e739efe23358b03898fb84ed4138e89185c11efb5fe711d1adc726",
+      "bytes": 34328
+    },
+    {
+      "path": "artifacts/viewer-pe/documentation-playback/scenarios.tsv",
+      "sha256": "1649106d37026db682ad3b0f69a828a344140f08d8a7930918e12ff1be36cb3a",
+      "bytes": 115
+    },
+    {
+      "path": "artifacts/viewer-pe/documentation-playback/viewer-vlc-paused.png",
+      "sha256": "859c15f9c7e739efe23358b03898fb84ed4138e89185c11efb5fe711d1adc726",
+      "bytes": 34328
+    },
+    {
+      "path": "artifacts/viewer-pe/documentation-playback/viewer-vlc-playback.png",
+      "sha256": "7e345948a3e1323b139178af351dd10a9cc105a04b3deda4a2338309a5eaa3a8",
+      "bytes": 33975
+    },
+    {
+      "path": "scratch/viewer-pe/documentation-playback/workshop-demo.avi",
+      "sha256": "55f05cc0098de3eb9d02885c98c88b38c633d5f55a2727403b93944dfafb378c",
+      "bytes": 2074120
+    }
+  ],
+  "reparsePointsNotFollowed": []
+}

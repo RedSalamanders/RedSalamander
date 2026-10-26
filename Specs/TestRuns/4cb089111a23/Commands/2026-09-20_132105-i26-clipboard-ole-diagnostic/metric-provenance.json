@@ -1,0 +1,21 @@
+{
+  "raw_path": "S:\\RedSalamander.Perf\\evidence\\i26-clipboard-png-ole-diagnostic-20260920\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "raw_bytes": 1678239,
+  "raw_sha256": "75d7e7c5c2f8002be977e95dd65b00f15f9dbb672bdecadc1929f2ab04058251",
+  "raw_rows": 4488,
+  "selected_lines": [
+    369,
+    458,
+    547,
+    636,
+    725,
+    848,
+    937,
+    1027,
+    1116,
+    1205,
+    4480
+  ],
+  "selected_sha256": "628f938d3bbd6bd4c7813d2a62f13021b8558aebe5af65bd1a4dde82e0f1aa90",
+  "selection": "All FileOps.Clipboard.* and FileOps.Popup.Throughput.* rows, preserving order."
+}

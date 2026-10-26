@@ -1,0 +1,13 @@
+{
+  "case": "TestViewerSpaceListingValidation",
+  "run_id": "20261018T223053Z-4112-b3942d10a08e494f83b286452b57b56d",
+  "exit_code": 0,
+  "configuration": "Debug",
+  "platform": "x64",
+  "activation": "native-no-activate",
+  "scope": "Three affected ViewerSpace cases only",
+  "receipt_id": "0e8bae1ce209243a8e4c4bd75d7598e319ea1ccb8b8c0d9d914ac1cc2f179177",
+  "source_snapshot_id": "295a8527742890ef7111979c26f25b87b1686b9f9d1e100591abf1ee06b46f35",
+  "source_stable": true,
+  "raw_archive": "Z:\\RedSalamander.Perf\\evidence\\final-cancellation-debug-2026-10-18\\viewers\\20261018T223053Z-4112-b3942d10a08e494f83b286452b57b56d"
+}

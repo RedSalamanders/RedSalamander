@@ -1,0 +1,158 @@
+{
+  "runId": "20261014T145706Z-9304-fe508fee88b2406382312b6c78cbb86e",
+  "receipt": "548988b8541ab61569f6c298db168b45ef5d9aaa65ce4cce0dcca2a655a063d4",
+  "sourceSnapshotId": "180bb20cdea4370b1c3376df556a6c1000e51c6a6e58386afeb63c4854d3a152",
+  "configuration": "Debug",
+  "sourceRetained": "D:\\RedSalamander.Perf\\evidence\\folder-copy-progress-candidate-debug-20261014-05",
+  "nativeVerdict": "PASSED",
+  "runnerVerdict": "PASSED",
+  "runnerAudit": "Three unrelated pre-existing unexpected-test-run-dir findings, untouched and separate; they do not themselves fail the selected runner.",
+  "note": "All original five routes pass exact counts,96MiB size/written/publication/content,advancing pixels; actual first named Finalizing frames pass719/765/656ms with known32MiB and activephase. Natural serial paints24-to66 advance independently of capture. Wide sequential32-file/33-folder/64MiB probe captures actual8/33/16MiB text ink721 and sameopenprefix aftercapture. Small1MiB Publishing,emptyroots,malformed/retry/producer synthetic controls and realPublished+Failed controls all pass.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "bytes": 93727,
+      "sha256": "4758DD10098968BCB9F86A63F83801B96C7B940930A014D462DCA27D91C9A1D3"
+    },
+    {
+      "path": "captures\\bridge-open-prefix-7.png",
+      "bytes": 79177,
+      "sha256": "F1B744F632415F093E2BE8391D988E7E82D00423307CE65FEAD0D870AADC35E9"
+    },
+    {
+      "path": "captures\\bridge-parallel-counts.png",
+      "bytes": 47373,
+      "sha256": "9DF96C5960D66BCBFE2151E591B8D037C5F1FFD71C8CB1C86436E9ABBA400BAE"
+    },
+    {
+      "path": "captures\\bridge-parallel-early.png",
+      "bytes": 47373,
+      "sha256": "9DF96C5960D66BCBFE2151E591B8D037C5F1FFD71C8CB1C86436E9ABBA400BAE"
+    },
+    {
+      "path": "captures\\bridge-parallel-late.png",
+      "bytes": 80812,
+      "sha256": "6ABA707FAC8879D4BF8E7F9A4248FFDF8CD12406E4EDFCEE5BD8CB1AA9268F94"
+    },
+    {
+      "path": "captures\\bridge-small-publishing.png",
+      "bytes": 69849,
+      "sha256": "CCB849C1482F3E89953D2ED6336295B9063AFC1B28756AA0BFB3BC91DCB54E5B"
+    },
+    {
+      "path": "captures\\bridge-verify-counts.png",
+      "bytes": 69743,
+      "sha256": "5D551F34A4E69F0AD4D76EE40731BCDFFDE2EC445BD162976E44764ED4785E62"
+    },
+    {
+      "path": "captures\\bridge-verify-early.png",
+      "bytes": 69743,
+      "sha256": "5D551F34A4E69F0AD4D76EE40731BCDFFDE2EC445BD162976E44764ED4785E62"
+    },
+    {
+      "path": "captures\\bridge-verify-late.png",
+      "bytes": 70852,
+      "sha256": "6755DBE4305EB304027EB348B3F29A2C155DE78A1D81B86D1E8082B30B637ED8"
+    },
+    {
+      "path": "captures\\local-overwrite-counts.png",
+      "bytes": 43914,
+      "sha256": "98EB1255C005CBD11C8CF2D092AB6FBDA40CD4AC34159FD187998BF00EB0AEB3"
+    },
+    {
+      "path": "captures\\local-overwrite-early.png",
+      "bytes": 54913,
+      "sha256": "409D3E27C5B74F09B2D10D578E4C3E169CD8D8BA51C16CF828D9A7A9CF06053A"
+    },
+    {
+      "path": "captures\\local-overwrite-finalizing.png",
+      "bytes": 62742,
+      "sha256": "9BFF5FA909CC2E464B81B696CBDD206BA104C434735B9918283C636A056CCD45"
+    },
+    {
+      "path": "captures\\local-overwrite-late.png",
+      "bytes": 57796,
+      "sha256": "FCAB38DD7BE80FA874BE2F88C244E4BADF5036E2ECA5578659DF3216EF295F6E"
+    },
+    {
+      "path": "captures\\local-parallel-counts.png",
+      "bytes": 50977,
+      "sha256": "293DD7184E62B76663F69651FB9ABBA20A3675B4F6BE598D4124057841FC17D9"
+    },
+    {
+      "path": "captures\\local-parallel-early.png",
+      "bytes": 73037,
+      "sha256": "76A494F3F3974B3A7E8168EB4CA6AE8196E5EBA5D806B69D321CAABC4BC85B5B"
+    },
+    {
+      "path": "captures\\local-parallel-finalizing.png",
+      "bytes": 78729,
+      "sha256": "8A97906772FA3AE7FA66AA9EA17534DEF7E56499D82CE92FA9D8FF6313F96A0C"
+    },
+    {
+      "path": "captures\\local-parallel-late.png",
+      "bytes": 76590,
+      "sha256": "9051AE5E4E4C28C505DFD693E3F4E1F1FA36570CB8E46EB7343CF4F21C2C882C"
+    },
+    {
+      "path": "captures\\local-serial-counts.png",
+      "bytes": 38987,
+      "sha256": "E86264003975E3AEB3DD793386218AD76A0BF71A29825CB7AF0F4D5F19E925AA"
+    },
+    {
+      "path": "captures\\local-serial-early.png",
+      "bytes": 49012,
+      "sha256": "0895F8EC0CE950EB93C2AFBCDE48ADD2B5106D1C7D3BCDD43BD74D5E5DD39AF1"
+    },
+    {
+      "path": "captures\\local-serial-finalizing.png",
+      "bytes": 57659,
+      "sha256": "C7E4F42126EB2C69EEE1554DA0112BD7A248588E4E0E2DD67B765ECF4D0D1B7E"
+    },
+    {
+      "path": "captures\\local-serial-late.png",
+      "bytes": 52890,
+      "sha256": "15DFDFDA1345073E4A1B2EA5BC5E9939B8C14B7DD943EF6438AD5E04B758AA39"
+    },
+    {
+      "path": "comparison.json",
+      "bytes": 14506,
+      "sha256": "C8E993B4CA5C8479EEB5C043E976CCE208562BDB46E7F324136F2694D07716DB"
+    },
+    {
+      "path": "metric-selection.json",
+      "bytes": 96423,
+      "sha256": "2D393EB28B92A05AD07CEFBE4B7D3FD055480D325F3891B4D064B48A2C130E61"
+    },
+    {
+      "path": "perf_metrics-002.jsonl",
+      "bytes": 403411,
+      "sha256": "B2D755A33323B0DBEC420AFBC3004ADDAD7BCC75FB50464FE44C3AA4D8659CCB"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "bytes": 1749690,
+      "sha256": "CC64AC266C99C9C08E2963E1F21B456E51F78A07DEFC3DDE078399930B1F8300"
+    },
+    {
+      "path": "qualified-input-source-manifest.json",
+      "bytes": 4069,
+      "sha256": "F74EEEB958AD7EF927066ABE495828FE17D8FD34FCA7B2D45F2A9803F92E94F6"
+    },
+    {
+      "path": "results.json",
+      "bytes": 889,
+      "sha256": "D559644C941D9F5CE1EA0C9C7ADB54E21D8B5815B871074A535AEDF6E45BA7ED"
+    },
+    {
+      "path": "runner-results.json",
+      "bytes": 3437,
+      "sha256": "52FD9FE96064191392A29E0216743E1F8BBA8BAA6B47B897D8050370D439D268"
+    },
+    {
+      "path": "trace.txt",
+      "bytes": 42544,
+      "sha256": "3FB29255DF94797D566B2E02F2F16C38BE0E73D83A2D1776AC412B6C85E6DC33"
+    }
+  ]
+}

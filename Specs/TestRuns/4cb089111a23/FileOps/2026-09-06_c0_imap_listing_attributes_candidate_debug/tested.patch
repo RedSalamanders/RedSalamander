@@ -1,0 +1,1754 @@
+diff --git a/Plugins/FileSystemCurl/FileSystemCurl.Imap.cpp b/Plugins/FileSystemCurl/FileSystemCurl.Imap.cpp
+index c0c91a01..c276583e 100644
+--- a/Plugins/FileSystemCurl/FileSystemCurl.Imap.cpp
++++ b/Plugins/FileSystemCurl/FileSystemCurl.Imap.cpp
+@@ -1,6 +1,7 @@
+ #include "FileSystemCurl.Internal.h"
+ #include "FileOperationTraversalPolicy.h"
+ 
++#include <charconv>
+ #include <chrono>
+ #include <span>
+ #include <unordered_map>
+@@ -276,37 +277,58 @@ static constexpr DWORD kImapFileAttributeDeleted = 0x08000000u;
+     return resultHr;
+ }
+ 
+-[[nodiscard]] bool TryParseImapQuotedString(std::string_view text, size_t& pos, std::string& out) noexcept
++// Borrow the encoded contents for framing; decode only when a metadata consumer needs them.
++[[nodiscard]] bool TryParseImapQuotedView(std::string_view text, size_t& pos, std::string_view& out) noexcept
+ {
+-    out.clear();
+-
++    out = {};
+     if (pos >= text.size() || text[pos] != '"')
+     {
+         return false;
+     }
+-
+-    ++pos;
+-
++    const size_t start = ++pos;
+     while (pos < text.size())
+     {
+         const char ch = text[pos++];
+         if (ch == '"')
+         {
++            out = text.substr(start, pos - start - 1u);
+             return true;
+         }
+-
+-        if (ch == '\\' && pos < text.size())
++        if (ch == '\r' || ch == '\n' || ch == '\0')
+         {
+-            out.push_back(text[pos++]);
+-            continue;
++            return false;
++        }
++        if (ch == '\\')
++        {
++            if (pos >= text.size() || (text[pos] != '\\' && text[pos] != '"'))
++            {
++                return false;
++            }
++            ++pos;
+         }
+-
+-        out.push_back(ch);
+     }
+-
+     return false;
+ }
+ 
++[[nodiscard]] bool TryParseImapQuotedString(std::string_view text, size_t& pos, std::string& out) noexcept
++{
++    out.clear();
++    std::string_view encoded;
++    if (! TryParseImapQuotedView(text, pos, encoded))
++    {
++        return false;
++    }
++    out.reserve(encoded.size());
++    for (size_t index = 0; index < encoded.size(); ++index)
++    {
++        if (encoded[index] == '\\')
++        {
++            ++index; // The framing helper validated the escape and its following byte.
++        }
++        out.push_back(encoded[index]);
++    }
++    return true;
++}
+ [[nodiscard]] void SkipImapWhitespace(std::string_view text, size_t& pos) noexcept
+ {
+     while (pos < text.size())
+@@ -779,45 +801,22 @@ static constexpr DWORD kImapFileAttributeDeleted = 0x08000000u;
+     return std::string_view::npos;
+ }
+ 
+-[[nodiscard]] bool TryParseUintAfterKey(std::string_view text, std::string_view key, uint64_t& out) noexcept
++[[nodiscard]] bool TryParseImapUnsignedToken(std::string_view token, uint64_t maximum, uint64_t& out) noexcept
+ {
+     out = 0;
+-
+-    const size_t keyPos = FindAsciiNoCase(text, key, 0);
+-    if (keyPos == std::string_view::npos)
++    if (token.empty())
+     {
+         return false;
+     }
+-
+-    size_t pos = keyPos + key.size();
+-    while (pos < text.size() && (text[pos] == ' ' || text[pos] == '\t'))
+-    {
+-        ++pos;
+-    }
+-
+-    uint64_t value = 0;
+-    size_t digits  = 0;
+-    while (pos < text.size() && text[pos] >= '0' && text[pos] <= '9')
+-    {
+-        const uint64_t digit = static_cast<uint64_t>(text[pos] - '0');
+-        if (value > (std::numeric_limits<uint64_t>::max() - digit) / 10u)
+-        {
+-            return false;
+-        }
+-        value = (value * 10u) + digit;
+-        ++digits;
+-        ++pos;
+-    }
+-
+-    if (digits == 0 || (pos < text.size() && text[pos] != ' ' && text[pos] != '\t' && text[pos] != '\r' && text[pos] != '\n' && text[pos] != ')'))
++    uint64_t value    = 0;
++    const auto result = std::from_chars(token.data(), token.data() + token.size(), value);
++    if (result.ec != std::errc{} || result.ptr != token.data() + token.size() || value > maximum)
+     {
+         return false;
+     }
+-
+     out = value;
+     return true;
+ }
+-
+ [[nodiscard]] bool TryParseMonthAbbrev(std::string_view mon, int& outMonth) noexcept
+ {
+     outMonth = 0;
+@@ -1300,94 +1299,51 @@ static constexpr DWORD kImapFileAttributeDeleted = 0x08000000u;
+     return ch == ' ' || ch == '\t' || ch == '\r' || ch == '\n';
+ }
+ 
+-[[nodiscard]] bool TryParseImapLiteralString(std::string_view text, size_t& pos, std::string& out) noexcept
++// IMAP wire literals differ from line/argv strings: their byte length, not delimiters,
++// establishes the next token. Borrow payload bytes and check subtraction before addition.
++[[nodiscard]] bool TryParseImapLiteralView(std::string_view text, size_t& pos, std::string_view& out) noexcept
+ {
+-    out.clear();
+-
+-    if (pos >= text.size())
+-    {
+-        return false;
+-    }
+-
+-    const bool hasTildePrefix = text[pos] == '~' && (pos + 1u) < text.size() && text[pos + 1u] == '{';
+-    const size_t bracePos     = hasTildePrefix ? (pos + 1u) : pos;
+-    if (bracePos >= text.size() || text[bracePos] != '{')
+-    {
+-        return false;
+-    }
+-
+-    size_t p = bracePos + 1u;
+-    if (p >= text.size())
++    out           = {};
++    size_t cursor = pos;
++    if (cursor < text.size() && text[cursor] == '~')
+     {
+-        return false;
+-    }
+-
+-    uint64_t value = 0;
+-    size_t digits  = 0;
+-    while (p < text.size() && text[p] >= '0' && text[p] <= '9')
+-    {
+-        const uint64_t digit = static_cast<uint64_t>(text[p] - '0');
+-        if (value > (std::numeric_limits<uint64_t>::max() - digit) / 10u)
+-        {
+-            return false;
+-        }
+-        value = (value * 10u) + digit;
+-        ++digits;
+-        ++p;
++        ++cursor;
+     }
+-
+-    if (digits == 0)
++    if (cursor >= text.size() || text[cursor++] != '{')
+     {
+         return false;
+     }
+-
+-    if (p < text.size() && text[p] == '+')
+-    {
+-        ++p;
+-    }
+-
+-    if (p >= text.size() || text[p] != '}')
++    const size_t numberStart = cursor;
++    while (cursor < text.size() && text[cursor] >= '0' && text[cursor] <= '9')
+     {
+-        return false;
++        ++cursor;
+     }
+-
+-    size_t afterBrace = p + 1u;
+-    if (afterBrace >= text.size())
++    uint64_t length = 0;
++    // RFC 9051 number64 is unsigned 63-bit, not the whole uint64_t range.
++    if (! TryParseImapUnsignedToken(text.substr(numberStart, cursor - numberStart), static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()), length))
+     {
+         return false;
+     }
+-
+-    size_t literalStart = std::string_view::npos;
+-    if (text[afterBrace] == '\n')
++    if (cursor < text.size() && text[cursor] == '+')
+     {
+-        literalStart = afterBrace + 1u;
++        ++cursor; // Retain the existing non-synchronizing-literal compatibility.
+     }
+-    else if (text[afterBrace] == '\r' && (afterBrace + 1u) < text.size() && text[afterBrace + 1u] == '\n')
+-    {
+-        literalStart = afterBrace + 2u;
+-    }
+-    else
++    if (cursor >= text.size() || text[cursor++] != '}')
+     {
+         return false;
+     }
+-
+-    if (value > static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
++    if (cursor < text.size() && text[cursor] == '\r')
+     {
+-        return false;
++        ++cursor;
+     }
+-
+-    const size_t literalSize = static_cast<size_t>(value);
+-    if (literalStart > text.size() || literalStart + literalSize > text.size())
++    if (cursor >= text.size() || text[cursor++] != '\n' || length > text.size() - cursor)
+     {
+         return false;
+     }
+-
+-    out.assign(text.substr(literalStart, literalSize));
+-
+-    pos = literalStart + literalSize;
++    out = text.substr(cursor, static_cast<size_t>(length));
++    pos = cursor + static_cast<size_t>(length);
+     return true;
+ }
+-
+ [[nodiscard]] bool TryParseImapNString(std::string_view text, size_t& pos, std::string& out) noexcept
+ {
+     out.clear();
+@@ -1419,27 +1375,16 @@ static constexpr DWORD kImapFileAttributeDeleted = 0x08000000u;
+ 
+     if (text[pos] == '{' || (text[pos] == '~' && (pos + 1u) < text.size() && text[pos + 1u] == '{'))
+     {
+-        return TryParseImapLiteralString(text, pos, out);
+-    }
+-
+-    const size_t start = pos;
+-    while (pos < text.size())
+-    {
+-        const char ch = text[pos];
+-        if (IsImapWhitespaceChar(ch) || ch == ')')
++        std::string_view value;
++        if (! TryParseImapLiteralView(text, pos, value))
+         {
+-            break;
++            return false;
+         }
+-        ++pos;
+-    }
+-
+-    if (pos <= start)
+-    {
+-        return false;
++        out.assign(value);
++        return true;
+     }
+ 
+-    out.assign(text.substr(start, pos - start));
+-    return true;
++    return false; // RFC nstring is NIL, a quoted string, or a literal; never a bare atom.
+ }
+ 
+ [[nodiscard]] bool TrySkipImapParenthesized(std::string_view text, size_t& pos) noexcept
+@@ -1449,137 +1394,81 @@ static constexpr DWORD kImapFileAttributeDeleted = 0x08000000u;
+     {
+         return false;
+     }
+-
+-    bool inQuote = false;
+-    int depth    = 0;
+-
+-    size_t i = pos;
+-    while (i < text.size())
++    // Iterative wire framing: depth is bounded by input bytes, with constant stack
++    // storage. File-tree depth policy does not apply to nested message attributes.
++    size_t depth = 0;
++    while (pos < text.size())
+     {
+-        const char ch = text[i];
+-        if (inQuote)
++        const char ch = text[pos];
++        std::string_view ignored;
++        if (ch == '"')
+         {
+-            if (ch == '\\' && (i + 1u) < text.size())
++            if (! TryParseImapQuotedView(text, pos, ignored))
+             {
+-                i += 2u;
+-                continue;
+-            }
+-            if (ch == '"')
+-            {
+-                inQuote = false;
++                return false;
+             }
+-            ++i;
+             continue;
+         }
+-
+-        if (ch == '"')
++        if (ch == '{' || (ch == '~' && pos + 1u < text.size() && text[pos + 1u] == '{'))
+         {
+-            inQuote = true;
+-            ++i;
+-            continue;
+-        }
+-
+-        const bool hasTildeLiteralPrefix = ch == '~' && (i + 1u) < text.size() && text[i + 1u] == '{';
+-        if (ch == '{' || hasTildeLiteralPrefix)
+-        {
+-            size_t p = (hasTildeLiteralPrefix ? (i + 1u) : i) + 1u;
+-            if (p >= text.size())
++            if (! TryParseImapLiteralView(text, pos, ignored))
+             {
+                 return false;
+             }
+-
+-            uint64_t value = 0;
+-            size_t digits  = 0;
+-            while (p < text.size() && text[p] >= '0' && text[p] <= '9')
+-            {
+-                const uint64_t digit = static_cast<uint64_t>(text[p] - '0');
+-                if (value > (std::numeric_limits<uint64_t>::max() - digit) / 10u)
+-                {
+-                    return false;
+-                }
+-                value = (value * 10u) + digit;
+-                ++digits;
+-                ++p;
+-            }
+-
+-            if (digits == 0)
+-            {
+-                ++i;
+-                continue;
+-            }
+-
+-            if (p < text.size() && text[p] == '+')
+-            {
+-                ++p;
+-            }
+-
+-            if (p >= text.size() || text[p] != '}')
+-            {
+-                ++i;
+-                continue;
+-            }
+-
+-            size_t afterBrace = p + 1u;
+-            if (afterBrace >= text.size())
+-            {
+-                return false;
+-            }
+-
+-            size_t literalStart = std::string_view::npos;
+-            if (text[afterBrace] == '\n')
+-            {
+-                literalStart = afterBrace + 1u;
+-            }
+-            else if (text[afterBrace] == '\r' && (afterBrace + 1u) < text.size() && text[afterBrace + 1u] == '\n')
+-            {
+-                literalStart = afterBrace + 2u;
+-            }
+-            else
+-            {
+-                ++i;
+-                continue;
+-            }
+-
+-            if (value > static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
+-            {
+-                return false;
+-            }
+-
+-            const size_t literalSize = static_cast<size_t>(value);
+-            if (literalStart > text.size() || literalStart + literalSize > text.size())
+-            {
+-                return false;
+-            }
+-
+-            i = literalStart + literalSize;
+             continue;
+         }
+-
++        ++pos;
+         if (ch == '(')
+         {
+             ++depth;
+-            ++i;
+-            continue;
+         }
+-
+-        if (ch == ')' && depth > 0)
++        else if (ch == ')')
+         {
+-            --depth;
+-            ++i;
+-            if (depth == 0)
++            if (--depth == 0u)
+             {
+-                pos = i;
+                 return true;
+             }
+-            continue;
+         }
+-
+-        ++i;
++        else if (ch == '\r' || ch == '\n' || ch == '\0')
++        {
++            return false; // Only a literal may span response lines.
++        }
+     }
+-
+     return false;
+ }
+ 
++// This scalar/list grammar is IMAP-local, not a generic string or command parser.
++[[nodiscard]] bool TrySkipImapValue(std::string_view text, size_t& pos) noexcept
++{
++    if (pos >= text.size())
++    {
++        return false;
++    }
++    std::string_view ignored;
++    if (text[pos] == '(')
++    {
++        return TrySkipImapParenthesized(text, pos);
++    }
++    if (text[pos] == '"')
++    {
++        return TryParseImapQuotedView(text, pos, ignored);
++    }
++    if (text[pos] == '{' || (text[pos] == '~' && pos + 1u < text.size() && text[pos + 1u] == '{'))
++    {
++        return TryParseImapLiteralView(text, pos, ignored);
++    }
++    const size_t start = pos;
++    while (pos < text.size() && text[pos] != ' ' && text[pos] != '\t' && text[pos] != ')' && text[pos] != ']')
++    {
++        const char ch = text[pos];
++        if (static_cast<unsigned char>(ch) <= 0x20u || ch == 0x7f || ch == '(' || ch == '"' || ch == '{' || ch == '}' || ch == '[' || ch == ']')
++        {
++            return false;
++        }
++        ++pos;
++    }
++    return pos != start;
++}
+ [[nodiscard]] bool TrySkipImapAddressList(std::string_view text, size_t& pos) noexcept
+ {
+     SkipImapWhitespace(text, pos);
+@@ -1730,13 +1619,7 @@ struct ImapEnvelopeFields
+ {
+     out = {};
+ 
+-    const size_t envPos = FindAsciiNoCase(fetchText, "ENVELOPE", 0);
+-    if (envPos == std::string_view::npos)
+-    {
+-        return false;
+-    }
+-
+-    size_t pos = envPos + 8u;
++    size_t pos = 0;
+     SkipImapWhitespace(fetchText, pos);
+     if (pos >= fetchText.size() || fetchText[pos] != '(')
+     {
+@@ -1783,7 +1666,7 @@ struct ImapEnvelopeFields
+         return false;
+     }
+ 
+-    return true;
++    return pos + 1u == fetchText.size();
+ }
+ 
+ struct ImapHeaderFields
+@@ -1994,7 +1877,7 @@ struct ImapHeaderFields
+             ++p;
+         }
+ 
+-        if (p + 4u >= response.size())
++        if (response.size() - p < 6u || response[p + 5u] != ' ')
+         {
+             continue;
+         }
+@@ -2010,212 +1893,254 @@ struct ImapHeaderFields
+     return std::string_view::npos;
+ }
+ 
+-[[nodiscard]] bool TryConsumeImapUntaggedFetchResponse(std::string_view response,
+-                                                       size_t msgStart,
+-                                                       size_t& outNextPos,
+-                                                       std::string_view& outPrefix,
+-                                                       std::string_view& outHeaderBlock,
+-                                                       std::string_view& outSuffix) noexcept
++struct ImapFetchAttributes
+ {
+-    outNextPos     = 0;
+-    outPrefix      = {};
+-    outHeaderBlock = {};
+-    outSuffix      = {};
++    std::string_view uid;
++    std::string_view size;
++    std::string_view flags;
++    std::string_view internalDate;
++    std::string_view envelope;
++    std::string_view headerFields;
++};
+ 
+-    if (msgStart >= response.size())
++[[nodiscard]] bool IsImapSummaryHeaderSection(std::string_view key) noexcept
++{
++    constexpr std::string_view prefix = "BODY[HEADER.FIELDS ";
++    if (key.size() <= prefix.size() || ! EqualsAsciiIgnoreCase(key.substr(0, prefix.size()), prefix) || key.back() != ']')
+     {
+         return false;
+     }
+-
+-    const size_t openParen = response.find('(', msgStart);
+-    if (openParen == std::string_view::npos)
++    const std::string_view fields = TrimAsciiView(key.substr(prefix.size(), key.size() - prefix.size() - 1u));
++    if (fields.size() < 2u || fields.front() != '(' || fields.back() != ')')
+     {
+         return false;
+     }
+-
+-    size_t headerStartAbs = std::string_view::npos;
+-    size_t headerEndAbs   = std::string_view::npos;
+-
+-    bool inQuote   = false;
+-    int parenDepth = 0;
+-
+-    size_t i = openParen;
+-    while (i < response.size())
++    bool subject = false;
++    bool from    = false;
++    bool date    = false;
++    size_t pos   = 1u;
++    while (pos < fields.size() - 1u)
+     {
+-        const char ch = response[i];
+-
+-        if (inQuote)
++        SkipImapWhitespace(fields, pos);
++        const size_t start = pos;
++        while (pos < fields.size() - 1u && fields[pos] != ' ' && fields[pos] != '\t')
+         {
+-            if (ch == '\\' && (i + 1u) < response.size())
+-            {
+-                i += 2u;
+-                continue;
+-            }
+-            if (ch == '"')
+-            {
+-                inQuote = false;
+-            }
+-            ++i;
+-            continue;
++            ++pos;
+         }
++        const std::string_view name = fields.substr(start, pos - start);
++        subject                     = subject || EqualsAsciiIgnoreCase(name, "SUBJECT");
++        from                        = from || EqualsAsciiIgnoreCase(name, "FROM");
++        date                        = date || EqualsAsciiIgnoreCase(name, "DATE");
++    }
++    // A partial BODY section, nested MIME header, or HEADER.FIELDS.NOT cannot
++    // establish the complete message-header metadata requested by this owner.
++    return subject && from && date;
++}
+ 
+-        if (ch == '"')
++[[nodiscard]] bool TryConsumeImapUntaggedFetchResponse(std::string_view response, size_t msgStart, size_t& outNextPos, ImapFetchAttributes& out) noexcept
++{
++    out                   = {};
++    outNextPos            = response.size();
++    size_t pos            = msgStart + 2u;
++    const auto skipSpaces = [&]() noexcept
++    {
++        while (pos < response.size() && (response[pos] == ' ' || response[pos] == '\t'))
+         {
+-            inQuote = true;
+-            ++i;
+-            continue;
++            ++pos;
+         }
++    };
++    skipSpaces();
++    const size_t sequenceStart = pos;
++    while (pos < response.size() && response[pos] >= '0' && response[pos] <= '9')
++    {
++        ++pos;
++    }
++    uint64_t sequence = 0;
++    if (! TryParseImapUnsignedToken(response.substr(sequenceStart, pos - sequenceStart), (std::numeric_limits<uint32_t>::max)(), sequence) || sequence == 0u ||
++        pos >= response.size() || response[pos] != ' ')
++    {
++        return false;
++    }
++    skipSpaces();
++    if (! EqualsAsciiIgnoreCase(response.substr(pos, 5u), "FETCH") || response.size() - pos < 6u || response[pos + 5u] != ' ')
++    {
++        return false;
++    }
++    pos += 6u;
++    skipSpaces();
++    if (pos >= response.size() || response[pos++] != '(')
++    {
++        return false;
++    }
+ 
+-        const bool hasTildeLiteralPrefix = ch == '~' && (i + 1u) < response.size() && response[i + 1u] == '{';
+-        if (ch == '{' || hasTildeLiteralPrefix)
++    while (pos < response.size())
++    {
++        while (pos < response.size() && (response[pos] == ' ' || response[pos] == '\t'))
+         {
+-            const size_t bracePos = hasTildeLiteralPrefix ? (i + 1u) : i;
+-
+-            size_t pos = bracePos + 1u;
+-            if (pos >= response.size())
+-            {
+-                break;
+-            }
+-
+-            uint64_t value = 0;
+-            size_t digits  = 0;
+-            while (pos < response.size() && response[pos] >= '0' && response[pos] <= '9')
+-            {
+-                const uint64_t digit = static_cast<uint64_t>(response[pos] - '0');
+-                if (value > (std::numeric_limits<uint64_t>::max() - digit) / 10u)
+-                {
+-                    break;
+-                }
+-                value = (value * 10u) + digit;
+-                ++digits;
+-                ++pos;
+-            }
+-
+-            if (digits == 0)
+-            {
+-                ++i;
+-                continue;
+-            }
+-
+-            if (pos < response.size() && response[pos] == '+')
+-            {
+-                ++pos;
+-            }
+-
+-            if (pos >= response.size() || response[pos] != '}')
+-            {
+-                ++i;
+-                continue;
+-            }
+-
+-            size_t afterBrace = pos + 1u;
+-            if (afterBrace >= response.size())
+-            {
+-                break;
+-            }
+-
+-            size_t literalStartAbs = std::string_view::npos;
+-            if (response[afterBrace] == '\n')
+-            {
+-                literalStartAbs = afterBrace + 1u;
+-            }
+-            else if (response[afterBrace] == '\r' && (afterBrace + 1u) < response.size() && response[afterBrace + 1u] == '\n')
+-            {
+-                literalStartAbs = afterBrace + 2u;
+-            }
+-            else
++            ++pos;
++        }
++        if (pos >= response.size())
++        {
++            return false;
++        }
++        if (response[pos] == ')')
++        {
++            ++pos;
++            while (pos < response.size() && (response[pos] == ' ' || response[pos] == '\t'))
+             {
+-                ++i;
+-                continue;
++                ++pos;
+             }
+-
+-            if (value > static_cast<uint64_t>((std::numeric_limits<size_t>::max)()))
++            if (pos < response.size() && response[pos] == '\r')
+             {
+-                break;
++                ++pos;
++                if (pos >= response.size() || response[pos] != '\n')
++                {
++                    return false;
++                }
+             }
+-
+-            const size_t literalSize = static_cast<size_t>(value);
+-            if (literalStartAbs > response.size() || literalStartAbs + literalSize > response.size())
++            if (pos < response.size() && response[pos++] != '\n')
+             {
+-                break;
++                return false;
+             }
++            outNextPos = pos;
++            return true;
++        }
+ 
+-            if (headerStartAbs == std::string_view::npos)
++        const size_t keyStart = pos;
++        while (pos < response.size() && response[pos] != '[' && response[pos] != ' ' && response[pos] != '\t')
++        {
++            const char ch = response[pos];
++            if (static_cast<unsigned char>(ch) <= 0x20u || ch == 0x7f || ch == '(' || ch == ')' || ch == '"' || ch == '{' || ch == '}' || ch == ']')
+             {
+-                const size_t contextStart  = (bracePos > 256u) ? (bracePos - 256u) : msgStart;
+-                const std::string_view ctx = response.substr(contextStart, bracePos - contextStart);
+-                if (FindAsciiNoCase(ctx, "HEADER.FIELDS", 0) != std::string_view::npos)
+-                {
+-                    headerStartAbs = literalStartAbs;
+-                    headerEndAbs   = literalStartAbs + literalSize;
+-                    outHeaderBlock = response.substr(literalStartAbs, literalSize);
+-                }
++                return false;
+             }
+-
+-            i = literalStartAbs + literalSize;
+-            continue;
++            ++pos;
+         }
+-
+-        if (ch == '(')
++        if (pos == keyStart)
+         {
+-            ++parenDepth;
+-            ++i;
+-            continue;
++            return false;
+         }
+-
+-        if (ch == ')' && parenDepth > 0)
++        if (pos < response.size() && response[pos] == '[')
+         {
+-            --parenDepth;
+-            ++i;
+-
+-            if (parenDepth == 0)
++            ++pos;
++            while (pos < response.size() && response[pos] != ']')
+             {
+-                const size_t lineEnd = response.find('\n', i);
+-                if (lineEnd == std::string_view::npos)
++                if (response[pos] == ' ' || response[pos] == '\t')
+                 {
+-                    break;
++                    ++pos;
+                 }
+-
+-                outNextPos = lineEnd + 1u;
+-                if (headerStartAbs != std::string_view::npos && headerEndAbs != std::string_view::npos)
++                else if (! TrySkipImapValue(response, pos))
+                 {
+-                    outPrefix = response.substr(msgStart, headerStartAbs - msgStart);
+-                    outSuffix = response.substr(headerEndAbs, outNextPos - headerEndAbs);
++                    return false;
+                 }
+-                else
++            }
++            if (pos >= response.size())
++            {
++                return false;
++            }
++            ++pos;
++            if (pos < response.size() && response[pos] == '<')
++            {
++                const size_t offsetStart = ++pos;
++                while (pos < response.size() && response[pos] >= '0' && response[pos] <= '9')
++                {
++                    ++pos;
++                }
++                uint64_t offset = 0;
++                if (! TryParseImapUnsignedToken(
++                        response.substr(offsetStart, pos - offsetStart), static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()), offset) ||
++                    pos >= response.size() || response[pos++] != '>')
+                 {
+-                    outPrefix = response.substr(msgStart, outNextPos - msgStart);
++                    return false;
+                 }
+-
+-                return true;
+             }
+-            continue;
+         }
+-
+-        ++i;
++        const std::string_view key = response.substr(keyStart, pos - keyStart);
++        if (pos >= response.size() || (response[pos] != ' ' && response[pos] != '\t'))
++        {
++            return false;
++        }
++        while (pos < response.size() && (response[pos] == ' ' || response[pos] == '\t'))
++        {
++            ++pos;
++        }
++        const size_t valueStart = pos;
++        if (! TrySkipImapValue(response, pos) || (pos < response.size() && response[pos] != ' ' && response[pos] != '\t' && response[pos] != ')'))
++        {
++            return false;
++        }
++        std::string_view* field = nullptr;
++        if (EqualsAsciiIgnoreCase(key, "UID"))
++        {
++            field = &out.uid;
++        }
++        else if (EqualsAsciiIgnoreCase(key, "RFC822.SIZE"))
++        {
++            field = &out.size;
++        }
++        else if (EqualsAsciiIgnoreCase(key, "FLAGS"))
++        {
++            field = &out.flags;
++        }
++        else if (EqualsAsciiIgnoreCase(key, "INTERNALDATE"))
++        {
++            field = &out.internalDate;
++        }
++        else if (EqualsAsciiIgnoreCase(key, "ENVELOPE"))
++        {
++            field = &out.envelope;
++        }
++        else if (IsImapSummaryHeaderSection(key))
++        {
++            field = &out.headerFields;
++        }
++        if (field)
++        {
++            if (! field->empty())
++            {
++                return false; // Duplicate metadata is ambiguous, even when one value looks usable.
++            }
++            *field = response.substr(valueStart, pos - valueStart);
++        }
+     }
++    return false;
++}
+ 
+-    const size_t nextFetch = FindImapUntaggedFetchLine(response, msgStart + 1u);
+-    outNextPos             = nextFetch == std::string_view::npos ? response.size() : nextFetch;
+-
+-    if (outNextPos <= msgStart)
++[[nodiscard]] bool TryParseImapFlags(std::string_view value, ImapMessageSummary& summary) noexcept
++{
++    if (value.size() < 2u || value.front() != '(' || value.back() != ')')
+     {
+         return false;
+     }
+-
+-    if (headerStartAbs != std::string_view::npos && headerEndAbs != std::string_view::npos && headerEndAbs <= outNextPos)
+-    {
+-        outPrefix = response.substr(msgStart, headerStartAbs - msgStart);
+-        outSuffix = response.substr(headerEndAbs, outNextPos - headerEndAbs);
+-    }
+-    else
++    bool seen                    = false;
++    bool flagged                 = false;
++    bool deleted                 = false;
++    const std::string_view flags = value.substr(1u, value.size() - 2u);
++    size_t pos                   = 0;
++    while (pos < flags.size())
+     {
+-        outPrefix = response.substr(msgStart, outNextPos - msgStart);
++        SkipImapWhitespace(flags, pos);
++        if (pos == flags.size())
++        {
++            break;
++        }
++        const size_t start = pos;
++        // FLAGS contains atoms, never lists, quoted strings, or literal payloads.
++        if (flags[pos] == '(' || flags[pos] == '"' || flags[pos] == '{' || (flags[pos] == '~' && pos + 1u < flags.size() && flags[pos + 1u] == '{') ||
++            ! TrySkipImapValue(flags, pos))
++        {
++            return false;
++        }
++        const std::string_view flag = flags.substr(start, pos - start);
++        seen                        = seen || EqualsAsciiIgnoreCase(flag, "\\Seen");
++        flagged                     = flagged || EqualsAsciiIgnoreCase(flag, "\\Flagged");
++        deleted                     = deleted || EqualsAsciiIgnoreCase(flag, "\\Deleted");
+     }
+-
++    summary.seen    = seen;
++    summary.flagged = flagged;
++    summary.deleted = deleted;
+     return true;
+ }
+-
+ [[nodiscard]] HRESULT ImapFetchMessageSummaries(const ConnectionInfo& conn,
+                                                 std::wstring_view mailboxPath,
+                                                 std::span<const uint64_t> uids,
+@@ -2299,198 +2224,104 @@ struct ImapHeaderFields
+             }
+ 
+             size_t nextPos = 0;
+-            std::string_view prefix;
+-            std::string_view headerBlock;
+-            std::string_view suffix;
+-            if (! TryConsumeImapUntaggedFetchResponse(std::string_view(response), msgStart, nextPos, prefix, headerBlock, suffix))
++            ImapFetchAttributes attributes;
++            if (! TryConsumeImapUntaggedFetchResponse(response, msgStart, nextPos, attributes))
+             {
+                 ++fetchParseFailures;
+-
+-                const size_t lineEnd = response.find('\n', msgStart);
+-                parsePos             = lineEnd == std::string_view::npos ? response.size() : (lineEnd + 1u);
+-                continue;
+-            }
+-
+-            if (nextPos <= msgStart)
+-            {
+-                ++fetchParseFailures;
+-                parsePos = msgStart + 1u;
+-                continue;
++                // Framing is no longer trustworthy: a later apparent FETCH line
++                // can be literal message data. Repair missing metadata separately.
++                break;
+             }
+ 
+-            ImapMessageSummary summary{};
+-
+             uint64_t uid = 0;
+-            bool hasUid  = TryParseUintAfterKey(prefix, "UID ", uid);
+-            if (! hasUid && ! suffix.empty())
+-            {
+-                hasUid = TryParseUintAfterKey(suffix, "UID ", uid);
+-            }
+-
+-            if (! hasUid || uid == 0u)
++            if (! TryParseImapUnsignedToken(attributes.uid, (std::numeric_limits<uint32_t>::max)(), uid) || uid == 0u)
+             {
+                 ++missingUidCount;
+                 parsePos = nextPos;
+                 continue;
+             }
+-            // Unsolicited FETCH rows may name other UIDs. They do not belong to
+-            // this request's bounded summary workspace (RFC 9051 section 7.5.2).
++            // Unsolicited FETCH rows do not belong to this request's workspace.
+             if (! std::binary_search(sorted.begin() + static_cast<ptrdiff_t>(startIndex), sorted.begin() + static_cast<ptrdiff_t>(endIndex), uid))
+             {
+                 parsePos = nextPos;
+                 continue;
+             }
+-            const auto existing   = inOut.find(uid);
+-            const bool hadSummary = existing != inOut.end();
+-            if (hadSummary)
+-            {
+-                // A later FLAGS-only update must not erase immutable message metadata.
+-                summary = std::move(existing->second);
+-            }
+-            summary.uid = uid;
+ 
+-            uint64_t sizeBytes = 0u;
+-            bool hasSize       = TryParseUintAfterKey(prefix, "RFC822.SIZE ", sizeBytes);
+-            if (! hasSize && ! suffix.empty())
++            ImapMessageSummary summary{};
++            const auto existing = inOut.find(uid);
++            if (existing != inOut.end())
+             {
+-                hasSize = TryParseUintAfterKey(suffix, "RFC822.SIZE ", sizeBytes);
++                // FLAGS-only updates retain already acquired immutable metadata.
++                summary = std::move(existing->second);
+             }
+-            if (hasSize)
++            summary.uid        = uid;
++            uint64_t sizeBytes = 0;
++            if (TryParseImapUnsignedToken(attributes.size, static_cast<uint64_t>((std::numeric_limits<int64_t>::max)()), sizeBytes))
+             {
+                 summary.sizeKnown = true;
+                 summary.sizeBytes = sizeBytes;
+             }
+-
+-            // FLAGS (...)
++            if (TryParseImapFlags(attributes.flags, summary))
+             {
+-                auto parseFlags = [&summary](std::string_view text) noexcept
+-                {
+-                    const size_t flagsPos = FindAsciiNoCase(text, "FLAGS", 0);
+-                    if (flagsPos == std::string_view::npos)
+-                    {
+-                        return;
+-                    }
+-
+-                    const size_t open = text.find('(', flagsPos);
+-                    if (open == std::string_view::npos)
+-                    {
+-                        return;
+-                    }
+-
+-                    const size_t close = text.find(')', open);
+-                    if (close == std::string_view::npos || close <= open)
+-                    {
+-                        return;
+-                    }
+-
+-                    const std::string_view flagsText = text.substr(open + 1u, close - open - 1u);
+-                    summary.seen                     = false;
+-                    summary.flagged                  = false;
+-                    summary.deleted                  = false;
+-                    size_t fp                        = 0;
+-                    while (fp < flagsText.size())
+-                    {
+-                        while (fp < flagsText.size() && (flagsText[fp] == ' ' || flagsText[fp] == '\t'))
+-                        {
+-                            ++fp;
+-                        }
+-                        const size_t startTok = fp;
+-                        while (fp < flagsText.size() && flagsText[fp] != ' ' && flagsText[fp] != '\t')
+-                        {
+-                            ++fp;
+-                        }
+-                        const std::string_view tok = flagsText.substr(startTok, fp - startTok);
+-                        if (! tok.empty())
+-                        {
+-                            if (FindAsciiNoCase(tok, "\\seen", 0) == 0 && tok.size() == 5u)
+-                            {
+-                                summary.seen = true;
+-                            }
+-                            else if (FindAsciiNoCase(tok, "\\flagged", 0) == 0 && tok.size() == 8u)
+-                            {
+-                                summary.flagged = true;
+-                            }
+-                            else if (FindAsciiNoCase(tok, "\\deleted", 0) == 0 && tok.size() == 8u)
+-                            {
+-                                summary.deleted = true;
+-                            }
+-                        }
+-                    }
+-                };
+-
+-                parseFlags(prefix);
+-                if (! suffix.empty())
+-                {
+-                    parseFlags(suffix);
+-                }
++                summary.flagsKnown = true;
+             }
+ 
+-            // INTERNALDATE "..."
++            size_t datePos = 0;
++            std::string internalDate;
++            __int64 received = 0;
++            if (TryParseImapQuotedString(attributes.internalDate, datePos, internalDate) && datePos == attributes.internalDate.size() &&
++                TryParseImapInternalDateToFileTime(internalDate, received))
+             {
+-                auto parseInternalDate = [&summary](std::string_view text) noexcept
+-                {
+-                    const size_t idPos = FindAsciiNoCase(text, "INTERNALDATE", 0);
+-                    if (idPos == std::string_view::npos)
+-                    {
+-                        return;
+-                    }
+-
+-                    size_t p           = idPos;
+-                    const size_t quote = text.find('"', p);
+-                    if (quote == std::string_view::npos)
+-                    {
+-                        return;
+-                    }
+-
+-                    p = quote;
+-                    std::string internalDate;
+-                    if (TryParseImapQuotedString(text, p, internalDate))
+-                    {
+-                        static_cast<void>(TryParseImapInternalDateToFileTime(internalDate, summary.recvTime));
+-                    }
+-                };
+-
+-                parseInternalDate(prefix);
+-                if (summary.recvTime == 0 && ! suffix.empty())
+-                {
+-                    parseInternalDate(suffix);
+-                }
++                summary.internalDateKnown = true;
++                summary.recvTime          = received;
+             }
+ 
+             ImapEnvelopeFields env;
+-            bool hasEnvelope = TryExtractEnvelopeFields(prefix, env);
+-            if (! hasEnvelope && ! suffix.empty())
+-            {
+-                hasEnvelope = TryExtractEnvelopeFields(suffix, env);
+-            }
+-
+-            if (hasEnvelope)
++            if (TryExtractEnvelopeFields(attributes.envelope, env))
+             {
+-                summary.subject = DecodeRfc2047EncodedWordsToUtf16(env.subject);
+-                summary.from    = Utf16FromImapHeaderValue(env.fromAddrSpec);
+-
+-                __int64 sentTime = 0;
++                summary.headersKnown = true; // NIL/empty values are known, not missing.
++                summary.subject      = DecodeRfc2047EncodedWordsToUtf16(env.subject);
++                summary.from         = Utf16FromImapHeaderValue(env.fromAddrSpec);
++                __int64 sentTime     = 0;
+                 if (TryParseRfc5322DateToFileTime(env.date, sentTime))
+                 {
+                     summary.sentTime = sentTime;
+                 }
+             }
+-            else if (! headerBlock.empty())
++            else if (! attributes.headerFields.empty())
+             {
++                size_t headerPos = 0;
++                std::string decodedHeader;
++                std::string_view headerBlock;
++                bool hasHeader = false;
++                if (attributes.headerFields.front() == '"')
++                {
++                    hasHeader   = TryParseImapQuotedString(attributes.headerFields, headerPos, decodedHeader);
++                    headerBlock = decodedHeader;
++                }
++                else if (EqualsAsciiIgnoreCase(attributes.headerFields, "NIL"))
++                {
++                    hasHeader = true;
++                    headerPos = attributes.headerFields.size();
++                }
++                else
++                {
++                    hasHeader = TryParseImapLiteralView(attributes.headerFields, headerPos, headerBlock);
++                }
+                 ImapHeaderFields headers;
+-                if (TryExtractHeaderFields(headerBlock, headers))
++                if (hasHeader && headerPos == attributes.headerFields.size() && TryExtractHeaderFields(headerBlock, headers))
+                 {
+-                    summary.subject = DecodeRfc2047EncodedWordsToUtf16(headers.subject);
+-                    summary.from    = ExtractEmailAddressFromFromHeader(headers.from);
+-
+-                    __int64 sentTime = 0;
++                    summary.headersKnown = true;
++                    summary.subject      = DecodeRfc2047EncodedWordsToUtf16(headers.subject);
++                    summary.from         = ExtractEmailAddressFromFromHeader(headers.from);
++                    __int64 sentTime     = 0;
+                     if (TryParseRfc5322DateToFileTime(headers.date, sentTime))
+                     {
+                         summary.sentTime = sentTime;
+                     }
+                 }
+             }
+-            else if (! hadSummary)
++            if (! summary.headersKnown)
+             {
+                 ++envelopeParseFailures;
+             }
+@@ -2499,11 +2330,8 @@ struct ImapHeaderFields
+             {
+                 summary.sentTime = summary.recvTime;
+             }
+-
+             inOut.insert_or_assign(uid, std::move(summary));
+-
+             ++fetchBlocksParsed;
+-
+             parsePos = nextPos;
+         }
+         Debug::Perf::EmitDurationUs(L"filesystem.imap.summary_parse_us",
+@@ -2512,153 +2340,28 @@ struct ImapHeaderFields
+                                     static_cast<uint64_t>(fetchParseFailures + missingUidCount + envelopeParseFailures),
+                                     hr);
+ 
+-        size_t missingRequested = 0;
+-        std::array<uint64_t, 5> missingSamples{};
+-        size_t missingSampleCount = 0;
++        size_t incompleteRequested = 0;
+         for (size_t i = startIndex; i < endIndex; ++i)
+         {
+-            const uint64_t uid = sorted[i];
+-            if (inOut.find(uid) == inOut.end())
++            const auto found = inOut.find(sorted[i]);
++            if (found == inOut.end() || ! found->second.HasCompleteMetadata())
+             {
+-                ++missingRequested;
+-                if (missingSampleCount < missingSamples.size())
+-                {
+-                    missingSamples[missingSampleCount++] = uid;
+-                }
++                ++incompleteRequested;
+             }
+         }
+-
+-        if (fetchParseFailures > 0 || missingUidCount > 0 || envelopeParseFailures > 0 || missingRequested > 0)
++        if (fetchParseFailures > 0 || missingUidCount > 0 || envelopeParseFailures > 0 || incompleteRequested > 0)
+         {
+-            std::wstring missingText;
+-            if (missingSampleCount > 0)
+-            {
+-                for (size_t i = 0; i < missingSampleCount; ++i)
+-                {
+-                    if (i != 0)
+-                    {
+-                        missingText.append(L",");
+-                    }
+-                    missingText.append(std::to_wstring(missingSamples[i]));
+-                }
+-            }
+-
+-            constexpr size_t kMaxUidSetLog = 160;
+-            std::string uidSetShort(uidSetText);
+-            if (uidSetShort.size() > kMaxUidSetLog)
+-            {
+-                uidSetShort.resize(kMaxUidSetLog);
+-                uidSetShort.append("...");
+-            }
+-
+-            constexpr size_t kMaxRequestLog = 200;
+-            std::string requestShort        = requestText;
+-            if (requestShort.size() > kMaxRequestLog)
+-            {
+-                requestShort.resize(kMaxRequestLog);
+-                requestShort.append("...");
+-            }
+-
+-            std::wstring responseFirstLine;
+-            std::wstring responseFetchLines;
+-
+-            // First non-empty line (trimmed)
+-            {
+-                std::string firstLine;
+-                size_t start = 0;
+-                while (start < response.size())
+-                {
+-                    size_t end = response.find('\n', start);
+-                    if (end == std::string_view::npos)
+-                    {
+-                        end = response.size();
+-                    }
+-
+-                    std::string_view line = std::string_view(response).substr(start, end - start);
+-                    if (! line.empty() && line.back() == '\r')
+-                    {
+-                        line.remove_suffix(1);
+-                    }
+-
+-                    firstLine = TrimAscii(line);
+-                    if (! firstLine.empty())
+-                    {
+-                        break;
+-                    }
+-                    start = end + 1u;
+-                }
+-
+-                constexpr size_t kMaxLineLog = 200;
+-                if (firstLine.size() > kMaxLineLog)
+-                {
+-                    firstLine.resize(kMaxLineLog);
+-                    firstLine.append("...");
+-                }
+-
+-                responseFirstLine = Utf16FromImapHeaderValue(firstLine);
+-            }
+-
+-            // First few FETCH lines (no literal payload)
+-            {
+-                constexpr size_t kMaxFetchLines = 4;
+-                size_t scanPos                  = 0;
+-                for (size_t i = 0; i < kMaxFetchLines; ++i)
+-                {
+-                    const size_t fetchStart = FindImapUntaggedFetchLine(std::string_view(response), scanPos);
+-                    if (fetchStart == std::string_view::npos)
+-                    {
+-                        break;
+-                    }
+-
+-                    size_t fetchLineEnd = response.find('\n', fetchStart);
+-                    if (fetchLineEnd == std::string_view::npos)
+-                    {
+-                        fetchLineEnd = response.size();
+-                    }
+-
+-                    std::string_view line = std::string_view(response).substr(fetchStart, fetchLineEnd - fetchStart);
+-                    if (! line.empty() && line.back() == '\r')
+-                    {
+-                        line.remove_suffix(1);
+-                    }
+-                    line = TrimAsciiView(line);
+-
+-                    constexpr size_t kMaxFetchLineLog = 220;
+-                    std::string lineShort(line);
+-                    if (lineShort.size() > kMaxFetchLineLog)
+-                    {
+-                        lineShort.resize(kMaxFetchLineLog);
+-                        lineShort.append("...");
+-                    }
+-
+-                    if (! responseFetchLines.empty())
+-                    {
+-                        responseFetchLines.append(L" | ");
+-                    }
+-                    responseFetchLines.append(Utf16FromImapHeaderValue(lineShort));
+-
+-                    scanPos = fetchLineEnd + 1u;
+-                }
+-            }
+-
+-            Debug::Warning(L"imap summary request mailbox='{}' req='{}'", mailboxPath, Utf16FromImapHeaderValue(requestShort));
+-            Debug::Warning(L"imap summary response mailbox='{}' firstLine='{}' fetchLines='{}'",
+-                           mailboxPath,
+-                           responseFirstLine.empty() ? L"(none)" : responseFirstLine,
+-                           responseFetchLines.empty() ? L"(none)" : responseFetchLines);
+-
+-            Debug::Warning(L"imap summary parse anomalies mailbox='{}' fetchBlocks={} fetchParseFailures={} envelopeParseFailures={} missingUidInFetch={} "
+-                           L"missingRequested={} missingSample='{}' requested={} responseBytes={} uidSet='{}'",
+-                           mailboxPath,
++            // Response lines can contain email subjects, addresses and literal body
++            // data. Diagnostics retain counts only, never a response prefix/payload.
++            Debug::Warning(L"imap summary parse anomalies: fetchBlocks={} fetchParseFailures={} envelopeParseFailures={} missingUidInFetch={} "
++                           L"incompleteRequested={} requested={} responseBytes={}",
+                            fetchBlocksParsed,
+                            fetchParseFailures,
+                            envelopeParseFailures,
+                            missingUidCount,
+-                           missingRequested,
+-                           missingText.empty() ? L"(none)" : missingText,
++                           incompleteRequested,
+                            endIndex - startIndex,
+-                           response.size(),
+-                           Utf16FromUtf8(uidSetShort));
++                           response.size());
+         }
+ 
+         return S_OK;
+@@ -3535,7 +3238,8 @@ struct ImapDeleteCommandContext
+         missing.reserve(requested.size());
+         for (const uint64_t uid : requested)
+         {
+-            if (summaries.find(uid) == summaries.end())
++            const auto found = summaries.find(uid);
++            if (found == summaries.end() || ! found->second.HasCompleteMetadata())
+             {
+                 missing.push_back(uid);
+             }
+@@ -3607,7 +3311,8 @@ struct ImapDeleteCommandContext
+ 
+             for (const uint64_t uid : batch)
+             {
+-                if (summaries.find(uid) != summaries.end())
++                const auto found = summaries.find(uid);
++                if (found != summaries.end() && found->second.HasCompleteMetadata())
+                 {
+                     continue;
+                 }
+@@ -3772,7 +3477,7 @@ struct ImapDeleteCommandContext
+     {
+         entry.attributes |= kImapFileAttributeMarked;
+     }
+-    if (! meta.seen)
++    if (meta.flagsKnown && ! meta.seen)
+     {
+         entry.attributes |= kImapFileAttributeUnread;
+     }
+@@ -3912,6 +3617,8 @@ struct ImapListingFixture final : IFileSystemOperationControl
+     HRESULT oneShotControlFailure = S_OK;
+     bool controlFailureReturned   = false;
+     std::string_view sizeToken    = "17";
++    std::string_view fixedFetchResponse;
++    std::string_view firstFetchResponse;
+ 
+     HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void*) noexcept override
+     {
+@@ -3974,6 +3681,11 @@ struct ImapListingFixture final : IFileSystemOperationControl
+         {
+             return S_OK;
+         }
++        if (! fixture.fixedFetchResponse.empty() || (fixture.fetchCount == 1u && ! fixture.firstFetchResponse.empty()))
++        {
++            response.assign(fixture.fixedFetchResponse.empty() ? fixture.firstFetchResponse : fixture.fixedFetchResponse);
++            return S_OK;
++        }
+         if (fixture.unsolicitedOtherUids)
+         {
+             for (size_t uid = 1'000'000u; uid < 1'000'500u; ++uid)
+@@ -4171,6 +3883,140 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlImapListingT
+               *passed,
+               *failed);
+     }
++    // FETCH attributes can be reordered; envelope/body strings are never authority.
++    const auto envelope = [](std::string_view encodedSubject) { return std::format("ENVELOPE (NIL {} NIL NIL NIL NIL NIL NIL NIL NIL)", encodedSubject); };
++    const auto literal  = [](std::string_view text) { return std::format("{{{}}}\r\n{}", text.size(), text); };
++    const std::string normalEnvelope = envelope("\"Subject\"");
++    const std::string normalFields   = "UID 1 FLAGS (\\Seen) RFC822.SIZE 17 INTERNALDATE \"06-Sep-2026 01:00:00 +0000\"";
++    struct AttributeCase
++    {
++        std::wstring_view name;
++        std::string response;
++        std::wstring_view subject;
++        bool knownSize = true;
++        bool fallback  = false;
++    };
++    const std::vector<AttributeCase> attributeCases{
++        {L"reordered", std::format("* 1 FETCH ({} {})\r\n", normalEnvelope, normalFields), L"Subject"},
++        {L"quoted-uid", std::format("* 1 FETCH ({} {})\r\n", envelope("\"UID 999 RFC822.SIZE 888\""), normalFields), L"UID 999 RFC822.SIZE 888"},
++        {L"literal-uid", std::format("* 1 FETCH ({} {})\r\n", envelope(literal("UID 999 RFC822.SIZE 888")), normalFields), L"UID 999 RFC822.SIZE 888"},
++        {L"quoted-size",
++         std::format("* 1 FETCH (UID 1 {} FLAGS (\\Seen) RFC822.SIZE 17 INTERNALDATE \"06-Sep-2026 01:00:00 +0000\")\r\n", envelope("\"RFC822.SIZE 888\"")),
++         L"RFC822.SIZE 888"},
++        {L"quoted-flags",
++         std::format("* 1 FETCH (UID 1 {} FLAGS (\\Seen) RFC822.SIZE 17 INTERNALDATE \"06-Sep-2026 01:00:00 +0000\")\r\n", envelope("\"FLAGS (\\\\Deleted)\"")),
++         L"FLAGS (\\Deleted)"},
++        {L"prefix-uid", std::format("* 1 FETCH (X-UID 999 {} {})\r\n", normalFields, normalEnvelope), L"Subject"},
++        {L"nested-attributes", std::format("* 1 FETCH (X-DETAILS (UID 999 RFC822.SIZE 888) {} {})\r\n", normalFields, normalEnvelope), L"Subject"},
++        {L"duplicate-uid", std::format("* 1 FETCH ({} {} UID 2)\r\n", normalFields, normalEnvelope), {}, false, true},
++        {L"duplicate-size", std::format("* 1 FETCH ({} {} RFC822.SIZE 99)\r\n", normalFields, normalEnvelope), {}, false, true},
++        {L"truncated-record", std::format("* 1 FETCH ({} {}\r\n", normalFields, normalEnvelope), {}, false, true},
++        {L"opaque-body", std::format("* 1 FETCH ({} BODY[] {})\r\n", normalFields, literal(envelope("\"Forged\""))), {}},
++        {L"header-literal",
++         std::format("* 1 FETCH (BODY[HEADER.FIELDS (SUBJECT FROM DATE)] {} {})\r\n",
++                     literal("Subject: Header subject\r\nFrom: sender@example.test\r\n\r\n"),
++                     normalFields),
++         L"Header subject"},
++        {L"escaped-subject", std::format("* 1 FETCH ({} {})\r\n", envelope("\"A \\\"quoted\\\" (subject)\""), normalFields), L"A \"quoted\" (subject)"},
++        {L"empty-envelope", std::format("* 1 FETCH ({} {})\r\n", normalFields, envelope("NIL")), {}},
++        {L"opaque-literal-fetch",
++         std::format("* 1 FETCH ({} BODY[] {} {})\r\n", normalFields, literal("* 1 FETCH (UID 999 RFC822.SIZE 888)\r\n"), normalEnvelope),
++         L"Subject"},
++        {L"false-header-context",
++         std::format("* 1 FETCH (X-DETAILS \"HEADER.FIELDS\" BODY[] {} {})\r\n", literal("Subject: Forged\r\n\r\n"), normalFields),
++         {}},
++        {L"partial-header-fields", std::format("* 1 FETCH (BODY[HEADER.FIELDS (SUBJECT)] {} {})\r\n", literal("Subject: Forged\r\n\r\n"), normalFields), {}},
++        {L"partial-header-offset",
++         std::format("* 1 FETCH (BODY[HEADER.FIELDS (SUBJECT FROM DATE)]<0> {} {})\r\n", literal("Subject: Forged\r\n\r\n"), normalFields),
++         {}},
++        {L"duplicate-flags", std::format("* 1 FETCH ({} {} FLAGS (\\Deleted))\r\n", normalFields, normalEnvelope), {}, false, true},
++        {L"duplicate-envelope", std::format("* 1 FETCH ({} {} {})\r\n", normalFields, normalEnvelope, envelope("\"Forged\"")), {}, false, true},
++        {L"literal-length-overflow",
++         std::format("* 1 FETCH (BODY[] {{18446744073709551615}}\r\n* 1 FETCH ({} {})\r\n", normalFields, normalEnvelope),
++         {},
++         false,
++         true},
++        {L"literal-truncated", std::format("* 1 FETCH (BODY[] {{99999}}\r\n* 1 FETCH ({} {})\r\n", normalFields, normalEnvelope), {}, false, true},
++        {L"quote-newline", std::format("* 1 FETCH ({} {})\r\n", normalFields, envelope("\"broken\r\nsubject\"")), {}, false, true},
++        {L"fetch-prefix", std::format("* 1 FETCHX (UID 999 RFC822.SIZE 888)\r\n* 1 FETCH ({} {})\r\n", normalFields, normalEnvelope), L"Subject"},
++        {L"empty-header-literal", std::format("* 1 FETCH (BODY[HEADER.FIELDS (SUBJECT FROM DATE)] {} {})\r\n", literal(""), normalFields), {}},
++        {L"unavailable-flags", std::format("* 1 FETCH (UID 1 RFC822.SIZE 17 INTERNALDATE \"06-Sep-2026 01:00:00 +0000\" {})\r\n", normalEnvelope), L"Subject"},
++    };
++    for (const auto& scenario : attributeCases)
++    {
++        ImapListingFixture fixture{};
++        fixture.messageCount       = 1u;
++        fixture.fixedFetchResponse = scenario.response;
++        std::vector<FilesInformationCurl::Entry> entries;
++        uint64_t peak    = 0u;
++        const HRESULT hr = runListing(fixture, std::format(L"attributes-{}", scenario.name), entries, peak);
++        check(hr == S_OK && entries.size() == 1u, L"attribute fixture retains the requested message", *passed, *failed);
++        const std::wstring expectedName = scenario.fallback ? L"message [777-1].eml" : BuildImapMessageLeafName(scenario.subject, {}, 777u, 1u);
++        check(entries.size() == 1u && entries[0].fileIndex == 1u && entries[0].name == expectedName,
++              L"only top-level attributes establish UID and envelope metadata",
++              *passed,
++              *failed);
++        check(entries.size() == 1u && entries[0].sizeKnown == scenario.knownSize && (! scenario.knownSize || entries[0].sizeBytes == 17u),
++              L"opaque text and malformed records never invent size proof",
++              *passed,
++              *failed);
++        check(entries.size() == 1u && (entries[0].attributes & (kImapFileAttributeMarked | kImapFileAttributeUnread | kImapFileAttributeDeleted)) == 0u,
++              L"only the declared FLAGS attribute controls message flags",
++              *passed,
++              *failed);
++    }
++    const std::vector<std::string> incompleteResponses{
++        "* 1 FETCH (UID 1 FLAGS (\\Seen))\r\n",
++        std::format("* 1 FETCH (UID 1 FLAGS (\\Seen) INTERNALDATE \"06-Sep-2026 01:00:00 +0000\" {})\r\n", normalEnvelope),
++        std::format("* 1 FETCH ({} )\r\n", normalFields),
++        std::format("* 1 FETCH (UID 1 RFC822.SIZE 17 INTERNALDATE \"06-Sep-2026 01:00:00 +0000\" {})\r\n", normalEnvelope),
++        std::format("* 1 FETCH (UID 1 FLAGS (\\Seen) RFC822.SIZE 17 INTERNALDATE \"invalid\" {})\r\n", normalEnvelope),
++        std::format("* 1 FETCH ({} {})\r\n", normalFields, envelope("bare-atom")),
++    };
++    for (size_t index = 0u; index < incompleteResponses.size(); ++index)
++    {
++        ImapListingFixture fixture{};
++        fixture.messageCount       = 1u;
++        fixture.firstFetchResponse = incompleteResponses[index];
++        std::vector<FilesInformationCurl::Entry> entries;
++        uint64_t peak    = 0u;
++        const HRESULT hr = runListing(fixture, std::format(L"incomplete-summary-{}", index), entries, peak);
++        check(hr == S_OK && entries.size() == 1u, L"incomplete summary repair retains exactly one message", *passed, *failed);
++        check(entries.size() == 1u && entries[0].sizeKnown && entries[0].sizeBytes == 17u && entries[0].changeTime != 0,
++              L"repair acquires missing size and timestamp",
++              *passed,
++              *failed);
++        check(
++            entries.size() == 1u && entries[0].name == L"Subject [777-1].eml", L"repair acquires missing envelope without changing identity", *passed, *failed);
++        check(fixture.fetchCount == 2u && peak == 1u, L"one bounded repair completes a partial summary", *passed, *failed);
++    }
++    struct NumberCase
++    {
++        std::string_view token;
++        uint64_t maximum;
++        bool valid;
++        uint64_t value = 0u;
++    };
++    constexpr uint64_t uidMax  = (std::numeric_limits<uint32_t>::max)();
++    constexpr uint64_t sizeMax = static_cast<uint64_t>((std::numeric_limits<int64_t>::max)());
++    constexpr std::array numberCases{
++        NumberCase{"4294967295", uidMax, true, uidMax},
++        NumberCase{"4294967296", uidMax, false},
++        NumberCase{"-1", uidMax, false},
++        NumberCase{"+1", uidMax, false},
++        NumberCase{"0", sizeMax, true},
++        NumberCase{"9223372036854775807", sizeMax, true, sizeMax},
++        NumberCase{"9223372036854775808", sizeMax, false},
++        NumberCase{"18446744073709551615", sizeMax, false},
++        NumberCase{"17tail", sizeMax, false},
++        NumberCase{"", sizeMax, false},
++    };
++    for (const auto& scenario : numberCases)
++    {
++        uint64_t value   = 123u;
++        const bool valid = TryParseImapUnsignedToken(scenario.token, scenario.maximum, value);
++        check(valid == scenario.valid && value == scenario.value, L"IMAP numbers require the complete protocol-range token", *passed, *failed);
++    }
+     return *failed == 0u ? S_OK : E_FAIL;
+ }
+ #endif
+@@ -4585,13 +4431,25 @@ HRESULT STDMETHODCALLTYPE FileSystemCurl::GetItemProperties(const wchar_t* path,
+                                 if (it != summaries.end())
+                                 {
+                                     const FileSystemCurlInternal::ImapMessageSummary& s = it->second;
+-                                    addField(imap, "subject", FileSystemCurlInternal::Utf8FromUtf16(s.subject));
+-                                    addField(imap, "from", FileSystemCurlInternal::Utf8FromUtf16(s.from));
+-                                    addField(imap, "sentTime", std::format("{}", s.sentTime));
+-                                    addField(imap, "recvTime", std::format("{}", s.recvTime));
+-                                    addField(imap, "seen", s.seen ? "true" : "false");
+-                                    addField(imap, "flagged", s.flagged ? "true" : "false");
+-                                    addField(imap, "deleted", s.deleted ? "true" : "false");
++                                    if (s.headersKnown)
++                                    {
++                                        addField(imap, "subject", FileSystemCurlInternal::Utf8FromUtf16(s.subject));
++                                        addField(imap, "from", FileSystemCurlInternal::Utf8FromUtf16(s.from));
++                                    }
++                                    if (s.sentTime != 0)
++                                    {
++                                        addField(imap, "sentTime", std::format("{}", s.sentTime));
++                                    }
++                                    if (s.recvTime != 0)
++                                    {
++                                        addField(imap, "recvTime", std::format("{}", s.recvTime));
++                                    }
++                                    if (s.flagsKnown)
++                                    {
++                                        addField(imap, "seen", s.seen ? "true" : "false");
++                                        addField(imap, "flagged", s.flagged ? "true" : "false");
++                                        addField(imap, "deleted", s.deleted ? "true" : "false");
++                                    }
+                                     if (s.sizeKnown)
+                                     {
+                                         addField(imap, "sizeBytes", std::format("{}", s.sizeBytes));
+diff --git a/Plugins/FileSystemCurl/FileSystemCurl.ImapHelpers.h b/Plugins/FileSystemCurl/FileSystemCurl.ImapHelpers.h
+index fc659aea..918f1c76 100644
+--- a/Plugins/FileSystemCurl/FileSystemCurl.ImapHelpers.h
++++ b/Plugins/FileSystemCurl/FileSystemCurl.ImapHelpers.h
+@@ -11,16 +11,24 @@ namespace FileSystemCurlInternal
+ {
+ struct ImapMessageSummary
+ {
+-    uint64_t uid       = 0;
+-    uint64_t sizeBytes = 0;
+-    bool sizeKnown     = false;
+-    bool flagged       = false;
+-    bool seen          = false;
+-    bool deleted       = false;
+-    __int64 sentTime   = 0;
+-    __int64 recvTime   = 0;
++    uint64_t uid           = 0;
++    uint64_t sizeBytes     = 0;
++    bool sizeKnown         = false;
++    bool flagsKnown        = false;
++    bool internalDateKnown = false;
++    bool headersKnown      = false;
++    bool flagged           = false;
++    bool seen              = false;
++    bool deleted           = false;
++    __int64 sentTime       = 0;
++    __int64 recvTime       = 0;
+     std::wstring subject;
+     std::wstring from;
++
++    [[nodiscard]] bool HasCompleteMetadata() const noexcept
++    {
++        return sizeKnown && flagsKnown && internalDateKnown && headersKnown;
++    }
+ };
+ 
+ struct ImapMailboxStatus
+diff --git a/Plugins/FileSystemCurl/FileSystemCurl.Internal.h b/Plugins/FileSystemCurl/FileSystemCurl.Internal.h
+index 3b28622d..0bcd042b 100644
+--- a/Plugins/FileSystemCurl/FileSystemCurl.Internal.h
++++ b/Plugins/FileSystemCurl/FileSystemCurl.Internal.h
+@@ -372,6 +372,7 @@ void ShutdownSharedCopyMoveJobScheduler() noexcept;
+ 
+ [[nodiscard]] std::string EscapeUrlPath(std::wstring_view path) noexcept;
+ [[nodiscard]] std::string TrimAscii(std::string_view text) noexcept;
++[[nodiscard]] bool EqualsAsciiIgnoreCase(std::string_view left, std::string_view right) noexcept;
+ 
+ [[nodiscard]] inline bool IsDotOrDotDotName(std::wstring_view name) noexcept
+ {
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp
+index e7c93c11..d88416f3 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp
+@@ -8088,7 +8088,7 @@ case SelfTestState::Step::C0_CurlImapListingTruth:
+     }
+     state.c0CurlWorker.join();
+     state.c0CurlModule.reset();
+-    const unsigned int expectedChecks = imapListing       ? 70u
++    const unsigned int expectedChecks = imapListing       ? 208u
+                                         : entryLookup     ? 294u
+                                         : copyTraversal   ? 142u
+                                         : movePreflight   ? 247u
+diff --git a/Specs/Core/Core_SharedHelpers.md b/Specs/Core/Core_SharedHelpers.md
+index f2e36b49..e39bc5de 100644
+--- a/Specs/Core/Core_SharedHelpers.md
++++ b/Specs/Core/Core_SharedHelpers.md
+@@ -94,6 +94,7 @@ and, when semantics truly match, extraction into the canonical catalog above.
+ 
+ | Concern | Deliberate local owner | Required boundary and reason |
+ |---|---|---|
++| IMAP FETCH attribute framing | `TryConsumeImapUntaggedFetchResponse` and the borrowed quoted/literal/list helpers in `Plugins/FileSystemCurl/FileSystemCurl.Imap.cpp` | IMAP byte-counted literals and nested wire values differ from FTP rows, shell strings and argv parsing. The summary parser shares these iterative, constant-stack helpers with envelope decoding, reuses the provider's `EqualsAsciiIgnoreCase`, and accepts metadata only from complete top-level attributes. Do not restore substring extraction or copy opaque payloads for framing. Literal offsets use remaining-byte bounds; malformed framing stops that response without resynchronizing into message data. The listing fixture covers malformed, reordered, nested, quoted/literal and partial-summary cases; the IMAP spec owns the grammar and fallback contract. |
+ | FTP/SFTP namespace command operands | `FileSystemCurlInternal::RemotePathForCommand` in `Plugins/FileSystemCurl/FileSystemCurl.Shared.cpp` | All native namespace commands share literal-path joining and canonical strict UTF conversion. FTP control-line operands and libcurl SFTP quoted operands differ from URLs, shell strings, and Windows argv; reject CR/LF/NUL and invalid Unicode, preserve percent sequences, and never reuse URL escaping or a generic process-argument helper. |
+ | Native FTP/SSH incremental listing cursor | `FileSystemCurlInternal::CurlDirectoryCursor` in `Plugins/FileSystemCurl/FileSystemCurl.Internal.h` / `.Shared.cpp` | Native Copy/merge, Delete, Move source-commitment preflight, and directory-size traversal (including its root lookup) reuse this worker-owned, bounded libcurl multi/pause cursor instead of the buffered FolderView listing facade. It shares the provider's Unix/DOS parsers, pool, operation control, and watchdog policy, but deliberately rejects ambiguous/malformed rows and never replays emitted entries. FTP/SSH transport framing and borrowed-handle lifetime differ from cloud continuation paging and Local directory handles; do not move this transport owner into `Common` or duplicate it in another Curl walker. |
+ | Curl size progress/transport cancellation | `CurlDirectorySizeControl` in `Plugins/FileSystemCurl/FileSystemCurl.DirectoryOps.cpp` | This synchronous raw-vtable adapter borrows the size result/callback/cookie and feeds existing Curl operation control. It owns 100-entry/200-ms coalescing, progress-before-cancel order, and sticky callback failure without concurrent or post-return callbacks. Size counters and final-total reporting differ from mutation progress; do not duplicate it in a Curl protocol-specific size walker. |
+diff --git a/Specs/FileSystem/FileSystem_Imap.md b/Specs/FileSystem/FileSystem_Imap.md
+index 8c366560..b6dc5aa0 100644
+--- a/Specs/FileSystem/FileSystem_Imap.md
++++ b/Specs/FileSystem/FileSystem_Imap.md
+@@ -86,9 +86,10 @@ size/callback repair.
+   - The final bracketed suffix is the stable operation key: mailbox path plus UIDVALIDITY plus UID identify the message. Subjects are display text only and are never used for message identity.
+ - Directory enumeration retrieves message metadata using:
+   - `UID FETCH <uid-set> (UID FLAGS INTERNALDATE RFC822.SIZE ENVELOPE)`
+-- When a bulk summary fetch has a recoverable metadata failure or omits requested UIDs, directory enumeration retries missing summaries in bounded smaller UID batches and then single UID fetches before falling back to `message [<uidValidity>-<uid>].eml`, unknown size, or unavailable timestamps. Cancellation, operation-control failure and expired request/operation deadlines stop the listing immediately, without further repair requests or publication of partial entries as a successful listing. A request-local latch preserves the first operation-control failure; it is not reconstructed by invoking the callback again.
++- When a bulk summary fetch has a recoverable metadata failure, omits requested UIDs, or leaves required metadata incomplete, directory enumeration repairs those summaries in bounded smaller UID batches and then single UID fetches before falling back to `message [<uidValidity>-<uid>].eml`, unknown size, or unavailable timestamps. Completeness requires known size, flags, valid internal date and parsed envelope (or a complete root `BODY[HEADER.FIELDS (SUBJECT FROM DATE)]` response); valid NIL/empty envelope values are known empty, not missing. Cancellation, operation-control failure and expired request/operation deadlines stop the listing immediately, without further repair requests or publication of partial entries as a successful listing. A request-local latch preserves the first operation-control failure; it is not reconstructed by invoking the callback again.
+ - Summary workspace is reused for each group of at most 200 requested UIDs, then converted to pane entries in descending UID order. Unsolicited FETCH rows for UIDs outside the current request are ignored; FLAGS-only updates for a requested UID replace flags without erasing already acquired size, subject or timestamps. This bounds summary-map entry count, not raw response bytes, mailbox/UID vectors, output entries or opaque transport memory.
+-- Missing, malformed, overflowing or signed `RFC822.SIZE` values remain unknown in both directory listings and targeted lookups. Only a complete valid unsigned token establishes size; explicit `0` is a known empty message. Unknown sizes cannot be used as zero-byte completion or source-stability proof.
++- FETCH metadata comes only from complete top-level attributes, independently of order and ASCII case. Quoted/literal message text, nested extension values and opaque BODY payloads cannot establish UID, size, flags or envelope fields. Duplicate recognized metadata and malformed/truncated framing cannot establish a summary. A framing failure stops parsing that response: apparent subsequent FETCH lines might be literal message text, so missing metadata is repaired through a separate bounded request.
++- Missing, malformed, overflowing or signed `RFC822.SIZE` values remain unknown in both directory listings and targeted lookups. Only a complete valid unsigned token within the RFC 9051 unsigned-63-bit range establishes size; explicit `0` is a known empty message. UID and message sequence numbers must be nonzero unsigned-32-bit values. Literal lengths use checked protocol-range parsing and remaining-byte subtraction before offset addition. Framing is iterative with constant stack storage and borrowed payload views; this does not bound the already buffered response itself. Unknown sizes cannot be used as zero-byte completion or source-stability proof.
+ - Legacy UID-only names such as `<uid>.eml` and `<subject> [<uid>].eml` are parseable only for compatibility diagnostics; version-sensitive fetch/delete operations reject them. Refresh the mailbox to obtain an epoch-qualified identity.
+ - Ambiguous names such as `Quarterly report 12345.eml` are not valid IMAP message keys.
+ - Before opening a message, the plugin re-reads mailbox STATUS UIDVALIDITY. A missing epoch fails closed; a changed epoch returns `ERROR_REVISION_MISMATCH` so the stale path cannot fetch a different message with a reused UID. Only then does `UID FETCH <uid> BODY.PEEK[]` expose the RFC822 content as a read-only file.
+@@ -110,10 +111,15 @@ The IMAP plugin populates `FileInfo` fields for message entries as follows:
+ 
+ #### Properties metadata
+ 
++Unavailable or malformed FLAGS do not imply unread, marked or deleted. Listing
++repair attempts to obtain them within the same metadata budget; after exhaustion,
++those attributes remain unavailable rather than being fabricated.
++
+ - `GetItemProperties` exposes general item data, remote/display paths, connection metadata, and IMAP metadata when available.
+ - Mailbox directories commonly do not have meaningful filesystem timestamps; unavailable timestamp fields MUST be omitted rather than shown as `0`.
+ - Message properties may include sent time, received/internal time, flags, UID, UIDVALIDITY-qualified path identity, sender, subject, and size. Standard timestamp fields are included only when non-zero.
+ - Message size metadata is omitted when its value is unknown; no missing size is synthesized as zero.
++- Unknown flags and unavailable subject/from metadata are omitted, as are zero/unavailable IMAP timestamp fields. A successfully parsed empty envelope may still expose empty subject/from values.
+ - Message properties MUST fetch metadata for the selected UID only; they must not enumerate and summarize the full mailbox just to show one message's Properties.
+ - Mailbox folder properties include the plugin mailbox path, server mailbox path, hierarchy delimiter, root/mailbox identity, connection metadata, and `STATUS` counts (`MESSAGES`, `RECENT`, `UIDNEXT`, `UIDVALIDITY`, `UNSEEN`) when the server provides them.
+ - Passwords and raw secrets are never emitted in properties; boolean presence fields such as `hasPassword` are sufficient.
+@@ -153,7 +159,7 @@ The IMAP implementation emits these metric names when diagnostics or perf JSONL
+ 
+ Message Properties performance is protected by a command-count contract: opening Properties for one message must stay constant with respect to mailbox size. The selected UID path uses targeted UID metadata fetches rather than a full mailbox summary refetch.
+ 
+-Mailbox listing summary repair is bounded per listing. The repair path may batch missing UID summaries first and then fall back to singleton fetches, but it MUST cap repair fetch attempts with a per-listing budget, log one warning when the budget is exhausted, and proceed with any summaries already recovered instead of issuing unbounded singleton fetches against flaky servers. Stop/control failures are not recoverable metadata failures and do not consume this fallback. The connection-owned `C0_CurlImapListingTruth` fixture exercises the real parser/repair owner with 1/201/4,097 messages, unknown sizes, unsolicited updates and stop failures. It is not live transport or TLS proof.
++Mailbox listing summary repair is bounded per listing. The repair path may batch missing or incomplete summaries first and then fall back to singleton fetches, but it MUST cap repair fetch attempts with a per-listing budget, log one warning when the budget is exhausted, and proceed with any summaries already recovered instead of issuing unbounded singleton fetches against flaky servers. Stop/control failures are not recoverable metadata failures and do not consume this fallback. Parse-anomaly diagnostics retain counts, not raw response prefixes, subjects, addresses or literal payloads. The connection-owned `C0_CurlImapListingTruth` fixture exercises the real parser/repair owner with 1/201/4,097 messages, unknown sizes, unsolicited updates, structural attributes, incomplete metadata and stop failures. It is not live transport or TLS proof.
+ 
+ UIDVALIDITY/UIDPLUS security validation has a constant command-count contract independent of mailbox size: one
+ STATUS command per mailbox listing or message fetch/delete, plus one CAPABILITY command per delete. STATUS latency is
+diff --git a/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md b/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md
+index 17eb58d4..9f09cf40 100644
+--- a/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md
++++ b/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md
+@@ -264,6 +264,29 @@ remain open. No C0 gate is claimed closed. Post-test plan/consistency/archive ed
+ do not claim another runtime result; a subsequent source/test/tool change needs a
+ new compatible receipt. Continue committing coherent steps; the four extras stay HOLD.
+ 
++Continuation at `f5858fbe`: the existing listing fixture now adds 64 assertions
++(134 total) before the parser repair. Thirteen response-shape cases cover reordered,
++quoted/literal/nested/prefix attributes, duplicate UID/size, truncated framing,
++opaque body data, real header literals and escaped subjects. Three partial-summary
++cases require exactly one successful repair, rather than accepting an incomplete
++record merely because its UID exists. The existing per-scenario metrics capture
++request count, map peak and duration. Next: archive the Debug red baseline, replace
++substring attribute discovery with bounded structural parsing in the existing owner,
++repair incomplete summaries within the current budget, then qualify and commit.
++
++That Debug baseline is now archived under
++`2026-09-06_c0_imap_listing_attributes_baseline_debug`: 110/134 pass and 24 fail,
++with clean test completion and zero build warnings/errors. Receipt
++`d7ed1766deae1596153c685b1985a307bdc72fc2b630a5330c34790d3f9c726d`
++binds snapshot `39cac13589c038ea41b93e2be271f3dcd77f360faa4e2934af117c11497af5d9`.
++The candidate replaces substring extraction with iterative borrowed-value framing,
++tracks complete metadata rather than map membership, preserves unavailable flags,
++and removes response-text logging. It adds 74 controls (208 total), including
++literal-overflow/truncation/no-resynchronization, empty metadata and numeric limits.
++These changes are not qualified yet: next run full test-enabled Debug/Release
++builds, focused IMAP, helper tests, broad C0 and source/resource policy, archive
++their exact evidence and commit. All baseline processes are terminal.
++
+ 1. Address the O(files) native Move commitment map next.
+    `PreflightDirectorySourceSizes` in
+    `Plugins/FileSystemCurl/FileSystemCurl.CopyMove.cpp` inserts every source path
+diff --git a/Specs/Testing/Testing_PerformanceValidation.md b/Specs/Testing/Testing_PerformanceValidation.md
+index bcc33c3d..c53abb03 100644
+--- a/Specs/Testing/Testing_PerformanceValidation.md
++++ b/Specs/Testing/Testing_PerformanceValidation.md
+@@ -47,7 +47,7 @@ envelope-build and confirmation/admission latency rows. `fileops.plan.source_cou
+ top-level plan, contain no provider paths, and must not become per-item or per-descendant emissions.
+ 
+ `C0_CurlImapListingTruth` exercises the production IMAP mailbox, UID, summary and
+-repair orchestration with a synchronous, connection-owned request fixture. Its 70
++repair orchestration with a synchronous, connection-owned request fixture. Its 208
+ checks require cancellation at bulk/repair/later-chunk boundaries to stop further
+ requests and publish no successful listing, preserve unknown versus explicit-zero
+ sizes in listing and targeted lookup, retain bounded ordinary metadata repair,
+@@ -56,6 +56,15 @@ Deadline and one-shot callback failures remain failures rather than metadata rep
+ unsolicited unrelated UIDs cannot grow the map, and FLAGS-only updates preserve
+ previously fetched immutable metadata. Overflowing/signed sizes remain unknown.
+ The pre-repair 38-check baseline is retained separately from the expanded candidate.
++The subsequent attribute-parser checkpoint retains those 70 checks and adds 64:
++thirteen quoted/literal/reordered/malformed FETCH shapes and three partial-summary
++repair scenarios. Message text must never establish UID, size or flags. Preserve
++its separate failing baseline; a green earlier numeric-token check does not qualify
++structural parsing. The structural-parser candidate adds 74 more assertions:
++thirteen further four-check shapes (including truncated/overflowing literals,
++embedded fake FETCH lines, partial header fields, valid empty headers and unknown
++flags), three four-check incomplete-summary repairs, and ten numeric-range controls.
++Existing fixture metrics retain request count and workspace peak.
+ `filesystem.imap.summary_workspace_peak_entries` records that map high-water mark;
+ `FileOps.Curl.Imap.ListingFixture` records duration, summary request count and peak
+ summary count for each scenario. These counts do not include buffered wire responses,

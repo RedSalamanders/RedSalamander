@@ -57,6 +57,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Prepare required MSVC 14.52 tools
+        uses: ./.github/actions/setup-msvc
+        with:
+          platform: ARM64
+
       - name: Require a native ARM64 host and Python
         id: host
         shell: pwsh
@@ -464,7 +469,7 @@ jobs:
 
       - name: Upload native crash evidence
         if: ${{ failure() }}
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ghostty-native-arm64-crash-${{ github.run_id }}
           path: ${{ runner.temp }}/ghostty-native-crash
@@ -558,7 +563,7 @@ jobs:
           Get-Content -LiteralPath $reportPath -Raw
 
       - name: Upload native qualification evidence
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: ghostty-native-arm64-${{ env.RS_CANDIDATE_COMMIT }}
           path: |

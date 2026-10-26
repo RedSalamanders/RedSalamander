@@ -1,0 +1,15 @@
+{
+  "commit": "6d2fcb04f85fb425fd9d83f2125af963341025e0",
+  "source_snapshot_id": "d207a07fae17a201c04b87fccb587f382939ed9ed211f4dbe2dddd4a48eb5f0f",
+  "receipt_id": "3e6b4068d6cfa867ec22b996e583bf298e41df53a21c747abb93ff90ce1551a5",
+  "configuration": "Release",
+  "platform": "x64",
+  "suite": "FileOps",
+  "filter": "FileOpsFamily_DecisionMirror",
+  "run_id": "20261018T200456Z-26568-eb065bfbd45d4951a427f6dd01ec6c51",
+  "exit_code": 0,
+  "passed": 9,
+  "failed": 0,
+  "skipped": 0,
+  "raw_archive": "Z:\\RedSalamander.Perf\\evidence\\affected-master-release-2026-10-18\\20261018T200456Z-26568-eb065bfbd45d4951a427f6dd01ec6c51"
+}

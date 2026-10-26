@@ -1,0 +1,5 @@
+mode=collapsed-expand
+processId=106288
+exitCode=0
+elapsedMs=4637
+completed=true

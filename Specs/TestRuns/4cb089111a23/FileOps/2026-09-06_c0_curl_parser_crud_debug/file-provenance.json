@@ -1,0 +1,44 @@
+[
+  {
+    "name": "results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-crud-debug-20260906\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "bytes": 869,
+    "sha256": "a9d8cc35a6597b316c7adb5c0cdc02c4d9623edb67b8b784477e3909630d6598",
+    "transform": "none"
+  },
+  {
+    "name": "trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-crud-debug-20260906\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "bytes": 5250,
+    "sha256": "2e4a4a68e6590536c123211c2b69672615a29fa6f74700862f6126521a7dec5a",
+    "transform": "none"
+  },
+  {
+    "name": "root-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-crud-debug-20260906\\artifacts\\selftest\\last_run\\results.json",
+    "bytes": 1419,
+    "sha256": "37b2e654bef3eef067d9b6059416097d6fac8ca23935ddfc0d9cd88c6f3a6d3a",
+    "transform": "none"
+  },
+  {
+    "name": "suite-trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-crud-debug-20260906\\artifacts\\selftest\\last_run\\trace.txt",
+    "bytes": 19736,
+    "sha256": "2a9ece1b2885d38a70112ae33ae0296a9618107ce45f18324e315eaa544c49ad",
+    "transform": "none"
+  },
+  {
+    "name": "run-all-tests-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-crud-debug-20260906\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "bytes": 47331,
+    "sha256": "6c8e41b9949ea17b8f44f65c3f04af0442406904fa31a93b54f8dffbe80810db",
+    "transform": "none"
+  },
+  {
+    "name": "entry-fingerprints.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-parser-crud-debug-20260906\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+    "bytes": 1694,
+    "sha256": "968784116984e2d95de1dfde013e0f98c4dbeb610c9c1970089bfbe26e5b1b65",
+    "transform": "none"
+  }
+]

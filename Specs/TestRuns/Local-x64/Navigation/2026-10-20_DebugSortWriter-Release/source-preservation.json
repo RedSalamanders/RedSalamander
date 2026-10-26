@@ -1,0 +1,102 @@
+{
+  "verified_utc": "2026-10-20T22:54:35.7470959Z",
+  "status": "passed",
+  "protected_inputs": [
+    {
+      "path": "Common/NaturalSort.h",
+      "sha256": "46BBFEB89E08027F5E2A07689547B5765E7DE9A0C60523A7FD314C13C13BAE52",
+      "unchanged": true,
+      "all_three_checkouts_match": true
+    },
+    {
+      "path": "Common/HandleIo.h",
+      "sha256": "95EA0608C99D515B7DC26536F0B05144967504EC280EEEE10D6765B01CF2FE03",
+      "unchanged": true,
+      "all_three_checkouts_match": true
+    },
+    {
+      "path": "RedSalamander/FolderViewSortPolicy.h",
+      "sha256": "318F6FE32C6848803A9421522C009587A3BA0730FA9610CD29EA7CE7F97BA2C5",
+      "unchanged": true,
+      "all_three_checkouts_match": true
+    },
+    {
+      "path": "RedSalamander/FolderView.Enumeration.cpp",
+      "sha256": "945963641442274D65D99F47E45DFE824CBA104550A464DA690684F4752B231A",
+      "unchanged": true,
+      "all_three_checkouts_match": true
+    },
+    {
+      "path": "RedSalamander/FolderView.Layout.cpp",
+      "sha256": "9143B6E664B7EBE7042F94D3D8442D840D342251566B3F762619666DDB3C2286",
+      "unchanged": true,
+      "all_three_checkouts_match": true
+    },
+    {
+      "path": "RedSalamander/FolderView.Rendering.cpp",
+      "sha256": "3115F3440DDBCDD98F1946919860A16284453C38F2E6BBD999BC666B9DEA3A37",
+      "unchanged": true,
+      "all_three_checkouts_match": true
+    },
+    {
+      "path": "RedSalamander/FolderView.cpp",
+      "sha256": "BD2F6053228FEE6C6A45402D58DB446D0145AE29DBA4B0438CDAA7845E045CBC",
+      "unchanged": true,
+      "all_three_checkouts_match": true
+    },
+    {
+      "path": "RedSalamander/FolderView.h",
+      "sha256": "92FB920F5A9E936C9B7CF1F8DED84BDF11135EFF09BFD7BE5EF240D5C50EB93E",
+      "unchanged": true,
+      "all_three_checkouts_match": true
+    },
+    {
+      "path": "Directory.Build.props",
+      "sha256": "1C6EC004C5AFDB0A5333AC736958A752425CE3CA6A31CA5881317A0468EF7F98",
+      "unchanged": true,
+      "all_three_checkouts_match": true
+    },
+    {
+      "path": "Directory.Build.targets",
+      "sha256": "3247A8B1B42C02F1EC77288B49C43FDBE2C53F7E65040B22FE7148403F1F77F5",
+      "unchanged": true,
+      "all_three_checkouts_match": true
+    },
+    {
+      "path": "Dependencies/DxUi.lock.json",
+      "sha256": "4E624F7ABFE0F9458245234FBDAAF053794368F25EBFE9155A665DA4E717556A",
+      "unchanged": true,
+      "all_three_checkouts_match": true
+    }
+  ],
+  "compiled_inputs": [
+    {
+      "path": "Common/Common/PerfJsonl.cpp",
+      "sha256": "BE88BCDE6B53EBAE90A0DBF6A56C85708380F27D75B6D648EEDBD45B707490EF",
+      "main_matches_candidate": true,
+      "baseline_matches": false
+    },
+    {
+      "path": "Common/Common.Tests.PerfJsonl.h",
+      "sha256": "C9C6A7ED222E4A1B5A518780FADDD353B195BF2E293E2839443FC6F06F8BC4BB",
+      "main_matches_candidate": true,
+      "baseline_matches": true
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp",
+      "sha256": "1E4FAE0C95F0D464D7B3FB2D18A03F5BF9F8D117BA69E31E8B658772FBED8CA3",
+      "main_matches_candidate": true,
+      "baseline_matches": true
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+      "sha256": "F9C495798E3F2AB88525FEFC3134CECFE37D47EC6AAA28DAFA0DF13B5F713E03",
+      "main_matches_candidate": true,
+      "baseline_matches": true
+    }
+  ],
+  "baseline_production_writer_unchanged_after_removing_exact_test_blocks": true,
+  "benchmark_and_diagnostic_interface_identical": true,
+  "candidate_observation": "TLS plus always-lock-free atomic snapshots; no writer synchronization",
+  "scope": "Only the Common JSONL writer is optimized. Windows ordering, row reordering, layout, drawing, presentation, compiler flags, pin, fixture, request sequence and timer boundaries are unchanged."
+}

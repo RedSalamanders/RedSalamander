@@ -1,0 +1,20 @@
+{
+  "native_selections": 12,
+  "native_passed": 93.0,
+  "native_failed": 0.0,
+  "native_skipped": 1.0,
+  "setup_cleanup_checks": 26,
+  "passing_scenarios": 67.0,
+  "configuration_gates": [
+    {
+      "name": "Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker",
+      "status": "skipped",
+      "duration_ms": 16,
+      "repeat_index": 1,
+      "skip_class": "declared-capability",
+      "reason": "FileSystem shared-scheduler shutdown selftests use a Debug-only plugin export; Debug coverage owns this proof."
+    }
+  ],
+  "viewer_cases": 3,
+  "tooling_passed": 421
+}

@@ -219,3 +219,9 @@ context:
 - [File Operations](FileOperations.md) - copy, move, delete, and failed-item handling.
 - [Find Files and Directories](FindFiles.md) and [Compare Directories](CompareDirectories.md).
 - [Preferences](Preferences.md) - the **Keyboard** page for customizing every binding.
+
+## Terminal shortcut example
+
+Filter the Shortcuts window to Terminal to inspect the configured bindings.
+
+![Native Shortcuts window filtered to Terminal](res/shortcuts-terminal.png)

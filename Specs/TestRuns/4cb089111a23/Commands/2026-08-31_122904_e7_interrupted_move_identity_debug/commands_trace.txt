@@ -1,0 +1,13 @@
+CommandsSelfTest: begin
+CommandsSelfTest: begin
+CommandsSelfTest: begin
+CommandsSelfTest: PASS
+CommandsSelfTest: isolated execution order count=1 repeat=1 shuffleSeed=none
+Case: cmd_fileops_move_breadcrumb_durable_lifecycle
+Case returned: cmd_fileops_move_breadcrumb_durable_lifecycle ok=yes failed=no skipped=no
+CommandsSelfTest: PASS
+CommandsSelfTest: PASS
+CommandsSelfTest: begin
+CommandsSelfTest: PASS
+
+

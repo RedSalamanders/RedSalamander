@@ -1,0 +1,68 @@
+{
+    "run_started_utc": "2026-08-31T04:38:18.453Z",
+    "suite": "FileOperations",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\20260831T043801Z-77340-817830570189429ebc9fca78bbd7c276\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 5750,
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1141,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase10_PermanentDelete",
+            "status": "passed",
+            "duration_ms": 1765,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase10_DeferredConsentAndRecycleEscalation",
+            "status": "passed",
+            "duration_ms": 547,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase10_MetadataPreservationAndSourceRetention",
+            "status": "passed",
+            "duration_ms": 610,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase10_TypedResultsAndConsumers",
+            "status": "passed",
+            "duration_ms": 234,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase10_ClipboardAdmissionAndRetainedActions",
+            "status": "passed",
+            "duration_ms": 109,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase10_ContentVerification",
+            "status": "passed",
+            "duration_ms": 1204,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase10_ArtifactTouchGuard",
+            "status": "passed",
+            "duration_ms": 15,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

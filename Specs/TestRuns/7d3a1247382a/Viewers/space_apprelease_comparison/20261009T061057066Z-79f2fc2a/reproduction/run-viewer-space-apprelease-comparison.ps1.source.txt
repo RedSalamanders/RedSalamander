@@ -1,0 +1,273 @@
+[CmdletBinding()]
+param(
+    [string]$BaselineRoot = 'C:\Users\PVB\.codex\worktrees\viewer-space-baseline\RedSalamander',
+    [string]$CandidateRoot = 'C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander',
+    [string]$TestRoot = 'D:\RedSalamander.Perf'
+)
+
+Set-StrictMode -Version Latest
+$ErrorActionPreference = 'Stop'
+
+$requiredMarker = Join-Path $TestRoot '.red-salamander-test-root'
+if (-not (Test-Path -LiteralPath $requiredMarker -PathType Leaf) -or
+    (Get-Content -LiteralPath $requiredMarker -Raw).TrimEnd("`r", "`n") -cne 'red-salamander.test-sandbox-root.v1') {
+    throw "TestRoot must already be an initialized, marked sandbox: $TestRoot"
+}
+$testRootFull = [IO.Path]::GetFullPath($TestRoot).TrimEnd('\')
+if ($testRootFull -cne 'D:\RedSalamander.Perf') {
+    throw "This reviewed campaign is bound to D:\RedSalamander.Perf; got '$testRootFull'."
+}
+
+$BaselineRoot = [IO.Path]::GetFullPath($BaselineRoot)
+$CandidateRoot = [IO.Path]::GetFullPath($CandidateRoot)
+Import-Module (Join-Path $CandidateRoot 'Tools\Modules\Testing\TestSandbox.psm1') -Force -Scope Local -ErrorAction Stop
+foreach ($repo in @($BaselineRoot, $CandidateRoot)) {
+    if (-not (Test-Path -LiteralPath (Join-Path $repo 'Tools\Run-AllTests.ps1') -PathType Leaf)) {
+        throw "Canonical runner is missing from '$repo'."
+    }
+    if (-not (Test-Path -LiteralPath (Join-Path $repo '.build\x64\Release\build-receipt.json') -PathType Leaf)) {
+        throw "Verified x64 Release receipt pointer is missing from '$repo'. Wait for its Release rebuild to finish."
+    }
+}
+
+$campaignId = [DateTime]::UtcNow.ToString('yyyyMMddTHHmmssfffZ') + '-' + [Guid]::NewGuid().ToString('N').Substring(0, 8)
+$expectedBaselineReceiptId = 'a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2'
+$campaignRoot = Join-Path $testRootFull "evidence\viewer-space-apprelease-$campaignId"
+$campaignRoot = Assert-RSTestSandboxContainedPath -TestRoot $testRootFull -Path $campaignRoot -RequireDescendant
+if (Test-Path -LiteralPath $campaignRoot) {
+    throw "Campaign evidence directory already exists: $campaignRoot"
+}
+$logsRoot = Join-Path $campaignRoot 'runner-logs'
+New-Item -ItemType Directory -Path $logsRoot -Force | Out-Null
+
+$manifestPath = Join-Path $campaignRoot 'campaign-manifest.json'
+$curatorPath = Join-Path $CandidateRoot '.build\curate-viewer-space-evidence.py'
+if (-not (Test-Path -LiteralPath $curatorPath -PathType Leaf)) {
+    throw "Existing ViewerSpace evidence curator is missing: $curatorPath"
+}
+$python = (Get-Command python -ErrorAction Stop).Source
+$pwsh = (Get-Command pwsh -ErrorAction Stop).Source
+Import-Module (Join-Path $CandidateRoot 'Tools\Modules\Build\ProcessStreaming.psm1') -Force -Scope Local -ErrorAction Stop
+
+# Preserve the exact ignored orchestration helpers used by this campaign, before
+# any measurements or stale-run cleanup. These are evidence, not source inputs.
+$reproductionRoot = Join-Path $campaignRoot 'reproduction'
+New-Item -ItemType Directory -Path $reproductionRoot | Out-Null
+$reproductionInputs = @()
+foreach ($helper in @($PSCommandPath, $curatorPath, (Join-Path $CandidateRoot '.build\analyze-viewer-space-apprelease-comparison.py'))) {
+    $copyPath = Join-Path $reproductionRoot ([IO.Path]::GetFileName($helper))
+    [IO.File]::Copy($helper, $copyPath, $false)
+    $sourceHash = (Get-FileHash -LiteralPath $helper -Algorithm SHA256).Hash.ToLowerInvariant()
+    $copyHash = (Get-FileHash -LiteralPath $copyPath -Algorithm SHA256).Hash.ToLowerInvariant()
+    if ($sourceHash -cne $copyHash) { throw "Campaign helper preservation mismatch: $helper" }
+    $reproductionInputs += [pscustomobject]@{ source_path=$helper; preserved_path=$copyPath; sha256=$sourceHash; bytes=(Get-Item -LiteralPath $copyPath).Length }
+}
+
+$manifest = [ordered]@{
+    schema = 'viewer-space.apprelease-comparison-campaign.v1'
+    campaign_id = $campaignId
+    created_utc = [DateTime]::UtcNow.ToString('o')
+    test_root = $testRootFull
+    configuration = 'Release'
+    platform = 'x64'
+    runner_arguments = @('-Suite', 'Commands', '-SkipBuild', '-CaseFilter', 'viewer_space_perf_',
+        '-SelfTestRepeat', '1', '-TestRoot', $testRootFull,
+        '-Platform', 'x64', '-Configuration', 'Release')
+    opt_in_environment = @{ REDSALAMANDER_VIEWERSPACE_LARGE_PERF = '1' }
+    baseline_root = $BaselineRoot
+    candidate_root = $CandidateRoot
+    ordering = 'baseline warmup, candidate warmup, then ABBA x 3 (A=baseline, B=candidate); one fresh runner process per observation; serial only.'
+    process_helper = 'Tools/Modules/Build/ProcessStreaming.psm1::Invoke-RSStreamingProcess with contained child process and a 30 minute outer watchdog.'
+    launcher_temp_root = 'campaign-specific TEMP/TMP beneath the marked TestSandbox evidence directory; Run-AllTests then switches to its run-owned process-temp directory.'
+    observer_policy = 'Both branches aggregate queue diagnostics in producers and emit cumulative UI snapshots at 250 ms plus terminal/teardown. Baseline source includes matched benchmark harness and diagnostic-only aggregation; original scanner/model/layout production algorithms remain unchanged.'
+    expected_baseline_receipt_id = $expectedBaselineReceiptId
+    archive_label_policy = 'campaign-id plus warmup side, or campaign-id plus ABBA block and position; existing archive targets fail closed.'
+    reproduction_inputs = $reproductionInputs
+    measurements = @()
+    runs = @()
+}
+
+function Write-CampaignManifest {
+    $json = $manifest | ConvertTo-Json -Depth 32
+    $temporary = "$manifestPath.tmp"
+    [IO.File]::WriteAllText($temporary, $json + "`n", [Text.UTF8Encoding]::new($false))
+    Move-Item -LiteralPath $temporary -Destination $manifestPath -Force | Out-Null
+}
+
+Write-CampaignManifest
+
+function Get-Sha256([string]$Path) {
+    return (Get-FileHash -LiteralPath $Path -Algorithm SHA256).Hash.ToLowerInvariant()
+}
+
+function Invoke-Measurement([string]$Side, [string]$Stage, [bool]$IsWarmup, [int]$Block, [int]$Position) {
+    $repo = if ($Side -eq 'baseline') { $BaselineRoot } else { $CandidateRoot }
+    $runner = Join-Path $repo 'Tools\Run-AllTests.ps1'
+    $archiveLabel = if ($IsWarmup) { "$campaignId-$Stage" } else { "$campaignId-b$Block-p$Position" }
+    $receiptPath = Join-Path $repo '.build\x64\Release\build-receipt.json'
+    $receiptBeforeBytes = [IO.File]::ReadAllBytes($receiptPath)
+    $receiptBefore = [Text.Encoding]::UTF8.GetString($receiptBeforeBytes) | ConvertFrom-Json
+    if ($receiptBefore.configuration -cne 'Release' -or $receiptBefore.platform -cne 'x64' -or
+        [int]$receiptBefore.exit_code -ne 0 -or
+        [string]::IsNullOrWhiteSpace([string]$receiptBefore.receipt_id)) {
+        throw "Receipt does not identify x64 Release: $receiptPath"
+    }
+    if ($Side -eq 'baseline' -and [string]$receiptBefore.receipt_id -cne $expectedBaselineReceiptId) {
+        throw "Baseline Release receipt differs from the reviewed PASS receipt '$expectedBaselineReceiptId'."
+    }
+    $receiptBeforeHash = Get-Sha256 $receiptPath
+
+    $stdoutPath = Join-Path $logsRoot "$archiveLabel.stdout.txt"
+    $stderrPath = Join-Path $logsRoot "$archiveLabel.stderr.txt"
+    $runTempRoot = Join-Path $campaignRoot "launcher-temp\$archiveLabel"
+    $runTempRoot = Assert-RSTestSandboxContainedPath -TestRoot $testRootFull -Path $runTempRoot -RequireDescendant
+    New-Item -ItemType Directory -Path $runTempRoot -Force | Out-Null
+    $runnerArguments = @('-NoLogo', '-NoProfile', '-File', $runner,
+        '-Suite', 'Commands', '-SkipBuild', '-CaseFilter', 'viewer_space_perf_',
+        '-SelfTestRepeat', '1', '-TestRoot', $testRootFull,
+        '-Platform', 'x64', '-Configuration', 'Release')
+    $exitCode = Invoke-RSStreamingProcess `
+        -FilePath $pwsh `
+        -Arguments $runnerArguments `
+        -WorkingDirectory $repo `
+        -LogPath $stdoutPath `
+        -ErrorLogPath $stderrPath `
+        -TimeoutMilliseconds 1800000 `
+        -AdditionalEnvironment @{
+            REDSALAMANDER_VIEWERSPACE_LARGE_PERF = '1'
+            REDSALAMANDER_TEST_ROOT = $testRootFull
+            TEMP = $runTempRoot
+            TMP = $runTempRoot
+        }
+
+    $runnerOutput = (Get-Content -LiteralPath $stdoutPath -Raw) -replace '\x1B\[[0-?]*[ -/]*[@-~]', ''
+    $runIdMatches = [regex]::Matches($runnerOutput, 'Run id:\s*([0-9]{8}T[0-9]{6}Z-[0-9]+-[0-9a-f]{32})')
+    if ($runIdMatches.Count -ne 1) {
+        throw "Runner '$archiveLabel' did not emit exactly one canonical Run id. Exit=$exitCode; see '$stdoutPath' and '$stderrPath'."
+    }
+    $runId = $runIdMatches[0].Groups[1].Value
+    $runRoot = Join-Path (Join-Path $testRootFull 'runs') $runId
+    $raw = Join-Path $runRoot 'artifacts\selftest\last_run'
+    $curationExitCode = -1
+    $curatedPath = $null
+    if (Test-Path -LiteralPath $raw -PathType Container) {
+        $perfMetricsPath = Join-Path $raw 'perf\perf_metrics.jsonl'
+        if (-not (Test-Path -LiteralPath $perfMetricsPath -PathType Leaf)) {
+            throw "Cannot curate '$archiveLabel' before cleanup: perf metrics are missing from the canonical run artifacts."
+        }
+        $machineHashes = [Collections.Generic.HashSet[string]]::new([StringComparer]::Ordinal)
+        foreach ($line in [IO.File]::ReadLines($perfMetricsPath)) {
+            if (-not [string]::IsNullOrWhiteSpace($line)) {
+                $row = $line | ConvertFrom-Json
+                if (-not [string]::IsNullOrWhiteSpace([string]$row.machineHash)) { [void]$machineHashes.Add([string]$row.machineHash) }
+            }
+        }
+        if ($machineHashes.Count -ne 1) { throw "Expected one machine identity in owned run '$runId'." }
+        $machineHash = @($machineHashes)[0]
+        $expectedArchivePath = Join-Path $CandidateRoot "Specs\TestRuns\$machineHash\Viewers\$archiveLabel"
+        if (Test-Path -LiteralPath $expectedArchivePath) {
+            throw "Refusing to overwrite existing curated archive: $expectedArchivePath"
+        }
+        $curatorOutput = @(& $python -X utf8 $curatorPath $CandidateRoot $runId $archiveLabel ([string]$receiptBefore.receipt_id))
+        $curationExitCode = [int]$LASTEXITCODE
+        if ($curationExitCode -eq 0 -and $curatorOutput.Count -gt 0) {
+            $curationResult = [string]$curatorOutput[-1] | ConvertFrom-Json
+            $curatedPath = [string]$curationResult.path
+            $testRunsPrefix = (Join-Path $CandidateRoot 'Specs\TestRuns').TrimEnd('\') + '\'
+            if (-not $curatedPath.StartsWith($testRunsPrefix, [StringComparison]::OrdinalIgnoreCase)) {
+                throw "Curator returned an archive outside Specs/TestRuns: '$curatedPath'"
+            }
+            if ([IO.Path]::GetFullPath($curatedPath) -cne [IO.Path]::GetFullPath($expectedArchivePath)) {
+                throw "Curator path differs from the verified no-overwrite target: '$curatedPath'"
+            }
+        }
+    }
+    $summaryPath = Join-Path $raw 'run-all-tests-results.json'
+    if (-not (Test-Path -LiteralPath $summaryPath -PathType Leaf)) {
+        throw "Canonical runner summary is missing for '$archiveLabel': $summaryPath"
+    }
+    $summary = Get-Content -LiteralPath $summaryPath -Raw | ConvertFrom-Json
+    $summaryHash = Get-Sha256 $summaryPath
+    $caseSummary = @($summary.suites | ForEach-Object { $_.cases } | ForEach-Object { $_ })
+    $expectedCases = @('viewer_space_perf_small_progressive', 'viewer_space_perf_large_optin')
+    $actualNames = @($caseSummary | ForEach-Object { [string]$_.name } | Sort-Object -Unique)
+    $caseStatusesValid = ($caseSummary.Count -eq 2 -and
+        (@($caseSummary | Where-Object { [string]$_.status -ine 'passed' }).Count -eq 0) -and
+        (@($expectedCases | Where-Object { $_ -notin $actualNames }).Count -eq 0))
+    $runPassed = $exitCode -eq 0 -and $summary.exit_code -eq 0 -and
+        $summary.run_id -ceq $runId -and $summary.platform -ceq 'x64' -and
+        $summary.configuration -ceq 'Release' -and $summary.case_filter -ceq 'viewer_space_perf_' -and
+        $caseStatusesValid
+
+    $receiptAfterHash = Get-Sha256 $receiptPath
+    $receiptAfter = Get-Content -LiteralPath $receiptPath -Raw | ConvertFrom-Json
+    if ($receiptAfterHash -cne $receiptBeforeHash -or $receiptAfter.receipt_id -cne $receiptBefore.receipt_id) {
+        throw "Release receipt changed during '$archiveLabel'; measurements are invalid."
+    }
+    $snapshotPath = Join-Path $raw 'workspace-final.json'
+    $workspaceSnapshotId = $null
+    $workspaceSnapshotSha256 = $null
+    if (Test-Path -LiteralPath $snapshotPath -PathType Leaf) {
+        $snapshot = Get-Content -LiteralPath $snapshotPath -Raw | ConvertFrom-Json
+        $workspaceSnapshotId = [string]$snapshot.snapshot_id
+        $workspaceSnapshotSha256 = Get-Sha256 $snapshotPath
+    }
+
+    $runRecord = [ordered]@{
+        label = $archiveLabel
+        stage = $Stage
+        side = $Side
+        role = if ($IsWarmup) { 'warmup' } else { 'measurement' }
+        block = $Block
+        position = $Position
+        workspace_root = $repo
+        run_id = $runId
+        process_exit_code = $exitCode
+        summary_exit_code = $summary.exit_code
+        summary_schema = $summary.schema
+        summary_path = $summaryPath
+        summary_sha256 = $summaryHash
+        case_filter = $summary.case_filter
+        cases = $caseSummary
+        case_statuses_valid = $caseStatusesValid
+        build_receipt_id = [string]$receiptBefore.receipt_id
+        build_receipt_path = $receiptPath
+        build_receipt_sha256 = $receiptBeforeHash
+        workspace_snapshot_id = $workspaceSnapshotId
+        workspace_snapshot_sha256 = $workspaceSnapshotSha256
+        runner_stdout_path = $stdoutPath
+        runner_stderr_path = $stderrPath
+        curated_path = $curatedPath
+        curation_exit_code = $curationExitCode
+        status = if ($runPassed -and $curationExitCode -eq 0 -and $null -ne $curatedPath -and (Test-Path -LiteralPath $curatedPath -PathType Container)) { 'PASSED' } else { 'FAILED' }
+    }
+    $manifest.runs = @($manifest.runs) + @([pscustomobject]$runRecord)
+    if (-not $IsWarmup) {
+        $manifest.measurements = @($manifest.measurements) + @([pscustomobject]@{
+            label = $archiveLabel
+            side = $Side
+            block = $Block
+            position = $Position
+            run_id = $runId
+        })
+    }
+    Write-CampaignManifest
+    Write-Host "$archiveLabel $($runRecord.status) run=$runId receipt=$($receiptBefore.receipt_id)"
+    if ($runRecord.status -ne 'PASSED') {
+        throw "Stopping campaign after unsuccessful run '$archiveLabel'. See the manifest and captured artifacts."
+    }
+}
+
+Invoke-Measurement 'baseline' 'warmup_baseline' $true 0 0
+Invoke-Measurement 'candidate' 'warmup_candidate' $true 0 0
+for ($block = 1; $block -le 3; ++$block) {
+    Invoke-Measurement 'baseline' 'measurement' $false $block 1
+    Invoke-Measurement 'candidate' 'measurement' $false $block 2
+    Invoke-Measurement 'candidate' 'measurement' $false $block 3
+    Invoke-Measurement 'baseline' 'measurement' $false $block 4
+}
+
+$manifest['finished_utc'] = [DateTime]::UtcNow.ToString('o')
+Write-CampaignManifest
+Write-Host "Completed six Release measurements per side. Manifest: $manifestPath"
+Write-Host "Analysis command: python -X utf8 `"$(Join-Path $CandidateRoot '.build\analyze-viewer-space-apprelease-comparison.py')`" `"$manifestPath`""

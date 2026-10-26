@@ -13,7 +13,7 @@ Describe 'Native test sandbox after package relocation' -Tag RequiresBuildToolch
         }
         $fixture = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot -Harness relocated-test-sandbox -Case ([Guid]::NewGuid().ToString('N'))
         $source = @'
-#include "TestSupport.h"
+#include "TestSupport.Tests.Runner.h"
 #include <fstream>
 
 #if defined(RS_FIXTURE_ASAN) && !defined(__SANITIZE_ADDRESS__)

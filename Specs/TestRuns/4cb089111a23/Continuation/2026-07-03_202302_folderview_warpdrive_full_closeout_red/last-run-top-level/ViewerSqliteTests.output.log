@@ -1,0 +1,436 @@
+[ RUN      ] TestListTables
+[PASS] table enumeration succeeds
+[PASS] table enumeration does not return an error
+[PASS] bigdata table is present
+[PASS] bigdata_view is present
+[        OK ] TestListTables
+[ RUN      ] TestPagedReads
+[PASS] middle page load succeeds
+[PASS] middle page contains exactly 200 rows
+[PASS] middle page reports more rows
+[PASS] middle page starts at row id 401
+[PASS] last page load succeeds
+[PASS] last page contains remaining 150 rows
+[PASS] last page does not report extra rows
+[PASS] last page ends at row id 750
+[        OK ] TestPagedReads
+[ RUN      ] TestSortedPagedReads
+[PASS] descending table preview succeeds
+[PASS] descending table preview starts at row id 750
+[PASS] descending table preview emits source-side ORDER BY
+[PASS] ascending sorted page with offset succeeds
+[PASS] ascending sorted page offset is preserved
+[        OK ] TestSortedPagedReads
+[ RUN      ] TestReadOnlyQueries
+[PASS] read-only SELECT query is accepted
+[PASS] read-only SELECT executes successfully
+[PASS] read-only SELECT returns three rows
+[PASS] read-only SELECT returns two columns
+[PASS] read-only SELECT preserves ordering
+[PASS] write query is rejected
+[PASS] multiple statements are rejected
+[        OK ] TestReadOnlyQueries
+[ RUN      ] TestViewerWindowUsesDxUiHostWithNoVisibleChildControls
+[PASS] test executable path resolves
+[PASS] ViewerSqlite.dll is present for viewer-window validation
+[PASS] ViewerSqlite.dll loads successfully
+[PASS] ViewerSqlite factory export is available
+[PASS] ViewerSqlite factory creates an IViewer instance
+[PASS] viewer callback registration succeeds
+[PASS] viewer window open succeeds
+[PASS] viewer window becomes visible
+[PASS] viewer window does not expose visible child controls
+[PASS] viewer window answers WM_GETOBJECT
+[PASS] viewer window exposes a visible UIA subtree for the DX form and grid
+[PASS] viewer window exposes multiple visible UIA descendants for the DX surface
+[PASS] viewer window exposes visible UIA ComboBox descendants
+[PASS] viewer window exposes a visible UIA Edit descendant
+[PASS] viewer window exposes visible UIA Button descendants
+[PASS] viewer window exposes a visible UIA DataGrid descendant
+[PASS] viewer window exposes visible UIA DataItem row descendants
+[PASS] viewer window exposes live UIA ValuePattern support
+[PASS] viewer window exposes live UIA SelectionPattern support on the result grid
+[PASS] viewer window exposes a debug snapshot for row-selection validation
+[PASS] viewer window exposes a retained DxUi StatusStrip
+[PASS] viewer window keeps the DxUi StatusStrip visible
+[PASS] viewer window keeps the DxUi StatusStrip at a usable height (22.00 DIP)
+[PASS] viewer window exposes at least two rows for row-selection validation
+[PASS] viewer window debug row-selection hook can select the first row
+[PASS] viewer window exposes an initial selected UIA grid row
+[PASS] viewer window debug row-selection hook can select the second row
+[PASS] viewer window UIA grid selection tracks a real row change
+[PASS] clearing the viewer callback before close does not deliver ViewerClosed immediately
+[PASS] viewer window close succeeds
+[PASS] viewer window closes cleanly
+[PASS] viewer does not invoke ViewerClosed after SetCallback(nullptr, nullptr) returns
+[PASS] viewer COM instance releases cleanly
+[PASS] ViewerSqlite.dll unload returns
+[        OK ] TestViewerWindowUsesDxUiHostWithNoVisibleChildControls
+[ RUN      ] TestViewerWindowLongRunScrollingStaysBounded
+[PASS] test executable path resolves
+[PASS] ViewerSqlite.dll is present for long-run scrolling validation
+[PASS] ViewerSqlite.dll loads successfully for long-run scrolling validation
+[PASS] ViewerSqlite factory export is available for long-run scrolling validation
+[PASS] ViewerSqlite factory creates an IViewer instance for long-run scrolling validation
+[PASS] viewer window open succeeds for long-run scrolling validation
+[PASS] viewer window becomes visible for long-run scrolling validation
+[PASS] viewer window answers WM_GETOBJECT for long-run scrolling validation
+[PASS] viewer window exposes a scrollable UIA grid subtree for long-run scrolling validation
+[PASS] viewer window reaches an idle populated DX grid state
+[PASS] viewer window scroll chunk 1 dispatch succeeds
+[PASS] viewer window scroll chunk 1 renders a settled frame
+[PASS] viewer window scroll chunk 1 keeps row count stable
+[PASS] viewer window scroll chunk 1 keeps visible rows bounded
+[PASS] viewer window scroll chunk 1 keeps visible columns stable
+[PASS] viewer window scroll chunk 1 keeps visible cell accounting consistent
+[PASS] viewer window scroll chunk 1 keeps the vertical scrollbar visible
+[PASS] viewer window scroll chunk 1 avoids DX host resize churn
+[PASS] viewer window scroll chunk 1 avoids DX host resize failures
+[PASS] viewer window scroll chunk 2 dispatch succeeds
+[PASS] viewer window scroll chunk 2 renders a settled frame
+[PASS] viewer window scroll chunk 2 keeps row count stable
+[PASS] viewer window scroll chunk 2 keeps visible rows bounded
+[PASS] viewer window scroll chunk 2 keeps visible columns stable
+[PASS] viewer window scroll chunk 2 keeps visible cell accounting consistent
+[PASS] viewer window scroll chunk 2 keeps the vertical scrollbar visible
+[PASS] viewer window scroll chunk 2 avoids DX host resize churn
+[PASS] viewer window scroll chunk 2 avoids DX host resize failures
+[PASS] viewer window scroll chunk 3 dispatch succeeds
+[PASS] viewer window scroll chunk 3 renders a settled frame
+[PASS] viewer window scroll chunk 3 keeps row count stable
+[PASS] viewer window scroll chunk 3 keeps visible rows bounded
+[PASS] viewer window scroll chunk 3 keeps visible columns stable
+[PASS] viewer window scroll chunk 3 keeps visible cell accounting consistent
+[PASS] viewer window scroll chunk 3 keeps the vertical scrollbar visible
+[PASS] viewer window scroll chunk 3 avoids DX host resize churn
+[PASS] viewer window scroll chunk 3 avoids DX host resize failures
+[PASS] viewer window scroll chunk 4 dispatch succeeds
+[PASS] viewer window scroll chunk 4 renders a settled frame
+[PASS] viewer window scroll chunk 4 keeps row count stable
+[PASS] viewer window scroll chunk 4 keeps visible rows bounded
+[PASS] viewer window scroll chunk 4 keeps visible columns stable
+[PASS] viewer window scroll chunk 4 keeps visible cell accounting consistent
+[PASS] viewer window scroll chunk 4 keeps the vertical scrollbar visible
+[PASS] viewer window scroll chunk 4 avoids DX host resize churn
+[PASS] viewer window scroll chunk 4 avoids DX host resize failures
+[PASS] viewer window scroll chunk 5 dispatch succeeds
+[PASS] viewer window scroll chunk 5 renders a settled frame
+[PASS] viewer window scroll chunk 5 keeps row count stable
+[PASS] viewer window scroll chunk 5 keeps visible rows bounded
+[PASS] viewer window scroll chunk 5 keeps visible columns stable
+[PASS] viewer window scroll chunk 5 keeps visible cell accounting consistent
+[PASS] viewer window scroll chunk 5 keeps the vertical scrollbar visible
+[PASS] viewer window scroll chunk 5 avoids DX host resize churn
+[PASS] viewer window scroll chunk 5 avoids DX host resize failures
+[PASS] viewer window scroll chunk 6 dispatch succeeds
+[PASS] viewer window scroll chunk 6 renders a settled frame
+[PASS] viewer window scroll chunk 6 keeps row count stable
+[PASS] viewer window scroll chunk 6 keeps visible rows bounded
+[PASS] viewer window scroll chunk 6 keeps visible columns stable
+[PASS] viewer window scroll chunk 6 keeps visible cell accounting consistent
+[PASS] viewer window scroll chunk 6 keeps the vertical scrollbar visible
+[PASS] viewer window scroll chunk 6 avoids DX host resize churn
+[PASS] viewer window scroll chunk 6 avoids DX host resize failures
+[PASS] viewer window scroll chunk 7 dispatch succeeds
+[PASS] viewer window scroll chunk 7 renders a settled frame
+[PASS] viewer window scroll chunk 7 keeps row count stable
+[PASS] viewer window scroll chunk 7 keeps visible rows bounded
+[PASS] viewer window scroll chunk 7 keeps visible columns stable
+[PASS] viewer window scroll chunk 7 keeps visible cell accounting consistent
+[PASS] viewer window scroll chunk 7 keeps the vertical scrollbar visible
+[PASS] viewer window scroll chunk 7 avoids DX host resize churn
+[PASS] viewer window scroll chunk 7 avoids DX host resize failures
+[PASS] viewer window scroll chunk 8 dispatch succeeds
+[PASS] viewer window scroll chunk 8 renders a settled frame
+[PASS] viewer window scroll chunk 8 keeps row count stable
+[PASS] viewer window scroll chunk 8 keeps visible rows bounded
+[PASS] viewer window scroll chunk 8 keeps visible columns stable
+[PASS] viewer window scroll chunk 8 keeps visible cell accounting consistent
+[PASS] viewer window scroll chunk 8 keeps the vertical scrollbar visible
+[PASS] viewer window scroll chunk 8 avoids DX host resize churn
+[PASS] viewer window scroll chunk 8 avoids DX host resize failures
+[PASS] viewer window close succeeds after long-run scrolling validation
+[PASS] viewer window closes cleanly after long-run scrolling validation
+[        OK ] TestViewerWindowLongRunScrollingStaysBounded
+[ RUN      ] TestViewerWindowLongRunOpenCloseStaysStable
+[PASS] test executable path resolves for open-close churn validation
+[PASS] ViewerSqlite.dll is present for open-close churn validation
+[PASS] ViewerSqlite.dll loads successfully for open-close churn validation
+[PASS] ViewerSqlite factory export is available for open-close churn validation
+[PASS] viewer window cycle 1 creates an IViewer instance
+[PASS] viewer window cycle 1 opens successfully
+[PASS] viewer window cycle 1 becomes visible
+[PASS] viewer window cycle 1 keeps visible child fallback at zero
+[PASS] viewer window cycle 1 answers WM_GETOBJECT
+[PASS] viewer window cycle 1 exposes the visible DX UIA subtree on reopen
+[PASS] viewer window cycle 1 reaches an idle populated DX grid state
+[PASS] viewer window cycle 1 keeps result rows populated after reopen
+[PASS] viewer window cycle 1 closes successfully
+[PASS] viewer window cycle 1 closes without leaving a lingering window handle
+[PASS] viewer window cycle 2 creates an IViewer instance
+[PASS] viewer window cycle 2 opens successfully
+[PASS] viewer window cycle 2 becomes visible
+[PASS] viewer window cycle 2 keeps visible child fallback at zero
+[PASS] viewer window cycle 2 answers WM_GETOBJECT
+[PASS] viewer window cycle 2 exposes the visible DX UIA subtree on reopen
+[PASS] viewer window cycle 2 reaches an idle populated DX grid state
+[PASS] viewer window cycle 2 keeps result rows populated after reopen
+[PASS] viewer window cycle 2 closes successfully
+[PASS] viewer window cycle 2 closes without leaving a lingering window handle
+[PASS] viewer window cycle 3 creates an IViewer instance
+[PASS] viewer window cycle 3 opens successfully
+[PASS] viewer window cycle 3 becomes visible
+[PASS] viewer window cycle 3 keeps visible child fallback at zero
+[PASS] viewer window cycle 3 answers WM_GETOBJECT
+[PASS] viewer window cycle 3 exposes the visible DX UIA subtree on reopen
+[PASS] viewer window cycle 3 reaches an idle populated DX grid state
+[PASS] viewer window cycle 3 keeps result rows populated after reopen
+[PASS] viewer window cycle 3 closes successfully
+[PASS] viewer window cycle 3 closes without leaving a lingering window handle
+[PASS] viewer window cycle 4 creates an IViewer instance
+[PASS] viewer window cycle 4 opens successfully
+[PASS] viewer window cycle 4 becomes visible
+[PASS] viewer window cycle 4 keeps visible child fallback at zero
+[PASS] viewer window cycle 4 answers WM_GETOBJECT
+[PASS] viewer window cycle 4 exposes the visible DX UIA subtree on reopen
+[PASS] viewer window cycle 4 reaches an idle populated DX grid state
+[PASS] viewer window cycle 4 keeps result rows populated after reopen
+[PASS] viewer window cycle 4 closes successfully
+[PASS] viewer window cycle 4 closes without leaving a lingering window handle
+[PASS] viewer window cycle 5 creates an IViewer instance
+[PASS] viewer window cycle 5 opens successfully
+[PASS] viewer window cycle 5 becomes visible
+[PASS] viewer window cycle 5 keeps visible child fallback at zero
+[PASS] viewer window cycle 5 answers WM_GETOBJECT
+[PASS] viewer window cycle 5 exposes the visible DX UIA subtree on reopen
+[PASS] viewer window cycle 5 reaches an idle populated DX grid state
+[PASS] viewer window cycle 5 keeps result rows populated after reopen
+[PASS] viewer window cycle 5 closes successfully
+[PASS] viewer window cycle 5 closes without leaving a lingering window handle
+[PASS] viewer window cycle 6 creates an IViewer instance
+[PASS] viewer window cycle 6 opens successfully
+[PASS] viewer window cycle 6 becomes visible
+[PASS] viewer window cycle 6 keeps visible child fallback at zero
+[PASS] viewer window cycle 6 answers WM_GETOBJECT
+[PASS] viewer window cycle 6 exposes the visible DX UIA subtree on reopen
+[PASS] viewer window cycle 6 reaches an idle populated DX grid state
+[PASS] viewer window cycle 6 keeps result rows populated after reopen
+[PASS] viewer window cycle 6 closes successfully
+[PASS] viewer window cycle 6 closes without leaving a lingering window handle
+[PASS] viewer window cycle 7 creates an IViewer instance
+[PASS] viewer window cycle 7 opens successfully
+[PASS] viewer window cycle 7 becomes visible
+[PASS] viewer window cycle 7 keeps visible child fallback at zero
+[PASS] viewer window cycle 7 answers WM_GETOBJECT
+[PASS] viewer window cycle 7 exposes the visible DX UIA subtree on reopen
+[PASS] viewer window cycle 7 reaches an idle populated DX grid state
+[PASS] viewer window cycle 7 keeps result rows populated after reopen
+[PASS] viewer window cycle 7 closes successfully
+[PASS] viewer window cycle 7 closes without leaving a lingering window handle
+[PASS] viewer window cycle 8 creates an IViewer instance
+[PASS] viewer window cycle 8 opens successfully
+[PASS] viewer window cycle 8 becomes visible
+[PASS] viewer window cycle 8 keeps visible child fallback at zero
+[PASS] viewer window cycle 8 answers WM_GETOBJECT
+[PASS] viewer window cycle 8 exposes the visible DX UIA subtree on reopen
+[PASS] viewer window cycle 8 reaches an idle populated DX grid state
+[PASS] viewer window cycle 8 keeps result rows populated after reopen
+[PASS] viewer window cycle 8 closes successfully
+[PASS] viewer window cycle 8 closes without leaving a lingering window handle
+[PASS] viewer window cycle 9 creates an IViewer instance
+[PASS] viewer window cycle 9 opens successfully
+[PASS] viewer window cycle 9 becomes visible
+[PASS] viewer window cycle 9 keeps visible child fallback at zero
+[PASS] viewer window cycle 9 answers WM_GETOBJECT
+[PASS] viewer window cycle 9 exposes the visible DX UIA subtree on reopen
+[PASS] viewer window cycle 9 reaches an idle populated DX grid state
+[PASS] viewer window cycle 9 keeps result rows populated after reopen
+[PASS] viewer window cycle 9 closes successfully
+[PASS] viewer window cycle 9 closes without leaving a lingering window handle
+[PASS] viewer window cycle 10 creates an IViewer instance
+[PASS] viewer window cycle 10 opens successfully
+[PASS] viewer window cycle 10 becomes visible
+[PASS] viewer window cycle 10 keeps visible child fallback at zero
+[PASS] viewer window cycle 10 answers WM_GETOBJECT
+[PASS] viewer window cycle 10 exposes the visible DX UIA subtree on reopen
+[PASS] viewer window cycle 10 reaches an idle populated DX grid state
+[PASS] viewer window cycle 10 keeps result rows populated after reopen
+[PASS] viewer window cycle 10 closes successfully
+[PASS] viewer window cycle 10 closes without leaving a lingering window handle
+[PASS] viewer window cycle 11 creates an IViewer instance
+[PASS] viewer window cycle 11 opens successfully
+[PASS] viewer window cycle 11 becomes visible
+[PASS] viewer window cycle 11 keeps visible child fallback at zero
+[PASS] viewer window cycle 11 answers WM_GETOBJECT
+[PASS] viewer window cycle 11 exposes the visible DX UIA subtree on reopen
+[PASS] viewer window cycle 11 reaches an idle populated DX grid state
+[PASS] viewer window cycle 11 keeps result rows populated after reopen
+[PASS] viewer window cycle 11 closes successfully
+[PASS] viewer window cycle 11 closes without leaving a lingering window handle
+[PASS] viewer window cycle 12 creates an IViewer instance
+[PASS] viewer window cycle 12 opens successfully
+[PASS] viewer window cycle 12 becomes visible
+[PASS] viewer window cycle 12 keeps visible child fallback at zero
+[PASS] viewer window cycle 12 answers WM_GETOBJECT
+[PASS] viewer window cycle 12 exposes the visible DX UIA subtree on reopen
+[PASS] viewer window cycle 12 reaches an idle populated DX grid state
+[PASS] viewer window cycle 12 keeps result rows populated after reopen
+[PASS] viewer window cycle 12 closes successfully
+[PASS] viewer window cycle 12 closes without leaving a lingering window handle
+[        OK ] TestViewerWindowLongRunOpenCloseStaysStable
+[ RUN      ] TestViewerWindowPagingAndSortFlows
+[PASS] test executable path resolves for paging and sort validation
+[PASS] ViewerSqlite.dll is present for paging and sort validation
+[PASS] ViewerSqlite.dll loads successfully for paging and sort validation
+[PASS] ViewerSqlite factory export is available for paging and sort validation
+[PASS] ViewerSqlite factory creates an IViewer instance for paging and sort validation
+[PASS] viewer window open succeeds for paging and sort validation
+[PASS] viewer window becomes visible for paging and sort validation
+[PASS] viewer window reaches the initial unsorted table-preview page
+[PASS] viewer paging debug hook can request the next table page
+[PASS] viewer next-page navigation loads the second table page
+[PASS] viewer paging debug hook can request the previous table page
+[PASS] viewer previous-page navigation returns to the first table page
+[PASS] viewer sort debug hook can request ascending sort on the first column
+[PASS] viewer ascending sort reloads the first page with sort metadata
+[PASS] viewer sort debug hook can request descending sort on the first column
+[PASS] viewer descending sort reloads the first page in reverse key order
+[PASS] viewer paging remains active after descending sort
+[PASS] viewer descending sort preserves paged navigation across subsequent pages
+[PASS] viewer sort debug hook can cycle the first column back to unsorted
+[PASS] viewer cycling sort off resets back to the unsorted first page
+[PASS] viewer window close succeeds after paging and sort validation
+[PASS] viewer window closes cleanly after paging and sort validation
+[        OK ] TestViewerWindowPagingAndSortFlows
+[ RUN      ] TestViewerWindowSelectionPatternSurvivesPagingAndSortFlows
+[PASS] test executable path resolves for viewer UIA selection churn validation
+[PASS] ViewerSqlite.dll is present for viewer UIA selection churn validation
+[PASS] ViewerSqlite.dll loads successfully for viewer UIA selection churn validation
+[PASS] ViewerSqlite factory export is available for viewer UIA selection churn validation
+[PASS] ViewerSqlite factory creates an IViewer instance for viewer UIA selection churn validation
+[PASS] viewer window open succeeds for viewer UIA selection churn validation
+[PASS] viewer window becomes visible for viewer UIA selection churn validation
+[PASS] viewer window reaches the initial unsorted table-preview page for viewer UIA selection churn validation
+[PASS] initial unsorted page selection can select the requested visible result row
+[PASS] initial unsorted page selection keeps the debug snapshot selection anchored to the expected row
+[PASS] initial unsorted page selection keeps a visible selected UIA DataItem with SelectionItemPattern
+[PASS] viewer paging debug hook can request the next page for viewer UIA selection churn validation
+[PASS] viewer next-page navigation settles before viewer UIA selection churn validation
+[PASS] next-page selection can select the requested visible result row
+[PASS] next-page selection keeps the debug snapshot selection anchored to the expected row
+[PASS] next-page selection keeps a visible selected UIA DataItem with SelectionItemPattern
+[PASS] viewer UIA selected row name changes after paging to a different result row
+[PASS] viewer sort debug hook can request ascending sort before descending selection validation
+[PASS] viewer ascending sort settles before descending selection validation
+[PASS] viewer sort debug hook can request descending sort for viewer UIA selection churn validation
+[PASS] viewer descending sort settles before viewer UIA selection churn validation
+[PASS] descending sorted page selection can select the requested visible result row
+[PASS] descending sorted page selection keeps the debug snapshot selection anchored to a real selected row
+[PASS] descending sorted page selection keeps a visible selected UIA DataItem with SelectionItemPattern
+[PASS] viewer paging stays active after descending sort for viewer UIA selection churn validation
+[PASS] viewer descending next page settles before final UIA selection validation
+[PASS] descending sorted next-page selection can select the requested visible result row
+[PASS] descending sorted next-page selection keeps the debug snapshot selection anchored to a real selected row
+[PASS] descending sorted next-page selection keeps a visible selected UIA DataItem with SelectionItemPattern
+[PASS] viewer UIA selection remains valid after descending paging churn
+[PASS] viewer window close succeeds after viewer UIA selection churn validation
+[PASS] viewer window closes cleanly after viewer UIA selection churn validation
+[        OK ] TestViewerWindowSelectionPatternSurvivesPagingAndSortFlows
+[ RUN      ] TestViewerWindowTabTraversalMatchesExpectedOrder
+[PASS] test executable path resolves for tab traversal validation
+[PASS] ViewerSqlite.dll is present for tab traversal validation
+[PASS] alternate SQLite input is created for file-combo traversal coverage
+[PASS] ViewerSqlite.dll loads successfully for tab traversal validation
+[PASS] ViewerSqlite factory export is available for tab traversal validation
+[PASS] ViewerSqlite factory creates an IViewer instance for tab traversal validation
+[PASS] viewer window open succeeds for tab traversal validation
+[PASS] viewer window becomes visible for tab traversal validation
+[PASS] viewer window reaches the initial idle table-preview state for tab traversal validation
+[PASS] viewer paging debug hook can move to the second page for tab traversal validation
+[PASS] viewer second page is ready before tab traversal validation
+[PASS] viewer debug row-selection hook can select a stable second-row baseline for tab traversal validation
+[PASS] viewer grid selection settles before tab traversal validation
+[PASS] viewer window accepts keyboard focus for tab traversal validation
+[PASS] viewer snapshot is available after taking keyboard focus
+[PASS] viewer activation leaves keyboard focus on the results grid
+[PASS] forward Tab advances focus to the file combo
+[PASS] forward Tab advances focus to the reload button
+[PASS] forward Tab advances focus to the table combo
+[PASS] forward Tab advances focus to the previous button
+[PASS] forward Tab advances focus to the next button
+[PASS] forward Tab advances focus to the query field
+[PASS] forward Tab advances focus to the run-query button
+[PASS] forward Tab advances focus to the table-preview button
+[PASS] forward Tab advances focus to the results grid
+[PASS] reverse Tab advances focus to the table-preview button
+[PASS] reverse Tab advances focus to the run-query button
+[PASS] reverse Tab advances focus to the query field
+[PASS] reverse Tab advances focus to the next button
+[PASS] reverse Tab advances focus to the previous button
+[PASS] reverse Tab advances focus to the table combo
+[PASS] reverse Tab advances focus to the reload button
+[PASS] reverse Tab advances focus to the file combo
+[PASS] reverse Tab advances focus to the results grid
+[PASS] focus is on a viewer control before Escape focus-return validation
+[PASS] Escape from viewer controls returns focus to the results grid without closing
+[PASS] viewer window closes cleanly after Escape from the results grid
+[        OK ] TestViewerWindowTabTraversalMatchesExpectedOrder
+[ RUN      ] TestViewerWindowThemeCycleKeepsGridLegible
+[PASS] test executable path resolves for theme-cycle validation
+[PASS] ViewerSqlite.dll is present for theme-cycle validation
+[PASS] ViewerSqlite.dll loads successfully for theme-cycle validation
+[PASS] ViewerSqlite factory export is available for theme-cycle validation
+[PASS] ViewerSqlite factory creates an IViewer instance for theme-cycle validation
+[PASS] viewer window open succeeds for theme-cycle validation
+[PASS] viewer window becomes visible for theme-cycle validation
+[PASS] viewer window reaches the initial unsorted table-preview page for theme-cycle validation
+[PASS] viewer accepts the initial dark theme update
+[PASS] viewer window applies the initial dark theme for theme-cycle validation
+[PASS] viewer debug row-selection hook can select the second row for theme-cycle validation
+[PASS] viewer window exposes a selected row for theme-cycle validation
+[PASS] viewer theme-cycle baseline selection keeps a visible selected UIA DataItem with SelectionItemPattern
+[PASS] viewer theme-cycle baseline exposes a named selected UIA row
+[PASS] viewer accepts the dark theme update
+[PASS] viewer window settles after switching to the dark theme
+[PASS] viewer window survives the dark theme update
+[PASS] viewer selected-row rainbow state matches the dark theme
+[PASS] viewer high-contrast state matches the dark theme
+[PASS] viewer selected-row colors stay distinct in the dark theme
+[PASS] viewer selected-row text contrast stays above 3.0:1 in the dark theme
+[PASS] viewer dark theme selection keeps a visible selected UIA DataItem with SelectionItemPattern
+[PASS] viewer dark theme keeps a visible named selected UIA row
+[PASS] viewer dark theme preserves the selected UIA row name across theme churn
+[PASS] viewer accepts the light theme update
+[PASS] viewer window settles after switching to the light theme
+[PASS] viewer window survives the light theme update
+[PASS] viewer selected-row rainbow state matches the light theme
+[PASS] viewer high-contrast state matches the light theme
+[PASS] viewer selected-row colors stay distinct in the light theme
+[PASS] viewer selected-row text contrast stays above 3.0:1 in the light theme
+[PASS] viewer light theme selection keeps a visible selected UIA DataItem with SelectionItemPattern
+[PASS] viewer light theme keeps a visible named selected UIA row
+[PASS] viewer light theme preserves the selected UIA row name across theme churn
+[PASS] viewer accepts the rainbow theme update
+[PASS] viewer window settles after switching to the rainbow theme
+[PASS] viewer window survives the rainbow theme update
+[PASS] viewer selected-row rainbow state matches the rainbow theme
+[PASS] viewer high-contrast state matches the rainbow theme
+[PASS] viewer selected-row colors stay distinct in the rainbow theme
+[PASS] viewer selected-row text contrast stays above 3.0:1 in the rainbow theme
+[PASS] viewer rainbow theme selection keeps a visible selected UIA DataItem with SelectionItemPattern
+[PASS] viewer rainbow theme keeps a visible named selected UIA row
+[PASS] viewer rainbow theme preserves the selected UIA row name across theme churn
+[PASS] viewer accepts the high-contrast theme update
+[PASS] viewer window settles after switching to the high-contrast theme
+[PASS] viewer window survives the high-contrast theme update
+[PASS] viewer selected-row rainbow state matches the high-contrast theme
+[PASS] viewer high-contrast state matches the high-contrast theme
+[PASS] viewer selected-row colors stay distinct in the high-contrast theme
+[PASS] viewer selected-row text contrast stays above 4.5:1 in the high-contrast theme
+[PASS] viewer high-contrast theme selection keeps a visible selected UIA DataItem with SelectionItemPattern
+[PASS] viewer high-contrast theme keeps a visible named selected UIA row
+[PASS] viewer high-contrast theme preserves the selected UIA row name across theme churn
+[PASS] viewer window close succeeds after theme-cycle validation
+[PASS] viewer window closes cleanly after theme-cycle validation
+[        OK ] TestViewerWindowThemeCycleKeepsGridLegible
+ViewerSqliteTests passed.

@@ -1,0 +1,52 @@
+[
+  {
+    "name": "results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-wide-debug-20260905\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "bytes": 3667,
+    "sha256": "a5588c6b48bbb05e38247fb503a9486f2c2b47b6705723613c40a4607c5ca051",
+    "transform": "none"
+  },
+  {
+    "name": "trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-wide-debug-20260905\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "bytes": 8680,
+    "sha256": "027901ba91b1faef30c3a2153414fd54ffd309cdca2979303516c52cc310e6ee",
+    "transform": "none"
+  },
+  {
+    "name": "root-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-wide-debug-20260905\\artifacts\\selftest\\last_run\\results.json",
+    "bytes": 4858,
+    "sha256": "618f8e1409c56b8bd688d185332ad9debdde2c7e244b28aed9a8c8c6c462ce3d",
+    "transform": "none"
+  },
+  {
+    "name": "suite-trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-wide-debug-20260905\\artifacts\\selftest\\last_run\\trace.txt",
+    "bytes": 23168,
+    "sha256": "a62ff471088bfa6b631e03a2cc01ac1d07024a39f491a5d2457ba1ffac9fb63d",
+    "transform": "none"
+  },
+  {
+    "name": "run-all-tests-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-wide-debug-20260905\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "bytes": 33188,
+    "sha256": "2bb87e52e15cd205e17eb08f926476390d9267daae49973a6ed9f06cf84d2034",
+    "transform": "none"
+  },
+  {
+    "name": "entry-fingerprints.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-wide-debug-20260905\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+    "bytes": 1695,
+    "sha256": "25504d052cf16ec9b05a42053454f1caa6b4daf85a78b81dee2e10272cb1c804",
+    "transform": "none"
+  },
+  {
+    "name": "perf_metrics.jsonl",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-framing-wide-debug-20260905\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+    "bytes": 20102237,
+    "rows": 57492,
+    "sha256": "9ee814bd32b16818df8ec21e4c4c3a738a733beeef0eac138778b950fa7b1d2e",
+    "transform": "metric-selection.json"
+  }
+]

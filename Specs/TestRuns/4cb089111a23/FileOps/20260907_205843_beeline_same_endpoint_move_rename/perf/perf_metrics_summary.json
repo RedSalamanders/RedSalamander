@@ -1,0 +1,24 @@
+{
+  "original": {
+    "path": "Z:/RedSalamander.Perf/runs/20260907T205843Z-46028-f4bfabc0e38e458cad88a4d92654fcac/artifacts/selftest/last_run/perf/perf_metrics.jsonl",
+    "rows": 542478,
+    "sha256": "7102f727e4a017a296ceefecfa5d465daecb0fedbbad0ce8ccd7afdd8b2a1bdb",
+    "bytes": 208840226
+  },
+  "compact": {
+    "path": "perf/perf_metrics.jsonl",
+    "rows": 1822,
+    "sha256": "11e820f9461ff0dd596c55060ba4a428464276ac40618502d120a314ce68d9e5",
+    "bytes": 688789
+  },
+  "keptMetricPattern": "\"metric\":\"(FileOps\\.SelfTest\\.[A-Za-z0-9_.]+|fileops\\.operation\\.strategy|fileops\\.execute\\.native_directory_race_requalified_after_noncommit|fileops\\.local\\.metadata\\.inspect_failed|FileOps\\.Bridge\\.(FailurePhase|StageDisposition))\"",
+  "fileOpsResult": {
+    "passed": 166,
+    "failed": 2,
+    "skipped": 29
+  },
+  "throughputDetail": "files=2000;bytes=16384000;copyMs=2016;moveMs=94",
+  "buildReceipt": "0fabf2c625e565828cf8905b54aaaea1e935a11c710454f4d0984650761ce11f",
+  "governedRunner": "20260907T205843Z-46028-f4bfabc0e38e458cad88a4d92654fcac",
+  "omittedOversizeFiles": []
+}

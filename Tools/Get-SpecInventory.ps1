@@ -3,6 +3,9 @@
 Validates specification authority, links, WIP ownership, and consistency evidence.
 
 .DESCRIPTION
+New completed plans require exact reviewed path admission and a regression check
+that rejects unreviewed siblings; admission does not qualify their implementation.
+
 Builds source-derived JSON and Markdown inventories for the repository specification tree, validates normative consistency records and protected completed-plan history, and also emits the generated test inventory.
 
 .PARAMETER Root
@@ -40,7 +43,7 @@ param(
 
     [string]$ConsistencyLedgerPath = 'Specs/NormativeConsistency.json',
 
-    [string]$ProtectedDoneBaseCommit = '6aecfde8e',
+    [string]$ProtectedDoneBaseCommit = '4a3a6c9dc3d094cb2269c438de7f3ae24ab5e853',
 
     [switch]$FailOnFindings,
 

@@ -1,0 +1,71 @@
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+@@ -1411,9 +1411,9 @@
+         case TaskStatusKind::Partial: return LoadStringResource(nullptr, IDS_FILEOPS_STATUS_PARTIAL_SHORT);
+         case TaskStatusKind::Indeterminate: return LoadStringResource(nullptr, IDS_FILEOPS_RESULT_UNKNOWN);
+         case TaskStatusKind::Failed: return LoadStringResource(nullptr, IDS_FILEOPS_STATUS_FAILED_SHORT);
++        case TaskStatusKind::Discovering: return LoadStringResource(nullptr, IDS_FILEOPS_DISCOVERING);
++        case TaskStatusKind::Preparing: return LoadStringResource(nullptr, IDS_FILEOPS_PREPARING);
+         case TaskStatusKind::Paused:
+-        case TaskStatusKind::Discovering:
+-        case TaskStatusKind::Preparing:
+         case TaskStatusKind::Canceled: return StatusTextForTask(task, status, nowTick);
+         case TaskStatusKind::Conflict: return {};
+         case TaskStatusKind::None:
+@@ -7347,8 +7347,8 @@
+                                         L"Partial"},
+                             ResultBadge{completedGroupSummary.indeterminate,
+                                         PopupStatusVisualTone::Warning,
+-                                        FluentIcons::kWarning,
+-                                        FluentIcons::kFallbackWarning,
++                                        FluentIcons::kInfo,
++                                        L'?',
+                                         IDS_FMT_FILEOPS_BADGE_INDETERMINATE_TOOLTIP,
+                                         L"Indeterminate"},
+                             ResultBadge{completedGroupSummary.failed,
+@@ -8255,6 +8255,8 @@
+                     }
+                 }
+ 
++                if (task.finished && statusChipPainted)
++                    headerText = opText;
+                 if (task.finished && ! task.resultSummary.empty() && ! statusChipPainted)
+                     headerText = FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_OP_STATUS, opText, chipText);
+                 float headerTextRight                                           = headerRight;
+@@ -9221,9 +9223,11 @@
+                 {
+                     const D2D1_RECT_F totalBarRc    = D2D1::RectF(barX, barsTop, barX + barW, barsTop + barHItem);
+                     const bool hostedHasTotalBytes  = task.totalBytes > 0 && task.completedBytes <= task.totalBytes;
+-                    const bool hostedHasUsefulItems = task.totalItems > 1;
+-                    const bool hostedUseBytes       = hostedHasTotalBytes && task.completedBytes > 0;
+-                    const bool hostedUseItems       = ! hostedUseBytes && hostedHasUsefulItems && task.completedItems > 0;
++                    // A closed, known denominator is determinate even before the first item completes.
++                    // Preserve the existing byte-first-after-progress / item fallback policy.
++                    const bool hostedHasUsefulItems = task.totalItems > 0;
++                    const bool hostedUseBytes       = hostedHasTotalBytes && (task.completedBytes > 0 || ! hostedHasUsefulItems);
++                    const bool hostedUseItems       = ! hostedUseBytes && hostedHasUsefulItems;
+                     double hostedFraction           = 0.0;
+                     if (hostedUseBytes)
+                     {
+@@ -9239,19 +9243,8 @@
+                 else
+                 {
+                     const D2D1_RECT_F totalBarRc = D2D1::RectF(barX, barsTop, barX + barW, barsTop + barHItem);
+-                    double hostedFraction        = 0.0;
+-                    bool hostedDeterminate       = false;
+-                    if (task.totalBytes > 0 && task.completedBytes <= task.totalBytes)
+-                    {
+-                        hostedFraction    = static_cast<double>(task.completedBytes) / static_cast<double>(task.totalBytes);
+-                        hostedDeterminate = true;
+-                    }
+-                    else if (task.totalItems > 0)
+-                    {
+-                        hostedFraction    = static_cast<double>(std::min(task.completedItems, task.totalItems)) / static_cast<double>(task.totalItems);
+-                        hostedDeterminate = true;
+-                    }
+-                    HostedProgressDescriptor progressDescriptor{totalBarRc, task.taskId, std::clamp(hostedFraction, 0.0, 1.0) * 100.0, ! hostedDeterminate};
++                    HostedProgressDescriptor progressDescriptor{
++                        totalBarRc, task.taskId, progressPresentation.fraction * 100.0, ! progressPresentation.determinate};
+                     progressDescriptor.segmented             = task.verificationRequested;
+                     progressDescriptor.primarySegmentValue   = VerificationTransferProgressPercent(task);
+                     progressDescriptor.secondarySegmentValue = VerificationProofProgressPercent(task);

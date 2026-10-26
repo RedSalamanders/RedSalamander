@@ -1,0 +1,390 @@
+Common/WindowMessages.h:37:43: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kTerminalOutputReady   = WM_APP + 0x365;
+                                          ^
+Common/WindowMessages.h:38:45: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kTerminalSessionExited = WM_APP + 0x366;
+                                            ^
+Common/WindowMessages.h:39:46: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kTerminalClipboardWrite = WM_APP + 0x367;
+                                             ^
+Common/WindowMessages.h:40:42: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kTerminalKittyReady = WM_APP + 0x368;
+                                         ^
+Common/WindowMessages.h:65:46: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kFileOperationCompleted           = WM_APP + 0x450;
+                                             ^
+Common/WindowMessages.h:66:56: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kFileOperationPresentationChanged = WM_APP + 0x455;
+                                                       ^
+Common/WindowMessages.h:68:55: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kFileOperationClipboardMoveReady  = WM_APP + 0x459;
+                                                      ^
+Common/WindowMessages.h:437:47: error: code should be clang-formatted [-Wclang-format-violations]
+    ViewerTextDebugGeometryOperation operation          = ViewerTextDebugGeometryOperation::ProbeLayout;
+                                              ^
+Common/WindowMessages.h:438:53: error: code should be clang-formatted [-Wclang-format-violations]
+    ViewerTextDebugAsyncStreamFault asyncStreamFault    = ViewerTextDebugAsyncStreamFault::None;
+                                                    ^
+Common/WindowMessages.h:439:27: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t cacheMaxEntries                              = 0u;
+                          ^
+Common/WindowMessages.h:440:25: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t cacheMaxBytes                                = 0u;
+                        ^
+Common/WindowMessages.h:441:24: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t segmentStart                                 = 0u;
+                       ^
+Common/WindowMessages.h:442:22: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t segmentEnd                                   = 0u;
+                     ^
+Common/WindowMessages.h:443:24: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t textPosition                                 = 0u;
+                       ^
+Common/WindowMessages.h:444:22: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t rangeStart                                   = 0u;
+                     ^
+Common/WindowMessages.h:445:20: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t rangeEnd                                     = 0u;
+                   ^
+Common/WindowMessages.h:446:23: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t logicalLine                                  = 0u;
+                      ^
+Common/WindowMessages.h:447:19: error: code should be clang-formatted [-Wclang-format-violations]
+    float widthDip                                      = 0.0f;
+                  ^
+Common/WindowMessages.h:448:15: error: code should be clang-formatted [-Wclang-format-violations]
+    float hitX                                          = 0.0f;
+              ^
+Common/WindowMessages.h:449:34: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t normalizedTextPosition = 0u;
+                                 ^
+Common/WindowMessages.h:450:32: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t previousTextPosition   = 0u;
+                               ^
+Common/WindowMessages.h:451:28: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t nextTextPosition       = 0u;
+                           ^
+Common/WindowMessages.h:452:27: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t hitTextPosition        = 0u;
+                          ^
+Common/WindowMessages.h:453:17: error: code should be clang-formatted [-Wclang-format-violations]
+    float caretX                  = 0.0f;
+                ^
+Common/WindowMessages.h:454:20: error: code should be clang-formatted [-Wclang-format-violations]
+    float rangeLeft               = 0.0f;
+                   ^
+Common/WindowMessages.h:455:21: error: code should be clang-formatted [-Wclang-format-violations]
+    float rangeRight              = 0.0f;
+                    ^
+Common/WindowMessages.h:456:31: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t wrappedSegmentCount    = 0u;
+                              ^
+Common/WindowMessages.h:457:31: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t wrappedCoveredStart    = 0u;
+                              ^
+Common/WindowMessages.h:458:29: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t wrappedCoveredEnd      = 0u;
+                            ^
+Common/WindowMessages.h:459:37: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t wrappedSecondSegmentStart = 0u;
+                                    ^
+Common/WindowMessages.h:460:35: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t wrappedSecondSegmentEnd   = 0u;
+                                  ^
+Common/WindowMessages.h:461:26: error: code should be clang-formatted [-Wclang-format-violations]
+    float wrappedWidthDip         = 0.0f;
+                         ^
+Common/WindowMessages.h:462:31: error: code should be clang-formatted [-Wclang-format-violations]
+    float wrappedLineHeightDip    = 0.0f;
+                              ^
+Common/WindowMessages.h:463:32: error: code should be clang-formatted [-Wclang-format-violations]
+    bool wrappedHasGapOrOverlap   = false;
+                               ^
+Common/WindowMessages.h:464:31: error: code should be clang-formatted [-Wclang-format-violations]
+    bool wrappedAllSegmentsFit    = false;
+                              ^
+Common/WindowMessages.h:465:19: error: code should be clang-formatted [-Wclang-format-violations]
+    HRESULT result                = E_UNEXPECTED;
+                  ^
+Common/WindowMessages.h:481:20: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t offset = 0u;
+                   ^
+Common/WindowMessages.h:541:18: error: code should be clang-formatted [-Wclang-format-violations]
+    bool hasImage              = false;
+                 ^
+Common/WindowMessages.h:542:29: error: code should be clang-formatted [-Wclang-format-violations]
+    bool displayingThumbnail   = false;
+                            ^
+Common/WindowMessages.h:543:29: error: code should be clang-formatted [-Wclang-format-violations]
+    uint16_t baseOrientation   = 1u;
+                            ^
+Common/WindowMessages.h:544:29: error: code should be clang-formatted [-Wclang-format-violations]
+    uint16_t viewOrientation   = 1u;
+                            ^
+Common/WindowMessages.h:545:25: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t sourceWidth       = 0u;
+                        ^
+Common/WindowMessages.h:546:26: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t sourceHeight      = 0u;
+                         ^
+Common/WindowMessages.h:547:27: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t orientedWidth     = 0u;
+                          ^
+Common/WindowMessages.h:548:28: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t orientedHeight    = 0u;
+                           ^
+Common/WindowMessages.h:628:32: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t cleanupCompletions           = 0;
+                               ^
+Common/WindowMessages.h:629:34: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t deferredCleanupCount         = 0;
+                                 ^
+Common/WindowMessages.h:630:30: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t cleanupDeferrals             = 0;
+                             ^
+Common/WindowMessages.h:631:35: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t cleanupSubmitFailures        = 0;
+                                  ^
+Common/WindowMessages.h:632:39: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t cleanupAllocationFailures    = 0;
+                                      ^
+Common/WindowMessages.h:633:37: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t asyncResultPostFailures      = 0;
+                                    ^
+Common/WindowMessages.h:634:31: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t loadPostFallbacks            = 0;
+                              ^
+Common/WindowMessages.h:635:34: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t cleanupPostFallbacks         = 0;
+                                 ^
+Common/WindowMessages.h:636:22: error: code should be clang-formatted [-Wclang-format-violations]
+    bool closePending                     = false;
+                     ^
+Common/WindowMessages.h:656:21: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t delayMs = 0;
+                    ^
+Common/WindowMessages.h:662:25: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t loadDelayMs = 0;
+                        ^
+Common/WindowMessages.h:663:28: error: code should be clang-formatted [-Wclang-format-violations]
+    bool failNextLoadSubmit = false;
+                           ^
+Common/WindowMessages.h:664:36: error: code should be clang-formatted [-Wclang-format-violations]
+    bool failNextLoadCompletionPost = false;
+                                   ^
+Common/WindowMessages.h:666:31: error: code should be clang-formatted [-Wclang-format-violations]
+    bool failNextCleanupSubmit = false;
+                              ^
+Common/WindowMessages.h:667:35: error: code should be clang-formatted [-Wclang-format-violations]
+    bool failNextCleanupAllocation = false;
+                                  ^
+Common/WindowMessages.h:719:45: error: code should be clang-formatted [-Wclang-format-violations]
+    ViewerSpacePerfRendererMode rendererMode = ViewerSpacePerfRendererMode::None;
+                                            ^
+Common/WindowMessages.h:720:39: error: code should be clang-formatted [-Wclang-format-violations]
+    ViewerSpacePerfScanState scanState       = ViewerSpacePerfScanState::NotStarted;
+                                      ^
+Common/WindowMessages.h:721:25: error: code should be clang-formatted [-Wclang-format-violations]
+    bool hasRenderTarget                     = false;
+                        ^
+Common/WindowMessages.h:722:30: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t realDirectoryCount                = 0u;
+                             ^
+Common/WindowMessages.h:723:30: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t fileCandidateCount                = 0u;
+                             ^
+Common/WindowMessages.h:724:26: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t syntheticCount                    = 0u;
+                         ^
+Common/WindowMessages.h:725:29: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t pendingQueueCount                 = 0u;
+                            ^
+Common/WindowMessages.h:726:31: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t pendingQueueBytes               = 0u;
+                              ^
+Common/WindowMessages.h:727:25: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t drawItemCount                     = 0u;
+                        ^
+Common/WindowMessages.h:728:28: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t visibleTileCount                  = 0u;
+                           ^
+Common/WindowMessages.h:729:27: error: code should be clang-formatted [-Wclang-format-violations]
+    size_t culledTileCount                   = 0u;
+                          ^
+Common/WindowMessages.h:730:28: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t rootTotalBytes                  = 0u;
+                           ^
+Common/WindowMessages.h:731:32: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t fileCandidateBytes              = 0u;
+                               ^
+Common/WindowMessages.h:732:28: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t syntheticBytes                  = 0u;
+                           ^
+Common/WindowMessages.h:733:31: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t lastTileDrawCount               = 0u;
+                              ^
+Common/WindowMessages.h:734:31: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t lastTextDrawCount               = 0u;
+                              ^
+Common/WindowMessages.h:735:35: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t staticCacheGeneration           = 0u;
+                                  ^
+Common/WindowMessages.h:736:29: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t staticCacheHits                 = 0u;
+                            ^
+Common/WindowMessages.h:737:31: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t staticCacheMisses               = 0u;
+                              ^
+Common/WindowMessages.h:738:36: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t staticCacheRecordCount          = 0u;
+                                   ^
+Common/WindowMessages.h:739:30: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t staticCacheBytes                = 0u;
+                             ^
+Common/WindowMessages.h:740:36: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t scanCacheSnapshotBytes          = 0u;
+                                   ^
+Common/WindowMessages.h:741:37: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t lastStaticCacheRecordUs         = 0u;
+                                    ^
+Common/WindowMessages.h:742:25: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t lastPaintUs                     = 0u;
+                        ^
+Common/WindowMessages.h:743:26: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t lastLayoutUs                    = 0u;
+                         ^
+Common/WindowMessages.h:744:25: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t lastDrainUs                     = 0u;
+                        ^
+Common/WindowMessages.h:745:33: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t lastWorkingSetBytes             = 0u;
+                                ^
+Common/WindowMessages.h:746:27: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t lastHitTestUs                   = 0u;
+                          ^
+Common/WindowMessages.h:747:42: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t lastHitTestCandidatesChecked    = 0u;
+                                         ^
+Common/WindowMessages.h:748:42: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t effectiveFileCandidateBudget    = 0u;
+                                         ^
+Common/WindowMessages.h:749:39: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t rendererDeviceCreateCount       = 0u;
+                                      ^
+Common/WindowMessages.h:750:34: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t swapChainResizeCount            = 0u;
+                                 ^
+Common/WindowMessages.h:751:38: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t rendererBrushCreateCount        = 0u;
+                                     ^
+Common/WindowMessages.h:752:43: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t rendererTextFormatCreateCount   = 0u;
+                                          ^
+Common/WindowMessages.h:753:30: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t swapChainWidthPx                = 0u;
+                             ^
+Common/WindowMessages.h:754:31: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t swapChainHeightPx               = 0u;
+                              ^
+Common/WindowMessages.h:755:34: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t rendererFailureStage            = 0u;
+                                 ^
+Common/WindowMessages.h:756:31: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t rendererFailureHr               = 0u;
+                              ^
+Common/WindowMessages.h:757:30: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t layoutGeneration                = 0u;
+                             ^
+Common/WindowMessages.h:758:30: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t hitGridCellCount                = 0u;
+                             ^
+Common/WindowMessages.h:759:41: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t hitGridMaxCandidatesPerCell     = 0u;
+                                        ^
+Common/WindowMessages.h:760:28: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t aggregateBytes                  = 0u;
+                           ^
+Common/WindowMessages.h:761:30: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t aggregateFolders                = 0u;
+                             ^
+Common/WindowMessages.h:762:28: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t aggregateFiles                  = 0u;
+                           ^
+Common/WindowMessages.h:763:28: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t scannedFolders                  = 0u;
+                           ^
+Common/WindowMessages.h:764:26: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t scannedFiles                    = 0u;
+                         ^
+Common/WindowMessages.h:765:33: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t childReferenceCount             = 0u;
+                                ^
+Common/WindowMessages.h:766:29: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t childArenaSlots                 = 0u;
+                            ^
+Common/WindowMessages.h:767:33: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t childArenaFreeSlots             = 0u;
+                                ^
+Common/WindowMessages.h:768:34: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t modelAcceptedEntries            = 0u;
+                                 ^
+Common/WindowMessages.h:769:34: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t modelRejectedEntries            = 0u;
+                                 ^
+Common/WindowMessages.h:770:36: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t modelCappedDirectories          = 0u;
+                                   ^
+Common/WindowMessages.h:771:30: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t modelCappedFiles                = 0u;
+                             ^
+Common/WindowMessages.h:772:36: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t modelRetainedNameBytes          = 0u;
+                                   ^
+Common/WindowMessages.h:773:42: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t modelRetainedChildReferences    = 0u;
+                                         ^
+Common/WindowMessages.h:774:39: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t modelTraversedDirectories       = 0u;
+                                      ^
+Common/WindowMessages.h:775:41: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t modelRetainedDirectoryLimit     = 0u;
+                                        ^
+Common/WindowMessages.h:776:36: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t modelRetainedFileLimit          = 0u;
+                                   ^
+Common/WindowMessages.h:777:38: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t modelChildReferenceLimit        = 0u;
+                                     ^
+Common/WindowMessages.h:778:38: error: code should be clang-formatted [-Wclang-format-violations]
+    uint64_t modelChildArenaSlotLimit        = 0u;
+                                     ^
+Common/WindowMessages.h:779:34: error: code should be clang-formatted [-Wclang-format-violations]
+    uint32_t modelValidationError            = 0u;
+                                 ^
+Common/WindowMessages.h:807:58: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kViewerSpaceDebugGetTooltipSnapshot = WM_APP + 0x61B;
+                                                         ^
+Common/WindowMessages.h:808:58: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kViewerSpaceDebugShowTooltipOverlay = WM_APP + 0x61C;
+                                                         ^
+Common/WindowMessages.h:809:55: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kViewerSpaceDebugGetPerfSnapshot    = WM_APP + 0x61D;
+                                                      ^
+Common/WindowMessages.h:810:55: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kViewerSpaceDebugForcePerfSample    = WM_APP + 0x61E;
+                                                      ^
+Common/WindowMessages.h:811:57: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kViewerSpaceDebugCompareHitTesting  = WM_APP + 0x61F;
+                                                        ^
+Common/WindowMessages.h:812:58: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kViewerSpaceDebugForceRendererFault = WM_APP + 0x623;
+                                                         ^
+Common/WindowMessages.h:825:48: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kAlertOverlayInvokeButton = WM_APP + 0x72;
+                                               ^
+Common/WindowMessages.h:827:48: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kAlertOverlayInvokeOption = WM_APP + 0x74;
+                                               ^
+Common/WindowMessages.h:828:43: error: code should be clang-formatted [-Wclang-format-violations]
+inline constexpr UINT kAlertOverlayUiaCall = WM_APP + 0x76;
+                                          ^

@@ -1,0 +1,70 @@
+{
+  "branch": "ej/viewerspace-desktop-preservation",
+  "baseCommit": "5141305d9c1d284c031d325d2e448fcd4a13a1d9",
+  "buildReceipt": "207b626a3c304933a1808af881c394531cfdf201a2c58c093ff57476f6333657",
+  "profile": "x64 Debug, tests enabled, Embedded compiler debug information",
+  "command": "ViewerPETests.exe --group=noninteractive",
+  "sourceHashes": [
+    {
+      "path": "Tests/TestSupport/TestSupport.Tests.DesktopObservation.h",
+      "sha256": "FE50012E0E377CBA479B3894FED9F453F5698F00DB1240B748E8BABE7CCF12D1"
+    },
+    {
+      "path": "Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.h",
+      "sha256": "C73BBB273CC92D7A61C9DF3901BBCF4B63C442667D76C856164D0DB7B940D441"
+    },
+    {
+      "path": "Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp",
+      "sha256": "346E1864B4451BA5685EFD80FE5C7ECAB3E5A4924A2E3A0B0ED7527AD95D7D74"
+    },
+    {
+      "path": "Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp",
+      "sha256": "D489CC492CC1BF4CFB38F53D9D017E5F430436F068142F6167BE80FF6CE8E03F"
+    },
+    {
+      "path": "Tests/ViewerPETests/ViewerPETests.vcxproj",
+      "sha256": "9F4ABEC9A6EE789D6F3BBAFA754B9EB47D497881839606DCAA7B9A92553C1F25"
+    }
+  ],
+  "exeSha256": "0FA1706EABB59CF8996708EB3E6FA0FAEA6C1248DEDF8F80A6C1B1F6A65474C9",
+  "pluginSha256": "04C185D078886429299DA0605EAB7DE0412AC4C6C35A9A26C47CE7D619CA41DD",
+  "runId": "20261016T124656Z-61832-75823e50612a4e19a777f7267aa61506",
+  "testRoot": "Z:\\RedSalamander.Perf",
+  "nativeChildTimeoutSeconds": 120,
+  "outerProcessTimeoutSeconds": 600,
+  "result": "FAILED",
+  "exitCode": 1,
+  "elapsedMs": 74944,
+  "desktopWitnesses": [
+    "[INFO] ViewerSpace desktop witness: samples=11 cursorChanges=0 foregroundChanges=0 inputChanges=4 ownedTransitions=0 barrierUs=113 failure=0",
+    "[INFO] ViewerSpace desktop witness: samples=11 cursorChanges=10 foregroundChanges=10 inputChanges=10 ownedTransitions=0 barrierUs=158 failure=0",
+    "[INFO] ViewerSpace lifecycle desktop witness: samples=31 cursorChanges=5 foregroundChanges=2 inputChanges=11 ownedTransitions=0 barrierUs=116"
+  ],
+  "failures": [
+    "[FAIL] 04-refresh-pending-retained-display lifecycle state and displayed model remain stable across capture",
+    "[FAIL] TestViewerSpaceLifecycleCaptures fresh harness run passes"
+  ],
+  "sourceHashesAfter": [
+    {
+      "path": "Tests/TestSupport/TestSupport.Tests.DesktopObservation.h",
+      "sha256": "FE50012E0E377CBA479B3894FED9F453F5698F00DB1240B748E8BABE7CCF12D1"
+    },
+    {
+      "path": "Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.h",
+      "sha256": "C73BBB273CC92D7A61C9DF3901BBCF4B63C442667D76C856164D0DB7B940D441"
+    },
+    {
+      "path": "Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp",
+      "sha256": "346E1864B4451BA5685EFD80FE5C7ECAB3E5A4924A2E3A0B0ED7527AD95D7D74"
+    },
+    {
+      "path": "Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp",
+      "sha256": "D489CC492CC1BF4CFB38F53D9D017E5F430436F068142F6167BE80FF6CE8E03F"
+    },
+    {
+      "path": "Tests/ViewerPETests/ViewerPETests.vcxproj",
+      "sha256": "9F4ABEC9A6EE789D6F3BBAFA754B9EB47D497881839606DCAA7B9A92553C1F25"
+    }
+  ],
+  "exeSha256After": "0FA1706EABB59CF8996708EB3E6FA0FAEA6C1248DEDF8F80A6C1B1F6A65474C9"
+}

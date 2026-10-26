@@ -1,0 +1,82 @@
+{
+  "scenario": "monitor.chrome.dxui_toolbar_statusstrip",
+  "status": "passed",
+  "summary": "Monitor DxUI toolbar/status strip selftest passed.",
+  "machineHash": "4cb089111a23",
+  "runId": "2026-07-16_230405",
+  "checks": [
+    {"name": "toolbar host created", "status": "passed", "detail": ""},
+    {"name": "status host created", "status": "passed", "detail": ""},
+    {"name": "toolbar host visible", "status": "passed", "detail": ""},
+    {"name": "toolbar root type", "status": "passed", "detail": ""},
+    {"name": "status root type", "status": "passed", "detail": ""},
+    {"name": "toolbar rendered", "status": "passed", "detail": ""},
+    {"name": "status rendered", "status": "passed", "detail": ""},
+    {"name": "toolbar present failures", "status": "passed", "detail": ""},
+    {"name": "status present failures", "status": "passed", "detail": ""},
+    {"name": "toolbar new label", "status": "passed", "detail": ""},
+    {"name": "toolbar open label", "status": "passed", "detail": ""},
+    {"name": "toolbar save label", "status": "passed", "detail": ""},
+    {"name": "toolbar copy label", "status": "passed", "detail": ""},
+    {"name": "toolbar show ids toggle sync", "status": "passed", "detail": ""},
+    {"name": "status section count", "status": "passed", "detail": ""},
+    {"name": "status auto section", "status": "passed", "detail": ""},
+    {"name": "status filter section", "status": "passed", "detail": ""},
+    {"name": "status visible section", "status": "passed", "detail": ""},
+    {"name": "status total section", "status": "passed", "detail": ""},
+    {"name": "status etw section", "status": "passed", "detail": ""},
+    {"name": "clear resets selection and caret", "status": "passed", "detail": ""},
+    {"name": "etw overload stays bounded", "status": "passed", "detail": "queued=0 retained=24 dropped=56"},
+    {"name": "toolbar compact density", "status": "passed", "detail": ""},
+    {"name": "status compact density", "status": "passed", "detail": ""},
+    {"name": "toolbar reduced motion override", "status": "passed", "detail": ""},
+    {"name": "status reduced motion override", "status": "passed", "detail": ""},
+    {"name": "toolbar compact height shrinks", "status": "passed", "detail": "baseline=42 compact=36"},
+    {"name": "status compact height shrinks", "status": "passed", "detail": "baseline=24 compact=20"},
+    {"name": "monitor backdrop applied", "status": "passed", "detail": "kind=4"},
+    {"name": "toolbar hides via command", "status": "passed", "detail": ""},
+    {"name": "toolbar re-shows via command", "status": "passed", "detail": ""},
+    {"name": "toolbar rerenders after re-show", "status": "passed", "detail": ""},
+    {"name": "show ids toggled", "status": "passed", "detail": ""},
+    {"name": "toolbar toggle tracks show ids", "status": "passed", "detail": ""},
+    {"name": "show ids restored", "status": "passed", "detail": ""},
+    {"name": "status filter section changes", "status": "passed", "detail": ""},
+    {"name": "status filter section restores", "status": "passed", "detail": ""},
+    {"name": "etw batch queue drained", "status": "passed", "detail": "before=0 after=260 expectedDelta=260"},
+    {"name": "required monitor frame metrics", "status": "passed", "detail": ""},
+    {"name": "overall", "status": "passed", "detail": "Monitor DxUI toolbar/status strip selftest passed."}
+  ],
+  "monitorFrameMetricPresence": {
+    "allPresent": true,
+    "metrics": [
+      {"metric": "monitor.frame.total_us", "present": true, "count": 6},
+      {"metric": "monitor.frame.present_us", "present": true, "count": 6},
+      {"metric": "monitor.frame.append_to_visible_us", "present": true, "count": 2},
+      {"metric": "monitor.frame.tail_layout_us", "present": true, "count": 16},
+      {"metric": "monitor.frame.mode", "present": true, "count": 6},
+      {"metric": "monitor.etw.batch_drain_us", "present": true, "count": 3}
+    ]
+  },
+  "monitorEtwBurstLatency": {
+    "enabled": false,
+    "count": 60,
+    "payloadChars": 260,
+    "metricPresence": {
+      "allPresent": true,
+      "metrics": [
+      ]
+    },
+    "metricSummary": [
+    ]
+  },
+  "monitorScrollbackSelfTest": {
+    "enabled": false,
+    "metricPresence": {
+      "allPresent": true,
+      "metrics": [
+      ]
+    },
+    "metricSummary": [
+    ]
+  }
+}

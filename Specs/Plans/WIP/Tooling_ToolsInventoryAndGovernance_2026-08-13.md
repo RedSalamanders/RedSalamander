@@ -11,8 +11,10 @@
 ## Status
 
 - **State:** ACTIVE — requested simplification and build-safety hardening are
-  complete; Full-suite closeout remains blocked by unrelated Commands self-test
-  failures
+  complete; Full-suite closeout remains open. A 2026-10-17 evidence pass found no
+  later Full whose source identity covers this plan's Tools tree (`bae5f9546`).
+  See "Full-source mapping checked 2026-10-17" below. Do not treat the September 8
+  or October 1 aggregate passes as this plan's Full.
 - **Priority:** P1 developer-experience and CI maintainability
 - **Planned at:** `f9cee9d47`
 - **Ownership boundary:** `Tools/`, direct build/workflow/documentation callers,
@@ -179,9 +181,52 @@ The main confirmed maintenance problems are:
   `cmd_preferences_dialog_keyboard_export_live_dx_interaction`, and
   `cmd_preferences_dialog_themes_save_theme_live_dx_interaction`.
   No application-source fix was attempted as part of this Tools-only plan.
-- Closeout remains: resolve or independently establish the Commands baseline,
-  rerun the canonical Full suite, then check the final two items and move this
-  plan to `Specs/Plans/Done/`.
+- Closeout remains: a canonical Full whose tested Tools identity covers
+  `bae5f9546`, then the exact Done-path admission in `Specs/README.md` and the move
+  to `Specs/Plans/Done/`. The 2026-10-17 mapping below did not find that Full.
+  Do not repeat the September 8 / October 1 search as if it were still open.
+
+## Full-source mapping checked 2026-10-17
+
+This section records the search so the next reader does not repeat it. The plan
+stays in `Specs/Plans/WIP/`. The Full checkbox and the move to Done stay open.
+Done-path admission (the `Test-RSProtectedDoneHistory` additional-path allowlist
+and its focused positive/sibling-negative test) was not added, because this file
+is not moving.
+
+- The implementation text in this file is commit `bae5f9546` (2026-08-13). At that
+  commit, `Specs/Testing/Testing_ToolingGovernance.md` is SHA-256
+  `e6612e7869ebfbbdcc0dd79b61ca952eb2162e1a7a69efa6db43ce27c24f232f` (15,826 bytes)
+  and `Tools/README.md` is SHA-256
+  `703f78ed9fd798f6c014bae200b2e8ba852f9193fff7c2568d8b2a532a8400f6` (15,126 bytes).
+- The failing Full named above (Commands 405/18/0) has no run id in this plan.
+  `Specs/TestRuns/4cb089111a23/Full/` has no archive newer than 2026-07-04, so that
+  failed run was not found there.
+- September 8 Fresh Full `20260908T104319Z-97448-ff25c4b1b0d545fe9b3654fc1edfb85f`
+  passed 2,113/0/52 on git `892f92358e9a4bab17fa07ab81d0604e36849885`, snapshot
+  `586e01641d3b534ad321b5b3a4be717601c6398c4e08fde66d3fd85223a24e10`. Archive:
+  `Specs/TestRuns/4cb089111a23/FileOps/2026-09-08_104319_br4_br5_br7_keyboard_fresh_full/`.
+  Its workspace snapshot does not list dirty `Tools/` files. The later same-day Full
+  `20260908T200723Z-69288-1db8a2860de7474ebbc2f9164aa99216` passed 2,116/0/52
+  (archive `Specs/TestRuns/4cb089111a23/Commands/2026-09-08_200340_i12_final_full/`).
+  Its case history marks all 18 original Commands names in this plan as `passed`.
+- Those runs do not cover this plan's Tools identity. `bae5f9546` is an ancestor of
+  `892f92358`, and ancestry is not the mapping. `git diff --stat bae5f9546c 892f92358`
+  on `Tools/`, `Specs/Testing/Testing_ToolingGovernance.md`,
+  `.github/skills/tooling-governance/`, `AGENTS.md`, `Directory.Build.targets`,
+  `RuntimeDependencies.props`, `build.ps1`, and `vcpkg-install.ps1` is 81 files,
+  +19,163/−1,992. At `892f92358` the governance spec is SHA-256
+  `d25ce1b93df7a0a437041c6b46625d7f5b41d432e385f3e11b7e9061d7b83c3e` (21,264 bytes),
+  not the plan commit's hash. The I12 final also tested an uncommitted edit of that
+  file (`worktree_sha256`
+  `b2634c3f204be8583946a4086ed07b3a42e327c335c49d08cc0af96f9d8df15d`).
+- Release Full `20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e` (2,211/0/46,
+  snapshot `f2e0a18a04fbc8a95368adc0c946bafb5ebccdf68d81b4a476d0fefbd323593c`, git
+  `ccebd5af68eb45f2e9deed64a7063780e71eb1ce`) is the I26 packet at
+  `Specs/TestRuns/4cb089111a23/Validation/2026-10-01_i26-v65-final/`. It is a later,
+  different Tools tree and does not qualify this plan.
+- No archived Full under `Specs/TestRuns` was found with the `bae5f9546` governance
+  hash. A new Full was not started.
 
 ## Follow-up simplification and build-safety hardening
 

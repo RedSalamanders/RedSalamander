@@ -6,6 +6,22 @@
 #include <windows.h>
 
 #include "Common.h"
+#include "SynchronousIoCancelWatch.h"
+
+namespace Common::SynchronousIoCancelWatch
+{
+namespace
+{
+// I35 R7.4: one owned-stage cleanup deadline per thread, shared by every module of the process, so a
+// window a provider opens on a host worker thread is seen by the host's watch too (see the header).
+thread_local std::atomic<ULONGLONG> g_cleanupDeadlineTick{0u};
+} // namespace
+
+std::atomic<ULONGLONG>* CurrentThreadCleanupDeadline() noexcept
+{
+    return &g_cleanupDeadlineTick;
+}
+} // namespace Common::SynchronousIoCancelWatch
 
 // This is an example of an exported variable
 COMMON_API int nCommon = 0;

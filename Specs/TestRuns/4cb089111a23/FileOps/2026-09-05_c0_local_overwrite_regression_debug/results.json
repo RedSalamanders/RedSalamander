@@ -1,0 +1,45 @@
+{
+    "run_started_utc": "2026-09-05T08:24:10.102Z",
+    "duration_ms": 2092,
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "Floodgate_LocalCopyOverwriteIsStaged",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-local-overwrite-regression-20260905\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 1468,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": true,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "Floodgate_LocalCopyOverwriteIsStaged",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1343,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Floodgate_LocalCopyOverwriteIsStaged",
+                    "status": "passed",
+                    "duration_ms": 79,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 46,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

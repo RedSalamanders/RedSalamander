@@ -1,0 +1,14 @@
+{
+  "run_id": "20261018T172004Z-33980-78b14fa7dca24b4f9fd76967c18ee92f",
+  "case_filter": "FileOps_SelectionShapeSmb",
+  "configuration": "Release",
+  "receipt_id": "dae9be77903a13b0c4c04f066688b482a526634e70e91f0e100155e9a6f8b653",
+  "source_snapshot_id": "c082d2f0e73ff46f23fcd48e6a666ec87e2e4c3185fc8a20b5717fc3f244bd01",
+  "exit_code": 0,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "raw_archive": "Z:/RedSalamander.Perf/evidence/completed-card-collapse/20261018T172004Z-33980-78b14fa7dca24b4f9fd76967c18ee92f/artifacts",
+  "activation": "governed-no-activation",
+  "new_collapse_regression_rows": 0
+}

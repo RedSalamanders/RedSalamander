@@ -1,0 +1,214 @@
+[
+  {
+    "Path": ".gitattributes",
+    "Sha256": "260531cf9c96567d69a7038a5c2420d8da55ab10dd1b9cc8762fe553eddb3f94"
+  },
+  {
+    "Path": "AGENTS.md",
+    "Sha256": "fb9bc2faf6d8adf14c462175a2ef2d48a980b6ad3006b2f2771dc1b978fcbeba"
+  },
+  {
+    "Path": "docs/CommandPalette.md",
+    "Sha256": "ca90ff9edafb5d1f3f92792b4b788b64fffcd579149090e862ed8fa00eeab1bb"
+  },
+  {
+    "Path": "docs/Connections.md",
+    "Sha256": "db477686b104b1973f90e07c965decea8a32e15b3a6864b648046767e5ee66a6"
+  },
+  {
+    "Path": "docs/dev/FileOperationsEngine.md",
+    "Sha256": "c4fe04fe161ce50bc64acba0071168fec7b7c430f1fb5dea16a101160553c2b4"
+  },
+  {
+    "Path": "docs/dev/FileSystemPlugins.md",
+    "Sha256": "3601d259911bba9ed91900bd61a5308cc0898f4a33775b1c88d235ed157bd475"
+  },
+  {
+    "Path": "docs/dev/TestingAndScreenshots.md",
+    "Sha256": "be8f8fdd02d2fcb84afb801cf071c77591d8e587ccf00f06ce25fca9e3adf5b4"
+  },
+  {
+    "Path": "docs/DeveloperGuide.md",
+    "Sha256": "1861a2371213ff472f4f7d19a767a815fbcd1af45e2d51d57f7d604f8f866591"
+  },
+  {
+    "Path": "docs/DocumentationMap.md",
+    "Sha256": "d5820be12db3b3426f35bfb4ac9de3748c3afb201649b8c838200c9d03a69e31"
+  },
+  {
+    "Path": "docs/FileOperations.md",
+    "Sha256": "c7f57fb1bef5ebed0b334688fe05610705a77ab5dd77e795fdd73b4b0bdabb13"
+  },
+  {
+    "Path": "docs/FindFiles.md",
+    "Sha256": "2f82228088ea3b90156eaf8a929da35d338e1ca7e836f678e610eba8752c026c"
+  },
+  {
+    "Path": "docs/GettingStarted.md",
+    "Sha256": "b4d2165a5d6a1fd8ca6c5fe9f016c386874f020a4def09f13b384a0b8ea6c0f4"
+  },
+  {
+    "Path": "docs/MainWindow.md",
+    "Sha256": "d9969bb82d3e68e10d31852e0c4d5d4f4801ab937ba53a845b13aec9361cf6bd"
+  },
+  {
+    "Path": "docs/NavigationAndPaths.md",
+    "Sha256": "8a6c5e742500c42be5768fd6ae415914d24c97cdd2513c3add0be86699f3dc69"
+  },
+  {
+    "Path": "docs/Plugins.md",
+    "Sha256": "7f7acd1a8c65f6376d3c90e01944ffc16f306bab2a2d801b21985e2422a7e8d5"
+  },
+  {
+    "Path": "docs/PortableDevices.md",
+    "Sha256": "2ae29f2e1a766e09238e7b8454b201c5c579341ca14c1c1acb9b50b97aa0e546"
+  },
+  {
+    "Path": "docs/Preferences.md",
+    "Sha256": "98b4409b72e6173b5819fd054b3f782a088fcc949a1875fe9edd3d014e20a8ac"
+  },
+  {
+    "Path": "docs/README.md",
+    "Sha256": "1ae995033ac7c4711b19e63a86d1ca295772777875242824a1441c41ab816aff"
+  },
+  {
+    "Path": "docs/release-note/vLast.md",
+    "Sha256": "6a32bab0057c0bda07a9db536e8686b08a826fdc87ca1a3b8f1a382fc250b85d"
+  },
+  {
+    "Path": "docs/res/file-operations-counting.png",
+    "Sha256": "bc1b9d66106db8aeb5ab0556682e93525026208f0041728a1f2945c412396fce"
+  },
+  {
+    "Path": "docs/res/file-operations-counting.provenance.json",
+    "Sha256": "2d3858e2297d09ae96fe2d0f815568da2176fe214f0544d3d47a9da55217202c"
+  },
+  {
+    "Path": "docs/res/file-operations-issues.provenance.json",
+    "Sha256": "8f125d413f3f88893a68db1e17ae3cfe30905fab9fb7be72de92df634784a998"
+  },
+  {
+    "Path": "docs/res/file-operations-popup.provenance.json",
+    "Sha256": "f5188c0ec9e8520f78add4a1f5f2b3c333febcf6b8c238ba7e49ed30bb6db4f8"
+  },
+  {
+    "Path": "docs/res/file-operations-wrapped-note.png",
+    "Sha256": "653f7b747e4e3d6466914762ff23aa6b4197969d3cb12f0efce6d144ca9c183d"
+  },
+  {
+    "Path": "docs/res/file-operations-wrapped-note.provenance.json",
+    "Sha256": "921218e3e219fb00d920e1e5f0747f13e2e7ea9e4a9631b5f05aac07a2f9550a"
+  },
+  {
+    "Path": "docs/res/README.md",
+    "Sha256": "a1087fb953d0ecc28865b6e4304a864022dfc7097e41768b5afeb28bd5ec32b6"
+  },
+  {
+    "Path": "docs/res/viewer-space-captures.provenance.json",
+    "Sha256": "8146d7e61978cd4a92a07a7ded7e0a010276c84de442680ec4d21ff62d8fb29e"
+  },
+  {
+    "Path": "docs/SelectionsAndLists.md",
+    "Sha256": "fc8348e6e3cc391ec0b24313b15b817cfb01bca9e5a04b9e7fc3446a39c60e5f"
+  },
+  {
+    "Path": "docs/SettingsFile.md",
+    "Sha256": "64e814e905ec1aad15756adffaea9803c9377de2beb7a2182ac7cab954fba97f"
+  },
+  {
+    "Path": "docs/Terminal.md",
+    "Sha256": "a4b5a0e9c3aa2a0d9a2f0a6f3898cc325e84165ec7dd5e83aaddeafde76848f3"
+  },
+  {
+    "Path": "docs/Themes.md",
+    "Sha256": "5f231c9690a2f08c5c089867d22429d89ddc022f525ed360fb97b61726ea954a"
+  },
+  {
+    "Path": "docs/Troubleshooting.md",
+    "Sha256": "75f3f7e660146eb3d2f530fb7025fab44f0347598233481185e6ce506c18fd03"
+  },
+  {
+    "Path": "docs/UserGuide.md",
+    "Sha256": "442c7489a03ce4446f31909c72e253d68089fea5f13011d3a09678395424fd99"
+  },
+  {
+    "Path": "docs/Viewers.md",
+    "Sha256": "34dd9bc4b1d9c7f098a620b673df7d80e7d364755912ea8511078c4eb47f9d2c"
+  },
+  {
+    "Path": "README.md",
+    "Sha256": "c418da5b23015b502d77af9c79b94fb697392b7c5bb261657347fa1175c5cd2f"
+  },
+  {
+    "Path": "RedSalamander/FolderWindow.FileOperations.Popup.cpp",
+    "Sha256": "88663abf9d8852f3a5cbd9751d99993a38d87012e13eeb5ab0a546e01b52b5ac"
+  },
+  {
+    "Path": "RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc",
+    "Sha256": "55e59173ee2915a01f83b3c724424edc65ec830ea97dacf522b80a092e4817f0"
+  },
+  {
+    "Path": "RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc",
+    "Sha256": "b354e04d99e332e34358f7f598c55b94b78ec1426ef6e88ae86d851f8016c6d9"
+  },
+  {
+    "Path": "RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc",
+    "Sha256": "59205c7b05e7eb4f70bb3104538ba73972da4156faad6231f475275378b4ca03"
+  },
+  {
+    "Path": "RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc",
+    "Sha256": "688f148c9fdc5fd91d95189b889d8ddc3b32c0fa8661e78eefa23abf2b9d2d73"
+  },
+  {
+    "Path": "RedSalamander/RedSalamander.rc",
+    "Sha256": "230cc82fb90d14a1f344e014b19a1d39a0c5c0c02a24df8b537433ef16c27282"
+  },
+  {
+    "Path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.VisualGallery.cpp",
+    "Sha256": "981a07c47109522737110f0f2b3c62487722ab2c23b74df191c597d627de9c46"
+  },
+  {
+    "Path": "Specs/NormativeConsistency.json",
+    "Sha256": "01a88e6f283054a586299d97f47aa11e16bae5ddbdb20371887ccae7caf278a5"
+  },
+  {
+    "Path": "Specs/Plans/WIP/Operation_FileOperations_LaterFeatures_2026-09-05.md",
+    "Sha256": "cfa7293042b2c90e56b74a4a7b406e117923d749655fcce1a3b48dcde138df11"
+  },
+  {
+    "Path": "Specs/Testing/Testing_SelfTests.md",
+    "Sha256": "820bc3ad2471bc8fa9f034666d5f650a53282b57920bc9bc62c00d8745471585"
+  },
+  {
+    "Path": "Specs/Testing/Testing_ToolingGovernance.md",
+    "Sha256": "d7e50bd417a81390abb35826c1caeed95cb1d4388b4838e4a7d5550d331b4d9f"
+  },
+  {
+    "Path": "Specs/UI/UI_FileOperationsPopup.md",
+    "Sha256": "aef1eceeffbbd14e9489686c67015bdc1b3a209b60386b749812d0b7bf19d710"
+  },
+  {
+    "Path": "Tests/README.md",
+    "Sha256": "f1245df36755f3b059e6bcb2e435d13156a3fbed38a50e168ba56b44c9320f6f"
+  },
+  {
+    "Path": "Tools/Modules/Tooling/SpecInformationArchitecture.psm1",
+    "Sha256": "ebfaa741c8b1a5fb7df283c7d34138a659e601a4df16193eb35758fff9806932"
+  },
+  {
+    "Path": "Tools/README.md",
+    "Sha256": "ff1ab48e9a68aaf4f0a83263bad7dbae400795b7b1dca885c3aaa51b1ec91fb2"
+  },
+  {
+    "Path": "Tools/Tests/DocumentationDriftContracts.Tests.ps1",
+    "Sha256": "27113f8b647506df93ebcadc4376e9096392fa8754277a1e2132b6ef55897ed2"
+  },
+  {
+    "Path": "Tools/Tests/SpecInformationArchitecture.Tests.ps1",
+    "Sha256": "ead9dcc80a906153f60043ef94efa67daa70669385e88bd43b4a4b8baa687ee9"
+  },
+  {
+    "Path": "Tools/tool-inventory.json",
+    "Sha256": "65494217813d4b26b69e8737b58f3b660a009bbc35b3705cd1650f1a966c8134"
+  }
+]

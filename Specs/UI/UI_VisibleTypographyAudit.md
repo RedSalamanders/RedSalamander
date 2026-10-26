@@ -17,7 +17,7 @@ Last reviewed: 2026-08-04
 
 | Path | Exception | Rationale and owner |
 |---|---|---|
-| `RedSalamander/SelfTest/Commands/Commands.SelfTest.cpp` | `DirectedSelfTestInputWarning` creates a large warning font | Test-only, `ENABLE_TESTS`-guarded desktop-input safety UI. The canonical shared test helper and restoration requirements are owned by `Core_SharedHelpers.md` and `Testing_SelfTests.md`. The font is held by WIL RAII. |
+| `RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp` | `DirectedSelfTestInputWarning` creates a large warning font | Test-only, `ENABLE_TESTS`-guarded desktop-input safety UI. The canonical shared test helper and restoration requirements are owned by `Core_SharedHelpers.md` and `Testing_SelfTests.md`. The font is held by WIL RAII. |
 
 There are no current product-surface typography exceptions. Any new audit result outside the row above is drift and must be resolved in code or explicitly reviewed here before merge.
 

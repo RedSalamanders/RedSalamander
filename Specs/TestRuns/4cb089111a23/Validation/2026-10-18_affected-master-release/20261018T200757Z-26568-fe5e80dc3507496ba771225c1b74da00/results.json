@@ -1,0 +1,68 @@
+{
+    "run_started_utc": "2026-10-18T20:08:37.379Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261018T200757Z-26568-fe5e80dc3507496ba771225c1b74da00\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 193609,
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1250,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase11_CrossFileSystemBridge",
+            "status": "passed",
+            "duration_ms": 11015,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase11_BridgeSingleFolderParallelCopyInFlightLines",
+            "status": "passed",
+            "duration_ms": 25688,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase11_BridgeMultiFolderParallelCopyInFlightLines",
+            "status": "passed",
+            "duration_ms": 97750,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase11_BridgePipelineDummyToDummyPerf",
+            "status": "passed",
+            "duration_ms": 2453,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase11_ConnectionOverridePrecedence",
+            "status": "passed",
+            "duration_ms": 625,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase11_ConnectionOverrideGlobalGate",
+            "status": "passed",
+            "duration_ms": 39734,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase11_ConnectionOverrideClamp",
+            "status": "passed",
+            "duration_ms": 14938,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 156,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

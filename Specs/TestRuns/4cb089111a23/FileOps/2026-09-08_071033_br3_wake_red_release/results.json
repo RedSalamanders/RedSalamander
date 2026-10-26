@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-09-08T07:14:36.788Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260908T071033Z-78696-a24db26346694f068b45ab77d1633524\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 3250,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Causeway paused pipeline reader did not honor the writer-side stop wakeup.",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1172,
+            "repeat_index": 1
+        },
+        {
+            "name": "Causeway_BridgeFailureStatusAndPausedReader",
+            "status": "failed",
+            "duration_ms": 2047,
+            "repeat_index": 1,
+            "reason": "Causeway paused pipeline reader did not honor the writer-side stop wakeup."
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

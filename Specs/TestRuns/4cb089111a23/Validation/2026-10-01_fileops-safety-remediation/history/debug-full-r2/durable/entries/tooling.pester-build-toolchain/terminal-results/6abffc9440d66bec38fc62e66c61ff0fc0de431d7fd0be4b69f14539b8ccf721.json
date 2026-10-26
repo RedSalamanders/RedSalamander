@@ -1,0 +1,1 @@
+{"canonicalization":"rs-canonical-json-v1","counts":{"failed":0,"passed":12,"skipped":0,"total":12},"entry_id":"tooling.pester-build-toolchain","kind":"Pester","reason_codes":[],"schema":"red-salamander.validation-terminal-result.v1","status":"PASSED","terminal_result_digest":"6abffc9440d66bec38fc62e66c61ff0fc0de431d7fd0be4b69f14539b8ccf721"}

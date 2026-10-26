@@ -49,6 +49,41 @@ Describe 'Operation Startrail governed impact graph' {
         @($decision.entries | Where-Object affected).Count | Should Be $decision.entries.Count
     }
 
+    It 'selects every canonical Full entry for unknown inputs and shared test support' {
+        $full = @(Get-RSTestRunPlan -Suite Full -RepoRoot $repoRoot -Platform x64 -Configuration Debug -RedSalamanderExePath (Join-Path $repoRoot '.build/x64/Debug/RedSalamander.exe'))
+        $fullPlan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite Full -Entries $full -ValidationMode Affected
+        foreach ($path in @('Unknown/new.cpp', 'Tests/TestSupport/Support.Tests.TestSandbox.h', 'Tools/Run-AllTests.ps1')) {
+            $decision = Get-RSValidationImpactDecision -Manifest $manifest -WorkspaceSnapshot (New-RSImpactSnapshot @([pscustomobject]@{path=$path;old_path=$null})) -ValidationPlan $fullPlan
+            @($decision.entries | Where-Object affected).Count | Should Be $full.Count
+        }
+    }
+
+    It 'selects the complete native consumer closure for the vendored RedMonitor client and lock' {
+        $full = @(Get-RSTestRunPlan -Suite Full -RepoRoot $repoRoot -Platform x64 -Configuration Debug -RedSalamanderExePath (Join-Path $repoRoot '.build/x64/Debug/RedSalamander.exe'))
+        $fullPlan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite Full -Entries $full -ValidationMode Affected
+        foreach ($case in @(
+            @{ Path = 'ThirdParty/RedMonitor/include/RedMonitor/Client.h'; Rule = 'build.redmonitor-client' },
+            @{ Path = 'Dependencies/RedMonitor.lock.json'; Rule = 'build.redmonitor-lock' }
+        )) {
+            $decision = Get-RSValidationImpactDecision -Manifest $manifest -WorkspaceSnapshot (New-RSImpactSnapshot @([pscustomobject]@{path=$case.Path;old_path=$null})) -ValidationPlan $fullPlan
+            ($decision.matched_impact_rules -contains $case.Rule) | Should Be $true
+            $decision.advisory_build_action | Should Be 'full'
+            @($decision.entries | Where-Object affected).Count | Should Be $full.Count
+        }
+        @($manifest.rules | Where-Object { $_.id -in @('monitor.product', 'scoped.monitor') }).Count | Should Be 0
+    }
+
+    It 'selects SQLite viewer tests without unrelated standalone scenarios' {
+        $full = @(Get-RSTestRunPlan -Suite Full -RepoRoot $repoRoot -Platform x64 -Configuration Debug -RedSalamanderExePath (Join-Path $repoRoot '.build/x64/Debug/RedSalamander.exe'))
+        $fullPlan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite Full -Entries $full -ValidationMode Affected
+        foreach ($path in @('Tests/ViewerSqliteTests/ViewerSqlite.Tests.Runner.cpp', 'Plugins/ViewerSqlite/ViewerSqlite.cpp')) {
+            $decision = Get-RSValidationImpactDecision -Manifest $manifest -WorkspaceSnapshot (New-RSImpactSnapshot @([pscustomobject]@{path=$path;old_path=$null})) -ValidationPlan $fullPlan
+            $affectedIds = @($decision.entries | Where-Object affected | ForEach-Object id)
+            $affectedIds.Count | Should BeGreaterThan 0
+            @($affectedIds | Where-Object {$_ -notlike 'viewer-sqlite.*'}).Count | Should Be 0
+        }
+    }
+
     It 'treats documentation-only changes as no-build with no affected runtime entries' {
         $decision = Get-RSValidationImpactDecision -Manifest $manifest `
             -WorkspaceSnapshot (New-RSImpactSnapshot @([pscustomobject]@{ path = 'Specs/Testing/example.md'; old_path = $null })) `
@@ -97,7 +132,7 @@ Describe 'Operation Startrail governed impact graph' {
     }
 
     It 'routes current product UI tests through their live consumer project' {
-        $rules = @(Get-RSValidationImpactRulesForPath -Manifest $manifest -Path 'Tests/ProductUiTests/ProductUiTests.cpp')
+        $rules = @(Get-RSValidationImpactRulesForPath -Manifest $manifest -Path 'Tests/ProductUiTests/ProductUi.Tests.Runner.cpp')
         $owned = @($rules | Where-Object derived_closure_source -eq 'Tests/ProductUiTests/ProductUiTests.vcxproj')
         $owned.Count | Should Be 1
         (Test-Path -LiteralPath (Join-Path $repoRoot $owned[0].derived_closure_source) -PathType Leaf) | Should Be $true
@@ -112,13 +147,13 @@ Describe 'Operation Startrail governed impact graph' {
             (New-RSTestRunPlanEntry -Id 'selftest.file-operations' -Name FileOps -Kind SelfTest -Path (Join-Path $repoRoot 'app.exe'))
         )
         $productPlan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite Full -Entries $entries -ValidationMode Affected
-        foreach ($path in @('Common/ViewerDxUiTheme.h', 'Dependencies/DxUi.lock.json', 'Tests/ProductUiTests/ProductUiTests.cpp')) {
+        foreach ($path in @('Common/ViewerDxUiTheme.h', 'Dependencies/DxUi.lock.json', 'Tests/ProductUiTests/ProductUi.Tests.Runner.cpp')) {
             (Test-Path -LiteralPath (Join-Path $repoRoot $path) -PathType Leaf) | Should Be $true
             $decision = Get-RSValidationImpactDecision -Manifest $manifest `
                 -WorkspaceSnapshot (New-RSImpactSnapshot @([pscustomobject]@{ path = $path; old_path = $null })) `
                 -ValidationPlan $productPlan
             ($decision.entries | Where-Object id -eq 'standalone.product-ui').affected | Should Be $true
-            if ($path -eq 'Tests/ProductUiTests/ProductUiTests.cpp') {
+            if ($path -eq 'Tests/ProductUiTests/ProductUi.Tests.Runner.cpp') {
                 ($decision.entries | Where-Object id -eq 'selftest.commands').affected | Should Be $false
                 ($decision.entries | Where-Object id -eq 'selftest.file-operations').affected | Should Be $false
             } else {

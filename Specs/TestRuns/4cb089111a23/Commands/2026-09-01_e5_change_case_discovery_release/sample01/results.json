@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-09-01T10:56:25.611Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\e5-final-discovery-release-01\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 5671,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_changeCase",
+            "status": "passed",
+            "duration_ms": 5114,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

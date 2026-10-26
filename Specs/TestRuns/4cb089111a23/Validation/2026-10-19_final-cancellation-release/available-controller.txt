@@ -1,0 +1,1 @@
+Available selections, ViewerSpace and tooling completed. Two real-SMB selections still require the registered NAS.

@@ -1,0 +1,91 @@
+{
+  "schema": "i27.containment-diagnostic-curation.v1",
+  "created_utc": "2026-10-04T11:46:56.7400751Z",
+  "scope": "Small counterbalanced private-helper diagnostic plus canonical focused tooling tests and failed-only historical retention. No native or Full qualification.",
+  "native_or_full_qualification": false,
+  "original_failed_full_verdict": "FAILED",
+  "original_failed_full_archive_complete": false,
+  "records": [
+    {
+      "file": "parity-diagnostic-original.json",
+      "bytes": 29483,
+      "sha256": "0c73e900bafd40c6dea6b01ea5bc139ebf8d4e3778c6a374109fb61a598fcc3a",
+      "original": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-overlay-b3fbb472c7f640a49ef35a64ae2a0119\\overlay-outcome.json",
+      "original_sha_before": "0c73e900bafd40c6dea6b01ea5bc139ebf8d4e3778c6a374109fb61a598fcc3a",
+      "original_sha_after": "0c73e900bafd40c6dea6b01ea5bc139ebf8d4e3778c6a374109fb61a598fcc3a"
+    },
+    {
+      "file": "balanced-diagnostic-original.json",
+      "bytes": 6889,
+      "sha256": "12bb1d5e7595aaee8b99096d4e87e9571d14499e30cab415a81d87779a71bc7e",
+      "original": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-balanced-24a41c564c0f4222822d3bd3c1316a04\\balanced-outcome.json",
+      "original_sha_before": "12bb1d5e7595aaee8b99096d4e87e9571d14499e30cab415a81d87779a71bc7e",
+      "original_sha_after": "12bb1d5e7595aaee8b99096d4e87e9571d14499e30cab415a81d87779a71bc7e"
+    },
+    {
+      "file": "pester-diagnostic-original.json",
+      "bytes": 12974,
+      "sha256": "13a1ef7ab7b58920ce3bd3c1438dd80f5b08d7fe2afd5fdeb8b2c07d530766e6",
+      "original": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-pester-overlay-5e8cdd4119504ab3a7c393ae13aea0a9\\pester-overlay-outcome.json",
+      "original_sha_before": "13a1ef7ab7b58920ce3bd3c1438dd80f5b08d7fe2afd5fdeb8b2c07d530766e6",
+      "original_sha_after": "13a1ef7ab7b58920ce3bd3c1438dd80f5b08d7fe2afd5fdeb8b2c07d530766e6"
+    },
+    {
+      "file": "pester-failed-diagnostic-original.json",
+      "bytes": 58499,
+      "sha256": "e9cc72c2a9706e0ea8b5981b5f8a0eb1f0e44dff0d1e76bc4fcc2e82474edcff",
+      "original": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\fresh-attributes-pester-overlay-2ac5e45369444462a3b0451fbf03869f\\pester-overlay-outcome.json",
+      "original_sha_before": "e9cc72c2a9706e0ea8b5981b5f8a0eb1f0e44dff0d1e76bc4fcc2e82474edcff",
+      "original_sha_after": "e9cc72c2a9706e0ea8b5981b5f8a0eb1f0e44dff0d1e76bc4fcc2e82474edcff"
+    },
+    {
+      "file": "failed-full-later-capture-original.json",
+      "bytes": 8683,
+      "sha256": "68c62fcba33dff2fa082ae26839ccb1aa66029a0bee72e98045ad83e353e6c48",
+      "original": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\later-capture-failed-full-20261004T054036Z-80612-60e6bb68d8934d4aa370d59535713f24-617fbb93ac7c48f39735e626d25ce02d\\recovery-invocation.json",
+      "original_sha_before": "68c62fcba33dff2fa082ae26839ccb1aa66029a0bee72e98045ad83e353e6c48",
+      "original_sha_after": "68c62fcba33dff2fa082ae26839ccb1aa66029a0bee72e98045ad83e353e6c48"
+    },
+    {
+      "file": "failed-only-retention-wrapper-original.json",
+      "bytes": 2189,
+      "sha256": "c57dce67e511f9d1c8e4567c732c7e5daf491087b6a648cf730061a1be14f258",
+      "original": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\later-capture-failed-full-20261004T054036Z-80612-60e6bb68d8934d4aa370d59535713f24-617fbb93ac7c48f39735e626d25ce02d\\receipt-overlay-wrapper.json",
+      "original_sha_before": "c57dce67e511f9d1c8e4567c732c7e5daf491087b6a648cf730061a1be14f258",
+      "original_sha_after": "c57dce67e511f9d1c8e4567c732c7e5daf491087b6a648cf730061a1be14f258"
+    },
+    {
+      "file": "failed-only-retention-original.json",
+      "bytes": 55411,
+      "sha256": "f7ab2fa4f732e1ab3d798034a11d00b9ae3e6d43fc93d1fdbeb75d018f55b602",
+      "original": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\later-capture-failed-full-20261004T054036Z-80612-60e6bb68d8934d4aa370d59535713f24-617fbb93ac7c48f39735e626d25ce02d\\receipt-epoch-retention\\retention-report.json",
+      "original_sha_before": "f7ab2fa4f732e1ab3d798034a11d00b9ae3e6d43fc93d1fdbeb75d018f55b602",
+      "original_sha_after": "f7ab2fa4f732e1ab3d798034a11d00b9ae3e6d43fc93d1fdbeb75d018f55b602"
+    },
+    {
+      "file": "canonical-focused-tests-original.json",
+      "bytes": 336960,
+      "sha256": "8c3168ef7977a76fccfb4523c6806d928ad0a84f1ae5e8c27e54c4d6318a83a0",
+      "original": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\governance-focused-20261004T114208Z-53484-08fe3164ac6f4e83bee081d217fd6b1e.json",
+      "original_sha_before": "8c3168ef7977a76fccfb4523c6806d928ad0a84f1ae5e8c27e54c4d6318a83a0",
+      "original_sha_after": "8c3168ef7977a76fccfb4523c6806d928ad0a84f1ae5e8c27e54c4d6318a83a0"
+    }
+  ],
+  "external_retention": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review",
+  "canonical_source_after_adoption_sha256": "965d812b838ba9ac5575397aebfa4c74d7c9767db4d00771487fdd9bc67ae610",
+  "diagnostic_function_sha256": "9764805125ef5eb0ce8c234585dea5a681bdc3576ad4a1beea04b8b7c56d985b",
+  "counterbalanced_order": [
+    "baseline",
+    "candidate",
+    "candidate",
+    "baseline"
+  ],
+  "limitations": [
+    "Small unchanged 192-file/32-directory/two-reparse fixture; no large-archive speedup claim",
+    "Filesystem/JIT cache and concurrent original-archive load uncontrolled",
+    "Handle values are endpoint observations, not peak/leak evidence",
+    "Named injected errors do not prove an actual OS DACL-denied attribute query",
+    "Fresh checks observe inter-call replacement; no atomic concurrent-mutation exclusion",
+    "Separate later capture does not repair original provenance or change failed native verdict"
+  ]
+}

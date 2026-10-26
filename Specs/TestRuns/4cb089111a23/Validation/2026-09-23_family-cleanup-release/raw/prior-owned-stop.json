@@ -1,0 +1,9 @@
+{
+  "reason": "First family failure left a throttled active task; subsequent same-process families contaminated. Stop only verified owned selftest, preserve runner failure.",
+  "utc": "2026-09-23T11:12:17.2000411Z",
+  "process": 36076,
+  "parent": 9612,
+  "executable": "C:\\RsI26Final\\.build\\x64\\Release\\RedSalamander.exe",
+  "commandLine": "C:\\RsI26Final\\.build\\x64\\Release\\RedSalamander.exe --fileops-selftest --selftest-no-activate",
+  "creationDate": "2026-09-23T12:54:45.702032+02:00"
+}

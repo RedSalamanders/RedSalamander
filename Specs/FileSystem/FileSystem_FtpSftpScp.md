@@ -406,6 +406,13 @@ real FTP/SSH session-limit qualification.
   before file-content download, destination upload/tree creation, or source
   deletion. Recursive relay Move MUST resolve every descendant file commitment in a
   read-only preflight before the first destination mutation.
+- Through the host bridge (a transfer between this provider and another one), an unknown source size
+  is never committed (I35 XP-10): each such file fails with `bridge.integrity.sourceSizeUnknown`
+  before any byte moves, because the bridge cannot tell a clean end of stream from a truncation, and
+  the task records one Information note (`bridge.integrity.sourceSizeUnknown.server`) naming a source
+  that reports no sizes at all. The same server as a destination fails every file as well: a staged
+  upload is published only after an exact remote size proves it. The bridge is therefore stricter than
+  this provider's own same-connection Copy, which may stage the whole download.
 - Native recursive Move preflight uses the strict incremental FTP/SSH cursor and
   an explicit ancestry stack, not buffered listing fallback or C++ recursion.
   Malformed/out-of-root/overlong records and depth beyond 128 fail before payload

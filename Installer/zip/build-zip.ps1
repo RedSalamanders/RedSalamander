@@ -43,6 +43,7 @@ $ArtifactOperationLockModule = Join-Path $RepoRoot "Tools\Modules\Build\Artifact
 $VcRuntimeScript = Join-Path $PSScriptRoot "VcRuntime.ps1"
 $RuntimeDependencyModule = Join-Path $RepoRoot "Tools\Modules\Packaging\RuntimeDependencies.psm1"
 $PortablePackageSmokeModule = Join-Path $RepoRoot "Tools\Modules\Packaging\PortablePackageSmoke.psm1"
+$ReleaseArtifactPolicyModule = Join-Path $RepoRoot "Tools\Modules\Packaging\ReleaseArtifactPolicy.psm1"
 $BuildOutputDir = Join-Path $RepoRoot ".build\$Platform\$Configuration"
 $PackageSmokeHarness = Join-Path $BuildOutputDir "PluginContractTests.exe"
 $PackageOutputDir = Join-Path $RepoRoot ".build\AppPackages"
@@ -68,11 +69,16 @@ if (-not (Test-Path $PortablePackageSmokeModule)) {
     throw "Portable package smoke helper not found: $PortablePackageSmokeModule"
 }
 
+if (-not (Test-Path $ReleaseArtifactPolicyModule)) {
+    throw "Release artifact policy module not found: $ReleaseArtifactPolicyModule"
+}
+
 Import-Module $VersioningModule -Force -ErrorAction Stop
 Import-Module $ArtifactOperationLockModule -Force -ErrorAction Stop
 . $VcRuntimeScript
 Import-Module $RuntimeDependencyModule -Force -ErrorAction Stop
 Import-Module $PortablePackageSmokeModule -Force -ErrorAction Stop
+Import-Module $ReleaseArtifactPolicyModule -Force -ErrorAction Stop
 
 # Reject a pre-existing .build or AppPackages reparse path before lock metadata
 # or package output can be redirected outside the repository. Missing components
@@ -182,7 +188,10 @@ try {
     Copy-Item (Join-Path $BuildOutputDir "RedLauncher.exe") $TempDir
     Copy-Item (Join-Path $BuildOutputDir "red.exe") $TempDir
     Copy-Item (Join-Path $BuildOutputDir "RedSalamander.exe") $TempDir
-    Copy-Item (Join-Path $BuildOutputDir "RedSalamanderMonitor.exe") $TempDir
+    # The client MIT notice ships with the application; the viewer is installed separately.
+    foreach ($notice in 'RedMonitor-LICENSE.txt') {
+        Copy-Item -LiteralPath (Join-Path $BuildOutputDir $notice) -Destination $TempDir
+    }
     
     $SearchServiceExe = Join-Path $BuildOutputDir "RedSalamanderSearchService.exe"
     if (Test-Path $SearchServiceExe) {
@@ -215,7 +224,10 @@ try {
     $LangSource = Join-Path $BuildOutputDir "Lang"
     if (Test-Path $LangSource) {
         $LangDest = Join-Path $TempDir "Lang"
-        Copy-Item $LangSource -Destination $LangDest -Recurse -Force
+        New-Item -ItemType Directory -Path $LangDest -Force | Out-Null
+        Get-ChildItem -LiteralPath $LangSource -File -Filter '*.dll' |
+            Where-Object Name -NotLike 'RedSalamanderMonitor-*' |
+            Copy-Item -Destination $LangDest -Force
 
         # Remove build artifacts from Lang
         Get-ChildItem $LangDest -Recurse -Include "*.pdb","*.lib","*.exp","*.ilk","*.iobj","*.ipdb" | Remove-Item -Force
@@ -251,7 +263,7 @@ GETTING STARTED
    app-local DLLs are found
 3. Run RedLauncher.exe with self-test flags when a foreground wait and process
    exit code are required, for example self-test automation
-4. Run RedSalamanderMonitor.exe for debugging/monitoring
+4. Install RedMonitor separately for optional debugging/monitoring.
 
 RUNTIME REQUIREMENT
 -------------------
@@ -293,6 +305,12 @@ https://github.com/RedSalamanders/RedSalamander
     # The prior complete ZIP remains untouched until the final atomic operation.
     Write-Host "Compressing files..." -ForegroundColor Cyan
     Compress-Archive -Path "$TempDir\*" -DestinationPath $StagedZipPath
+
+    # A Release ZIP is distributable, so it must not carry an ENABLE_TESTS surface. Debug ZIPs are
+    # diagnostic only and the release workflow rejects them independently.
+    if ($Configuration -eq 'Release') {
+        Assert-RSShippingPackageHasNoTestSurface -LiteralPath $StagedZipPath
+    }
 
     $HostCanExecutePackage = $Platform -eq 'x64' -or $env:PROCESSOR_ARCHITECTURE -eq 'ARM64'
     $SmokeResult = Test-RSPortablePackage `

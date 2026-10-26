@@ -1,0 +1,40 @@
+{
+  "schema": "i27.root-native-provenance-review-notes.v1",
+  "status": "NARROW-ROOT-REVIEW-NOT-FULL-QUALIFICATION",
+  "origin": "Root direct review message in this task,2026-10-03",
+  "interaction_original_run_id": "20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583",
+  "root_independently_parsed_all_rows": 5839,
+  "original_metric_sha256": "eed248eb54cc2d32e17991debaa95edc8bc105010a8aa52be631107079bb988d",
+  "native_id_groups": [
+    {
+      "run_id": "2026-10-03_231939",
+      "last_metric": "App.Startup.ApplyPane.Right",
+      "original_lines": "1-103",
+      "first_metric": "App.Startup.CoInitializeEx"
+    },
+    {
+      "run_id": "2026-10-03_231940",
+      "original_lines": "104-5839",
+      "first_metric": "App.Startup.MainWindow.WM_CREATE"
+    }
+  ],
+  "shared_metadata": {
+    "branch": "fileops-safety-followup",
+    "machine": "4cb089111a23",
+    "native_commit": "",
+    "build": "Release",
+    "process": 95416
+  },
+  "owning_source": "RedSalamander/SelfTest/Common/SelfTestCommon.cpp:1877-1908",
+  "root_source_observation": "InitSelfTestRun creates currentUTC second runId for ConfigureJsonlOutput. Both chronological original IDs remain unchanged; this is not a runner ID mismatch by itself.",
+  "root_native_trace_observation": "Root reread actual mousemove/hover/capture observations and separate native action/text DPI qualifiers, both complete1/1",
+  "final_gallery_original_run_id": "20261003T232201Z-75488-0a7264eaad564dcd8aa1014d5093c463",
+  "root_gallery_count": 562,
+  "root_gallery_bytes": 24954716,
+  "receipt_id": "aa261e2bf802576713e3a5a739b84f9b8b23e352c62ad73049e6f9edee9d2fc4",
+  "snapshot_id": "61d189e9b740cf55b0695b21126842ec14a8ceca83dd1f6ef8f835a0aa52da41",
+  "receipt_original_sha256": "0e77adb74e0eeadeec99646a91f76698e2bb719ca5273347573ac966ae8b642d",
+  "qualification_limits": "Focused originalv1/native fixture scope; no Full/AT/192DPI/I27/GPU/performance/leak/global-clean claim. Canonical Git common ref is distinct from SHA-bound actual source snapshot and does not establish frozen-HEAD tree equivalence. Preserve historical failures and all source dependencies.",
+  "reviewer_focused_source_read": "Confirmed GetSystemTime UTC second formatted runId and ConfigureJsonlOutput; explanatory focused source read only, no new native verdict",
+  "root_additional_receipt_review": "Root independently matched canonical receipt/component074238 and source snapshot61d189. Original receipt is test-enabled192-output solution with Git common reffbe113 and dirty SHA-bound snapshot. No unexplained receipt/component gap remains; no Full-v2/live post-Full PE attestation or frozen-HEAD equivalence inferred."
+}

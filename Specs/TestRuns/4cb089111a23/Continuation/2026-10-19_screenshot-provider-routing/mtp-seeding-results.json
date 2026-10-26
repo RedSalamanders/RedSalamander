@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-10-19T20:29:10.529Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261019T202401Z-90084-69d6d9cf77a64857a0e093151c648a70\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 12672,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Provider fixture upload did not commit.",
+    "cases": [
+        {
+            "name": "cmd_product_documentation_gallery",
+            "status": "failed",
+            "duration_ms": 12655,
+            "repeat_index": 1,
+            "reason": "Provider fixture upload did not commit."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

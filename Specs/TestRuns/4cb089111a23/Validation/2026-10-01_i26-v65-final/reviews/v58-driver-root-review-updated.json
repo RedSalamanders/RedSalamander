@@ -1,0 +1,50 @@
+{
+  "schema": "i26-v58-driver-root-review.v1",
+  "reviewer": "root",
+  "files": [
+    {
+      "name": "prepare-v58-draft.ps1",
+      "sha256": "21d50d3923ced93bf9c090117f1bd8404bd97fa0ac06930fed4581020e1601e2",
+      "parserPassed": true
+    },
+    {
+      "name": "build-debug-v58-draft.ps1",
+      "sha256": "1dd9893c485d452fd2b841846d5fa1803b606a39528e7713992d98a1b2ebed74",
+      "parserPassed": true
+    },
+    {
+      "name": "build-release-v58-draft.ps1",
+      "sha256": "0874f88d119cd16d703571c7260f5646a075c36c4c464440a78defa932b24772",
+      "parserPassed": true
+    },
+    {
+      "name": "run-v58-source-guards-draft.ps1",
+      "sha256": "40532a2eb2e9a645ab2f7aabfe51354455d1607a27d48b88c4b7d7b69e567707",
+      "parserPassed": true
+    }
+  ],
+  "allowedPrimaryDelta": [
+    "RedSalamander/SelfTest/Commands/Commands.SelfTest.PluginConfig.cpp",
+    "Specs/Plans/WIP/UI_FileOperationsReview_2026-09-16.md",
+    "Specs/Testing/Testing_SelfTests.md",
+    "Specs/Testing/Testing_TestCoverage.md",
+    "Specs/UI/UI_FileOperationsPopup.md",
+    "Tools/README.md",
+    "Tools/Tests/TestHarnessSourceContracts.Tests.ps1",
+    "Tools/tool-inventory.json"
+  ],
+  "priorFrozenAndIsolatedHashesRequiredBeforeCopy": true,
+  "resourceHeaderAliasChecked": true,
+  "dxuiPinUnchanged": true,
+  "buildChangesOnlyVersionIdentity": true,
+  "guardCaseNames": [
+    "file_operations_phase0_typed_contract_source_guard",
+    "file_operations_preparing_lifecycle_source_guard"
+  ],
+  "expectedGuardNativeCounts": "2/0/0",
+  "nativeRepeatIndexVerified": 1,
+  "desktopLeasePreserved": true,
+  "scriptExecutionApprovedAfter": "ViewerPE bounded diagnostic reviewed; terminal V57 Full retained as FAILED and root reviewed; prepare only first, then root freeze verification before builds",
+  "executed": false,
+  "pesterGuardRootReviewSha256": "c770d03f9002d44973eaa9f2858c8b4facec30ed34b305d8c0aeced64befcf00"
+}

@@ -1,0 +1,106 @@
+[
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-23_224336/commands_trace.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-23_224336/compare_trace.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-23_224336/env.txt",
+    "sha256": "eaf0400d921dd7be1d6c14633d63110f33be9219f1469dd21788fe27a4ed3639"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-23_224336/fileops_results.json",
+    "sha256": "9e9546fdc09bfd470e9b41a5e2aedf2e68157025caf15be4725433ae9a90d1f5"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-23_224336/fileops_trace.txt",
+    "sha256": "43c53f71ceee268763960418b949f572c4a1475ec85fa53093c168981d09e442"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-23_224336/perf/perf_metrics.jsonl",
+    "sha256": "22d1a6964534130f867a25e2374e237d9e1380bfb773a7752e39b24f38af9713"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-23_224336/selftest.txt",
+    "sha256": "3bade23da3ae45d7b97ff7136ac20938ab5f90a6db650e6657b48cfa3447463d"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-23_224336/selftest_run_results.json",
+    "sha256": "561481c59a707b8cd26fa506542a785f7e736733cbe374b97e54ef0434236bd9"
+  },
+  {
+    "path": "artifacts/archive/4cb089111a23/FileOps/2026-09-23_224336/selftest_run_trace.txt",
+    "sha256": "78f54f72239be93472e908e98639f4052d56cf015698ba33c2ffd76254844a08"
+  },
+  {
+    "path": "artifacts/selftest/last_run/commands/trace.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "path": "artifacts/selftest/last_run/compare/trace.txt",
+    "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209"
+  },
+  {
+    "path": "artifacts/selftest/last_run/fileops/results.json",
+    "sha256": "9e9546fdc09bfd470e9b41a5e2aedf2e68157025caf15be4725433ae9a90d1f5"
+  },
+  {
+    "path": "artifacts/selftest/last_run/fileops/trace.txt",
+    "sha256": "43c53f71ceee268763960418b949f572c4a1475ec85fa53093c168981d09e442"
+  },
+  {
+    "path": "artifacts/selftest/last_run/perf/perf_metrics.jsonl",
+    "sha256": "22d1a6964534130f867a25e2374e237d9e1380bfb773a7752e39b24f38af9713"
+  },
+  {
+    "path": "artifacts/selftest/last_run/results.json",
+    "sha256": "561481c59a707b8cd26fa506542a785f7e736733cbe374b97e54ef0434236bd9"
+  },
+  {
+    "path": "artifacts/selftest/last_run/run-all-tests-case-history.jsonl",
+    "sha256": "c545652e407008cb18fcff83520e7ccbbaa6ec7c500e78004d1d09f5fdecc252"
+  },
+  {
+    "path": "artifacts/selftest/last_run/run-all-tests-dashboard.md",
+    "sha256": "496ef08658bce43b3e098cbeb68d0d92ef235881b0b9970dff6fa7187c3d544d"
+  },
+  {
+    "path": "artifacts/selftest/last_run/run-all-tests-results.json",
+    "sha256": "149bb93cc44a0dd58b5104f67d3bee66feeb7b9bdc7706bc7a3c023604e7857c"
+  },
+  {
+    "path": "artifacts/selftest/last_run/trace.txt",
+    "sha256": "78f54f72239be93472e908e98639f4052d56cf015698ba33c2ffd76254844a08"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-selftest.file-operations.json",
+    "sha256": "08e221bfa64f36efbc937ae7b67696dfe776499e91635c24c1effb86be4bc3ae"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-final.json",
+    "sha256": "c5e4c3d8d22606e2349bbffd36b21276cf67e303a84f4f0d686837a9411e9659"
+  },
+  {
+    "path": "artifacts/selftest/previous_run/entry-fingerprints.json",
+    "sha256": "90291a72b12be012e12d1887a0cf87eaf5ebe96ca88699ecd806039dd12a6d28"
+  },
+  {
+    "path": "artifacts/selftest/previous_run/validation-plan-decision.json",
+    "sha256": "bddbf66879b145bb4bc55b0e36a87d00325ae724d449fb7cf9677b55e696b6a4"
+  },
+  {
+    "path": "artifacts/selftest/previous_run/validation-plan.json",
+    "sha256": "ed5f67047b50638cd508082a4b2e305a6a9fabd886213195195bf957ee2cc89d"
+  },
+  {
+    "path": "artifacts/selftest/previous_run/workspace-initial.json",
+    "sha256": "49646d5b21c9a1493cc55d84db95a7f075a28d1f0ac22ba692561af30f756bfc"
+  },
+  {
+    "path": "scratch/settings-store/RedSalamander/Logs/FileOperations-20260923.jsonl",
+    "sha256": "481a268bfedba7351b867e2e353e8bbd1f86b4613dae06060dff0585cf7a47fb"
+  }
+]

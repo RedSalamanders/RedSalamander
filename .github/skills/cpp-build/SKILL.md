@@ -1,6 +1,6 @@
 ---
 name: cpp-build
-description: Build RedSalamander C++ project using PowerShell build script. Use when building, compiling, or rebuilding the solution or specific projects like RedSalamander, RedSalamanderMonitor, Common, or FileSystem.
+description: Build RedSalamander C++ projects using the PowerShell wrapper; the independently installed RedMonitor helper is outside this solution.
 metadata:
   author: RedSalamander
   version: "1.0"
@@ -19,7 +19,6 @@ metadata:
 
 # Build specific project
 .\build.ps1 -ProjectName RedSalamander
-.\build.ps1 -ProjectName RedSalamanderMonitor
 .\build.ps1 -ProjectName Common
 
 # Clean and rebuild
@@ -36,7 +35,7 @@ metadata:
 |-----------|--------|---------|
 | `-Configuration` | Debug, Release, ASan Debug | Debug |
 | `-Platform` | x64, ARM64 | x64 |
-| `-ProjectName` | RedSalamander, RedSalamanderMonitor, Common, FileSystem | All projects |
+| `-ProjectName` | RedSalamander, Common, FileSystem | All projects |
 | `-Clean` | Switch | False |
 | `-Rebuild` | Switch | False |
 | `-MaxCpuCount` | 0-256 | 0 (MSBuild default) |
@@ -51,9 +50,13 @@ metadata:
 ## Build Order (Dependencies)
 
 1. **Common** - Shared library (no dependencies)
-2. **RedSalamanderMonitor** - Monitoring app (depends: Common)
-3. **RedSalamander** - Main app (depends: Common, FileSystem, RedSalamanderMonitor)
-4. **FileSystem** - Plugin (no dependencies)
+2. **FileSystem** - Plugin (no dependencies)
+3. **RedSalamander** - Main app (depends: Common and the solution's plugins/search service)
+
+RedMonitor is independent. Ordinary builds verify the vendored Client.h, license and immutable lock
+locally; they never clone/build/stage a viewer. Use Tools/Update-RedMonitorClient.ps1 only for an
+explicit reviewed header update. Debug may launch an installed production Release helper; the
+consumer package contains only the client notice. See Specs/Core/Core_RedSalamanderMonitor.md.
 
 ## Visual Studio Build
 
@@ -151,7 +154,7 @@ work and receipt publication. Every `Run:` line must remain copy/paste executabl
 
 - Automatically locates MSBuild (VS 2022 or later)
 - Builds entire solution when no ProjectName specified
-- Resolves most `-ProjectName` builds to the target `.vcxproj` directly; `RedSalamander` stays on the solution build graph so the solution can also build its bundled sibling outputs (`Plugins\*.dll`, `RedSalamanderMonitor.exe`, `RedSalamanderSearchService.exe`)
+- Resolves most `-ProjectName` builds to the target `.vcxproj` directly; `RedSalamander` stays on the solution build graph so the solution can also build its bundled plugin/search-service outputs (`Plugins\*.dll`, `RedSalamanderSearchService.exe`)
 - Reuses the saved local beta build number by default, so ordinary repeated local builds stay incremental instead of forcing a fresh version stamp on every invocation
 - Resolve-and-persist version state only through `Resolve-RSVersionContext`, which owns the exclusive repository-local version-state file lease and atomic counter/context publication. The file lease coordinates Windows sessions and checkout aliases and is released by process termination. Use pure `New-RSVersionContext` when a caller already has an explicit build number. `Read-RSVersionContext` is the locked, validated diagnostics-only reader; raw unlocked lock/read/save primitives are private, and the version lease never spans MSBuild or another native child.
 - Plain consoles that support child-console output keep MSBuild's native console output/color while still capturing a `.build\logs\msbuild-*.log` file; Windows Terminal and redirected hosts such as Codex use the replay helper so build progress stays visible, with replayed errors/warnings/project completion colorized in the console

@@ -1,0 +1,5 @@
+{
+  "command": "Tools/Get-ToolInventory.ps1 -FailOnFindings",
+  "exitCode": 0,
+  "result": "PASSED"
+}

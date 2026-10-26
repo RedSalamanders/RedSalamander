@@ -1,0 +1,226 @@
+[
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Common\\Common\\Common.vcxproj.FileListAbsolute.txt",
+    "bytes": 120,
+    "sha256": "91435d697c94ac543ef36fb31fe7ce806902fc6af3473a723ec5c2c2812413d6",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Common\\Common\\Common.vcxproj.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystem\\FileSystem.vcxproj.FileListAbsolute.txt",
+    "bytes": 128,
+    "sha256": "75df148d943391ba909e39a8388661b822264f25a66ca5b85eaf919af931a554",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystem\\FileSyst.5E43661C.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystem7z\\FileSystem7z.vcxproj.FileListAbsolute.txt",
+    "bytes": 130,
+    "sha256": "9c95aff4b94d31f011cfe101dacab3cf63577e2aeeeac23b54fa5a61eddd505f",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystem7z\\FileSyst.29EE716A.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystemCurl\\FileSystemCurl.vcxproj.FileListAbsolute.txt",
+    "bytes": 132,
+    "sha256": "e32ca8506bb25a05084205b9cd3b4c6c0ee5d53b82baee0f425d52e35a4aee5c",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystemCurl\\FileSyst.2570F747.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystemDummy\\FileSystemDummy.vcxproj.FileListAbsolute.txt",
+    "bytes": 133,
+    "sha256": "31c534ca15d8a84d988adedf688c46027d2e9037dd53a410281e6ae2dec65afc",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystemDummy\\FileSyst.3048A26B.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystemGoogleDrive\\FileSystemGoogleDrive.vcxproj.FileListAbsolute.txt",
+    "bytes": 139,
+    "sha256": "3bd894e21b98a60fd5970035c2d27eff5146c53fae0da75d4abca1cdede51e81",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystemGoogleDrive\\FileSyst.8CDE0898.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystemMicrosoftDrive\\FileSystemMicrosoftDrive.vcxproj.FileListAbsolute.txt",
+    "bytes": 142,
+    "sha256": "31c62b5acab91d1a166f59931d49ea39390ad2b20c266e9aa525114f2d28d1ea",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystemMicrosoftDrive\\FileSyst.E5BE1F71.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystemMtp\\FileSystemMtp.vcxproj.FileListAbsolute.txt",
+    "bytes": 131,
+    "sha256": "255117bc6c95e3bdbea22bcec727fe2eacaae2f3af921501c45aa68f37b62fbf",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystemMtp\\FileSyst.5022DC52.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystemS3\\FileSystemS3.vcxproj.FileListAbsolute.txt",
+    "bytes": 130,
+    "sha256": "e34e8cfad0ccaa40e214064ba8114f59a581bb824e23832d19897190b7102df5",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\FileSystemS3\\FileSyst.A3A170DB.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\Terminal\\Terminal.vcxproj.FileListAbsolute.txt",
+    "bytes": 125,
+    "sha256": "733dfe23c71fbed5aa0142c76f4e7e890f8b167f17e5e02b8c787cf1fd1f3b7c",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\Terminal\\Terminal.vcxproj.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\ViewerImgRaw\\ViewerImgRaw.vcxproj.FileListAbsolute.txt",
+    "bytes": 130,
+    "sha256": "e93b1d364a6ab1cd5c36750bc116ccc2bdb8a6e77080585879921d5550412777",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\ViewerImgRaw\\ViewerIm.C9A0F91F.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\ViewerPE\\ViewerPE.vcxproj.FileListAbsolute.txt",
+    "bytes": 125,
+    "sha256": "e33b264f6119220e3a9f5b6e4aab89494838ea6f682e8b29803718bf40c88efe",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\ViewerPE\\ViewerPE.vcxproj.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\ViewerSpace\\ViewerSpace.vcxproj.FileListAbsolute.txt",
+    "bytes": 129,
+    "sha256": "181f44aea1a98a4ec40e46f3adc799cddff4752606b411babed2fd9bb1849642",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\ViewerSpace\\ViewerSp.4F8F60C0.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\ViewerSqlite\\ViewerSqlite.vcxproj.FileListAbsolute.txt",
+    "bytes": 130,
+    "sha256": "2db70da5cf7c69ed79bd14e89a149bcf84084d87f9a0b19458525172609931bb",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\ViewerSqlite\\ViewerSq.D24E3E26.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\ViewerText\\ViewerText.vcxproj.FileListAbsolute.txt",
+    "bytes": 128,
+    "sha256": "30f53b2b0d2bef490b8dca3be0dc3cbf9318e37c5faa9f65490b4409e90f0933",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\ViewerText\\ViewerTe.F184810A.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\ViewerVLC\\ViewerVLC.vcxproj.FileListAbsolute.txt",
+    "bytes": 127,
+    "sha256": "a6407f332dd812ca2cc501ce196ad9385f06cdb4b8e33446407aae517d61ff8d",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\ViewerVLC\\ViewerVLC.vcxproj.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\ViewerWeb\\ViewerWeb.vcxproj.FileListAbsolute.txt",
+    "bytes": 127,
+    "sha256": "bf4eeb2a36d97d84b952a9cb56481a6acf9cb2ebe766947fb272e9fa57158a6a",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Plugins\\ViewerWeb\\ViewerWeb.vcxproj.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\RedConfigure\\RedConfigure.vcxproj.FileListAbsolute.txt",
+    "bytes": 122,
+    "sha256": "5307ce4b03520433fa5fa74f5dc3ef0ee38a60662c225f9af74e00a4e25860b3",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\RedConfigure\\RedConfi.E04AFB5D.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\RedSalamander\\RedSalamander.vcxproj.FileListAbsolute.txt",
+    "bytes": 123,
+    "sha256": "d9cbaa3487d483021b187be1bf776b40e38fe23903f32bd633d0e4ac13236a66",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\RedSalamander\\RedSalam.0DC124CD.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\RedSalamanderMonitor\\RedSalamanderMonitor.vcxproj.FileListAbsolute.txt",
+    "bytes": 130,
+    "sha256": "696bcb92f17d33857014ba224d7164a0e344e4cc36e13e7926801740417fb15b",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\RedSalamanderMonitor\\RedSalam.52962E84.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\RedSalamanderSearchService\\RedSalamanderSearchService.vcxproj.FileListAbsolute.txt",
+    "bytes": 136,
+    "sha256": "60f4a9abcd04ce594b609cbd12a9466f065a4c29728568ec5def4cb327df4811",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\RedSalamanderSearchService\\RedSalam.AD62C212.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Tests\\DxUiTests\\DxUiTests.vcxproj.FileListAbsolute.txt",
+    "bytes": 125,
+    "sha256": "94adb64f9e6cc289eb67dd0affd1bd17200a455038ec3331be6bf97f15769716",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Tests\\DxUiTests\\DxUiTests.vcxproj.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Tests\\LocalizationTests\\LocalizationTests.vcxproj.FileListAbsolute.txt",
+    "bytes": 133,
+    "sha256": "9db0fbc729cccc31b2b3c3493d4761690de5b80fd2fc1c429217dcc75964adcc",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Tests\\LocalizationTests\\Localiza.984BF89A.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Tests\\PerformanceTests2\\PerformanceTests2.vcxproj.FileListAbsolute.txt",
+    "bytes": 133,
+    "sha256": "2fa910248ebb7baf37bb06e36a2ab1d084a8a992ea1e9a7f57def2487aa12918",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Tests\\PerformanceTests2\\Performa.EB3035F7.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Tests\\PluginContractTests\\PluginContractTests.vcxproj.FileListAbsolute.txt",
+    "bytes": 135,
+    "sha256": "11f73d5694b8e9f54d3d08c3fa27f44a8ea0337b996a9008ea368458d0468213",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Tests\\PluginContractTests\\PluginCo.8C4352DC.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Tests\\RedConfigureTests\\RedConfigureTests.vcxproj.FileListAbsolute.txt",
+    "bytes": 133,
+    "sha256": "c0d6833daa34162155169a87d71acb5a33a4bbe883570f1d4ecb576bf1a62c77",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Tests\\RedConfigureTests\\RedConfi.8E8B8343.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Tests\\SettingsSchemaTests\\SettingsSchemaTests.vcxproj.FileListAbsolute.txt",
+    "bytes": 135,
+    "sha256": "5c7f1ab664fcd2fe8f01357de2f9566da9f6ec0487c669ce40427d8abdceea2b",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Tests\\SettingsSchemaTests\\Settings.E6195884.Up2Date"
+    ]
+  },
+  {
+    "path": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Tests\\ViewerSqliteTests\\ViewerSqliteTests.vcxproj.FileListAbsolute.txt",
+    "bytes": 133,
+    "sha256": "1910f11fbb9275d0000c3ad055b30dd7c5ab7299b5dbe873090348b17716b0df",
+    "entries": [
+      "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\Intermediate\\x64\\Release\\Tests\\ViewerSqliteTests\\ViewerSq.168AEB53.Up2Date"
+    ]
+  }
+]

@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-10-09T09:44:51.728Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261009T094420Z-45920-c3ef336d9ccc449aba382c4b66ddeb8a\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 305237,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Cached first-map sample 1 failed exact counts, cache restore, clean presentation, or one-hit accounting. settled=0, cacheHits=1, restoreBytes=614398, state=3, generation=1/1, firstMeaningfulPaintUs=157818",
+    "cases": [
+        {
+            "name": "cmd_viewer_space_cache_reopen_200_first_map_optin",
+            "status": "failed",
+            "duration_ms": 304571,
+            "repeat_index": 1,
+            "reason": "Cached first-map sample 1 failed exact counts, cache restore, clean presentation, or one-hit accounting. settled=0, cacheHits=1, restoreBytes=614398, state=3, generation=1/1, firstMeaningfulPaintUs=157818"
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

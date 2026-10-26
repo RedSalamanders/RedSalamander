@@ -9,6 +9,15 @@
 
 namespace WindowPlacementPersistence
 {
+// GetWindowPlacement uses workspace coordinates for ordinary top-level windows;
+// the settings bounds and SetWindowPos/WindowRect use screen coordinates.
+[[nodiscard]] inline RECT NormalPositionToScreenRect(RECT normal, DWORD style, DWORD extendedStyle, const RECT& monitorRect, const RECT& workRect) noexcept
+{
+    if ((style & WS_CHILD) == 0u && (extendedStyle & WS_EX_TOOLWINDOW) == 0u)
+        OffsetRect(&normal, workRect.left - monitorRect.left, workRect.top - monitorRect.top);
+    return normal;
+}
+
 [[nodiscard]] inline std::optional<Common::Settings::WindowPlacement> Capture(HWND hwnd) noexcept
 {
     if (! hwnd)
@@ -26,24 +35,29 @@ namespace WindowPlacementPersistence
     Common::Settings::WindowPlacement wp;
     wp.state = placement.showCmd == SW_SHOWMAXIMIZED ? Common::Settings::WindowState::Maximized : Common::Settings::WindowState::Normal;
 
-    const RECT rc = placement.rcNormalPosition;
-    wp.bounds.x   = rc.left;
-    wp.bounds.y   = rc.top;
-
-    const int width  = static_cast<int>(rc.right - rc.left);
-    const int height = static_cast<int>(rc.bottom - rc.top);
-    wp.bounds.width  = std::max(1, width);
-    wp.bounds.height = std::max(1, height);
-
-    wp.dpi = GetDpiForWindow(hwnd);
-
-    const HMONITOR monitor = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+    RECT normal               = placement.rcNormalPosition;
+    const DWORD style         = static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_STYLE));
+    const DWORD extendedStyle = static_cast<DWORD>(GetWindowLongPtrW(hwnd, GWL_EXSTYLE));
+    const HMONITOR monitor    = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
     MONITORINFOEXW monitorInfo{};
     monitorInfo.cbSize = sizeof(monitorInfo);
     if (monitor != nullptr && GetMonitorInfoW(monitor, &monitorInfo) != FALSE)
     {
+        normal               = NormalPositionToScreenRect(normal, style, extendedStyle, monitorInfo.rcMonitor, monitorInfo.rcWork);
         wp.monitorDeviceName = monitorInfo.szDevice;
     }
+    else if ((style & WS_CHILD) == 0u && (extendedStyle & WS_EX_TOOLWINDOW) == 0u)
+    {
+        // Preserve the last valid setting if workspace coordinates cannot be
+        // converted; they must never be persisted as screen coordinates.
+        return std::nullopt;
+    }
+
+    wp.bounds.x      = normal.left;
+    wp.bounds.y      = normal.top;
+    wp.bounds.width  = std::max(1, static_cast<int>(normal.right - normal.left));
+    wp.bounds.height = std::max(1, static_cast<int>(normal.bottom - normal.top));
+    wp.dpi           = GetDpiForWindow(hwnd);
 
     return wp;
 }
@@ -70,11 +84,11 @@ inline void Save(Common::Settings::Settings& settings, std::wstring_view windowI
         return SW_SHOWNORMAL;
     }
 
-    const UINT dpi = GetDpiForWindow(hwnd);
+    const UINT dpi                               = GetDpiForWindow(hwnd);
     Common::Settings::WindowPlacement normalized = Common::Settings::NormalizeWindowPlacement(placement, dpi);
 
-    const int minimumWidth  = std::max(1, static_cast<int>(minimumSizePx.cx));
-    const int minimumHeight = std::max(1, static_cast<int>(minimumSizePx.cy));
+    const int minimumWidth   = std::max(1, static_cast<int>(minimumSizePx.cx));
+    const int minimumHeight  = std::max(1, static_cast<int>(minimumSizePx.cy));
     normalized.bounds.width  = std::max(normalized.bounds.width, minimumWidth);
     normalized.bounds.height = std::max(normalized.bounds.height, minimumHeight);
     normalized.dpi           = dpi;

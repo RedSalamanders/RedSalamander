@@ -1,0 +1,53 @@
+{
+  "scope": "Focused x64 Debug; user-authorized foreground Commands and no-activation FileOps",
+  "receipt": "ceb646bc0fd1e47dc2c9cf61cf1ea4110c3e4281814923330281745ef84b866e",
+  "sourceSnapshot": "e1790f1fba69722dda44433a7abe34997137935a2808f1a8f9994851dc7c78b4",
+  "dependency": "Existing unstaged DxUi f65e4a4b9311370b3e3070088e2a8abe29adcb27, untouched",
+  "runs": [
+    {
+      "name": "commands",
+      "runId": "20261019T101648Z-81640-7274eee5504f40c2a00fddbfb57642ac",
+      "caseFilter": "cmd_pane_fileops_popup_throughput_disclosure,cmd_pane_fileops_popup_throughput_external_reload,cmd_pane_fileops_popup_throughput_restart",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "auditIssues": 274
+    },
+    {
+      "name": "cards",
+      "runId": "20261019T101836Z-95032-41863c2199f248a19933fcb1a31adb91",
+      "caseFilter": "FileOps_ReviewRemediationContracts",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "auditIssues": 274
+    },
+    {
+      "name": "live",
+      "runId": "20261019T102016Z-78132-9a907601f84f41399450994e1da3f84d",
+      "caseFilter": "DiscoveryScope_FolderLiveProgress",
+      "passed": 3,
+      "failed": 0,
+      "skipped": 0,
+      "exitCode": 0,
+      "auditIssues": 274
+    }
+  ],
+  "sourceContracts": "204 passed, 0 failed",
+  "cardFacts": "124 checks, 48 exact determinate percentages; 132 captures",
+  "liveAssertions": "69 passed including 5 independent count-oracle rejection checks",
+  "review": "No remaining actionable defect found in scoped final review",
+  "notEvaluated": [
+    "Full repository",
+    "Release",
+    "ARM64",
+    "ASan",
+    "external assistive technology",
+    "other DPI scales",
+    "storage throughput"
+  ],
+  "sandboxAudit": "274 shared-root audit findings remain unresolved; selected case passes do not establish clean whole-repository qualification",
+  "sourceCloseout": "Product, tests, normative spec, guide and dependency bytes remained unchanged across final build and all three runtime runs. Only plan closeout and curated evidence/staging follow."
+}

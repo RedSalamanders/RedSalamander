@@ -1,0 +1,6 @@
+Exception: E:\RedSalamander.Perf\evidence\redmonitor-merge-migration-20261024\Invoke-OwnedResidualProbe.ps1:78
+Line |
+  78 |  … ralPath $nativePath)) { throw "Missing native verdict: $nativePath" }
+     |                            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Missing native verdict:
+     | E:\RedSalamander.Perf\runs\20261026T073454Z-71684-21fffc3a9fae41ae96af7bfb41b6caba\artifacts\selftest\last_run\selftest\last_run\commands\results.json

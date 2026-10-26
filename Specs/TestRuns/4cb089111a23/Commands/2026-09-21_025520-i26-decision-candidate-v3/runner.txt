@@ -1,0 +1,74 @@
+Skipping build (verified receipt fb7eac7ae9990be523986bcdb4d0e00a81a7aa8fe1a9ee4dd6b932ed59f08e6b).
+Validation plan: 3ceac99413c7e7d4f217d34f2dc994a2246887c75f7fff3aea26e7d22a172216
+Entry fingerprints: 0021b1eed3fa83379a6345c8b00e293e665ad75e33b7d883dedef1a58fa35146 (82 ms)
+Shadow affected set: 1/1 entries; advisory-build=targeted. Fresh still executes all.
+
+======================================================================
+  Running: Commands
+======================================================================
+  Exe:  Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
+  Args: --commands-selftest --selftest-timeout-multiplier=3 --selftest-case=file_operations_phase0_typed_contract_source_guard,cmd_pane_fileops_conflict_comparison_rows,cmd_pane_fileops_accepted_decision_records --selftest-repeat=3
+
+  TERMINAL RESULT: FAILED (DECLARED_FAILURES, FAILURE_CLASSIFICATION, NONZERO_EXIT)
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [FAIL]
+Commands
+  (39,6s)
+         Passed: 8
+  Failed: 1
+  Skipped: 0
+         Classification: UNCLASSIFIED_FAILURE
+         Initial attempt failed and no retry classification evidence was collected.
+
+  -------------------------------------------------------
+
+  Overall:
+FAILED
+  Total: 9
+  Passed: 8
+  Failed: 1
+  Skipped: 0
+  Wall time: 48,6s
+  Classifications:
+flaky=0
+regression=0
+isolation_suspect=0
+unclassified_failure=1
+  Quarantine:
+active=0
+invalid=0
+repair_attempts=0
+repair_reproduced=0
+
+--- FAILURE DETAILS (1 failing case) ---
+
+  FAIL
+[Commands]
+cmd_pane_fileops_conflict_comparison_rows
+       Reason:
+A measured redraw batch must remain on its declared physical display and DPI: sameName=true, width=480, batch=0, frame=0, DPI=96/144, monitor=true, device=\\.\DISPLAY5/\\.\DISPLAY5, rect=(24,24,766,648), work=(0,0,2560,672).
+       Duration: 12,0s
+
+--- ARTIFACTS ---
+  Test root: S:\RedSalamander.Perf
+  Run id:    i26-decision-candidate-v3-20260921
+  Disk audit issues: 0
+  Last run: S:\RedSalamander.Perf\runs\i26-decision-candidate-v3-20260921\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.commands.json
+    workspace-final.json
+    commands\results.json
+
+
+--- NEXT STEPS ---
+  1. Review failure reasons above
+  2. Check trace logs: S:\RedSalamander.Perf\runs\i26-decision-candidate-v3-20260921\artifacts\selftest\last_run\<suite>\trace.txt
+  3. Re-run a single failing case:
+     Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe --<suite>-selftest --selftest-case=<case_name>
+  4. Compare with previous run:
+     .\Tools\CompareTestRuns.ps1 <old_run_path> <new_run_path>

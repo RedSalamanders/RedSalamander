@@ -3,7 +3,26 @@
 Status: current normative policy and risk map
 Last reviewed: 2026-08-09
 
+## Nonactivating UIA evidence
+
+Nonactivating tests do not own the person's desktop. Foreground witnesses attribute
+events to the test process and retain transient owned activation; ambient pointer,
+foreign foreground and last-input changes remain separate read-only observations.
+Source contracts forbid physical input writes in the UIA observer and fixture path.
+Unavailable guards/observation coverage fail closed. These checks complement native
+UIA behavior and do not substitute for real-input, assistive-technology or interactive
+qualification.
+
 ## Purpose and authority
+
+Archive export coverage must exercise source paths containing each accepted separator,
+including a Windows-joined nested path, through Preparing and the host Copy bridge to
+both a local destination and a sandbox-only UNC destination. Assert exact output bytes,
+the single selected leaf, and continued destination rejection of reserved names, trailing
+dots and embedded separators. Include a multipart archive fixture. An unavailable SMB
+test route remains an explicit capability skip and cannot count as network qualification.
+Typed and diagnostic archive separator contracts must also agree in the standalone
+plugin contract tests.
 
 This document defines which risks RedSalamander test suites must cover and how coverage claims are evaluated. It deliberately does not enumerate mutable case names or totals.
 
@@ -22,6 +41,8 @@ The live inventory authorities are:
 Named documentation galleries such as `FileOps_VisualGallery` are explicit opt-in rendering fixtures.
 They are excluded from broad behavioral phase totals and phase-order integrity requirements, while
 remaining selectable by their exact case name. Their screenshot count is not a behavioral test count.
+The paired `FileOps_CommonPresentationPerf` and `FileOps_IntegratedPresentationPerf` fixtures follow the same exact-selection rule: their
+measurements remain outside broad behavioral phase totals and do not establish full-suite coverage.
 
 ## Trusted validation coverage contract
 
@@ -64,6 +85,16 @@ Every durable behavior change must have a test disposition before closeout:
 
 A passing case proves only its named contract and inputs. A source search, build success, manual observation, or historical green run cannot substitute for relevant current behavioral evidence.
 
+Structural source guards must tolerate formatter whitespace without weakening required arguments,
+call boundaries, ordering or forbidden APIs. The File Operations durable-store guard matches the
+complete publication call and fail-if-exists/replace policy; native durable-store cases remain the
+authority for atomic publication, rejected paths and recovery behavior.
+
+Application production foreground requests route through `Common::RequestForegroundWindow`.
+The source contract rejects direct bypasses, and physical-input/activation-write bans recognize
+the wrapper too. Real-input predecessor plus documentation-gallery runs provide the behavioral
+regression evidence; structural routing alone does not qualify no-activation behavior.
+
 Commands clipboard setup must account for desktop listeners notified by fixture clears and seeds.
 The shared fixture quiet-point helper waits for an unchanged sequence and no open owner for 250 ms,
 with a final availability probe and a three-second scaled deadline. Product copy/cut/paste commands
@@ -92,9 +123,74 @@ CompareDirectories coverage must include matching/classification rules, display 
 
 Search coverage must include local scan, host fallback, indexed service behavior, schema compatibility, store recovery/compaction, writer ownership, cancellation/timeouts, degraded operation, security boundaries, and isolation from stale state. Process-backed tests must capture early-exit diagnostics and must not consume the first state observation in a generic readiness probe when that observation is part of the contract.
 
+Find header-input coverage must use DPI-correct client coordinates, verify the intended logical
+column and prove intermediate sort-order changes. Restored sorting must preserve the exact selected
+path, reordered columns and resized widths; an unchanged preexisting order cannot prove a click.
+
 ### File Operations
 
 FileOperations coverage must include copy, move, delete, rename, conflict resolution, cancellation, pause/resume, queue ordering, rollback/cleanup debt, metadata, reparse-point policy, alternate-volume behavior, watcher refresh, bandwidth/concurrency controls, progress/accounting, and local-to-remote/remote-to-local/remote-to-remote bridges.
+
+Consent coverage must preserve stale bindings across replacement prompts on the same task, including
+UIA, overflow menus, scope toggles and Escape, and prove one-shot acceptance under concurrent
+submitters. Cancellation coverage must distinguish aggregate status from storage evidence: missing
+receipts after possible mutation cannot prove source retention or destination publication. Known,
+unknown, malformed, null and absent receipts, explicit/partial Skip, and stronger host-managed facts
+require distinct assertions. Known no-commit receipts with an absent original or Published owned stage
+must be rejected through both the pure reducer and the real bulk callback/dense finalizer, across
+Copy/Move/Delete, success/Skip/error/cancel statuses and subsequent task cancellation. Valid no-commit
+controls must remain precise. UI lifecycle coverage must exercise real hidden/minimized windows,
+unchanged-model work suppression, retained path-detail state without native focus theft, alert-provider
+presentation lifetime, and rollback/retry after every partial native failure-surface allocation.
+Parallel recursive-copy receipts must include child mutation facts without mixing selected roots.
+Bulk Local Copy/Move must report per-index receipts in both sequential and parallel branches;
+a successful first root cannot supply committed truth to a later failed root. Unknown cleanup
+remains independent of known final non-publication, and callback order is not item identity.
+One-shot and apply-to-all collision controls must validate final typed storage axes as well as bytes.
+UI selection coverage must include programmatic selection, real UIA clear/reselect, append, and
+removal of the selected stable row with no stale detail text. Fixtures that admit real tasks must
+drain and dismiss their own terminal UI through the production path before returning to the suite.
+Successful no-op Copy merges must preserve `Completed` independently of `NotPublished`: cover an
+empty source directory, an existing destination with sentinel data, and an entirely existing empty
+directory tree at serial and parallel concurrency. A new destination is a committed control.
+Known no-commit Move/Delete success, Copy `S_FALSE` without Skip, and unresolved stage debt must
+retain their failure/indeterminate classifications.
+
+Actual Local storage witnesses must cross their named production boundary: cancellation after
+an observed child removal, cross-volume Managed Move failure after an observed publication and
+later positive stage write, locked replacement-authority refusal through normal consent, native
+stage-write failure after positive I/O, ordinary-child DACL denial, exact case-only rename, owned
+application shutdown during actual stage I/O, and two intentional queued non-clipboard commands.
+Prove exact before/after bytes and canonical BLAKE3, identity where required, bounded nofollow
+inventories, real stage disposition and separate producer/callback/finalizer axes after quiet.
+Cancellation is not an injected write failure; a retained selected root is not proof that no child
+changed, and leafwise Managed Move is not an atomic whole-tree transaction. A Dummy Copy-only
+source-retention control cannot stand in for actual cross-volume partial publication.
+
+Failure/lifetime coverage must include empty synchronous admission with no created task,
+same-path/hard-link storage preservation, stale/concurrent normal consent, valid and contradictory
+receipts, visible Stopping plus hidden Preparing cancellation, all-post-failure owner recovery,
+worker-return gating and actual completion-callback owner destruction. Private shutdown-child
+coverage must prove natural application close, owned settings persistence, quiet-before-destroy
+and external storage after real process exit. Bounded job containment or a killed child is failure
+evidence. Child-only environment overrides require native inheritance/override controls without
+changing the parent's environment.
+
+Admission-performance coverage measures actual UI-thread admission, not provider helper calls
+alone. Retain cold/prime/warm-requested labels, actual cache hits/misses and prime age, real volume
+API and allocation counters, immutable plan partitions, cancellation-before-consumption proof,
+exact closed inventory and foreground/pane disposition. Mounted routes use only the test-owned
+VHDX volume that an elevated harness provisions, proves and mounts inside the current run; the test
+validates that hand-off and never mounts, unmounts or adopts a volume, and mounting a real user
+volume is forbidden (see the sandbox rules in `Testing_SelfTests.md`). Capability skips stay explicit and cannot be counted as measured route coverage or
+performance non-regression. Focused families, test-enabled Release, native alternate-volume and
+mounted qualification, repeat/order runs, sanitizers and architecture gates remain separate claims.
+
+Failed evidence must survive worker retirement and safe settings/security restoration. Preserve
+actual failed axes/bytes/inventories/diagnostics and owned scratch; stop same-process continuation
+and refuse automatic reuse after retained failure. Never remove an ambiguous owned mount or tree
+to make a later run green. Registration/catalog parity proves declared reachability only; runtime
+receipts and the canonical Full plan remain required for executed coverage.
 
 Provider tests must prove exact destination/source identity and byte preservation where applicable. A simulated success response is insufficient when the contract depends on server-acknowledged offsets, revisions, IDs, parents, names, eTags, continuation tokens, or cleanup convergence.
 
@@ -103,6 +199,11 @@ Remaining deterministic stress validation for the File Operations popup, large l
 ### Plugins and providers
 
 Plugin coverage must validate public ABI size/version negotiation, capability honesty, factory/enumeration behavior, callback cookies, configuration transactions, unknown-member round trips, secret handling, unload quiet points, and module/callback lifetime.
+
+When one DLL exposes several logical plugin IDs, mixed unload outcomes, repeated refresh and
+partial deferred sweeps must preserve every alias without retaining an extra executable owner.
+After the final unload settles, discovery must restore all aliases. Cover this shared-module
+boundary directly as well as through broad-process plugin discovery.
 
 Every plugin exposing `IInformations` must prove it accepts the defaults its own schema declares. `Tests/PluginContractTests` drives `GetConfigurationSchema` through `Common::PluginConfiguration::ParseSchema` + `MakeDefaultValue` + `SerializeConfiguration` — the exact path the Preferences page uses — requires `SetConfiguration` to return `S_OK`, and then requires the resulting `GetConfiguration` output to still satisfy the schema and be re-acceptable. This closes the gap where a plugin declares an integer-serialized `value` field and rejects the integer the shared codec emits for it, making a transactional `SetConfiguration` discard every other member and silently revert to compiled defaults. The Terminal is covered by the same transactional proofs as the file-system providers (unknown-member preservation, malformed and non-object roots reporting `ERROR_INVALID_DATA`, `{}` restoring defaults). Host-side plumbing is covered by the `settings_terminal_plugin_roundtrip` Commands case, which stores an integer `fontSizeDip` alongside a `fontFamily` and asserts the family survives `CreateTerminalInstance` → `ApplyConfigurationFromSettings`.
 
@@ -156,17 +257,30 @@ Tests that mutate dependency or build state and cannot be made isolated must be 
 
 Crash coverage must preserve partial results and actionable diagnostics across exceptions, access violations, hangs/timeouts, child-process termination, and dump/sidecar collection. Test code must not swallow failures behind broad exception handling.
 
-Monitor coverage must validate ETW provider compatibility, self-originated event suppression, runtime diagnostic
-gating, bounded ingestion/display behavior, and stable ColorTextView interaction. It must also cover decoded
-expansion limits, split UTF-8/UTF-16 boundaries, malformed/truncated input, mid-decode cancellation, move-publication
-without UI reparsing, repeated search-cap eviction/refill and F3 order, Show IDs coordinate reset/rebuild, exact
-canonical read/export/read records (including empty, terminal, blank, Unicode, and line-budget boundaries),
-start-snapshot asynchronous export across later append/retention/clear/replacement, zero-text-copy immutable capture,
-open/save thread-admission rollback and retry, cancellation/fault target preservation, bounded worker close,
-registered payload drain, three-size/five-repeat Release scaling, and selftest fixture cleanup. Optional richer clipboard formats and filter semantics are owned by
-`Specs/Plans/WIP/Operation_Atlas_RemainingSpecificationDecisions_2026-08-04.md` until decided.
+RedMonitor client integration coverage validates the immutable local header/license, direct producer build
+verification, legacy ETW GUID/field compatibility, normalized application/severity/Unicode/PID/TID/time,
+absent-helper behavior, installed production Release discovery and explicit/optional Debug startup routing.
+Preferences tests retain live filter/mask application and the shared Release settings-file link. Consumer
+builds, test plans and packages must contain no viewer target, executable or satellite dependency.
+
+The standalone viewer's detailed model, ingestion, file I/O, interaction, lifetime and Release scaling
+obligations transferred to [RedMonitor validation](https://github.com/RedSalamanders/RedMonitor/blob/ej/redmonitor-adoption-20261023/Specs/Testing/Testing_Validation.md).
+Historical viewer receipts remain historical; consumer component passes cannot qualify those viewer gates.
+The impact manifest maps the vendored client and its lock to the full consumer build/test closure and
+does not select retired viewer projects or suites.
 
 ## Conditional and destructive scenarios
+
+The File Operations safety contract exercises repeated Enter, Space and Escape through the owned
+popup's native message route after prompt A's controls are replaced by generation B. Its synthetic
+fixture observes actual hosted callbacks, requires exact B default/cancel identities, retains fresh-press
+positive controls and repeated-navigation coverage, and preserves native foreground/focus ownership.
+The Commands stale-presentation case separately checks that held Escape leaves a real B prompt
+unresolved after its cancel binding refreshes. These message-dispatch checks do not replace physical
+keyboard qualification under the interactive desktop lease.
+
+The legacy FileOps archive read/seek and mounted-pane backing-archive change cases remain explicit
+coverage gaps. Compare's 7z directory-size and name-only-search tests do not qualify those scenarios.
 
 Conditional cases remain members of their suite. Missing credentials, ReFS/alternate volumes, foreground desktop ownership, optional plugins, or other declared prerequisites produce a justified `skipped` result under `Testing_SelfTests.md`; they do not remove the case.
 
@@ -199,7 +313,8 @@ Use these commands for review:
 in the I19 gap analysis, plus viewer adapter mapping/polarity regressions. It links
 the pinned archive through public headers. The legacy library source/suite is retired;
 its old results are not candidate coverage. Shared control/embedded tests belong to DxUi. Commands,
-viewer tests, RedConfigure and Monitor continue to establish product behavior.
+viewer tests and RedConfigure continue to establish product behavior. RedMonitor client and Preferences
+integration is consumer coverage; standalone viewer behavior belongs to its independent project.
 
 Compare's low-hardening smoke keeps the Find checkbox repaint contract as an
 interaction with the pinned public library. Left on an unchecked mixed checkbox
@@ -217,3 +332,52 @@ The extracted control target does not own product source policies. `Tools/Tests/
 retains the NavigationView delivered-input generation prohibition and the credential prompt modal-quit, raw-child
 teardown and joined-UIA-worker policies. These four checks remain in the product tooling suite alongside runtime
 Commands coverage when the old DxUiTests executable is retired.
+
+ViewerSpace's authoritative-progress source guard follows its monotonic observed-byte
+helper across the scanner and model translation units. Native gated summary coverage
+must additionally bind the early and settled totals to the same named, presented real
+folder tile; source-pattern checks alone do not qualify accounting or presentation.
+
+## Folder Copy live progress
+
+The two exact no-activation cases are `DiscoveryScope_FolderLiveProgress` and
+`DiscoveryScope_MultipleFoldersLiveProgress`, registered in the existing DiscoveryClosure source
+and runner. The first uses real serial/overwrite/parallel Native, parallel bridge and Verify bridge
+copies, independent 4-file/3-folder/96-MiB totals/content, rendered found-count ink and same-file
+advancing track/fill pixels. Its slow-finalization and exact small-file Publishing pauses check
+real meter lifetime and retained size. A separate sequential bridge traversal uses 32 nonempty
+sibling folders beyond the four-directory lookahead (32 files, 33 folders, 64 MiB at 2 MiB/s).
+It checks independently defined positive open count/size prefixes and visible text ink;
+empty roots and actual publication followed by committed-error/proof failure check count truth
+and typed root failure. Sampling can use at most three actual child attempts with retained misses;
+it never weakens fractions/pixels or changes the five paired routes' speed/delay.
+Only these five meter routes and the wide open probe cap each harness message batch at eight,
+preventing ordinary queued paint traffic from starving their 100-ms sampling. The original
+first named file must remain in actual nonterminal Finalizing for the 650-ms meter witness;
+phase/full-byte/terminal transitions remain diagnostic evidence. Other closure cases keep the
+existing 1,024-message default.
+
+Multiple selected roots cover monotonic counters, bounded rows, simultaneous regular workers,
+file-shaped preserved links with zero payload, literal link targets and independent file bytes.
+The direct Native `CopyItems` control uses real I/O plus the production reducer on a non-admitted
+task, separately from product PerItem popup coverage. Synthetic reducer/presentation controls
+cover all-scope support, zero work, Skip/cancel, publication+retry, stale terminal, producer/worker
+coexistence, replay uncertainty, known-size summation, partial-total presentation, Verify On zero
+bytes and malformed enum/BOOL/immutable-kind withdrawal while independent certified size survives.
+Only those two exact cases have the reviewed no-activation runner classification; broad FileOps
+families retain their foreground prerequisites. Focused results never assert a Full verdict.
+
+One ordinary large route samples automatic WM_PAINT records without forcing redraw or repeatedly
+showing the popup. It requires distinct advancing generations for the same file, excludes every
+capture-induced generation, and retains the same pixel probes afterward. Other routes explicitly
+use synchronous redraw for their renderer/phase witnesses. Semantic-link I/O requires Windows
+file-link creation privilege (or Developer Mode already enabled). ERROR_PRIVILEGE_NOT_HELD(1314)
+records named skipped link subcases and their reason; regular-file PerItem and Native Bulk I/O
+remain required and cannot be skipped. Synthetic producer controls remain distinct from actual
+Native semantic-link qualification. No test changes the machine's privilege or Developer Mode.
+
+## Supplied-review safety regressions (2026-10-16)
+
+ProductUiTests covers FULL, ID_BOTH and notification record truncation, record-local name bounds, alignment, nonprogress/overflow, unsafe leaf/path names and valid layouts. It also covers payload destination/message/type mismatch preservation, rightful adoption, distinct trivial types whose deleters may fold in Release, duplicate/stale delivery, teardown and unclaimed synchronous reclamation, plus deterministic entropy failure, zero and live-collision exhaustion. Existing coalescing/order and teardown stress remain required.
+
+`FileOps_ReviewRemediationContracts` owns descendant parent pin/race and cancellation coverage, plus XP-09 typed skip/refusal outcomes. `FileOps_SmallFileCopyCost` validates actual names and content on both routes and rejects missing/corrupt destination controls. ScopedTesting Pester fixtures change reusable workflows, composite actions, assets and imported scripts, and verify that a committed emptied reusable gate cannot delegate obligations. These focused checks do not qualify native ARM64, real hostile-server input delivery or all SMB/NAS implementations.

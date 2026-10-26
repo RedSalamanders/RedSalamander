@@ -1,0 +1,123 @@
+AFFECTED FileOps FileOps_SmbManagedMoveLeavesNoStage 20261018T214617Z-58432-9b76370459d14524b9148296db271fc0
+Stale TestSandbox run cleanup: 1 removed, 0 failed, 0 retained (unlinkable reparse point or test-owned VHDX receipt).
+Skipping build (verified receipt 55ed5991c792071f0abd3bc887ccad5563f4e51d6348b8b8daa53297632ae9f3).
+Validation plan: f73621b0cf1fc3c694aba1b584ffa378bdb5fdcafe6b04d283413060999b26cc
+Entry fingerprints: 1c2493e5531d2106ae6a0576630d96f69f021e4299b6cd12443708fd9349a102 (105 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: FileOperations
+======================================================================
+  Exe:  Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
+  Args: --fileops-selftest --selftest-no-activate --selftest-case=FileOps_SmbManagedMoveLeavesNoStage --selftest-repeat=3
+
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [PASS] 
+FileOperations
+  (23,8s)
+         Passed: 9
+  Failed: 0
+  Skipped: 0
+
+  -------------------------------------------------------
+
+  Overall: 
+PASSED
+  Total: 9
+  Passed: 9
+  Failed: 0
+  Skipped: 0
+  Wall time: 38,8s
+  Classifications: 
+flaky=0 
+regression=0 
+isolation_suspect=0 
+unclassified_failure=0
+  Quarantine: 
+active=0 
+invalid=0 
+repair_attempts=0 
+repair_reproduced=0
+
+--- ARTIFACTS ---
+  Test root: Z:\RedSalamander.Perf
+  Run id:    20261018T214617Z-58432-9b76370459d14524b9148296db271fc0
+  Disk audit issues: 41
+  Last run: Z:\RedSalamander.Perf\runs\20261018T214617Z-58432-9b76370459d14524b9148296db271fc0\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.file-operations.json
+    workspace-final.json
+    fileops\results.json
+
+{"commit":"a4b506d53b92d716a923199ba436463f95a6e375","source_snapshot_id":"0e85c912ebb5b196b1ecee6caa3c2fc2de01b54df6aa20577f9c2be732e26eff","receipt_id":"55ed5991c792071f0abd3bc887ccad5563f4e51d6348b8b8daa53297632ae9f3","configuration":"Debug","platform":"x64","suite":"FileOps","repeat_count":3,"filter":"FileOps_SmbManagedMoveLeavesNoStage","run_id":"20261018T214617Z-58432-9b76370459d14524b9148296db271fc0","exit_code":0,"passed":9,"failed":0,"skipped":0,"raw_archive":"Z:\\RedSalamander.Perf\\evidence\\final-cancellation-debug-2026-10-18\\20261018T214617Z-58432-9b76370459d14524b9148296db271fc0"}
+AFFECTED FileOps FileOpsFamily_DiscoveryScope 20261018T214736Z-58432-091ccffe6bae4c139db0b8368ccbdebd
+Skipping build (verified receipt 55ed5991c792071f0abd3bc887ccad5563f4e51d6348b8b8daa53297632ae9f3).
+Validation plan: 5527b8bf58f0256188e78fc7eb78f94fb9348878b14d0c68db47a324dae896a3
+Entry fingerprints: fa83315a92b30a803aaca3f2dc224fdbe7cc4f3d6ef97f27562a2c806153e951 (72 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: FileOperations
+======================================================================
+  Exe:  Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
+  Args: --fileops-selftest --selftest-no-activate --selftest-case=FileOpsFamily_DiscoveryScope
+
+  SOURCE MUTATION: workspace changed during selftest.file-operations.
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [PASS] 
+FileOperations
+  (2m 26,8s)
+         Passed: 27
+  Failed: 0
+  Skipped: 0
+
+  -------------------------------------------------------
+
+  Overall: 
+FAILED
+  Total: 27
+  Passed: 27
+  Failed: 0
+  Skipped: 0
+  Wall time: 2m 41,7s
+  Classifications: 
+flaky=0 
+regression=0 
+isolation_suspect=0 
+unclassified_failure=0
+  Quarantine: 
+active=0 
+invalid=0 
+repair_attempts=0 
+repair_reproduced=0
+
+--- ARTIFACTS ---
+  Test root: Z:\RedSalamander.Perf
+  Run id:    20261018T214736Z-58432-091ccffe6bae4c139db0b8368ccbdebd
+  Disk audit issues: 41
+  Last run: Z:\RedSalamander.Perf\runs\20261018T214736Z-58432-091ccffe6bae4c139db0b8368ccbdebd\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.file-operations.json
+    workspace-final.json
+    fileops\results.json
+
+
+--- NEXT STEPS ---
+  1. Review failure reasons above
+  2. Check trace logs: Z:\RedSalamander.Perf\runs\20261018T214736Z-58432-091ccffe6bae4c139db0b8368ccbdebd\artifacts\selftest\last_run\<suite>\trace.txt
+  3. Re-run a single failing case:
+     Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe --<suite>-selftest --selftest-case=<case_name>
+  4. Compare with previous run:
+     .\Tools\CompareTestRuns.ps1 <old_run_path> <new_run_path>
+
+{"commit":"a4b506d53b92d716a923199ba436463f95a6e375","source_snapshot_id":"0e85c912ebb5b196b1ecee6caa3c2fc2de01b54df6aa20577f9c2be732e26eff","receipt_id":"55ed5991c792071f0abd3bc887ccad5563f4e51d6348b8b8daa53297632ae9f3","configuration":"Debug","platform":"x64","suite":"FileOps","repeat_count":1,"filter":"FileOpsFamily_DiscoveryScope","run_id":"20261018T214736Z-58432-091ccffe6bae4c139db0b8368ccbdebd","exit_code":1,"passed":27,"failed":0,"skipped":0,"raw_archive":"Z:\\RedSalamander.Perf\\evidence\\final-cancellation-debug-2026-10-18\\20261018T214736Z-58432-091ccffe6bae4c139db0b8368ccbdebd"}

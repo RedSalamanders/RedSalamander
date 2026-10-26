@@ -35,7 +35,7 @@ using DxUi::GridRowTone;
 using DxUi::GridSelectionMode;
 using DxUi::GridSortSpec;
 using DxUi::GridVisibleWorkMetrics;
-using DxUi::IDxGridModel;
+using DxUi::IGridModel;
 using DxUi::Label;
 using DxUi::Panel;
 using DxUi::SortDirection;
@@ -446,7 +446,7 @@ struct FileActionGridRow
 
 } // namespace
 
-class FileActionGridModel final : public IDxGridModel
+class FileActionGridModel final : public IGridModel
 {
 public:
     void SetColumns(std::vector<GridColumnDesc> columns)

@@ -1,0 +1,96 @@
+{
+    "run_started_utc": "2026-10-25T19:33:09.756Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261025T193240Z-40124-cb54a8e6175240f5aac6d48a84ec9f11\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 92550,
+    "passed": 10,
+    "failed": 3,
+    "skipped": 0,
+    "failureMessage": "A 1,000-command burst must keep private-memory growth bounded (before=692473856 after=1180155904 limit=8388608 bytes).",
+    "cases": [
+        {
+            "name": "theme_cycle_overlay_retention",
+            "status": "failed",
+            "duration_ms": 17284,
+            "repeat_index": 1,
+            "reason": "A 1,000-command burst must keep private-memory growth bounded (before=692473856 after=1180155904 limit=8388608 bytes)."
+        },
+        {
+            "name": "cmd_fileops_durable_store_safe_mechanics",
+            "status": "passed",
+            "duration_ms": 262,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_fileops_move_breadcrumb_durable_lifecycle",
+            "status": "failed",
+            "duration_ms": 3341,
+            "repeat_index": 1,
+            "reason": "Interrupted Move actions should offer navigation and exact dismissal without Resume, retry, rollback, cleanup, Cut-again, fake diagnostics, or item reveal (layout=true compact=false failedItems=false showLog=false exportIssues=false openDestination=true revealDestination=false dismiss=false startNow=false pause=false cancel=false selectSources=false cutAgain=false)."
+        },
+        {
+            "name": "cmd_pane_fileops_issues_pane_result_retention",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_accepted_decision_records",
+            "status": "passed",
+            "duration_ms": 5454,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "passed",
+            "duration_ms": 11282,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_hosted_decision_keys",
+            "status": "passed",
+            "duration_ms": 2995,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_two_pending_task_identity",
+            "status": "failed",
+            "duration_ms": 5061,
+            "repeat_index": 1,
+            "reason": "Return after B completion must restore A's focused action, scope, default/cancel and context."
+        },
+        {
+            "name": "cmd_viewer_space_refresh_preserves_display_until_adoption",
+            "status": "passed",
+            "duration_ms": 9164,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_refresh_cancel_keeps_display",
+            "status": "passed",
+            "duration_ms": 8072,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_refresh_budget_requires_explicit_rebuild",
+            "status": "passed",
+            "duration_ms": 7972,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_deferred_rebuild_waits_for_disposal_capacity",
+            "status": "passed",
+            "duration_ms": 7833,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_close_does_not_wait_for_retired_model_disposal",
+            "status": "passed",
+            "duration_ms": 8496,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

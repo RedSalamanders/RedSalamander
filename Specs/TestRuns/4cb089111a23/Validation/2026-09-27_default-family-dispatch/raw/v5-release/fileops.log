@@ -1,0 +1,155 @@
+Stale TestSandbox run cleanup: 1 removed, 0 failed.
+Skipping build (verified receipt e231b251d2a6a43e2e209b45aae9b2959b8b969727caeda6e693040f4d34f2da).
+Validation plan: 8c2c4bd5ac8d00623c3f497195e939e57801a77ecfaa33677ff85e5f16559a82
+Entry fingerprints: cf34997dc1eddaaf538e56fc7324f65a81ec604ed4ecd9fc98187dca762afaa6 (83 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: FileOperations
+======================================================================
+  Exe:  C:\RsI26Final\.build\x64\Release\RedSalamander.exe
+  Args: --fileops-selftest --selftest-no-activate
+
+  TERMINAL RESULT: FAILED (FORBIDDEN_SKIP_CLASS, UNALLOWED_SKIP)
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [FAIL] 
+FileOperations
+  (14m 22,1s)
+         Passed: 194
+  Failed: 1
+  Skipped: 22
+
+  -------------------------------------------------------
+
+  Overall: 
+FAILED
+  Total: 217
+  Passed: 194
+  Failed: 1
+  Skipped: 22
+  Wall time: 14m 33,2s
+  Classifications: 
+flaky=0 
+regression=0 
+isolation_suspect=0 
+unclassified_failure=0
+  Quarantine: 
+active=0 
+invalid=0 
+repair_attempts=0 
+repair_reproduced=0
+
+--- SKIPPED CASES (22 cases) ---
+  SKIP 
+[FileOperations] 
+FileOps_BatchRenameExactResultCarrier
+ - not executed
+  SKIP 
+[FileOperations] 
+Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker
+ - FileSystem shared-scheduler shutdown selftests use a Debug-only plugin export; Debug coverage owns this proof.
+  SKIP 
+[FileOperations] 
+Phase15_FileSystem7zReadSeekSmoke
+ - 7z read/seek smoke skipped in the file-operations suite; 7z coverage remains in compare selftests.
+  SKIP 
+[FileOperations] 
+Phase15_FileSystem7zMountPathImpact
+ - 7z mount-path impact skipped in the file-operations suite; 7z coverage remains in compare selftests.
+  SKIP 
+[FileOperations] 
+Phase16_RemoteFtpSecret
+ - FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteFtpSandbox
+ - FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteSftpSecret
+ - SFTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SFTP or create 'FileOpsSelfTest SFTP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteSftpSandbox
+ - SFTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SFTP or create 'FileOpsSelfTest SFTP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteScpSecret
+ - SCP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SCP or create 'FileOpsSelfTest SCP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteScpSandbox
+ - SCP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SCP or create 'FileOpsSelfTest SCP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteImapSecret
+ - IMAP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_IMAP or create 'FileOpsSelfTest IMAP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteImapSandbox
+ - IMAP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_IMAP or create 'FileOpsSelfTest IMAP').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteS3Secret
+ - S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteS3Sandbox
+ - S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteS3FileOps
+ - S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteOneDrivePersonalSecret
+ - OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteOneDrivePersonalSandbox
+ - OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteOneDrivePersonalFileOps
+ - OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteOneDriveBusinessSecret
+ - OneDrive Business: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS or create 'FileOpsSelfTest OneDrive Business').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteOneDriveBusinessSandbox
+ - OneDrive Business: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS or create 'FileOpsSelfTest OneDrive Business').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteSharePointSecret
+ - SharePoint: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SHAREPOINT or create 'FileOpsSelfTest SharePoint').
+  SKIP 
+[FileOperations] 
+Phase16_RemoteSharePointSandbox
+ - SharePoint: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SHAREPOINT or create 'FileOpsSelfTest SharePoint').
+
+--- ARTIFACTS ---
+  Test root: E:\RedSalamander.Perf
+  Run id:    20260927T122219Z-64752-80f406468c454126a4b99e52c3e9187d
+  Disk audit issues: 0
+  Last run: E:\RedSalamander.Perf\runs\20260927T122219Z-64752-80f406468c454126a4b99e52c3e9187d\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.file-operations.json
+    workspace-final.json
+    fileops\results.json
+
+
+--- NEXT STEPS ---
+  1. Review failure reasons above
+  2. Check trace logs: E:\RedSalamander.Perf\runs\20260927T122219Z-64752-80f406468c454126a4b99e52c3e9187d\artifacts\selftest\last_run\<suite>\trace.txt
+  3. Re-run a single failing case:
+     C:\RsI26Final\.build\x64\Release\RedSalamander.exe --<suite>-selftest --selftest-case=<case_name>
+  4. Compare with previous run:
+     .\Tools\CompareTestRuns.ps1 <old_run_path> <new_run_path>
+

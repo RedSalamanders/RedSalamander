@@ -1,0 +1,84 @@
+{
+  "variant": "conflict-rows-baseline-clean",
+  "passed": 0,
+  "failed": 3,
+  "skipped": 0,
+  "source_snapshot": "ae715bd17e8a2aa8863eb4d3268f0f3cd9f9236f0722c8dd4102db1e1030ff46",
+  "build_receipt": "0e8b80f8cb366d7d7d50dfbd1fa890e4ada1486edf96bba1033a04b07dbb1c55",
+  "rounds": [
+    {
+      "samples_us": [
+        60344,
+        66609,
+        66494,
+        66732,
+        66489,
+        59200,
+        66630,
+        66647,
+        66506,
+        66810,
+        59178,
+        66528,
+        66726,
+        66516,
+        66526
+      ],
+      "median_us": 66526,
+      "p95_us": 66810
+    },
+    {
+      "samples_us": [
+        62666,
+        66551,
+        66560,
+        66742,
+        66521,
+        61941,
+        66836,
+        66498,
+        66584,
+        66619,
+        62813,
+        66676,
+        66593,
+        66484,
+        66703
+      ],
+      "median_us": 66560,
+      "p95_us": 66836
+    },
+    {
+      "samples_us": [
+        64934,
+        66948,
+        66378,
+        66600,
+        66702,
+        59274,
+        66346,
+        66732,
+        66700,
+        66648,
+        62336,
+        66512,
+        66683,
+        66703,
+        66621
+      ],
+      "median_us": 66621,
+      "p95_us": 66948
+    }
+  ],
+  "audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": true,
+    "issue_count": 0,
+    "test_root": "S:\\RedSalamander.Perf",
+    "run_id": "i26-conflict-rows-baseline-clean",
+    "allowed_run_ids": [
+      "i26-conflict-rows-baseline-clean"
+    ],
+    "issues": []
+  }
+}

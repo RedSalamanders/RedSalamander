@@ -1,0 +1,802 @@
+[
+  {
+    "filename": "102-confirmation-4-short__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-4-short__dark__fr-FR__display1__144dpi.png",
+    "sha256": "991acaebd6d8ae54dcaf7571c89beb4a0b7350df00ff31a5ca37fd1e24d43fac",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-4-short__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-4-short__dark__fr-FR__display2__96dpi.png",
+    "sha256": "0ac0121fbeaf29e82e5ffcedadeb4ea2990304e43b7ffb423f3459ebffd3c758",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-4-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-4-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "sha256": "5f04cecf68577b6fae58517b3cf4978f7509482618b59b04f1b0b600665e980b",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-4-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-4-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "sha256": "95128ee3b8695d7ae3dea85fd32049625396fa2c6fc9dd0e4c25e8c2af915f32",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-5__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-5__dark__fr-FR__display1__144dpi.png",
+    "sha256": "40e7fd746f70d2ac58127334050e04a3d6e60bdedd481bb0ff72eeb92252cac1",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-5__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-5__dark__fr-FR__display2__96dpi.png",
+    "sha256": "ef3867a1c04d9f8b47f14fca103e611f66dcd0f60b609b85f465389d4d32bbe2",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-5-narrow__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-5-narrow__dark__fr-FR__display1__144dpi.png",
+    "sha256": "cdda1788ea43545d46d654f99d9e79094729a5b03fe901a55a1e95103b352e3c",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-5-narrow__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-5-narrow__dark__fr-FR__display2__96dpi.png",
+    "sha256": "ce8428ff22f0d56cdbce3b7b45e066d39fffcca3a409ee32547584ae2d46711f",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-5-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-5-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "sha256": "3c3de65dddb72326a5c320d7bc5532f5f54390ce923e9b995f3992a82ee6ae69",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-5-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-5-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "sha256": "e31841a09a9d24199217f3623021391cdb0b9bb70ef586a3c6a6ed6b93ed76c7",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-6__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-6__dark__fr-FR__display1__144dpi.png",
+    "sha256": "433ebf08a0cd890b45eb0d01a81da26808fce1afde4ca608b2c2dcd348964e16",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-6__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-6__dark__fr-FR__display2__96dpi.png",
+    "sha256": "52975a19720dd1fc9186845b75c9a1a249dc9843f62b5aee38343c673bfbdedb",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-6-narrow__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-6-narrow__dark__fr-FR__display1__144dpi.png",
+    "sha256": "4b0377180a0bcc9ad716c3bf742a556bfa884cfd713d4e0c1162b87af9fe5e14",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-6-narrow__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-6-narrow__dark__fr-FR__display2__96dpi.png",
+    "sha256": "57b01121b275c1febcc569907f1a5a01a2ca3d1e0046a1eed8079df258807520",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-6-short__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-6-short__dark__fr-FR__display1__144dpi.png",
+    "sha256": "7025e8c28d88cddae9d325e97edf91bde68bb4efba967cbc06236e0f1dcd3936",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-6-short__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-6-short__dark__fr-FR__display2__96dpi.png",
+    "sha256": "4118f8ef0f7653f5ed1568fcbcdac85e00fbd03a2199ecf2384cb7db0f9479db",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-6-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-6-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "sha256": "8e397db971ce5c0232d7b2914a59f434f1f1e7f568e2b3a3085a881dc83c5c3d",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-6-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-6-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "sha256": "3fe14a4d44620ebb0d0b40ec33d35f759da6b00fdb8d8ddebbae67728698e2ca",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-7__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-7__dark__fr-FR__display1__144dpi.png",
+    "sha256": "b1494fa9d0ad811287a1db543fdacb903c8b46fe386e1361fcab4e1afbba0976",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-7__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-7__dark__fr-FR__display2__96dpi.png",
+    "sha256": "ffb951d6db1b229d494817ad2c11de144a2a721845e81bb52392aa1c66a10065",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-7-narrow__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-7-narrow__dark__fr-FR__display1__144dpi.png",
+    "sha256": "c62366876566b2543a16b8d75bd9d72f01f726f4e77578dd070f43f39b2c0c56",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-7-narrow__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-7-narrow__dark__fr-FR__display2__96dpi.png",
+    "sha256": "72f9b624f340a955a1f54f2ab8e791c154c5c59b2d60b1e0fcace1319c0c8621",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-7-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-7-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "sha256": "0a9a644b2fd788e00a5f09116542b4fb5e3c2272cd588aae63ef73e2456848b4",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-7-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-7-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "sha256": "3b6e9d4318e808b45126fccfc5bac5e1b586028257af670abbcbbd4ea5d9068a",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-8__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-8__dark__fr-FR__display1__144dpi.png",
+    "sha256": "602724ff79f77314bc3597071ad8d8765be5584aea22ed48c27c9f8ac59e9989",
+    "finding": "Permanent-delete warning is explicit and readable; destructive action and Cancel are both visible with clear red treatment, including narrow/short views.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-8__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-8__dark__fr-FR__display2__96dpi.png",
+    "sha256": "9813b926b2cdff0f8d07da76f42601cf96a91d056132db7ee11a98aec58d056c",
+    "finding": "Permanent-delete warning is explicit and readable; destructive action and Cancel are both visible with clear red treatment, including narrow/short views.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-8-narrow__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-8-narrow__dark__fr-FR__display1__144dpi.png",
+    "sha256": "2e5fea26f2212336cad5e71f884039f2a5805a3db13573e414d2662933000f7e",
+    "finding": "Permanent-delete warning is explicit and readable; destructive action and Cancel are both visible with clear red treatment, including narrow/short views.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-8-narrow__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-8-narrow__dark__fr-FR__display2__96dpi.png",
+    "sha256": "303733bd8f7262205052026c452fa4c4bbb353ee70ee66583ba25ce1668c597c",
+    "finding": "Permanent-delete warning is explicit and readable; destructive action and Cancel are both visible with clear red treatment, including narrow/short views.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-8-short__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-8-short__dark__fr-FR__display1__144dpi.png",
+    "sha256": "e2a03117e58fb8281bb620edb45064f790a90fd647c90c83cd53f35c8477dd27",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-8-short__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-8-short__dark__fr-FR__display2__96dpi.png",
+    "sha256": "e7996eba56416250d5e6d64e9d0395fd298e21b9a599d1a7ce1901d8cc72365a",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-9__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-9__dark__fr-FR__display1__144dpi.png",
+    "sha256": "0e632da8662554f4b05363f3636ebe89d63aa32bdff8d3c360cb8bbdb5c56575",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-9__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-9__dark__fr-FR__display2__96dpi.png",
+    "sha256": "74db84ea489ac117baad0430269dd2368d217073f2ed46c5887cbab520c0a2b4",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-9-narrow__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-9-narrow__dark__fr-FR__display1__144dpi.png",
+    "sha256": "ab47695a80f553f20da2d97cd7185474df004db5255b55062d978c1bb06cbb14",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-9-narrow__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-9-narrow__dark__fr-FR__display2__96dpi.png",
+    "sha256": "5562ab6318ea615e9d94cde4c3909d9c7389ded66a09b8e69ca10a619c341766",
+    "finding": "Operation-specific French confirmation text and available options are legible; narrow variants wrap without overlapping their action buttons.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-9-short__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-9-short__dark__fr-FR__display1__144dpi.png",
+    "sha256": "1cb217560ce764e27bb1c1aec08684acfb8d7cb69386c6be745254d24537086b",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "102-confirmation-9-short__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-9-short__dark__fr-FR__display2__96dpi.png",
+    "sha256": "4320b89196f6656d754f7ec2dd0e1ba46ac2fb33edf011ed5fd6bd8153ac715c",
+    "finding": "Short-height dialog: body content is clipped inside the intended scroll viewport; the fixed action buttons remain visible. The scrolled counterpart shows the option/warning content. No overlap or missing control observed.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "103-issues-empty__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\103-issues-empty__dark__fr-FR__display1__144dpi.png",
+    "sha256": "580dd9dd0b0742485c5c551fbe151408f521b072105ccaf9bfaa12ae97fc9a35",
+    "finding": "Empty Issues table shows all column headers, selection guidance, and the technical-details/copy-details footer actions.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "103-issues-empty__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\103-issues-empty__dark__fr-FR__display2__96dpi.png",
+    "sha256": "6d4fea661fee3af61f2b3214c2144c06672a0088c1cedca689d67257d391bf8e",
+    "finding": "Empty Issues table shows all column headers, selection guidance, and the technical-details/copy-details footer actions.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "104-issues-populated__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\104-issues-populated__dark__fr-FR__display1__144dpi.png",
+    "sha256": "d4d4ef24ed79d6fe14136e6dd21ba00e5ce0827e4354e43720a34b3647bf066c",
+    "finding": "Populated Issues rows use distinct error styling; columns remain separated and the detail guidance/footer actions remain visible. Partial lower rows are within the scrollable table.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "104-issues-populated__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\104-issues-populated__dark__fr-FR__display2__96dpi.png",
+    "sha256": "128382dd5087f2b26820c129fd79dc89f17376348464f34b57b2f85749ecbd38",
+    "finding": "Populated Issues rows use distinct error styling; columns remain separated and the detail guidance/footer actions remain visible. Partial lower rows are within the scrollable table.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "105-issues-selected__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\105-issues-selected__dark__fr-FR__display1__144dpi.png",
+    "sha256": "36e9cacaee64f659084156d646c77071e6bfa513640c5858a68c43468c2d2761",
+    "finding": "Selected issue is visually distinct and its full detail projection (problem, operation, decision, result, source, destination) is readable; technical/copy actions remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "105-issues-selected__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\105-issues-selected__dark__fr-FR__display2__96dpi.png",
+    "sha256": "f748888709d759fa20d67a152062fc65a31efc22e68b0dc715be16b834a556db",
+    "finding": "Selected issue is visually distinct and its full detail projection (problem, operation, decision, result, source, destination) is readable; technical/copy actions remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "106-issues-scrolled__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\106-issues-scrolled__dark__fr-FR__display1__144dpi.png",
+    "sha256": "d519c37b581dcc52e6050049987f9291768b85a089ab6ea977f492fd89b911a7",
+    "finding": "Scrolled issue list and selected-row details remain readable; the list/detail pane scrollbars and fixed bottom actions are visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "106-issues-scrolled__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\106-issues-scrolled__dark__fr-FR__display2__96dpi.png",
+    "sha256": "cc35512c17dbd7860e01ab0b944796ec8f50211f349f79664776accf420f4c30",
+    "finding": "Scrolled issue list and selected-row details remain readable; the list/detail pane scrollbars and fixed bottom actions are visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "107-destination-history__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\107-destination-history__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "sha256": "0017fe4337f326f57d93031493c0069680c96eba14f177642ef38a9d41114b82",
+    "finding": "History flyout entries and their secondary destination paths are legible; repeated display names remain distinguishable through their paths.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "107-destination-history__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\107-destination-history__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "sha256": "5c250ad94ed6a71e589be8273f914ed83027f860b6dbd70a1892b102acd3aad8",
+    "finding": "History flyout entries and their secondary destination paths are legible; repeated display names remain distinguishable through their paths.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "108-decision-long-french-paths__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\108-decision-long-french-paths__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "ff32e21d7dfcaa849ecd3a0fff315aa986433fdec90ff5ddf82977305c51166c",
+    "finding": "Long French filename and source/destination details wrap or elide within their rows; checkbox and decision/action buttons remain separated and visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "108-decision-long-french-paths__dark__760dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\108-decision-long-french-paths__dark__760dip__fr-FR__display2__96dpi.png",
+    "sha256": "62bc7792a9f62a9968ad16e02ff36235a983ab3f6172a4747b7b477abf82cead",
+    "finding": "Long French filename and source/destination details wrap or elide within their rows; checkbox and decision/action buttons remain separated and visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "11-speed-limited__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\11-speed-limited__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "6546f87f6151c21e950129df881e0f3958cb5f52dacf67e736b02073cba7e9b2",
+    "finding": "Localized active speed limit is visible in the progress card; filenames, graph, and footer actions remain readable.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "11-speed-limited__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\11-speed-limited__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "5fa16c99e95165f0face8ebd22b0ba5ebdb041c980b3cbe979ee87da06b20b96",
+    "finding": "Localized active speed limit is visible in the progress card; filenames, graph, and footer actions remain readable.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "11-speed-limited__dark__760dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\11-speed-limited__dark__760dip__fr-FR__display1__144dpi.png",
+    "sha256": "a1f8be054a9f8bee611201773805be209bebedbf65bfb4ea2dd58c0176a29bc4",
+    "finding": "Localized active speed limit is visible in the progress card; filenames, graph, and footer actions remain readable.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "11-speed-limited__dark__760dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\11-speed-limited__dark__760dip__fr-FR__display2__96dpi.png",
+    "sha256": "8d08d31900ca46206cd64308af8b8c23582466ad04120f0bc902018954b14322",
+    "finding": "Localized active speed limit is visible in the progress card; filenames, graph, and footer actions remain readable.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "110-keyboard-shift-tab-focus__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-interaction-protected-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\110-keyboard-shift-tab-focus__dark__fr-FR__display1__144dpi.png",
+    "sha256": "faa25a0de24955d476e49f968e780333e4db47be54db8e867419b7c60596c9ea",
+    "finding": "Conflict card, full-width navigation actions, checkbox, decision buttons, and footer are visible; focus outline is visible on the captured control.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "110-keyboard-shift-tab-focus__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-interaction-protected-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\110-keyboard-shift-tab-focus__dark__fr-FR__display2__96dpi.png",
+    "sha256": "1db85d05a465e4b5c4cafdb713f44aaf421817a70bfd54b9c031fc6219ffd978",
+    "finding": "Conflict card, full-width navigation actions, checkbox, decision buttons, and footer are visible; focus outline is visible on the captured control.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "112-pointer-pressed__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-interaction-protected-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\112-pointer-pressed__dark__fr-FR__display1__144dpi.png",
+    "sha256": "bec08b9b5d8ed0390a6d1b11870fb7795e0293bea6164b96e844897fb3dc12bd",
+    "finding": "Pointer-pressed overflow action has a visible pressed treatment; conflict content and adjacent footer controls remain intact.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "112-pointer-pressed__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-interaction-protected-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\112-pointer-pressed__dark__fr-FR__display2__96dpi.png",
+    "sha256": "080571df7c8290d5f607a52e18c9177567ebceb01ceac6d254d285f146118d41",
+    "finding": "Pointer-pressed overflow action has a visible pressed treatment; conflict content and adjacent footer controls remain intact.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "113-dpi-return-to-first-display__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-interaction-protected-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\113-dpi-return-to-first-display__dark__fr-FR__display1__144dpi.png",
+    "sha256": "a20de288ed32e5791e1e4d3c0875620cce471e97947cf4a76270bc50fc74e2d7",
+    "finding": "Conflict card and focus/action layout are fully rendered at the captured DPI; no visible overlap or missing control.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "114-focused-action-dpi-hop__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-interaction-protected-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\114-focused-action-dpi-hop__dark__fr-FR__display2__96dpi.png",
+    "sha256": "dcffcc2d8bb5d36b1cd73ca08e83a4ef3562de2ad643eefcfbaf8f8e10c62cd7",
+    "finding": "Conflict card and focus/action layout are fully rendered at the captured DPI; no visible overlap or missing control.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "114-recovery-known-source-menu__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\114-recovery-known-source-menu__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "sha256": "433b07c60677206ed4b05d99c0f5eaa7fd0bb36416fbe6cbc1bb4027a4931d73",
+    "finding": "Recovery menu items are fully visible and legible without clipping or overlap.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "114-recovery-known-source-menu__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\114-recovery-known-source-menu__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "5fdb73d3e3648d65a10cfa9c78fae43074119eddaa7cd55f6931d7ded640af36",
+    "finding": "Recovery status, retained-source counts, path summary, and actions are visible; long paths are abbreviated in compact layouts without obscuring state.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "114-recovery-known-source-menu__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\114-recovery-known-source-menu__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "sha256": "fbd01398d1c12f5c296338d29697fd93bc6dfee6deb9a864eb16caaa9bbd9bf4",
+    "finding": "Recovery menu items are fully visible and legible without clipping or overlap.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "114-recovery-known-source-menu__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\114-recovery-known-source-menu__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "9d1347a5b02c3a581839537ce26f941df51d2bd0bc7cd4393e206eb234a11295",
+    "finding": "Recovery status, retained-source counts, path summary, and actions are visible; long paths are abbreviated in compact layouts without obscuring state.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "114-recovery-known-source-menu__dark__760dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\114-recovery-known-source-menu__dark__760dip__fr-FR__display1__144dpi.png",
+    "sha256": "6b358cbe9f036302cb58ef4abbe4b6d39fe50fb534bd4b7c6b218fbe85ce875c",
+    "finding": "Recovery status, retained-source counts, path summary, and actions are visible; long paths are abbreviated in compact layouts without obscuring state.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "114-recovery-known-source-menu__dark__760dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\114-recovery-known-source-menu__dark__760dip__fr-FR__display2__96dpi.png",
+    "sha256": "d6865c950b082b0ff5c582baf73ff62657e38f26e8f4da807bb9717ba5f250a7",
+    "finding": "Recovery status, retained-source counts, path summary, and actions are visible; long paths are abbreviated in compact layouts without obscuring state.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "115-recovery-unknown-source-menu__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\115-recovery-unknown-source-menu__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "sha256": "96de136fd4c7d14072e6d22bb435b0f30712c1da097167c4721ee8718c60cde7",
+    "finding": "Unknown-source recovery menu shows its available commands fully and legibly.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "115-recovery-unknown-source-menu__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\115-recovery-unknown-source-menu__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "fc61fc93407825e73499475099b385f448e8a213c6ce58dbdbfb5146e4dce855",
+    "finding": "Unknown-source state is clearly labeled, including the cleared/not-restored cut-list message; retained/unknown counts and recovery actions remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "115-recovery-unknown-source-menu__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\115-recovery-unknown-source-menu__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "sha256": "bbeb37fb84e77d17633a91830ccd3962e96fc170b6896d1411bf78328034480a",
+    "finding": "Unknown-source recovery menu shows its available commands fully and legibly.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "115-recovery-unknown-source-menu__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\115-recovery-unknown-source-menu__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "4390733231be74ccfec834aee6c7f1d378320ab4f09b43bace4aea9a74509a9e",
+    "finding": "Unknown-source state is clearly labeled, including the cleared/not-restored cut-list message; retained/unknown counts and recovery actions remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "115-recovery-unknown-source-menu__dark__760dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\115-recovery-unknown-source-menu__dark__760dip__fr-FR__display1__144dpi.png",
+    "sha256": "23c0310d3b37833d1f08cec488bbed4a16736274c4a6ce3a952395c3f5cdec1a",
+    "finding": "Unknown-source state is clearly labeled, including the cleared/not-restored cut-list message; retained/unknown counts and recovery actions remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "115-recovery-unknown-source-menu__dark__760dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\115-recovery-unknown-source-menu__dark__760dip__fr-FR__display2__96dpi.png",
+    "sha256": "6d49c7e920fc1812861e64ecb2a800126a4404783281e2caf1cfe90c77c14990",
+    "finding": "Unknown-source state is clearly labeled, including the cleared/not-restored cut-list message; retained/unknown counts and recovery actions remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "116-footer-wrapped-summary__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\116-footer-wrapped-summary__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "878abbc35b9087d76368cfb516901d09128892e3c9966586b1bb7c2e4ba4bd41",
+    "finding": "Footer summary and global actions fit; the summary wraps in the compact capture and remains readable in the larger captures.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "116-footer-wrapped-summary__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\116-footer-wrapped-summary__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "e4fc160db3886de0d2fb11818c0ea2d0d3d40755f88bb5f2eb6739b716104797",
+    "finding": "Footer summary and global actions fit; the summary wraps in the compact capture and remains readable in the larger captures.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "116-footer-wrapped-summary__dark__760dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\116-footer-wrapped-summary__dark__760dip__fr-FR__display1__144dpi.png",
+    "sha256": "61222eb772fdd160653cfb31dbe1c636326f49867fc830edc67de3f7f9d39151",
+    "finding": "Footer summary and global actions fit; the summary wraps in the compact capture and remains readable in the larger captures.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "116-footer-wrapped-summary__dark__760dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\116-footer-wrapped-summary__dark__760dip__fr-FR__display2__96dpi.png",
+    "sha256": "37b4ef8d8f0d116a7397d9f6d2b5a7c5dec61a77ac36cbc72df53d22892a7f2c",
+    "finding": "Footer summary and global actions fit; the summary wraps in the compact capture and remains readable in the larger captures.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "117-expanded-wrapped-summary__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\117-expanded-wrapped-summary__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "bdf855482906da01072e03529994796e7e701fd94d311a655986f84ea04b29b2",
+    "finding": "Expanded cards and the wrapped global footer summary remain readable; partial card content is within the scrollable viewport.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "117-expanded-wrapped-summary__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\117-expanded-wrapped-summary__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "3716868baedc29c818f387fc3186430b11990df87db4744f71346df9790e5a9d",
+    "finding": "Expanded cards and the wrapped global footer summary remain readable; partial card content is within the scrollable viewport.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "117-expanded-wrapped-summary__dark__760dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\117-expanded-wrapped-summary__dark__760dip__fr-FR__display1__144dpi.png",
+    "sha256": "cc88ccbabc812d3f72d4d528d211526e79d2a7acf14f199712c580326837125b",
+    "finding": "Expanded cards and the wrapped global footer summary remain readable; partial card content is within the scrollable viewport.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "117-expanded-wrapped-summary__dark__760dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\117-expanded-wrapped-summary__dark__760dip__fr-FR__display2__96dpi.png",
+    "sha256": "b331116a3a07b2b3ed3ad07cf9027dc7715584a678aad47964599bdf06173b89",
+    "finding": "Expanded cards and the wrapped global footer summary remain readable; partial card content is within the scrollable viewport.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "118-progress-long-filename__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\118-progress-long-filename__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "ab665117f59772c119a35bf7a3fe2c4915e4cf234999f8225c2232d979392fb2",
+    "finding": "Long source path is elided to fit its row; destination, graph, progress, and action controls remain readable and separated.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "118-progress-long-filename__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\118-progress-long-filename__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "cecd4efbc2a00285864b78bf9291a5f9f747f6e21af186426a60b2f757351a55",
+    "finding": "Long source path is elided to fit its row; destination, graph, progress, and action controls remain readable and separated.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "118-progress-long-filename__dark__760dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\118-progress-long-filename__dark__760dip__fr-FR__display1__144dpi.png",
+    "sha256": "ef7902a2eae9d3dbae7e7541992019f23703a3fcb0019742847a0170f335750a",
+    "finding": "Long source path is elided to fit its row; destination, graph, progress, and action controls remain readable and separated.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "118-progress-long-filename__dark__760dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\118-progress-long-filename__dark__760dip__fr-FR__display2__96dpi.png",
+    "sha256": "528eaa37ab18984a57cf9dd00edaea2d513fcd83c478d6ee8ab94309ed055ea5",
+    "finding": "Long source path is elided to fit its row; destination, graph, progress, and action controls remain readable and separated.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "119-progress-unicode-filename__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\119-progress-unicode-filename__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "536154be7e56be4af9e03843ab745b09aa7026e6ab3122210c1413bd17cbb531",
+    "finding": "Unicode filename renders with recognizable inline symbols; progress/status labels and controls remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "119-progress-unicode-filename__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\119-progress-unicode-filename__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "5555a13bb972a74e721420e047c6d2ec5cebc58cdea2673f8a5a54967ada62c2",
+    "finding": "Unicode filename renders with recognizable inline symbols; progress/status labels and controls remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "119-progress-unicode-filename__dark__760dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\119-progress-unicode-filename__dark__760dip__fr-FR__display1__144dpi.png",
+    "sha256": "44347e6d68a08bf80f5baf4698d1e20c78c46b216e61acb55f057de2a62c7048",
+    "finding": "Unicode filename renders with recognizable inline symbols; progress/status labels and controls remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "119-progress-unicode-filename__dark__760dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\119-progress-unicode-filename__dark__760dip__fr-FR__display2__96dpi.png",
+    "sha256": "0444952e1364dbb00581e02eae4f8fef968ae94d123b1abcb590a53e72d62f20",
+    "finding": "Unicode filename renders with recognizable inline symbols; progress/status labels and controls remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "12-move__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\12-move__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "efa74240b3dece26a854b21183dc9e13cfc3828756ae49697fe3b82431d8d7cd",
+    "finding": "Move progress card, source/destination, graph, speed, and footer actions are visible without overlap.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "12-move__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\12-move__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "aa6e551c5071b5210a344e1757836ab83164a93ad9f13a16d45d762dbc66eef5",
+    "finding": "Move progress card, source/destination, graph, speed, and footer actions are visible without overlap.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "120-waiting-unknown-total__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\120-waiting-unknown-total__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "52e9e4fe216b57c43495d305defe1d2a0f9c97be2614011ae5106ed8c019de1b",
+    "finding": "Queued item states it is waiting for the preceding operation; source/destination, start/limit/cancel controls, and waiting count remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "120-waiting-unknown-total__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\120-waiting-unknown-total__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "dd013224a972c262f98e748b508d138386e8faed25c20651aafdccf16fe9aac1",
+    "finding": "Queued item states it is waiting for the preceding operation; source/destination, start/limit/cancel controls, and waiting count remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "120-waiting-unknown-total__dark__760dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\120-waiting-unknown-total__dark__760dip__fr-FR__display1__144dpi.png",
+    "sha256": "663554de3fdb4f638acf9e107a2d594beb6231fa4dbc0fcef94c2aa7f28d074e",
+    "finding": "Queued item states it is waiting for the preceding operation; source/destination, start/limit/cancel controls, and waiting count remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "120-waiting-unknown-total__dark__760dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\120-waiting-unknown-total__dark__760dip__fr-FR__display2__96dpi.png",
+    "sha256": "cc02dcc418cebef9b86213371c1d4b9dba25820df800cb486879f44b71412d7e",
+    "finding": "Queued item states it is waiting for the preceding operation; source/destination, start/limit/cancel controls, and waiting count remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "121-waiting-move-auto__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\121-waiting-move-auto__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "3a9e565210c045e9753aad9868051dd15d097cc0b2ce60b3918f22e3873ec1f8",
+    "finding": "Queued move shows automatic parallelism resolved/applied values and remains visually distinct from the waiting state; controls are visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "121-waiting-move-auto__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\121-waiting-move-auto__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "ff5281c723873bf12d9acb5fbac4807a30f6f1aa05766008da6f235504898b94",
+    "finding": "Queued move shows automatic parallelism resolved/applied values and remains visually distinct from the waiting state; controls are visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "121-waiting-move-auto__dark__760dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\121-waiting-move-auto__dark__760dip__fr-FR__display1__144dpi.png",
+    "sha256": "84df065cbaa5a13fb87108fbb0747e0764eed99bf149d1e9ce6229107800f6aa",
+    "finding": "Queued move shows automatic parallelism resolved/applied values and remains visually distinct from the waiting state; controls are visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "121-waiting-move-auto__dark__760dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\121-waiting-move-auto__dark__760dip__fr-FR__display2__96dpi.png",
+    "sha256": "17c8374c550904a8524843fc24603a40f34c24e3e4c8926ce0a15cb681c422e3",
+    "finding": "Queued move shows automatic parallelism resolved/applied values and remains visually distinct from the waiting state; controls are visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "122-waiting-retained-rows__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\122-waiting-retained-rows__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "61acac259f2d8899e02a0ece9370794623db9c5b6d5e559d18b565713aba2419",
+    "finding": "Retained queued rows show filenames and per-row progress distinctly; source/destination and global queue actions remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "122-waiting-retained-rows__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\122-waiting-retained-rows__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "f29bbfe9a862ac9e06da0e857c0b1d6b8548aaffd6e9e2ea36e3b7ce9c552aed",
+    "finding": "Retained queued rows show filenames and per-row progress distinctly; source/destination and global queue actions remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "122-waiting-retained-rows__dark__760dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\122-waiting-retained-rows__dark__760dip__fr-FR__display1__144dpi.png",
+    "sha256": "557a304261010b05835e3f71f2b24b355211186786258c02dfc7cf2a354b399a",
+    "finding": "Retained queued rows show filenames and per-row progress distinctly; source/destination and global queue actions remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  },
+  {
+    "filename": "122-waiting-retained-rows__dark__760dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\122-waiting-retained-rows__dark__760dip__fr-FR__display2__96dpi.png",
+    "sha256": "622d6abb7ec54165b7fa6a6080ef167f5fa7b7024195c05b9ac4b28917d2d0c8",
+    "finding": "Retained queued rows show filenames and per-row progress distinctly; source/destination and global queue actions remain visible.",
+    "observedConcern": null,
+    "visualConfidence": "High for rendered layout and legibility at this capture size; no functional behavior inferred from pixels."
+  }
+]

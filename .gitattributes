@@ -3,6 +3,73 @@
 ###############################################################################
 * text=auto
 
+# Immutable client inputs and imported patch context retain their original bytes.
+ThirdParty/RedMonitor/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# Existing-destination identity failure receipts preserve their measured bytes.
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-16_move-existing-message/** -text whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-16_move-existing-message/source-diff.txt whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# Natural breadcrumb sorting receipts and paired samples retain their original bytes.
+Specs/TestRuns/Local-x64/Navigation/2026-10-17_NaturalSiblingSorting/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# File Operations card hierarchy captures and receipts retain their original bytes.
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-16_card-hierarchy-closeout/** -text whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-16_card-hierarchy-closeout/source-diff.txt whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# Nested archive Copy regression records preserve original diagnostic and receipt bytes.
+Specs/TestRuns/Local-x64/FileOps/2026-10-16_ArchiveNestedCopyContracts/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/Local-x64/FileOps/2026-10-16_ArchiveNestedCopy_FirstFailure/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/Local-x64/FileOps/2026-10-16_ArchiveNestedCopy_SplitFixtureFailure/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-16_ArchiveNestedCopy/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# ViewerSpace panel qualification records retain their digest-bound original bytes.
+Specs/TestRuns/*/Viewers/*ViewerSpacePanels*/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/*/Viewers/*ViewerSpacePanels*/*.txt whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# I27 original qualification records and capture provenance retain exact bytes.
+Specs/TestRuns/4cb089111a23/FileOps/20261003T205140Z-42648-2508477ee1b24f0c93cbbac2200cf891/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T205312Z-42648-c0fd3b2f5d1c4732b3b78ec1f39a0ec5/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T205447Z-42648-938f4f07d6494f5d884e68fb3b4ff686/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T205621Z-42648-508cb4e3cfb540509bb19ca6c815b8ef/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T205755Z-42648-0187e3631a104de7b9bfe9d7debc289b/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T205928Z-42648-8dc56dc9c189485eb96f9d0dad36eed9/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T210355Z-80796-66d2ba7c093b4465b2f322d7caed90ac/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T210505Z-80796-b4c8dd0ab103477caf7b286524b042af/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T210616Z-80796-348f1330f8044bca939cb9541de9bdef/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T210727Z-80796-f10904b26bf8417b90e16ee00714516d/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T210836Z-80796-395ffeda98824cd18abda6e4c26ba107/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T210945Z-80796-ad9401cb0a5843e4890d35036bee2089/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T211058Z-80796-1d14accc71fd45e3b4f9d8266b26a3f8/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T211208Z-80796-7d11672973894c29adefa152e75690fb/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T211338Z-80796-2b8509ac21194ff5bda55e137c69538c/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T211512Z-80796-0cb73e59c3c741f9bcae95a38bb43929/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T191317Z-82816-199e9f25af4d49739d1410c6881e3e0d/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T232201Z-75488-0a7264eaad564dcd8aa1014d5093c463/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01/implementation/2026-10-04-final-gallery/20261003T232201Z-75488-0a7264eaad564dcd8aa1014d5093c463/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Predeclare only the I27 original-record subdirectory of future real Full runs.
+Specs/TestRuns/4cb089111a23/Validation/*/i27-final/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-04_114600-containment/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+
+# I26 final qualification binds exact result, manifest and capture-provenance bytes.
+Specs/TestRuns/4cb089111a23/Validation/2026-10-01_i26-v65-final/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/Plans/WIP/FileOperationsUiReview_2026-09-16/implementation/2026-09-30-interaction-v22/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/Plans/WIP/FileOperationsUiReview_2026-09-16/implementation/2026-09-30-v47-final/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/Plans/WIP/FileOperationsUiReview_2026-09-16/implementation/2026-10-01-v55-final/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Retain original diagnostic/review whitespace in these six hashed evidence files.
+Specs/TestRuns/4cb089111a23/Validation/2026-10-01_i26-v65-final/reviews/v57-binder-audit.md whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-01_i26-v65-final/source-guards/original-driver-error.txt whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-01_i26-v65-final/source-guards/original-runner.log whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-01_i26-v65-final/source/v58-pester-guard-review.md whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-01_i26-v65-final/source/v58-source-guard-review.md whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-01_i26-v65-final/validation/v64-fileops/original-driver-error.txt whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# Clipboard provenance binds exact native result/metric bytes across checkouts.
+Specs/TestRuns/4cb089111a23/Commands/2026-09-21-clipboard-bitmap-preflight/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Commands/2026-09-21-clipboard-ownership-native/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+
 # These curated FileOps archives bind raw bytes, including mixed line endings.
 # Keep their hashes reproducible under core.autocrlf without rewriting old runs.
 # Recognize the preserved CRLF terminator while retaining every default hygiene check.
@@ -153,3 +220,200 @@ Tools/TerminalEngine/Patches/*.patch text eol=lf -whitespace
 
 Specs/TestRuns/4cb089111a23/Commands/2026-09-08_183818_i12_fresh_full/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 Specs/TestRuns/4cb089111a23/Commands/2026-09-08_200340_i12_final_full/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Commands/2026-09-21-issues-live-language/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-09-21-inline-queue-exemption/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+
+# I35 S2 discovery-closure evidence (same-machine baseline at ec84aa0bc and candidate) retains exact bytes.
+Specs/TestRuns/4cb089111a23/FileOps/20261012T011939Z-44272-1b8215f81d244ca78a20c58ab159264c/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T012313Z-44272-c1cb85d69f494b79b171fd57698f6bb3/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T012434Z-44272-631455e9dc204d759a7a39d9a0ad513c/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T012534Z-44272-ba3c4f347a0f481582d0cf37fe8c2dc0/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T012148Z-44272-78a6c7855f1f4cd59298ae092c04b2e3/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T012038Z-44272-5e7878240d4d45aeb1e18578fe4ec993/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T013052Z-44272-02dfc9d1de0642ac87ab6d0631df4148/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T012719Z-44272-966a9bda8d22412abc70b892032709d5/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T012815Z-44272-66922ed46f6d4069a022b54e95266cdf/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T041712Z-68732-dab610d546064d8c9b1a15fb40ac914d/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T041848Z-68732-33e89083f91641f590be38b862ca5c46/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T041954Z-68732-f0b8f4fae8c8475aaff615c582694d86/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T041258Z-68732-d3d14e16f7494006a7cc270626085e93/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T041547Z-68732-290aa67945044c449c0084872ffd17d5/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T042326Z-68732-8b8f6ea8a3934f7b8ebdd6ba0dff0144/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T042221Z-68732-211a70b63dd84ca6bcb77059da48da7b/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T040940Z-68732-b497a182a80e46e3b0389daae14a4596/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T040635Z-68732-60ab399d79524578ad379681277b1986/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T043746Z-90036-1036c389d76f46f690517c88182b335a/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Bulk CopyItems producer fix evidence (same-machine baseline at d9dc39b65 and candidate at 8d2f36900) retains exact bytes.
+Specs/TestRuns/4cb089111a23/FileOps/20261012T053708Z-93156-6738c57cd3044d3c887d9b5ee44b6823/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T053810Z-93156-832d7342a3e74ef286ed9a588245a71f/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T053933Z-93156-7505c50d9a814d57ac1e50b569a35bd8/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T054139Z-93156-16b23470ba9f40c6a0b5690898b451e7/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T090517Z-84020-c9b4b94b0e4c4a27bba7cc0c3edfb039/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T091031Z-84020-6d7304b366c247149ff29e1e803e8ba2/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T091347Z-84020-622857e7d18f4d6c88d56d6bde115fef/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T094439Z-67988-ba5ec61c16db41de82c1ed39da4eb8d5/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T094021Z-67988-7d3d7b27a195415a990943585bd2a04c/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# Scheduler parking fix evidence (baseline at 107ffe85e with the Idle-dispatch counters; candidate b2b22cfa1; DiscoveryScope interleaved three and three) retains exact bytes.
+Specs/TestRuns/4cb089111a23/FileOps/20261012T100049Z-41236-186b34ba76ed4cb2867f24a1d703f09e/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T095643Z-41236-b76c80ab53da437ab7fe637dc1fc2b56/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T095758Z-41236-c3e13c7d88024cdeb970219c962b9833/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T123242Z-79000-b9f4cac3b39546bc9b07eb266a8788aa/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T123715Z-79000-82fa366bcf3f48e6a3a187c11d1cad28/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T124227Z-79000-ec3c990a043a4c31977b50401cee2d79/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T123459Z-79000-5d5391cbb49541ebb25f91d36744d9ce/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T123952Z-79000-38792f7897d749708f9ef1ede5ecd86d/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T124504Z-79000-37fa2841f80d4d159afb4abfa7b577db/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T114331Z-85880-a92129df546546498169d368b26e4658/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T114456Z-85880-889ca7165d654f0bbc0681563fc99f73/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T053006Z-24720-ca5649a0ab3d4007b3ebf8994c7cd491/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T071842Z-74320-74577d92adde43489d5de8a572e6c560/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T072013Z-19144-6da64dc91893430a90a64d9b05527c1f/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T072428Z-49156-5b62198d8393466f8fb0c9e35207de55/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T073105Z-65868-9d3366d036034a9d8987aae2a638b915/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T073606Z-65868-3de927c5a5f44904ac993ca2660c8584/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T075830Z-27776-f06996f9840845a9aa9ad59c0ba60201/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T082340Z-3592-36486aa03f6e4e65a26af6b185786f23/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T084639Z-84504-7960787a32ac44a9b3e984821a3fb879/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T084903Z-96092-4a134547ec044abc85d97d5898298748/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T085032Z-74108-9633221b44a042ea87cffb9e9f7481b1/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T135045Z-96724-5cd4b0c7638f4b64ad6f30a640861450/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T135556Z-96724-7783923ace1c4173ba44b2d16dc7b2e9/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T140040Z-96724-05321f37eb584e2e892ab855752d0da0/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T140636Z-96724-80fa641253ef4e3baf1babb5804cca18/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T141149Z-96724-157c4d35aadf49a7aa8d96f913f23290/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T141813Z-96724-5d8b3da109da4e8ca36f9d83a26ed14f/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# I35 NAS nested Copy evidence (Local walker holds no handle on a created folder; baseline at 2f8c6825e, candidates at 357a99ad0 and 66612ab19) retains exact bytes.
+Specs/TestRuns/4cb089111a23/FileOps/20261012T133830Z-74164-3ae822997a87401abcc5fe631ddd8da5/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T134514Z-74164-36b4a97d2e034f55be58511eb1684fbd/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T143841Z-4964-787677f507db4697bc3b022cb8d8ebe8/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T144521Z-4964-5013bd1480b54ae899d53131e19b20af/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T154411Z-98796-fda6c9f6deab46569564a1ede47aee98/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T155132Z-98796-3a7e57a6a03e4ecea3187052b85e6fba/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# I35 NAS bridge evidence (the host bridge holds no handle on a created folder; A/B of the bridge that kept its folders open against 892b79819 and 9ffb178fc) retains exact bytes.
+Specs/TestRuns/4cb089111a23/FileOps/20261012T174438Z-45872-d8cbf59aada84aaa84367b0ed07fa161/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T174547Z-45872-2ecab40e25cf46419b0163824b69e9e4/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T175116Z-45872-779fbc8cdb16489c863489cbcfcc4591/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T175230Z-45872-5fa8d8ac97c747889ada0baa35bd74ff/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T180125Z-19732-5a270ba9aaa642539bd96d0a75866ece/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T180249Z-19732-c664777d0a2c44b0a875aa8f23a496af/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T180853Z-19732-8eeaa7919c844fc387f2f5874ef486fa/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261012T181009Z-19732-731eaa13a2be4d309bffca585bed1ee3/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+# SMB write-through on the host bridge (2026-10-13): NAS A/B and local reference, digest-bound compacted metrics
+Specs/TestRuns/4cb089111a23/FileOps/20261013T141002Z-70040-762903d3fdd7403bbf2e487a2d7c1172/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261013T141900Z-62100-7525415b20434f478257e337b831b1b8/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261013T142330Z-62100-086c6521c8f34c228c1ca4a21b08cfd7/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261013T143758Z-33940-e71c092f928e47c2ae042a8cde953ec5/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261013T161108Z-63304-7bc676daf715464d9da9fc7ba4c39d72/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Commands/2026-09-21-conflict-visible-order/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Commands/2026-09-21-throughput-reload-restart/** -text whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
+
+# Preserve reviewed original console whitespace; never rewrite hashed diagnostics.
+Specs/Plans/Done/UI_FileOperationsSafetyRemediation_2026-10-01/implementation/2026-10-04-final-gallery/20261003T232201Z-75488-0a7264eaad564dcd8aa1014d5093c463/runner-console.txt whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153/provenance/runner.txt whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T191317Z-82816-199e9f25af4d49739d1410c6881e3e0d/provenance/runner.txt whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T205140Z-42648-2508477ee1b24f0c93cbbac2200cf891/provenance/runner.stdout.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T205312Z-42648-c0fd3b2f5d1c4732b3b78ec1f39a0ec5/provenance/runner.stdout.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T205447Z-42648-938f4f07d6494f5d884e68fb3b4ff686/provenance/runner.stdout.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T205621Z-42648-508cb4e3cfb540509bb19ca6c815b8ef/provenance/runner.stdout.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T205755Z-42648-0187e3631a104de7b9bfe9d7debc289b/provenance/runner.stdout.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T205928Z-42648-8dc56dc9c189485eb96f9d0dad36eed9/provenance/runner.stdout.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T210355Z-80796-66d2ba7c093b4465b2f322d7caed90ac/provenance/runner.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T210505Z-80796-b4c8dd0ab103477caf7b286524b042af/provenance/runner.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T210616Z-80796-348f1330f8044bca939cb9541de9bdef/provenance/runner.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T210727Z-80796-f10904b26bf8417b90e16ee00714516d/provenance/runner.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T210836Z-80796-395ffeda98824cd18abda6e4c26ba107/provenance/runner.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T210945Z-80796-ad9401cb0a5843e4890d35036bee2089/provenance/runner.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T211058Z-80796-1d14accc71fd45e3b4f9d8266b26a3f8/provenance/runner.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T211208Z-80796-7d11672973894c29adefa152e75690fb/provenance/runner.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T211338Z-80796-2b8509ac21194ff5bda55e137c69538c/provenance/runner.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T211512Z-80796-0cb73e59c3c741f9bcae95a38bb43929/provenance/runner.log whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T231906Z-20588-9a03d56cc9484b5db5b1358771aee583/runner-console.txt whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/20261003T232201Z-75488-0a7264eaad564dcd8aa1014d5093c463/runner-console.txt whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/*/i27-final/runner.log whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/7d3a1247382a/FileOps/*-i37-*/** -text whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/7d3a1247382a/FileOps/*-i37-*/*.patch whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# ViewerSpace desktop-observer diagnostics retain original log, receipt and provenance bytes.
+Specs/TestRuns/Local-x64/Viewers/2026-10-16_125146_DesktopObservation/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# Keep Both ordering and plain-message validation receipts preserve their measured bytes.
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-16_keep-both-and-plain-messages/** -text whitespace=blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# Preserve original Release dialog/navigation acceptance evidence bytes.
+Specs/TestRuns/Local-x64/Navigation/2026-10-17_ReleaseDialogAndNaturalSorting/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/Local-x64/Navigation/2026-10-17_ViewerSpaceNaturalSiblingSorting/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/Local-x64/Navigation/2026-10-17_NaturalNameSorting/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/Local-x64/Navigation/2026-10-17_NaturalSortingPerformance/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/Local-x64/Navigation/2026-10-17_NaturalSortingQuietRerun/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# Preserve original Copy/Move baseline, candidate, receipt and failed-control evidence bytes.
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-18_selection-convergence-and-parallel-move/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-18_completed-card-collapse/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# Preserve governed affected-test results, failed attempts and source/artifact bindings.
+Specs/TestRuns/4cb089111a23/Validation/2026-10-18_affected-master-local/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-18_affected-master-release/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-18_final-cancellation-debug/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-19_final-cancellation-release/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# Preserve the original card-layout baseline/candidate measurements and harness provenance.
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-19_card-counts-throughput/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-19_last-note-wrap/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-19_ui-review-fixes/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-19_documentation-privacy/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-19_documentation-synthetic/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# Preserve reviewed documentation captures, source bindings and native results.
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-19_documentation-refresh/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# Preserve simple-count gallery frames, original metrics and failed-attempt evidence.
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-19_simple-counts-gallery/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+Specs/TestRuns/4cb089111a23/Continuation/2026-10-19_product-viewer-gallery-hang/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# Preserve current product gallery frames, receipts and failed-attempt continuation bytes.
+Specs/TestRuns/4cb089111a23/Validation/2026-10-19_product-scenarios/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-19_space-scenarios/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+Specs/TestRuns/4cb089111a23/Continuation/2026-10-19_screenshot-utility-modal-hang/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+Specs/TestRuns/4cb089111a23/Continuation/2026-10-19_screenshot-provider-routing/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+Specs/TestRuns/4cb089111a23/Continuation/2026-10-19_screenshot-vlc-thread-route/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+Specs/TestRuns/4cb089111a23/Validation/2026-10-19_supplemental-scenarios/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-20_documentation-merge/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# ViewerSpace timestamp repair receipts preserve their measured bytes.
+Specs/TestRuns/Local-x64/ViewerSpace/2026-10-20_ModifiedTimestamps/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/Local-x64/Navigation/2026-10-20_DebugSortingRowMoves/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/Local-x64/Navigation/2026-10-20_ReleaseSortPaintLatency-Debug/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/Local-x64/Navigation/2026-10-20_ReleaseSortPaintLatency-Release/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/Local-x64/Navigation/2026-10-20_DebugSortWriter-Debug/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/Local-x64/Navigation/2026-10-20_DebugSortWriter-Release/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/FileOps/2026-10-20_waiting-cards/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-20_waiting-sort-merge/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+
+# ViewerSpace workspace native captures, receipts and raw metric extracts retain measured bytes.
+Specs/TestRuns/Local-x64/ViewerSpace/2026-10-22_WorkspacePolish/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/Local-x64/UI/2026-10-22_ViewerSpaceNativeCaptures/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-24_163728_RedMonitorMergeMigration/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-25_040111_WarmQuiescence/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-25_084433_PerItemCancel/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-25_140118_ASanFailures/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-25_193147_ASanDiagnostics/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-25_202056_ASanRepairChecks/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-25_205025_NoWaitRegression/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-25_214951_ViewerWebProfileIsolation/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-25_233252_ViewerSpaceExportGate/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-26_005055_ExportDiagnostics/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-26_010343_ExportPreparationBaseline/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-26_022926_ASanResidualFailures/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-26_073646_ResidualStageDiagnostics/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-26_082420_NativeSeedPoolRejected/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-26_090022_NativeSeedBoundedRejected/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-26_094332_NativeSeedScratchFocused/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-26_100317_GuardedRendererResourceRejected/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+Specs/TestRuns/4cb089111a23/Validation/2026-10-26_113110_FocusViewportRecheck/** -text whitespace=-blank-at-eol,-blank-at-eof,space-before-tab,cr-at-eol
+/Specs/TestRuns/4cb089111a23/Validation/2026-10-26_131427_FocusBindingsFailure/** -text -whitespace
+/Specs/TestRuns/4cb089111a23/Validation/2026-10-26_140706_DisclosurePointerFailure/** -text -whitespace

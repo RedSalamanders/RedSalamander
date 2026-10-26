@@ -1,0 +1,194 @@
+{
+    "run_started_utc": "2026-09-13T08:47:56.221Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260913T084739Z-87256-10d2c657dc5c4e75ade5b3e4888b0909\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 49233,
+    "passed": 30,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1578,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase6_LocalBandwidthThrottle",
+            "status": "passed",
+            "duration_ms": 4610,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 109,
+            "repeat_index": 1
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 2
+        },
+        {
+            "name": "Phase6_LocalBandwidthThrottle",
+            "status": "passed",
+            "duration_ms": 4578,
+            "repeat_index": 2
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 110,
+            "repeat_index": 2
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 63,
+            "repeat_index": 3
+        },
+        {
+            "name": "Phase6_LocalBandwidthThrottle",
+            "status": "passed",
+            "duration_ms": 4578,
+            "repeat_index": 3
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 93,
+            "repeat_index": 3
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 4
+        },
+        {
+            "name": "Phase6_LocalBandwidthThrottle",
+            "status": "passed",
+            "duration_ms": 4594,
+            "repeat_index": 4
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 4
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 62,
+            "repeat_index": 5
+        },
+        {
+            "name": "Phase6_LocalBandwidthThrottle",
+            "status": "passed",
+            "duration_ms": 4578,
+            "repeat_index": 5
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 94,
+            "repeat_index": 5
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 6
+        },
+        {
+            "name": "Phase6_LocalBandwidthThrottle",
+            "status": "passed",
+            "duration_ms": 4594,
+            "repeat_index": 6
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 94,
+            "repeat_index": 6
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 63,
+            "repeat_index": 7
+        },
+        {
+            "name": "Phase6_LocalBandwidthThrottle",
+            "status": "passed",
+            "duration_ms": 4656,
+            "repeat_index": 7
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 94,
+            "repeat_index": 7
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 63,
+            "repeat_index": 8
+        },
+        {
+            "name": "Phase6_LocalBandwidthThrottle",
+            "status": "passed",
+            "duration_ms": 4625,
+            "repeat_index": 8
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 46,
+            "repeat_index": 8
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 62,
+            "repeat_index": 9
+        },
+        {
+            "name": "Phase6_LocalBandwidthThrottle",
+            "status": "passed",
+            "duration_ms": 4641,
+            "repeat_index": 9
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 93,
+            "repeat_index": 9
+        },
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 62,
+            "repeat_index": 10
+        },
+        {
+            "name": "Phase6_LocalBandwidthThrottle",
+            "status": "passed",
+            "duration_ms": 4625,
+            "repeat_index": 10
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 109,
+            "repeat_index": 10
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 10
+}

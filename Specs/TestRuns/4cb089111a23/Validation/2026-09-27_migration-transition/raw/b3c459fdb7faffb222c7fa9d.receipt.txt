@@ -1,0 +1,76 @@
+Stale TestSandbox run cleanup: 1 removed, 0 failed.
+Skipping build (verified receipt c7d48c0ce93e1fbc317a24770c336ae231eb782893f31de82c316190e19b3db5).
+Validation plan: 7aff915534c1615095c00e088a789c177d36a0c7631296532bf3e8a8a581b3eb
+Entry fingerprints: 85ba0b49cdc0e0f919f11ee91fca5a44a09a5d6d4984d09b0013e82731619195 (73 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: Commands
+======================================================================
+  Exe:  C:\RsI26Final\.build\x64\Release\RedSalamander.exe
+  Args: --commands-selftest --selftest-timeout-multiplier=3 --selftest-case=cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot
+
+  TERMINAL RESULT: FAILED (DECLARED_FAILURES, FAILURE_CLASSIFICATION, NONZERO_EXIT)
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [FAIL] 
+Commands
+  (17,0s)
+         Passed: 0
+  Failed: 1
+  Skipped: 0
+         Classification: UNCLASSIFIED_FAILURE
+         Initial attempt failed and no retry classification evidence was collected.
+
+  -------------------------------------------------------
+
+  Overall: 
+FAILED
+  Total: 1
+  Passed: 0
+  Failed: 1
+  Skipped: 0
+  Wall time: 26,9s
+  Classifications: 
+flaky=0 
+regression=0 
+isolation_suspect=0 
+unclassified_failure=1
+  Quarantine: 
+active=0 
+invalid=0 
+repair_attempts=0 
+repair_reproduced=0
+
+--- FAILURE DETAILS (1 failing case) ---
+
+  FAIL 
+[Commands] 
+cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot
+       Reason: 
+Inspection focus acceptance requires the existing warning and owned foreground.
+       Duration: 12,7s
+
+--- ARTIFACTS ---
+  Test root: E:\RedSalamander.Perf
+  Run id:    20260927T144925Z-65508-cbfaa35ad0ab48839db54af54c056088
+  Disk audit issues: 0
+  Last run: E:\RedSalamander.Perf\runs\20260927T144925Z-65508-cbfaa35ad0ab48839db54af54c056088\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.commands.json
+    workspace-final.json
+    commands\results.json
+
+
+--- NEXT STEPS ---
+  1. Review failure reasons above
+  2. Check trace logs: E:\RedSalamander.Perf\runs\20260927T144925Z-65508-cbfaa35ad0ab48839db54af54c056088\artifacts\selftest\last_run\<suite>\trace.txt
+  3. Re-run a single failing case:
+     C:\RsI26Final\.build\x64\Release\RedSalamander.exe --<suite>-selftest --selftest-case=<case_name>
+  4. Compare with previous run:
+     .\Tools\CompareTestRuns.ps1 <old_run_path> <new_run_path>
+

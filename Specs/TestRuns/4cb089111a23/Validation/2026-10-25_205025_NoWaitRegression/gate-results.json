@@ -1,0 +1,35 @@
+{
+    "run_started_utc": "2026-10-25T20:50:51.255Z",
+    "suite": "CompareDirectories",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261025T205025Z-30012-6cfdfa2480ec481a8a2c0af51d802617\\artifacts\\selftest\\last_run\\compare",
+    "duration_ms": 10167,
+    "passed": 1,
+    "failed": 2,
+    "skipped": 0,
+    "failureMessage": "No-wait query must return the exact live result within 500 ms while warmup holds the volume (authoritative=true hr=0x00000000 gateHeld=false elapsedUs=5011577 count=1 exact=true mode=3 live=true).",
+    "cases": [
+        {
+            "name": "local_search_index_status_snapshot_does_not_wait_for_warmup",
+            "status": "passed",
+            "duration_ms": 11,
+            "repeat_index": 1
+        },
+        {
+            "name": "local_search_index_nowait_query_does_not_wait_for_warmup",
+            "status": "failed",
+            "duration_ms": 5022,
+            "repeat_index": 1,
+            "reason": "No-wait query must return the exact live result within 500 ms while warmup holds the volume (authoritative=true hr=0x00000000 gateHeld=false elapsedUs=5011577 count=1 exact=true mode=3 live=true)."
+        },
+        {
+            "name": "local_search_index_opportunistic_query_does_not_wait_for_warmup",
+            "status": "failed",
+            "duration_ms": 5024,
+            "repeat_index": 1,
+            "reason": "No-wait query must return the exact live result within 500 ms while warmup holds the volume (authoritative=false hr=0x00000000 gateHeld=false elapsedUs=5014767 count=1 exact=true mode=3 live=true)."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

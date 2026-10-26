@@ -1,0 +1,901 @@
+{
+    "run_started_utc": "2026-08-24T00:57:59.864Z",
+    "duration_ms": 918977,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260824T005740Z-6260-0893b5a963c84fe4a88dd6914aadf99c\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 912142,
+            "passed": 110,
+            "failed": 0,
+            "skipped": 27,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 6470,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_CopyMergeIntoExistingFolder",
+                    "status": "passed",
+                    "duration_ms": 343,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_MoveMergeIntoExistingFolderSameVolume",
+                    "status": "passed",
+                    "duration_ms": 375,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_ReparseDirectoryMergeIntoExistingFolder",
+                    "status": "passed",
+                    "duration_ms": 47,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_ProviderCapabilityMatrix",
+                    "status": "passed",
+                    "duration_ms": 2719,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_ParallelGraphFairColorWeight",
+                    "status": "passed",
+                    "duration_ms": 188,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_CrossVolumeMovePartialFailureStatus",
+                    "status": "passed",
+                    "duration_ms": 406,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_ReparseRetargetDestinationContainment",
+                    "status": "passed",
+                    "duration_ms": 79,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_DeleteToctouSwapGuard",
+                    "status": "passed",
+                    "duration_ms": 15,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_ResolvedItemsExactDestinations",
+                    "status": "passed",
+                    "duration_ms": 235,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Riptide_MoveDistinctSameSizeFilePreservesSource",
+                    "status": "passed",
+                    "duration_ms": 406,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Riptide_ReparseMoveRollbackKeepsOverwrittenDestination",
+                    "status": "passed",
+                    "duration_ms": 32,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_MoveFallbackPreservesUncopiedNewFiles",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "deferred until P2 identity-bound managed Move replaces the retired pathname copy-delete fallback"
+                },
+                {
+                    "name": "Fairstream_MoveMergeReadonlyDestinationFolder",
+                    "status": "passed",
+                    "duration_ms": 234,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_OverwriteGrantIsOneShot",
+                    "status": "passed",
+                    "duration_ms": 1594,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_ConflictPromptsSerializedUnderParallelism",
+                    "status": "passed",
+                    "duration_ms": 734,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_ReparseReplaceNonEmptyDirRequiresConsent",
+                    "status": "passed",
+                    "duration_ms": 594,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate",
+                    "status": "passed",
+                    "duration_ms": 453,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent",
+                    "status": "passed",
+                    "duration_ms": 313,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Riptide_ReparseMoveSourceNeverUsesDirectoryMerge",
+                    "status": "passed",
+                    "duration_ms": 78,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_MovedTreeRetargetsInternalLinks",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "deferred until P3 semantic link retargeting is executable on the admitted Move strategy"
+                },
+                {
+                    "name": "Fairstream_CrossFsConcurrentMoveUsesBridge",
+                    "status": "passed",
+                    "duration_ms": 359,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_RerunCopyIdenticalCollisionPrompts",
+                    "status": "passed",
+                    "duration_ms": 1031,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_MoveFallbackSameSizeCollisionPrompts",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "deferred until P2/P3 managed Move conflict routing; P1 CopyOnly collision coverage remains active"
+                },
+                {
+                    "name": "Fairstream_GraphBandsFairUnderParallelCopy",
+                    "status": "passed",
+                    "duration_ms": 172,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_ManagedMergeMovePreservesChildren",
+                    "status": "passed",
+                    "duration_ms": 235,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_JunctionMergeTargetRequiresConsent",
+                    "status": "passed",
+                    "duration_ms": 578,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_CopyIntoSelfAliasRejected",
+                    "status": "passed",
+                    "duration_ms": 375,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_StorageKindProbed",
+                    "status": "passed",
+                    "duration_ms": 25187,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_ParallelDeleteContinuesPastLockedChild",
+                    "status": "passed",
+                    "duration_ms": 453,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_BridgePerFileConflictSkips",
+                    "status": "passed",
+                    "duration_ms": 735,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cinderstar_BridgeMovePerFileConflictSkipsParallel",
+                    "status": "passed",
+                    "duration_ms": 781,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Riptide_BridgeNestedDirVsFileSkipContinuesSiblings",
+                    "status": "passed",
+                    "duration_ms": 641,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Riptide_BridgeDirectoryOverReadOnlyFileRequiresReplaceReadOnly",
+                    "status": "passed",
+                    "duration_ms": 640,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPartial",
+                    "status": "passed",
+                    "duration_ms": 688,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_SaturationConcurrentCopiesMakeProgress",
+                    "status": "passed",
+                    "duration_ms": 10734,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_DiscoveryAheadOverlapsTransfer",
+                    "status": "passed",
+                    "duration_ms": 813,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Riptide_LiveFinishedSnapshotCarriesDiagnostics",
+                    "status": "passed",
+                    "duration_ms": 453,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Riptide_BridgeSequentialContinueOnErrorCopiesSiblings",
+                    "status": "passed",
+                    "duration_ms": 390,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Causeway_BridgeRejectsHostileChildNames",
+                    "status": "passed",
+                    "duration_ms": 969,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Causeway_BridgeProviderOutputContracts",
+                    "status": "passed",
+                    "duration_ms": 1844,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Causeway_BridgeSchedulingAndResourceContracts",
+                    "status": "passed",
+                    "duration_ms": 5687,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Causeway_BridgeFileReparsePolicy",
+                    "status": "passed",
+                    "duration_ms": 875,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Causeway_BridgeFailureStatusAndPausedReader",
+                    "status": "passed",
+                    "duration_ms": 891,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Floodgate_CrossFsCopyGetSizeFailureRefusesCommit",
+                    "status": "passed",
+                    "duration_ms": 375,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Floodgate_CrossFsMoveGetSizeFailurePreservesSource",
+                    "status": "passed",
+                    "duration_ms": 359,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Floodgate_CrossFsMoveDestinationGetSizeFailurePreservesSource",
+                    "status": "passed",
+                    "duration_ms": 391,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cinderstar_LegacyWriterEventuallyConsistentMove",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "deferred until P2 identity-bound managed Move defines publication revalidation and cancellation backoff"
+                },
+                {
+                    "name": "Cinderstar_LegacyWriterPermanentMissMove",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "deferred until P2 identity-bound managed Move defines publication revalidation and cancellation backoff"
+                },
+                {
+                    "name": "Cinderstar_LegacyWriterWrongSizeMove",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "deferred until P2 identity-bound managed Move defines publication revalidation and cancellation backoff"
+                },
+                {
+                    "name": "Cinderstar_LegacyWriterConcurrentReplacementCopy",
+                    "status": "passed",
+                    "duration_ms": 375,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cinderstar_LegacyWriterCancelDuringBackoff",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "deferred until P2 identity-bound managed Move defines publication revalidation and cancellation backoff"
+                },
+                {
+                    "name": "Floodgate_CrossFsCopyOnlyUsesCopyVerification",
+                    "status": "passed",
+                    "duration_ms": 1469,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Floodgate_CrossFsMoveGetSizeFailuresParallelPreserveSourceTree",
+                    "status": "passed",
+                    "duration_ms": 1422,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Floodgate_CrossFsCopyOnlyNeverEntersSourceCleanup",
+                    "status": "passed",
+                    "duration_ms": 343,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Floodgate_CrossFsDirectoryCopyOnlyRetainsSource",
+                    "status": "passed",
+                    "duration_ms": 407,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Floodgate_LocalWriterOverwriteIsStaged",
+                    "status": "passed",
+                    "duration_ms": 140,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Floodgate_LocalCopyOverwriteIsStaged",
+                    "status": "passed",
+                    "duration_ms": 63,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker",
+                    "status": "passed",
+                    "duration_ms": 281,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker",
+                    "status": "passed",
+                    "duration_ms": 328,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Floodgate_InlineF2WorkerQueueBypassAndInterlock",
+                    "status": "passed",
+                    "duration_ms": 1234,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_DiscoverySingleTraversal",
+                    "status": "passed",
+                    "duration_ms": 1063,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_DiscoveryCancelReleasesSlot",
+                    "status": "passed",
+                    "duration_ms": 1531,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_DiscoveryCancelLatencyLocal",
+                    "status": "passed",
+                    "duration_ms": 1359,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_DiscoverySkipContinues",
+                    "status": "passed",
+                    "duration_ms": 735,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_CancelQueuedTask",
+                    "status": "passed",
+                    "duration_ms": 1343,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_SwitchParallelToWaitDuringDiscovery",
+                    "status": "passed",
+                    "duration_ms": 985,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_SwitchWaitToParallelResume",
+                    "status": "passed",
+                    "duration_ms": 375,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase6_PopupRateSmoothing",
+                    "status": "passed",
+                    "duration_ms": 203,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase6_PopupSmokeResizeAndPause",
+                    "status": "passed",
+                    "duration_ms": 56375,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase6_DeleteBytesMeaningful",
+                    "status": "passed",
+                    "duration_ms": 312,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase6_LocalBandwidthThrottle",
+                    "status": "passed",
+                    "duration_ms": 13110,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase6_ParallelBandwidthThrottleFairness",
+                    "status": "passed",
+                    "duration_ms": 49922,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_WatcherChurn",
+                    "status": "passed",
+                    "duration_ms": 1828,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_CacheBorrowNoWatchInvalidation",
+                    "status": "passed",
+                    "duration_ms": 15,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_CrossPaneVisibleRefreshLocal",
+                    "status": "passed",
+                    "duration_ms": 641,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_CrossPaneVisibleRefreshDummy",
+                    "status": "passed",
+                    "duration_ms": 734,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_CrossPaneRelocateLocal",
+                    "status": "passed",
+                    "duration_ms": 735,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_LargeDirectoryEnumeration",
+                    "status": "passed",
+                    "duration_ms": 1453,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_ParallelCopyMoveKnobs",
+                    "status": "passed",
+                    "duration_ms": 115078,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_CopyMoveConcurrency16Perf",
+                    "status": "passed",
+                    "duration_ms": 1234,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_AutoConcurrencyHints",
+                    "status": "passed",
+                    "duration_ms": 3328,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_PerItemDirectoryCopyInFlightLines",
+                    "status": "passed",
+                    "duration_ms": 9750,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_CopyItemsSingleFolderRecursiveParallelism",
+                    "status": "passed",
+                    "duration_ms": 407,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_CopyItemsMultiRootUnevenRecursiveParallelism",
+                    "status": "passed",
+                    "duration_ms": 110,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_CopyRecursiveParallelismMatrix",
+                    "status": "passed",
+                    "duration_ms": 218,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_SharedPerItemScheduler",
+                    "status": "passed",
+                    "duration_ms": 1516,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_ParallelDeleteKnobs",
+                    "status": "passed",
+                    "duration_ms": 984,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_RecycleBinBatchDelete",
+                    "status": "passed",
+                    "duration_ms": 18907,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_RecycleBinBatchDeleteMultiBatch",
+                    "status": "passed",
+                    "duration_ms": 23859,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase8_DefaultBandwidthLimitFromSettings",
+                    "status": "passed",
+                    "duration_ms": 4969,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase8_TightDefaults_NoOverwrite",
+                    "status": "passed",
+                    "duration_ms": 688,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase8_InvalidDestinationRejected",
+                    "status": "passed",
+                    "duration_ms": 125,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase8_InvalidSizeBytesRejected",
+                    "status": "passed",
+                    "duration_ms": 156,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase8_PerItemOrchestration",
+                    "status": "passed",
+                    "duration_ms": 49812,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_OverwriteReplaceReadonly",
+                    "status": "passed",
+                    "duration_ms": 782,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_ApplyToAllUiCache",
+                    "status": "passed",
+                    "duration_ms": 828,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_KeepBothNestedCacheEligibility",
+                    "status": "passed",
+                    "duration_ms": 4375,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_OverwriteAutoCap",
+                    "status": "passed",
+                    "duration_ms": 953,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_LocalFileOntoDirectory",
+                    "status": "passed",
+                    "duration_ms": 469,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_SkipApplyToAll",
+                    "status": "passed",
+                    "duration_ms": 562,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_RetryCap",
+                    "status": "passed",
+                    "duration_ms": 1438,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase9_ConflictPrompt_SkipContinuesDirectoryCopy",
+                    "status": "passed",
+                    "duration_ms": 531,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase9_PerItemConcurrency",
+                    "status": "passed",
+                    "duration_ms": 25172,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase10_PermanentDelete",
+                    "status": "passed",
+                    "duration_ms": 1688,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase11_CrossFileSystemBridge",
+                    "status": "passed",
+                    "duration_ms": 13329,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase11_BridgeSingleFolderParallelCopyInFlightLines",
+                    "status": "passed",
+                    "duration_ms": 25000,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase11_BridgeMultiFolderParallelCopyInFlightLines",
+                    "status": "passed",
+                    "duration_ms": 195984,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase11_BridgePipelineDummyToDummyPerf",
+                    "status": "passed",
+                    "duration_ms": 128719,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase11_ConnectionOverridePrecedence",
+                    "status": "passed",
+                    "duration_ms": 2937,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase11_ConnectionOverrideGlobalGate",
+                    "status": "passed",
+                    "duration_ms": 41359,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase11_ConnectionOverrideClamp",
+                    "status": "passed",
+                    "duration_ms": 16891,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase12_ReparsePointPolicy",
+                    "status": "passed",
+                    "duration_ms": 2297,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase13_PostMortemDiagnostics",
+                    "status": "passed",
+                    "duration_ms": 1047,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase14_PopupHostLifetimeGuard",
+                    "status": "passed",
+                    "duration_ms": 703,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase15_FileSystem7zReadSeekSmoke",
+                    "status": "skipped",
+                    "duration_ms": 156,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "7z read/seek smoke skipped in the file-operations suite; 7z coverage remains in compare selftests."
+                },
+                {
+                    "name": "Phase15_FileSystem7zMountPathImpact",
+                    "status": "skipped",
+                    "duration_ms": 31,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "7z mount-path impact skipped in the file-operations suite; 7z coverage remains in compare selftests."
+                },
+                {
+                    "name": "Phase16_RemoteWatchContractExposure",
+                    "status": "passed",
+                    "duration_ms": 156,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase16_RemoteFtpSecret",
+                    "status": "skipped",
+                    "duration_ms": 15,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP')."
+                },
+                {
+                    "name": "Phase16_RemoteFtpSandbox",
+                    "status": "skipped",
+                    "duration_ms": 63,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP')."
+                },
+                {
+                    "name": "Phase16_RemoteSftpSecret",
+                    "status": "skipped",
+                    "duration_ms": 62,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "SFTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SFTP or create 'FileOpsSelfTest SFTP')."
+                },
+                {
+                    "name": "Phase16_RemoteSftpSandbox",
+                    "status": "skipped",
+                    "duration_ms": 63,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "SFTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SFTP or create 'FileOpsSelfTest SFTP')."
+                },
+                {
+                    "name": "Phase16_RemoteScpSecret",
+                    "status": "skipped",
+                    "duration_ms": 62,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "SCP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SCP or create 'FileOpsSelfTest SCP')."
+                },
+                {
+                    "name": "Phase16_RemoteScpSandbox",
+                    "status": "skipped",
+                    "duration_ms": 63,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "SCP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SCP or create 'FileOpsSelfTest SCP')."
+                },
+                {
+                    "name": "Phase16_RemoteImapSecret",
+                    "status": "skipped",
+                    "duration_ms": 62,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "IMAP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_IMAP or create 'FileOpsSelfTest IMAP')."
+                },
+                {
+                    "name": "Phase16_RemoteImapSandbox",
+                    "status": "skipped",
+                    "duration_ms": 63,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "IMAP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_IMAP or create 'FileOpsSelfTest IMAP')."
+                },
+                {
+                    "name": "Phase16_RemoteS3Secret",
+                    "status": "skipped",
+                    "duration_ms": 62,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3')."
+                },
+                {
+                    "name": "Phase16_RemoteS3Sandbox",
+                    "status": "skipped",
+                    "duration_ms": 63,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3')."
+                },
+                {
+                    "name": "Phase16_RemoteS3FileOps",
+                    "status": "skipped",
+                    "duration_ms": 62,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3')."
+                },
+                {
+                    "name": "Phase16_RemoteOneDrivePersonalSecret",
+                    "status": "skipped",
+                    "duration_ms": 63,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal')."
+                },
+                {
+                    "name": "Phase16_RemoteOneDrivePersonalSandbox",
+                    "status": "skipped",
+                    "duration_ms": 62,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal')."
+                },
+                {
+                    "name": "Phase16_RemoteOneDrivePersonalFileOps",
+                    "status": "skipped",
+                    "duration_ms": 63,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal')."
+                },
+                {
+                    "name": "Phase16_RemoteOneDriveBusinessSecret",
+                    "status": "skipped",
+                    "duration_ms": 62,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "OneDrive Business: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS or create 'FileOpsSelfTest OneDrive Business')."
+                },
+                {
+                    "name": "Phase16_RemoteOneDriveBusinessSandbox",
+                    "status": "skipped",
+                    "duration_ms": 63,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "OneDrive Business: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS or create 'FileOpsSelfTest OneDrive Business')."
+                },
+                {
+                    "name": "Phase16_RemoteSharePointSecret",
+                    "status": "skipped",
+                    "duration_ms": 62,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "SharePoint: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SHAREPOINT or create 'FileOpsSelfTest SharePoint')."
+                },
+                {
+                    "name": "Phase16_RemoteSharePointSandbox",
+                    "status": "skipped",
+                    "duration_ms": 63,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "SharePoint: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SHAREPOINT or create 'FileOpsSelfTest SharePoint')."
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 4748,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 110,
+    "failed": 0,
+    "skipped": 27
+}

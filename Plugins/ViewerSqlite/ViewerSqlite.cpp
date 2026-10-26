@@ -37,7 +37,7 @@ using DxUi::GridCellData;
 using DxUi::GridColumnDesc;
 using DxUi::GridRowStyle;
 using DxUi::GridSortSpec;
-using DxUi::IDxGridModel;
+using DxUi::IGridModel;
 using DxUi::Label;
 using DxUi::Panel;
 using DxUi::SortDirection;
@@ -218,7 +218,7 @@ const char* GetViewerSqliteStaticConfigurationSchema() noexcept
     return GetViewerSqliteStaticConfigurationSchemaImpl();
 }
 
-struct ViewerSqliteGridModel final : IDxGridModel
+struct ViewerSqliteGridModel final : IGridModel
 {
     void SetPage(const ViewerSqliteEngine::QueryPage* page, bool tablePreviewMode)
     {
@@ -848,7 +848,7 @@ LRESULT ViewerSqlite::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
         case WM_CLOSE: static_cast<void>(Close()); return 0;
         case kAsyncOpenCompleteMessage:
         {
-            auto result = TakeMessagePayload<AsyncOpenResult>(lp);
+            auto result = TakeMessagePayload<AsyncOpenResult>(hwnd, msg, lp);
             if (lp != 0 && ! result)
             {
                 return 0;
@@ -858,7 +858,7 @@ LRESULT ViewerSqlite::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcep
         }
         case kAsyncQueryCompleteMessage:
         {
-            auto result = TakeMessagePayload<AsyncQueryResult>(lp);
+            auto result = TakeMessagePayload<AsyncQueryResult>(hwnd, msg, lp);
             if (lp != 0 && ! result)
             {
                 return 0;

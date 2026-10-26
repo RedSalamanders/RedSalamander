@@ -1,0 +1,24 @@
+{
+  "primaryHead": "26209bac37bb7c0d2d3800cc62e2205d67469040",
+  "isolatedHead": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+  "sourceInputs": 16,
+  "allPrimaryInputsMatch": true,
+  "allIsolatedInputsMatch": true,
+  "committedSourceChangesCovered": [
+    "Common/WindowMessages.h",
+    "RedSalamander/FileOperationsFooterLayout.h",
+    "RedSalamander/FolderWindow.FileOperations.Popup.cpp",
+    "RedSalamander/FolderWindow.FileOperations.Popup.h",
+    "RedSalamander/RedSalamander.cpp",
+    "RedSalamander/RedSalamander.vcxproj",
+    "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp",
+    "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases14_16.cpp",
+    "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp",
+    "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallerySurfaces.cpp",
+    "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp",
+    "RedSalamander/Ui/AlertOverlay.h",
+    "RedSalamander/Ui/AlertOverlayWindow.cpp",
+    "RedSalamander/Ui/AlertOverlayWindow.h",
+    "Tests/ProductUiTests/ProductUiTests.cpp"
+  ]
+}

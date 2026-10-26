@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-09-08T10:24:57.101Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260908T102141Z-27092-edc68532832c44c3bb0b344a664026ad\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 1547,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Copy Skip must copy the hydrated placeholder and skip only the junction (hr=0x00000001, copied=0, linkCopied=0).",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1219,
+            "repeat_index": 1
+        },
+        {
+            "name": "Beeline_CopySkipLinksKeepsPlaceholders",
+            "status": "failed",
+            "duration_ms": 297,
+            "repeat_index": 1,
+            "reason": "Copy Skip must copy the hydrated placeholder and skip only the junction (hr=0x00000001, copied=0, linkCopied=0)."
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

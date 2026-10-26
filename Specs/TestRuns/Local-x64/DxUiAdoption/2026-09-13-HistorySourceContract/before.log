@@ -1,0 +1,1095 @@
+
+
+
+
+
+Describing IMAP UIDVALIDITY and single-message delete source contracts
+ [+] never issues mailbox-wide EXPUNGE and requires UIDPLUS before the mark-expunge-rollback state machine 169ms
+ [+] carries UIDVALIDITY in listed identity and revalidates it before message fetch or delete 44ms
+Describing Microsoft Drive credential-boundary source contracts
+ [+] validates Graph and preauthenticated upload targets before credential-bound dispatch 120ms
+ [+] keeps bearer values and opaque query values out of diagnostics and serialized header blocks 5ms
+Describing Preferences settings-backed page source contracts
+ [+] keeps Mouse in both manual Preferences projections and verifies live Apply persistence 22ms
+ [+] documents every required draft-to-disk integration layer in the spec and project skill 2ms
+Describing Test harness source contracts
+ [+] documents and enforces bounded self-test timeout multipliers 35ms
+ [+] keeps scaled self-test timeouts finite and nonzero for nonzero bases 3ms
+ [+] waits for runner-native self-test processes by direct process handle 2ms
+ [+] keeps the nightly shuffle repeat lane separate from the PR gate 4ms
+ [+] gives ViewerPETests nested shell churn its own timeout budget 6ms
+ [+] keeps ViewerVLC dependency loading isolated from the process DLL directory 9ms
+ [+] keeps ViewerVLC probing, loader fallback, drawable teardown, and option boundaries safe 20ms
+ [+] bounds multi-plugin metadata before host indexing and reference-counts shared localization owners 11ms
+ [+] keeps viewer threadpool module pins alive through the callback return boundary 46ms
+ [+] rejects viewer async work without module pins and impossible provider read counts 27ms
+ [+] keeps ViewerImgRaw main decode scheduling bounded, exact, terminal, and ordered 42ms
+ [+] keeps ViewerWeb security setup fail-closed and teardown outside DllMain 17ms
+ [+] keeps ViewerPE reader commitments exact and current terminal delivery recoverable 5ms
+ [+] keeps ViewerSpace close non-waiting with an honest runtime unload and shutdown gate 16ms
+ [+] publishes authoritative ViewerSpace totals before root completion becomes visible 18ms
+ [+] captures viewer payload fields before moving the payload into PostMessagePayload 45ms
+ [+] keeps ViewerText Save As source-first and transactionally committed 17ms
+ [+] keeps ViewerText async decode and clipboard work terminal and bounded 21ms
+ [+] requires git identity before accepting self-test archive repo roots 2ms
+ [+] keeps self-test archive parent walking bounded by a named limit 2ms
+ [+] scopes the self-test run mutex to the isolated self-test root 7ms
+ [+] lets native selftests consume the unified test root and run id directly 4ms
+ [+] exposes native TestSandbox scratch acquisition separate from last_run artifacts 4ms
+ [+] removes native self-test sandboxes without traversing directory reparse points 4ms
+ [+] keeps nested settings-save child artifacts shallow and removes them before audit 28ms
+ [+] routes FileOperations cross-volume scratch through the sanctioned alternate TestSandbox root 6ms
+ [+] authorizes test roots centrally and fails closed before native mutation 4ms
+ [+] routes RedConfigureTests scratch through the unified TestSandbox root 16ms
+ [+] routes ViewerSqliteTests scratch through the unified TestSandbox root 7ms
+ [+] routes CrashHandlingTests scratch through the unified TestSandbox root 4ms
+ [+] routes Commands plugin-config scratch through native TestSandbox roots 3ms
+ [+] recovers plugin-config debug tab traversal from logical focus position before first-control fallback 5ms
+ [+] keeps plugin-config tab traversal retries from sending an extra tab after a successful advance 2ms
+ [+] waits for preview fallback text and source-pane focus together 3ms
+ [+] separates configured preview publication from external desktop deactivation 3ms
+ [+] makes quick-search tests own pane sort and extension visibility 32ms
+ [+] keeps quick-search navigation expectations tied to visible match order 31ms
+ [+] keeps Hot Paths browse page-settle failures diagnostic-rich 4ms
+ [+] uses condition-based focus waiting for Viewers roundtrip category navigation 5ms
+ [+] retries Preferences focus acquisition during condition-based waits 4ms
+ [+] keeps embedded Terminal pointer-follow lifecycle proof capability-aware and fail-closed 12ms
+ [+] waits for Plugins sort-search header rects before reorder-resize interactions 16ms
+ [+] waits for Viewers sort-search header rects before reorder-resize interactions 13ms
+ [+] keeps broad Preferences focus paths on the shared focus helper 69ms
+ [+] defers change-case folder focus restoration until modal teardown unwinds 15ms
+ [+] retries transient selected-path lease observations to a diagnostic quiet point 8ms
+ [-] keeps broad Commands app navigation shell focus checks condition-based 50ms
+   Expected: {[[nodiscard]] bool TestPaneNavigationViewHistoryDropdownKeyboardNavigation(HWND mainWindow, CaseState& state) noexcept
+   {
+       using namespace std::chrono_literals;
+       if (! mainWindow || IsWindow(mainWindow) == FALSE)
+       {
+           state.Require(false, L"Main window handle invalid.");
+           return false;
+       }
+       const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+       state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for navigation-view history-dropdown test.");
+       if (suiteRoot.empty())
+       {
+           return false;
+       }
+       const std::filesystem::path root  = suiteRoot / L"work" / (L"navigation_view_history_dropdown_" + NewGuidText());
+       const std::filesystem::path rootA = root / L"A";
+       const std::filesystem::path rootB = root / L"B";
+       const std::filesystem::path rootC = root / L"C";
+       std::error_code ec;
+       std::filesystem::remove_all(root, ec);
+       state.Require(SelfTest::EnsureDirectory(rootA), L"Failed to create history path A.");
+       state.Require(SelfTest::EnsureDirectory(rootB), L"Failed to create history path B.");
+       state.Require(SelfTest::EnsureDirectory(rootC), L"Failed to create history path C.");
+       state.Require(SelfTest::WriteTextFile(rootA / L"alpha.txt", "alpha"), L"Failed to create alpha.txt in history path A.");
+       state.Require(SelfTest::WriteTextFile(rootB / L"alpha.txt", "alpha"), L"Failed to create alpha.txt in history path B.");
+       state.Require(SelfTest::WriteTextFile(rootC / L"alpha.txt", "alpha"), L"Failed to create alpha.txt in history path C.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+       const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+       const auto restorePane                                = wil::scope_exit([&]
+       {
+           static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+           if (leftBefore.has_value())
+           {
+               g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+           }
+       });
+       g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+       state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                     L"Failed to set local file-system plugin for navigation-view history-dropdown test.");
+       const auto navigatePane = [&](const std::filesystem::path& path, std::wstring_view context) noexcept
+       {
+           g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, path);
+           state.Require(WaitForPanePath(FolderWindow::Pane::Left, path, SelfTest::Scale(3000ms)),
+                         std::format(L"Failed to set left pane path to '{}' during {}.", path.wstring(), context));
+           state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)),
+                         std::format(L"Pane contents not ready at '{}' during {}.", path.wstring(), context));
+           return state.failure.empty();
+       };
+       state.Require(navigatePane(rootA, L"initial history seeding"), L"Navigation-view history seeding failed at A.");
+       state.Require(navigatePane(rootB, L"initial history seeding"), L"Navigation-view history seeding failed at B.");
+       state.Require(navigatePane(rootC, L"initial history seeding"), L"Navigation-view history seeding failed at C.");
+       state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"alpha.txt"),
+                     L"Failed to focus alpha.txt before navigation-view history-dropdown validation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       FocusFolderViewPane(FolderWindow::Pane::Left);
+       const HWND navigationView = g_folderWindow.DebugGetNavigationViewHwnd(FolderWindow::Pane::Left);
+       state.Require(navigationView != nullptr && IsWindow(navigationView) != FALSE, L"Navigation view handle unavailable for history-dropdown validation.");
+       const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+       state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                     L"Left navigation bar did not become visible before history-dropdown validation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       state.Require(g_folderWindow.DebugFocusNavigationViewRegion(FolderWindow::Pane::Left, NavigationView::FocusRegion::History),
+                     L"Failed to focus the NavigationView history region before keyboard dropdown validation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       NavigationViewDebugSnapshot baselineSnapshot{};
+       state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                   [&](const NavigationViewDebugSnapshot& value) noexcept
+       {
+           return value.focusTarget == NavigationViewDebugFocusTarget::HistoryRegion && ! value.editMode && ! value.historyDropdownVisible &&
+                  ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
+                  value.currentPathText == rootC.wstring() && value.historyCount >= 2u;
+       },
+                                                   SelfTest::Scale(3000ms),
+                                                   &baselineSnapshot),
+                     L"Failed to capture the focused NavigationView history-region baseline before keyboard dropdown validation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       struct HistoryPopupKeyboardResult
+       {
+           bool popupObserved            = false;
+           bool popupOwnerValid          = false;
+           bool popupStateCaptured       = false;
+           bool selectionMoved           = false;
+           bool popupClosed              = false;
+           int selectedIndex             = -1;
+           int targetIndex               = -1;
+           size_t stateQueryCount        = 0;
+           size_t readableStateCount     = 0;
+           int lastKeyboardIndex         = -1;
+           int lastHoveredIndex          = -1;
+           size_t lastItemCount          = 0;
+           bool failedPopupValid         = false;
+           bool failedPopupVisible       = false;
+           DWORD failedForegroundProcess = 0;
+           HWND failedFocus              = nullptr;
+           HWND failedCapture            = nullptr;
+           POINT cursorBeforeActivation{};
+           POINT cursorAtFailure{};
+           RECT failedPopupRect{};
+       } popupResult{};
+       const DWORD uiThreadId = GetCurrentThreadId();
+       static_cast<void>(GetCursorPos(&popupResult.cursorBeforeActivation));
+       std::atomic<bool> popupDriverDone{false};
+       std::jthread popupDriver([&](std::stop_token) noexcept
+       {
+           const auto done  = wil::scope_exit([&]() noexcept { popupDriverDone.store(true, std::memory_order_release); });
+           const HWND popup = WaitForWindow([&]() noexcept { return FindVisibleOwnedDxUiContextMenuWindow(navigationView); }, SelfTest::Scale(3000ms));
+           if (! popup || IsWindow(popup) == FALSE)
+           {
+               return;
+           }
+           popupResult.popupObserved   = true;
+           const HWND popupOwner       = GetWindow(popup, GW_OWNER);
+           popupResult.popupOwnerValid = popupOwner == navigationView || popupOwner == GetAncestor(navigationView, GA_ROOT);
+           DxUi::ContextMenuPopupDebugState popupState{};
+           const auto popupStateDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+           while (std::chrono::steady_clock::now() < popupStateDeadline)
+           {
+               popupState = {};
+               ++popupResult.stateQueryCount;
+               const bool stateReadable = DxUi::DebugGetContextMenuPopupState(popup, popupState);
+               if (stateReadable)
+               {
+                   ++popupResult.readableStateCount;
+                   popupResult.lastKeyboardIndex = popupState.keyboardIndex.has_value() ? static_cast<int>(popupState.keyboardIndex.value()) : -1;
+                   popupResult.lastHoveredIndex  = popupState.hoveredIndex.has_value() ? static_cast<int>(popupState.hoveredIndex.value()) : -1;
+                   popupResult.lastItemCount     = popupState.itemTexts.size();
+               }
+               if (stateReadable && popupState.keyboardIndex.has_value())
+               {
+                   popupResult.popupStateCaptured = true;
+                   break;
+               }
+               std::this_thread::sleep_for(10ms);
+           }
+           if (! popupResult.popupStateCaptured)
+           {
+               // Capture the failure before Escape destroys the popup; the result is read only after the driver joins.
+               popupResult.failedPopupValid   = IsWindow(popup) != FALSE;
+               popupResult.failedPopupVisible = IsWindowVisible(popup) != FALSE;
+               static_cast<void>(GetWindowRect(popup, &popupResult.failedPopupRect));
+               static_cast<void>(GetCursorPos(&popupResult.cursorAtFailure));
+               static_cast<void>(GetWindowThreadProcessId(GetForegroundWindow(), &popupResult.failedForegroundProcess));
+               GUITHREADINFO guiInfo{};
+               guiInfo.cbSize = sizeof(guiInfo);
+               if (GetGUIThreadInfo(uiThreadId, &guiInfo) != FALSE)
+               {
+                   popupResult.failedFocus   = guiInfo.hwndFocus;
+                   popupResult.failedCapture = guiInfo.hwndCapture;
+               }
+               PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+               PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
+               popupResult.popupClosed = WaitForWindowClosed(popup, SelfTest::Scale(2000ms));
+               return;
+           }
+           popupResult.selectedIndex = static_cast<int>(popupState.keyboardIndex.value());
+           const int itemCount       = static_cast<int>(baselineSnapshot.historyCount);
+           if (itemCount < 2)
+           {
+               PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+               PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
+               popupResult.popupClosed = WaitForWindowClosed(popup, SelfTest::Scale(2000ms));
+               return;
+           }
+           popupResult.targetIndex = popupResult.selectedIndex > 0 ? (popupResult.selectedIndex - 1) : (popupResult.selectedIndex + 1);
+           if (popupResult.targetIndex < 0 || popupResult.targetIndex >= itemCount)
+           {
+               PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+               PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
+               popupResult.popupClosed = WaitForWindowClosed(popup, SelfTest::Scale(2000ms));
+               return;
+           }
+           const UINT directionKey = popupResult.targetIndex < popupResult.selectedIndex ? VK_UP : VK_DOWN;
+           PostMessageW(popup, WM_KEYDOWN, directionKey, 0);
+           PostMessageW(popup, WM_KEYUP, directionKey, 0);
+           const auto selectionDeadline = std::chrono::steady_clock::now() + SelfTest::Scale(3000ms);
+           while (std::chrono::steady_clock::now() < selectionDeadline)
+           {
+               DxUi::ContextMenuPopupDebugState currentState{};
+               if (DxUi::DebugGetContextMenuPopupState(popup, currentState) && currentState.keyboardIndex.has_value() &&
+                   static_cast<int>(currentState.keyboardIndex.value()) == popupResult.targetIndex)
+               {
+                   popupResult.selectionMoved = true;
+                   break;
+               }
+               std::this_thread::sleep_for(10ms);
+           }
+           if (! popupResult.selectionMoved)
+           {
+               PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+               PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
+               popupResult.popupClosed = WaitForWindowClosed(popup, SelfTest::Scale(2000ms));
+               return;
+           }
+           PostMessageW(popup, WM_KEYDOWN, VK_RETURN, 0);
+           PostMessageW(popup, WM_KEYUP, VK_RETURN, 0);
+           popupResult.popupClosed = WaitForWindowClosed(popup, SelfTest::Scale(2000ms));
+       });
+       SendMessageW(navigationView, WM_KEYDOWN, VK_SPACE, 0);
+       SendMessageW(navigationView, WM_KEYUP, VK_SPACE, 0);
+       PumpPendingMessages();
+       JoinPopupDriverWithUiPumping(popupDriver, popupDriverDone, mainWindow, SelfTest::Scale(5000ms));
+       state.Require(popupResult.popupObserved, L"NavigationView history region did not open the live DxUI dropdown through keyboard activation.");
+       state.Require(popupResult.popupOwnerValid, L"Focused DxUI history popup should remain owned by the active pane window hierarchy.");
+       state.Require(
+           popupResult.popupStateCaptured,
+           std::format(L"History popup keyboard state unavailable: queries={}, readable={}, keyboard={}, hovered={}, items={}, valid={}, visible={}, "
+                       L"foregroundPid={}, selfPid={}, focus={:#x}, capture={:#x}, cursorBefore=({}, {}), cursorFailure=({}, {}), rect=({}, {}, {}, {}).",
+                       popupResult.stateQueryCount,
+                       popupResult.readableStateCount,
+                       popupResult.lastKeyboardIndex,
+                       popupResult.lastHoveredIndex,
+                       popupResult.lastItemCount,
+                       popupResult.failedPopupValid,
+                       popupResult.failedPopupVisible,
+                       popupResult.failedForegroundProcess,
+                       GetCurrentProcessId(),
+                       reinterpret_cast<uintptr_t>(popupResult.failedFocus),
+                       reinterpret_cast<uintptr_t>(popupResult.failedCapture),
+                       popupResult.cursorBeforeActivation.x,
+                       popupResult.cursorBeforeActivation.y,
+                       popupResult.cursorAtFailure.x,
+                       popupResult.cursorAtFailure.y,
+                       popupResult.failedPopupRect.left,
+                       popupResult.failedPopupRect.top,
+                       popupResult.failedPopupRect.right,
+                       popupResult.failedPopupRect.bottom));
+       state.Require(popupResult.selectedIndex >= 0 && popupResult.selectedIndex < static_cast<int>(baselineSnapshot.historyCount),
+                     std::format(L"NavigationView history dropdown should expose a valid selected index; saw {} of {}.",
+                                 popupResult.selectedIndex,
+                                 baselineSnapshot.historyCount));
+       state.Require(popupResult.targetIndex >= 0 && popupResult.targetIndex < static_cast<int>(baselineSnapshot.historyCount),
+                     L"NavigationView history dropdown did not expose an adjacent keyboard-selection target.");
+       state.Require(popupResult.selectionMoved, L"NavigationView history dropdown did not expose the adjacent keyboard-selection target in the DxUI popup.");
+       state.Require(popupResult.popupClosed, L"NavigationView history dropdown should close after accepting the DxUI popup keyboard selection.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       const std::filesystem::path expectedTarget = rootB;
+       state.Require(WaitForPanePath(FolderWindow::Pane::Left, expectedTarget, SelfTest::Scale(3000ms)),
+                     std::format(L"NavigationView history dropdown keyboard selection did not navigate to '{}'.", expectedTarget.wstring()));
+       state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)),
+                     L"Pane contents did not settle after NavigationView history dropdown keyboard selection.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       NavigationViewDebugSnapshot closedSnapshot{};
+       state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                   [&](const NavigationViewDebugSnapshot& value) noexcept
+       {
+           return ! value.editMode && ! value.historyDropdownVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode &&
+                  value.visibleChildWindowCount == 0u && value.currentPathText == expectedTarget.wstring() && value.historyCount >= baselineSnapshot.historyCount;
+       },
+                                                   SelfTest::Scale(3000ms),
+                                                   &closedSnapshot),
+                     L"NavigationView history dropdown should close cleanly after keyboard path selection.");
+       return state.failure.empty();
+   }
+   [[nodiscard]] bool WaitForNavigationViewKeyboardMenuFocusReturn(
+       FolderWindow::Pane pane, HWND folderView, HWND navigationView, std::chrono::milliseconds timeout, CaseState& state, std::wstring_view context) noexcept
+   {
+       using namespace std::chrono_literals;
+       if (folderView == nullptr || IsWindow(folderView) == FALSE || navigationView == nullptr || IsWindow(navigationView) == FALSE)
+       {
+           state.Require(false,
+                         std::format(L"{} cannot verify focus return because pane handles are invalid; folderView={}, navigationView={}.",
+                                     context,
+                                     DescribeWindowHandleForSelfTest(folderView),
+                                     DescribeWindowHandleForSelfTest(navigationView)));
+           return false;
+       }
+       const auto deadline  = std::chrono::steady_clock::now() + timeout;
+       size_t stableSamples = 0u;
+       HWND lastFocus       = nullptr;
+       while (std::chrono::steady_clock::now() < deadline)
+       {
+           PumpPendingMessages();
+           lastFocus = GetFocus();
+           if (lastFocus == folderView || lastFocus == navigationView)
+           {
+               ++stableSamples;
+               if (stableSamples >= 3u)
+               {
+                   return true;
+               }
+           }
+           else
+           {
+               stableSamples = 0u;
+           }
+           std::this_thread::sleep_for(10ms);
+       }
+       NavigationViewDebugSnapshot snapshot{};
+       const bool snapshotOk = g_folderWindow.DebugGetNavigationViewSnapshot(pane, snapshot);
+       state.Require(false,
+                     std::format(L"{} did not return focus to the pane shell or folder view; focus={}, folderView={}, navigationView={}, "
+                                 L"focusedFolderView={}, focusedPane={}, snapshotOk={}, focusTarget={}, editMode={}, childWindows={}, currentPath='{}'.",
+                                 context,
+                                 DescribeWindowHandleForSelfTest(lastFocus),
+                                 DescribeWindowHandleForSelfTest(folderView),
+                                 DescribeWindowHandleForSelfTest(navigationView),
+                                 DescribeWindowHandleForSelfTest(g_folderWindow.GetFocusedFolderViewHwnd()),
+                                 static_cast<int>(g_folderWindow.GetFocusedPane()),
+                                 snapshotOk ? L"yes" : L"no",
+                                 snapshotOk ? static_cast<int>(snapshot.focusTarget) : -1,
+                                 snapshotOk && snapshot.editMode ? L"yes" : L"no",
+                                 snapshotOk ? snapshot.visibleChildWindowCount : 0u,
+                                 snapshotOk ? snapshot.currentPathText : std::wstring()));
+       return false;
+   }
+   [[nodiscard]] bool TestPaneNavigationViewMenuRegionKeyboardActivationOpensMenu(HWND mainWindow, CaseState& state) noexcept
+   {
+       using namespace std::chrono_literals;
+       if (! mainWindow || IsWindow(mainWindow) == FALSE)
+       {
+           state.Require(false, L"Main window handle invalid.");
+           return false;
+       }
+       DWORD processId        = 0;
+       const DWORD uiThreadId = GetWindowThreadProcessId(mainWindow, &processId);
+       state.Require(uiThreadId != 0u, L"Failed to resolve the UI thread for navigation-view menu-region keyboard activation.");
+       if (uiThreadId == 0u)
+       {
+           return false;
+       }
+       const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+       state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for navigation-view menu-region keyboard activation.");
+       if (suiteRoot.empty())
+       {
+           return false;
+       }
+       const std::filesystem::path root = suiteRoot / L"work" / (L"navigation_view_menu_region_" + NewGuidText());
+       std::error_code ec;
+       std::filesystem::remove_all(root, ec);
+       state.Require(SelfTest::EnsureDirectory(root), L"Failed to create the navigation-view menu-region keyboard-activation root.");
+       state.Require(SelfTest::WriteTextFile(root / L"alpha.txt", "alpha"), L"Failed to create alpha.txt for menu-region keyboard activation.");
+       state.Require(SelfTest::WriteTextFile(root / L"beta.txt", "beta"), L"Failed to create beta.txt for menu-region keyboard activation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+       const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+       const auto restorePane                                = wil::scope_exit([&]
+       {
+           static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+           if (leftBefore.has_value())
+           {
+               g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+           }
+       });
+       g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+       state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                     L"Failed to set the local file-system plugin for navigation-view menu-region keyboard activation.");
+       g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+       state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                     L"Failed to set the left pane path for navigation-view menu-region keyboard activation.");
+       state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"beta.txt"}, SelfTest::Scale(3000ms)),
+                     L"Pane contents not ready for navigation-view menu-region keyboard activation.");
+       state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"alpha.txt"),
+                     L"Failed to focus alpha.txt before navigation-view menu-region keyboard activation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       FocusFolderViewPane(FolderWindow::Pane::Left);
+       const HWND folderView     = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+       const HWND navigationView = g_folderWindow.DebugGetNavigationViewHwnd(FolderWindow::Pane::Left);
+       state.Require(folderView != nullptr && IsWindow(folderView) != FALSE,
+                     L"Folder view handle unavailable for navigation-view menu-region keyboard activation.");
+       state.Require(navigationView != nullptr && IsWindow(navigationView) != FALSE,
+                     L"Navigation view handle unavailable for navigation-view menu-region keyboard activation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+       state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                     L"Left navigation bar did not become visible before navigation-view menu-region keyboard activation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       const uint64_t baselineRefreshCount = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+       const size_t baselineItemCount      = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
+       const size_t baselineSelectedCount  = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
+       const std::wstring expectedFocusedItem(g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left));
+       NavigationViewDebugSnapshot baselineSnapshot{};
+       state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                   [&](const NavigationViewDebugSnapshot& value) noexcept
+       {
+           return ! value.editMode && ! value.historyDropdownVisible && ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible &&
+                  ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u && value.showMenuSection && value.currentPathText == root.wstring();
+       },
+                                                   SelfTest::Scale(3000ms),
+                                                   &baselineSnapshot),
+                     L"Failed to capture the baseline navigation-view snapshot before menu-region keyboard activation.");
+       state.Require(baselineSnapshot.showMenuSection, L"Navigation view should expose the menu region before menu-region keyboard activation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       const auto waitForMenuRegionFocus = [&](std::wstring_view context) noexcept
+       {
+           NavigationViewDebugSnapshot snapshot{};
+           state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                       [&](const NavigationViewDebugSnapshot& value) noexcept
+           {
+               return value.focusTarget == NavigationViewDebugFocusTarget::MenuRegion && ! value.editMode && ! value.historyDropdownVisible &&
+                      ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
+                      value.showMenuSection && value.currentPathText == root.wstring() &&
+                      g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
+                      g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
+                      g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount;
+           },
+                                                       SelfTest::Scale(3000ms),
+                                                       &snapshot),
+                         std::format(L"Navigation view did not focus the menu shell region during {}.", context));
+           return state.failure.empty();
+       };
+       const auto waitForClosedShellState = [&](std::wstring_view context) noexcept
+       {
+           NavigationViewDebugSnapshot snapshot{};
+           state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                       [&](const NavigationViewDebugSnapshot& value) noexcept
+           {
+               return ! value.editMode && ! value.historyDropdownVisible && ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible &&
+                      ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u && value.showMenuSection && value.currentPathText == root.wstring() &&
+                      value.historyCount == baselineSnapshot.historyCount &&
+                      g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
+                      g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
+                      g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount &&
+                      g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == expectedFocusedItem;
+           },
+                                                       SelfTest::Scale(3000ms),
+                                                       &snapshot),
+                         std::format(L"Navigation view did not settle back to its shell baseline during {}.", context));
+           return state.failure.empty();
+       };
+       const auto activateAndDismissMenu = [&](const WPARAM virtualKey, std::wstring_view label) noexcept
+       {
+           state.Require(g_folderWindow.DebugFocusNavigationViewRegion(FolderWindow::Pane::Left, NavigationView::FocusRegion::Menu),
+                         std::format(L"Failed to focus the navigation-view menu region before {}.", label));
+           if (! state.failure.empty())
+           {
+               return false;
+           }
+           state.Require(waitForMenuRegionFocus(std::format(L"{} focus settle", label)),
+                         std::format(L"Navigation view menu region did not settle before {}.", label));
+           if (! state.failure.empty())
+           {
+               return false;
+           }
+           const UiMenuRoundTripResult roundTrip =
+               TriggerAndDismissKeyboardActivatedUiMenu(navigationView, virtualKey, uiThreadId, navigationView, SelfTest::Scale(2000ms), SelfTest::Scale(3000ms));
+           state.Require(roundTrip.opened,
+                         std::format(L"Navigation view menu-region keyboard activation did not enter menu mode or materialize a DxUI popup during {}.", label));
+           state.Require(roundTrip.closed,
+                         std::format(L"Navigation view menu-region keyboard activation did not leave menu mode or dismiss the DxUI popup during {}.", label));
+           if (! state.failure.empty())
+           {
+               return false;
+           }
+           state.Require(waitForClosedShellState(std::format(L"{} post-close settle", label)),
+                         std::format(L"Navigation view shell state did not settle after {}.", label));
+           if (! state.failure.empty())
+           {
+               return false;
+           }
+           return state.failure.empty();
+       };
+       state.Require(activateAndDismissMenu(VK_RETURN, L"Enter activation"), L"Navigation view menu region did not round-trip cleanly through Enter activation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       state.Require(activateAndDismissMenu(VK_SPACE, L"Space activation"), L"Navigation view menu region did not round-trip cleanly through Space activation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       if (! WaitForNavigationViewKeyboardMenuFocusReturn(
+               FolderWindow::Pane::Left, folderView, navigationView, SelfTest::Scale(3000ms), state, L"Navigation view menu-region keyboard activation"))
+       {
+           return false;
+       }
+       return state.failure.empty();
+   }
+   [[nodiscard]] bool TestPaneNavigationViewDiskInfoRegionKeyboardActivationOpensMenu(HWND mainWindow, CaseState& state) noexcept
+   {
+       using namespace std::chrono_literals;
+       if (! mainWindow || IsWindow(mainWindow) == FALSE)
+       {
+           state.Require(false, L"Main window handle invalid.");
+           return false;
+       }
+       DWORD processId        = 0;
+       const DWORD uiThreadId = GetWindowThreadProcessId(mainWindow, &processId);
+       state.Require(uiThreadId != 0u, L"Failed to resolve the UI thread for navigation-view disk-info keyboard activation.");
+       if (uiThreadId == 0u)
+       {
+           return false;
+       }
+       const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+       state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for navigation-view disk-info keyboard activation.");
+       if (suiteRoot.empty())
+       {
+           return false;
+       }
+       const std::filesystem::path root = suiteRoot / L"work" / (L"navigation_view_disk_info_region_" + NewGuidText());
+       std::error_code ec;
+       std::filesystem::remove_all(root, ec);
+       state.Require(SelfTest::EnsureDirectory(root), L"Failed to create the navigation-view disk-info keyboard-activation root.");
+       state.Require(SelfTest::WriteTextFile(root / L"alpha.txt", "alpha"), L"Failed to create alpha.txt for disk-info keyboard activation.");
+       state.Require(SelfTest::WriteTextFile(root / L"beta.txt", "beta"), L"Failed to create beta.txt for disk-info keyboard activation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+       const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+       const auto restorePane                                = wil::scope_exit([&]
+       {
+           static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+           if (leftBefore.has_value())
+           {
+               g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+           }
+       });
+       g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+       state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                     L"Failed to set the local file-system plugin for navigation-view disk-info keyboard activation.");
+       g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, root);
+       state.Require(WaitForPanePath(FolderWindow::Pane::Left, root, SelfTest::Scale(3000ms)),
+                     L"Failed to set the left pane path for navigation-view disk-info keyboard activation.");
+       state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt", L"beta.txt"}, SelfTest::Scale(3000ms)),
+                     L"Pane contents not ready for navigation-view disk-info keyboard activation.");
+       state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"alpha.txt"),
+                     L"Failed to focus alpha.txt before navigation-view disk-info keyboard activation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       FocusFolderViewPane(FolderWindow::Pane::Left);
+       const HWND folderView     = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+       const HWND navigationView = g_folderWindow.DebugGetNavigationViewHwnd(FolderWindow::Pane::Left);
+       state.Require(folderView != nullptr && IsWindow(folderView) != FALSE, L"Folder view handle unavailable for navigation-view disk-info keyboard activation.");
+       state.Require(navigationView != nullptr && IsWindow(navigationView) != FALSE,
+                     L"Navigation view handle unavailable for navigation-view disk-info keyboard activation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+       state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                     L"Left navigation bar did not become visible before navigation-view disk-info keyboard activation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       const uint64_t baselineRefreshCount = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+       const size_t baselineItemCount      = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
+       const size_t baselineSelectedCount  = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
+       const std::wstring expectedFocusedItem(g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left));
+       NavigationViewDebugSnapshot baselineSnapshot{};
+       state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                   [&](const NavigationViewDebugSnapshot& value) noexcept
+       {
+           return ! value.editMode && ! value.historyDropdownVisible && ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible &&
+                  ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u && value.showDiskInfoSection && value.currentPathText == root.wstring();
+       },
+                                                   SelfTest::Scale(3000ms),
+                                                   &baselineSnapshot),
+                     L"Failed to capture the baseline navigation-view snapshot before disk-info keyboard activation.");
+       state.Require(baselineSnapshot.showDiskInfoSection, L"Navigation view should expose the disk-info region before disk-info keyboard activation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       const auto waitForDiskInfoFocus = [&](std::wstring_view context) noexcept
+       {
+           NavigationViewDebugSnapshot snapshot{};
+           state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                       [&](const NavigationViewDebugSnapshot& value) noexcept
+           {
+               return value.focusTarget == NavigationViewDebugFocusTarget::DiskInfoRegion && ! value.editMode && ! value.historyDropdownVisible &&
+                      ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
+                      value.showDiskInfoSection && value.currentPathText == root.wstring() &&
+                      g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
+                      g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
+                      g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount;
+           },
+                                                       SelfTest::Scale(3000ms),
+                                                       &snapshot),
+                         std::format(L"Navigation view did not focus the disk-info shell region during {}.", context));
+           return state.failure.empty();
+       };
+       const auto waitForClosedShellState = [&](std::wstring_view context) noexcept
+       {
+           NavigationViewDebugSnapshot snapshot{};
+           state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                       [&](const NavigationViewDebugSnapshot& value) noexcept
+           {
+               return ! value.editMode && ! value.historyDropdownVisible && ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible &&
+                      ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u && value.showDiskInfoSection &&
+                      value.currentPathText == root.wstring() && value.historyCount == baselineSnapshot.historyCount &&
+                      g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
+                      g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
+                      g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount &&
+                      g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == expectedFocusedItem;
+           },
+                                                       SelfTest::Scale(3000ms),
+                                                       &snapshot),
+                         std::format(L"Navigation view did not settle back to its shell baseline during {}.", context));
+           return state.failure.empty();
+       };
+       const auto activateAndDismissMenu = [&](const WPARAM virtualKey, std::wstring_view label) noexcept
+       {
+           state.Require(g_folderWindow.DebugFocusNavigationViewRegion(FolderWindow::Pane::Left, NavigationView::FocusRegion::DiskInfo),
+                         std::format(L"Failed to focus the navigation-view disk-info region before {}.", label));
+           if (! state.failure.empty())
+           {
+               return false;
+           }
+           state.Require(waitForDiskInfoFocus(std::format(L"{} focus settle", label)),
+                         std::format(L"Navigation view disk-info region did not settle before {}.", label));
+           if (! state.failure.empty())
+           {
+               return false;
+           }
+           const UiMenuRoundTripResult roundTrip =
+               TriggerAndDismissKeyboardActivatedUiMenu(navigationView, virtualKey, uiThreadId, navigationView, SelfTest::Scale(2000ms), SelfTest::Scale(3000ms));
+           state.Require(roundTrip.opened,
+                         std::format(L"Navigation view disk-info keyboard activation did not enter menu mode or materialize a DxUI popup during {}.", label));
+           state.Require(roundTrip.closed,
+                         std::format(L"Navigation view disk-info keyboard activation did not leave menu mode or dismiss the DxUI popup during {}.", label));
+           if (! state.failure.empty())
+           {
+               return false;
+           }
+           state.Require(waitForClosedShellState(std::format(L"{} post-close settle", label)),
+                         std::format(L"Navigation view shell state did not settle after {}.", label));
+           if (! state.failure.empty())
+           {
+               return false;
+           }
+           return state.failure.empty();
+       };
+       state.Require(activateAndDismissMenu(VK_RETURN, L"Enter activation"),
+                     L"Navigation view disk-info region did not round-trip cleanly through Enter activation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       state.Require(activateAndDismissMenu(VK_SPACE, L"Space activation"),
+                     L"Navigation view disk-info region did not round-trip cleanly through Space activation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       if (! WaitForNavigationViewKeyboardMenuFocusReturn(
+               FolderWindow::Pane::Left, folderView, navigationView, SelfTest::Scale(3000ms), state, L"Navigation view disk-info keyboard activation"))
+       {
+           return false;
+       }
+       return state.failure.empty();
+   }
+   [[maybe_unused]] [[nodiscard]] bool TestPaneNavigationViewPointerClickDropdownsStayOpen(HWND mainWindow, CaseState& state) noexcept
+   {
+       using namespace std::chrono_literals;
+       if (! mainWindow || IsWindow(mainWindow) == FALSE)
+       {
+           state.Require(false, L"Main window handle invalid.");
+           return false;
+       }
+       const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+       state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for navigation-view pointer-click dropdown validation.");
+       if (suiteRoot.empty())
+       {
+           return false;
+       }
+       const std::filesystem::path root  = suiteRoot / L"work" / (L"navigation_view_pointer_click_dropdowns_" + NewGuidText());
+       const std::filesystem::path rootA = root / L"A";
+       const std::filesystem::path rootB = root / L"B";
+       const std::filesystem::path rootC = root / L"C";
+       std::error_code ec;
+       std::filesystem::remove_all(root, ec);
+       state.Require(SelfTest::EnsureDirectory(rootA), L"Failed to create pointer-click history path A.");
+       state.Require(SelfTest::EnsureDirectory(rootB), L"Failed to create pointer-click history path B.");
+       state.Require(SelfTest::EnsureDirectory(rootC), L"Failed to create pointer-click history path C.");
+       state.Require(SelfTest::WriteTextFile(rootA / L"alpha.txt", "alpha"), L"Failed to create alpha.txt in pointer-click history path A.");
+       state.Require(SelfTest::WriteTextFile(rootB / L"alpha.txt", "alpha"), L"Failed to create alpha.txt in pointer-click history path B.");
+       state.Require(SelfTest::WriteTextFile(rootC / L"alpha.txt", "alpha"), L"Failed to create alpha.txt in pointer-click history path C.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       const std::wstring leftPluginBefore                   = std::wstring(g_folderWindow.GetFileSystemPluginId(FolderWindow::Pane::Left));
+       const std::optional<std::filesystem::path> leftBefore = g_folderWindow.GetCurrentPath(FolderWindow::Pane::Left);
+       const auto restorePane                                = wil::scope_exit([&]
+       {
+           static_cast<void>(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, leftPluginBefore));
+           if (leftBefore.has_value())
+           {
+               g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, leftBefore.value());
+           }
+       });
+       g_folderWindow.SetActivePane(FolderWindow::Pane::Left);
+       state.Require(SUCCEEDED(g_folderWindow.SetFileSystemPluginForPane(FolderWindow::Pane::Left, L"builtin/file-system")),
+                     L"Failed to set local file-system plugin for navigation-view pointer-click dropdown validation.");
+       const auto navigatePane = [&](const std::filesystem::path& path, std::wstring_view context) noexcept
+       {
+           g_folderWindow.SetFolderPath(FolderWindow::Pane::Left, path);
+           state.Require(WaitForPanePath(FolderWindow::Pane::Left, path, SelfTest::Scale(3000ms)),
+                         std::format(L"Failed to set left pane path to '{}' during {}.", path.wstring(), context));
+           state.Require(WaitForPaneItems(FolderWindow::Pane::Left, {L"alpha.txt"}, SelfTest::Scale(3000ms)),
+                         std::format(L"Pane contents not ready at '{}' during {}.", path.wstring(), context));
+           return state.failure.empty();
+       };
+       state.Require(navigatePane(rootA, L"pointer-click history seeding"), L"Navigation-view pointer-click seeding failed at A.");
+       state.Require(navigatePane(rootB, L"pointer-click history seeding"), L"Navigation-view pointer-click seeding failed at B.");
+       state.Require(navigatePane(rootC, L"pointer-click history seeding"), L"Navigation-view pointer-click seeding failed at C.");
+       state.Require(g_folderWindow.DebugFocusItemByDisplayName(FolderWindow::Pane::Left, L"alpha.txt"),
+                     L"Failed to focus alpha.txt before navigation-view pointer-click dropdown validation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       FocusFolderViewPane(FolderWindow::Pane::Left);
+       const HWND folderView     = g_folderWindow.GetFolderViewHwnd(FolderWindow::Pane::Left);
+       const HWND navigationView = g_folderWindow.DebugGetNavigationViewHwnd(FolderWindow::Pane::Left);
+       state.Require(folderView != nullptr && IsWindow(folderView) != FALSE,
+                     L"Folder view handle unavailable for navigation-view pointer-click dropdown validation.");
+       state.Require(navigationView != nullptr && IsWindow(navigationView) != FALSE,
+                     L"Navigation view handle unavailable for navigation-view pointer-click dropdown validation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       const ScopedNavigationBarVisibilityRestore restoreNavigationBars;
+       state.Require(EnsureNavigationViewVisibleForSelfTest(FolderWindow::Pane::Left, navigationView, SelfTest::Scale(3000ms)),
+                     L"Left navigation bar did not become visible before navigation-view pointer-click dropdown validation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       const uint64_t baselineRefreshCount = g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left);
+       const size_t baselineItemCount      = g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left);
+       const size_t baselineSelectedCount  = g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left);
+       const std::wstring expectedFocusedItem(g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left));
+       NavigationViewDebugSnapshot baselineSnapshot{};
+       state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                   [&](const NavigationViewDebugSnapshot& value) noexcept
+       {
+           return value.focusTarget == NavigationViewDebugFocusTarget::None && ! value.editMode && ! value.historyDropdownVisible &&
+                  ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
+                  value.showMenuSection && value.showDiskInfoSection && value.currentPathText == rootC.wstring() && value.historyCount >= 2u;
+       },
+                                                   SelfTest::Scale(3000ms),
+                                                   &baselineSnapshot),
+                     L"Failed to capture the baseline navigation-view state before pointer-click dropdown validation.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       const auto waitForClosedShellState = [&](std::wstring_view context) noexcept
+       {
+           NavigationViewDebugSnapshot snapshot{};
+           state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                       [&](const NavigationViewDebugSnapshot& value) noexcept
+           {
+               return value.focusTarget == NavigationViewDebugFocusTarget::None && ! value.editMode && ! value.historyDropdownVisible &&
+                      ! value.editSuggestPopupVisible && ! value.fullPathPopupVisible && ! value.fullPathPopupEditMode && value.visibleChildWindowCount == 0u &&
+                      value.showMenuSection && value.showDiskInfoSection && value.currentPathText == rootC.wstring() &&
+                      value.historyCount == baselineSnapshot.historyCount &&
+                      g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
+                      g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
+                      g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount &&
+                      g_folderWindow.DebugGetFocusedItemDisplayName(FolderWindow::Pane::Left) == expectedFocusedItem;
+           },
+                                                       SelfTest::Scale(3000ms),
+                                                       &snapshot),
+                         std::format(L"Navigation view did not settle back to its baseline shell state during {}.", context));
+           return state.failure.empty();
+       };
+       const auto findOwnedPopup = [&]() noexcept -> HWND
+       {
+           const HWND rootOwner = GetAncestor(navigationView, GA_ROOT);
+           for (HWND popup = FindWindowW(L"DxUi_ContextMenu", nullptr); popup != nullptr; popup = FindWindowExW(nullptr, popup, L"DxUi_ContextMenu", nullptr))
+           {
+               if (IsWindowVisible(popup) == FALSE)
+               {
+                   continue;
+               }
+               const HWND owner = GetWindow(popup, GW_OWNER);
+               if (owner == navigationView || owner == rootOwner)
+               {
+                   return popup;
+               }
+           }
+           return nullptr;
+       };
+       const auto clickRegionAndDismiss = [&](const RECT region, const NavigationViewDebugDropdownKind expectedKind, std::wstring_view label) noexcept
+       {
+           const LONG clickX       = region.left + ((region.right - region.left) / 2);
+           const LONG clickY       = region.top + ((region.bottom - region.top) / 2);
+           const LPARAM clickPoint = MAKELPARAM(clickX, clickY);
+           PostMessageW(navigationView, WM_MOUSEMOVE, 0, clickPoint);
+           PostMessageW(navigationView, WM_LBUTTONDOWN, MK_LBUTTON, clickPoint);
+           PostMessageW(navigationView, WM_LBUTTONUP, 0, clickPoint);
+           PumpPendingMessages();
+           NavigationViewDebugSnapshot popupSnapshot{};
+           state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
+                                                       [&](const NavigationViewDebugSnapshot& value) noexcept
+           {
+               return ! value.editMode && value.historyDropdownVisible && value.dropdownKind == expectedKind && value.visibleChildWindowCount == 0u &&
+                      value.currentPathText == rootC.wstring() && g_folderWindow.DebugGetForceRefreshCount(FolderWindow::Pane::Left) == baselineRefreshCount &&
+                      g_folderWindow.DebugGetItemCount(FolderWindow::Pane::Left) == baselineItemCount &&
+                      g_folderWindow.DebugGetSelectedCount(FolderWindow::Pane::Left) == baselineSelectedCount;
+           },
+                                                       SelfTest::Scale(3000ms),
+                                                       &popupSnapshot),
+                         std::format(L"Navigation view {} click did not open the expected DxUI dropdown.", label));
+           if (! state.failure.empty())
+           {
+               return false;
+           }
+           const HWND popup = WaitForWindow(findOwnedPopup, SelfTest::Scale(3000ms));
+           state.Require(popup != nullptr && IsWindow(popup) != FALSE,
+                         std::format(L"Navigation view {} click did not materialize a live DxUI popup window.", label));
+           if (! popup || IsWindow(popup) == FALSE)
+           {
+               return false;
+           }
+           std::this_thread::sleep_for(SelfTest::Scale(150ms));
+           PumpPendingMessages();
+           state.Require(IsWindowVisible(popup) != FALSE,
+                         std::format(L"Navigation view {} popup dismissed immediately after the opening click/release path.", label));
+           if (! state.failure.empty())
+           {
+               return false;
+           }
+           PostMessageW(popup, WM_KEYDOWN, VK_ESCAPE, 0);
+           PostMessageW(popup, WM_KEYUP, VK_ESCAPE, 0);
+           state.Require(WaitForWindowClosed(popup, SelfTest::Scale(2000ms)), std::format(L"Navigation view {} popup did not dismiss after Escape.", label));
+           if (! state.failure.empty())
+           {
+               return false;
+           }
+           state.Require(waitForClosedShellState(std::format(L"{} post-dismiss settle", label)),
+                         std::format(L"Navigation view shell state did not settle after {} dismissal.", label));
+           return state.failure.empty();
+       };
+       state.Require(clickRegionAndDismiss(baselineSnapshot.menuRegionRect, NavigationViewDebugDropdownKind::Menu, L"menu region"),
+                     L"Navigation view menu-region click path did not keep the DxUI popup open.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       state.Require(clickRegionAndDismiss(baselineSnapshot.historyRegionRect, NavigationViewDebugDropdownKind::History, L"history region"),
+                     L"Navigation view history-region click path did not keep the DxUI popup open.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       state.Require(clickRegionAndDismiss(baselineSnapshot.diskInfoRegionRect, NavigationViewDebugDropdownKind::DiskInfo, L"disk-info region"),
+                     L"Navigation view disk-info click path did not keep the DxUI popup open.");
+       if (! state.failure.empty())
+       {
+           return false;
+       }
+       state.Require(GetFocus() == folderView || GetFocus() == navigationView,
+                     L"Navigation view pointer-click dropdown dismissal should return focus to the pane shell or folder view.");
+       return state.failure.empty();
+   }
+   } to match the expression {DebugGetContextMenuPopupState\(popup,\s*popupState\)\s*&&\s*popupState\.keyboardIndex\.has_value\(\)}
+   1220:         $historyBlock | Should Match 'DebugGetContextMenuPopupState\(popup,\s*popupState\)\s*&&\s*popupState\.keyboardIndex\.has_value\(\)'
+   at <ScriptBlock>, Z:\RsI19Toolchain\Tools\Tests\TestHarnessSourceContracts.Tests.ps1: line 1220
+ [+] makes the app Shortcuts navigation-shell fixture own its settings and window isolation 214ms
+ [+] isolates the Preferences Keyboard reset live interaction fixture 6ms
+ [+] isolates the pane-filter DxUi surface fixture before global prompt discovery 8ms
+ [+] isolates both Compare navigation-shell fixtures before asserting restored focus 36ms
+ [+] isolates mouse-opened menu keyboard ordering and preserves split post diagnostics 13ms
+ [+] reacquires the submenu placement cascade target after root-menu initialization 13ms
+ [+] reports locked-desktop clipboard and foreground dependencies as explicit Commands skips 6ms
+ [+] keeps Preferences category-tree UIA selection pinned to category-id selection 4ms
+ [+] keeps Preferences debug category selection independent from transient snapshot capture 15ms
+ [+] keeps broad-process Preferences navigation on a stable category surface and retires stale UIA providers 9ms
+ [+] keeps Preferences category churn settled, attributable, and bounded under uncontended focus 31ms
+ [+] isolates Compare Directories wrap traversal and keeps failures diagnostic-rich 8ms
+ [+] carries selected FolderView rename identity across bounded refresh interleavings 8ms
+ [+] routes Commands long-path and high-cardinality fixtures through native TestSandbox roots 8ms
+ [+] routes ShellCommands shortcut save temp files through native TestSandbox roots 3ms
+ [+] routes PerformanceTests2 scratch through the unified TestSandbox root 6ms
+ [+] routes BatchRename window fixture roots through native TestSandbox roots 4ms
+ [+] routes ViewerPETests fixture files through the unified TestSandbox root 4ms
+ [+] keeps shared TestSupport sandbox and environment policies explicit 3ms
+ [+] keeps viewer message pumping and typed snapshot polling on bounded shared support 6ms
+ [+] routes MTP fake journal LOCALAPPDATA state through native TestSandbox roots 12ms
+ [+] routes Compare dummy filesystem scratch through native TestSandbox roots 3ms
+ [+] routes Tools Pester scratch through the unified TestSandbox root 7ms
+ [+] gives retained Preferences page-state activation a broad-order settle budget 12ms
+ [+] unwinds retained Plugins children before parent-grid UIA validation 9ms
+ [+] uses deterministic retryable category-tree boundary routes in broad-order Preferences coverage 20ms
+ [+] quiesces asynchronous UI state before broad-order preview, overlay, Preferences, and Find fixtures 132ms
+ [+] keeps gated test sources inside TestSandbox instead of raw temp or profile roots 120ms
+ [+] routes SettingsStore app files through the unified TestSandbox root during test runs 5ms
+ [+] keeps SettingsStore TestSandbox path overrides behind ENABLE_TESTS 10ms
+ [+] moves Compare foreground service capture files into TestSandbox instead of process temp 3ms
+ [+] wraps foreground search service selftest processes in a kill-on-close JobObject 8ms
+ [+] keeps broad-order foreground Search service failures process-diagnostic 26ms
+ [+] keeps foreground Search service stdout tests independent from hidden readiness requests 39ms
+ [+] keeps Compare live compact requests bound to an explicit pipe with captured-output diagnostics 10ms
+ [+] keeps the shared child-process runner contained, concurrently drained, and parity-tested 9ms
+ [+] keeps local index snapshot reload timing advisory instead of a correctness ceiling 6ms
+ [+] keeps SQLite traversal-seed currentness-unproven state from being downgraded by metadata probes 10ms
+ [+] keeps foreground Search service status probes behind a condition-based status wait 67ms
+ [+] lets delete-burst maintenance tests accept an already completed first idle window 11ms
+ [+] drains Batch Rename central test tasks before provider teardown 39ms
+ [+] scales named raw self-test waits through the timeout multiplier 56ms
+ [+] keeps FileOperations popup fixtures inside the current self-test process 7ms
+ [+] keeps Commands UIA action helpers deterministic under DxUi dispatch timeouts 31ms
+ [+] suppresses the deliberately parked live cursor during persistent View-to-Plugins menu hover selftests 14ms
+ [+] routes persistent View-to-Files menu hover through the menu bar root-switch path 24ms
+ [+] centralizes the Commands real-input warning and guards every cursor-warp family 49ms
+ [+] reuses one native warning across foreground suites and preserves it through Commands isolation 13ms
+ [+] opens the temporary menu-bar hover-switch popup through keyboard activation 21ms
+ [+] parks real cursor away from DxUi popup initial hover in menu selftests 31ms
+ [+] restores broad command-probe UI state and isolates modeless ownership fixtures 17ms
+ [+] keeps Shortcuts live UIA search interaction message-pumped under broad order 29ms
+ [+] keeps Compare Options close-reopen churn globally settled before live UIA reuse 10ms
+ [+] keeps File Operations speed-limit prompt churn ValuePattern checks condition-based 18ms
+ [+] keeps dialog prompt model and UIA checks condition-based under broad order 19ms
+ [+] keeps Item Properties UIA interaction off the owning window thread and joins bounded workers 22ms
+ [+] keeps broad-order Commands fixtures pinned to the state each case owns 40ms
+ [+] keeps Find destination/action button probes pinned to deterministic input state 36ms
+ [+] keeps Find header-drag reorder failures diagnostic-rich 17ms
+ [+] keeps Find reordered-sort restore checks diagnostic-rich under broad order 13ms
+ [+] stabilizes shared-process Preferences close-reopen and category transitions before UIA assertions 45ms
+ [+] keeps Compare Directories lower-card scroll focus failures diagnostic-rich 7ms
+ [+] keeps Connection Manager long-run open-close settled and diagnostic-rich 7ms
+ [+] keeps exact-run TestSandbox cleanup root-confined, dry-run gated, and ShouldProcess protected 4ms
+ [+] rejects retired outside-root cleanup in the unified runner 3ms
+ [+] bypasses fatal error modal dialogs while self-tests are running 10ms
+ [+] keeps Commands Preferences chunks namespace-self-contained 9ms
+ [+] keeps IconCache association LRU perf emission outside the association cache lock helper 4ms
+ [+] bounds DirectoryInfoCache eviction when protected entries exceed the cache budget 3ms
+ [+] keeps FolderView thumbnail WIC factory ownership local to the processing thread 4ms
+ [+] keeps IMAP summary repair budget exhaustion local to the current repair pass 4ms
+ [+] clears FolderView incremental-search layout effects over the visual label text 3ms
+ [+] matches FolderView incremental-search highlights against visual display names 3ms
+ [+] cleans stale FolderView incremental-search drawing effects when search is inactive 4ms
+ [+] exposes runner-native self-test case listing without executing case bodies 5ms
+ [+] exposes native self-test repeat and seeded shuffle execution controls 6ms
+ [+] reinitializes Commands UIA cache after explicit-order case listing 15ms
+ [+] isolates every Commands case before fixture dispatch 7ms
+ [+] resets pane content and transient UI state between Commands explicit-order cases 28ms
+ [+] rehydrates runtime plugins after the MTP deferred-unload probe 6ms
+ [+] keeps CompareDirectories seeded shuffle native through explicit case order 4ms
+ [+] keeps FileOperations repeat coverage native instead of runner-only 5ms
+ [+] keeps FolderView overlay perf sample sufficiency advisory 34ms
+ [+] uses shared self-test result emission for ad hoc and state-machine cases 6ms
+ [+] preserves partial self-test results when a case or suite crashes 16ms
+ [+] keeps injected classifier proof hooks explicit and debug-only 8ms
+ [+] keeps CompareDirectories runner-listed case names unique 17ms
+ [+] keeps CompareDirectories literal RunCase names listed for runner coverage 63ms
+ [+] opens the file-operations custom speed-limit prompt asynchronously for self-tests 4ms
+ [+] keeps FileOperations self-test case prefixes runnable 3ms
+ [+] keeps FileOperations discovery perf counters race-free under worker concurrency 5ms
+ [+] keeps FileSystem dynamic scheduler cleanup explicit and recursive-copy queueing unbounded 20ms
+ [+] keeps admitted CopyOnly MOVE on the bridge with source cleanup disabled 4ms
+ [+] keeps Copy issue handling from converting PermanentDelete into a Recycle opt-out 5ms
+ [+] keeps FileOperations conflict routing in one arbiter and one engine policy builder 40ms
+ [+] keeps same-host overlap choices bounded, relation-scoped, and safely defaulted 37ms
+ [+] keeps cached Keep Both eligibility scoped to the current top-level conflict 57ms
+ [+] keeps Riptide low-risk hardening invariants wired 20ms
+ [+] keeps Floodgate data-safety invariants wired 201ms
+ [+] keeps Microsoft Drive merge destination-metadata reuse and Release proof wired 15ms
+ [+] keeps Delta reverify file-system safety fixes wired 103ms
+ [+] keeps possible file-operation artifact projections visible and recovery-free in FolderView Compare and Find 47ms
+ [+] keeps Change Case discovery fail-closed and task updates token-owned 24ms
+ [+] shares only safe File Operations durable-state file mechanics 27ms
+ [+] keeps R1c exact compensation independent from primary cancel and exposes committed cleanup debt 26ms
+ [+] keeps File Operations scheduler failure policy local and the worker start gate cancelable 20ms
+ [+] keeps Curl reader and full-buffer writer waits stop-aware 3ms
+ [+] isolates the destructive missing-directory hot-reload fixture from the shared settings run 14ms
+ [+] keeps HostServices synchronous marshaling, result-capacity, and connection-secret lifecycle contracts wired 10ms
+ [+] keeps bounded registry strings and canonical WSL discovery wired through Common 9ms
+ [+] keeps RedConfigure rectangular paste bound to visible row and culture identities 10ms
+ [+] keeps Riptide test-credibility gaps closed 32ms
+ [+] keeps focus-independent GUI coverage behind the shared no-activation guard 18ms
+ [+] keeps new native focus calls inside reviewed focus-sensitive test adapters 60ms
+ [+] keeps MainMenuBarHost HWND teardown inside the DxUi host lifetime 15ms
+ [+] serializes build and test artifacts and contains every shared process launch tree 45ms
+ [+] keeps IronLedger FolderView data-integrity guards wired 12ms
+ [+] keeps Observatory Track 5 pack-and-delete output safety wired 14ms
+ [+] keeps Observatory Track 5 local outputs transactional 11ms
+ [+] keeps Observatory Track 5 Make File List responsive, cancellable, and explicit about its destination 16ms
+ [+] keeps Observatory Track 5 archive extraction conflicts explicit and transactional 8ms
+ [+] keeps Observatory Track 6 Monitor ownership and bounded-pipeline guards wired 21ms
+ [+] keeps Observatory Track 7 settings commits conflict-aware and recoverable 16ms
+ [+] keeps Observatory Track 8 connection identity and authorization boundaries wired 15ms
+ [+] keeps Observatory Track 9 DxUi identity, reentrancy, and text-input guards wired 6ms
+ [+] keeps Observatory Track 10 cloud paging, upload acknowledgement, commit, and identity guards wired 45ms
+ [+] keeps Observatory Track 11 S3 transfer, cleanup, and unload contracts wired 10ms
+ [+] keeps Observatory Track 12 plugin configuration, secret, runtime, and cancellation contracts wired 27ms
+ [+] keeps Observatory Track 13 local and Dummy provider mutations fail-before-change 7ms
+ [+] keeps Observatory Track 14 final-save, stale-suggestion, and bounded-menu contracts wired 11ms
+ [+] keeps production translation units independently compiled 329ms
+Describing Product source policies retained from the extracted DxUi test target
+ [+] TestNavigationViewPointerRoutingHasNoSyntheticGenerationGate 21ms
+ [+] TestConnectionCredentialPromptDestroysWindowOnModalQuit 3ms
+ [+] TestConnectionCredentialPromptTeardownDoesNotWipeThroughRawTextFieldPointers 5ms
+ [+] TestConnectionCredentialPromptUiaPumpDoesNotDetachTimedOutWorkers 9ms
+Tests completed in 4.39s
+Passed: 187 Failed: 1 Skipped: 0 Pending: 0 Inconclusive: 0

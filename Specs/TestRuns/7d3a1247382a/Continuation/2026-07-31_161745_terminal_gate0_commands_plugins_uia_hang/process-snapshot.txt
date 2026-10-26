@@ -1,0 +1,35 @@
+
+Id                  : 35744
+ProcessName         : pwsh
+StartTime           : 7/31/2026 5:38:29 PM
+CPU                 : 37.5625
+Responding          : True
+HandleCount         : 686
+WorkingSet64        : 230010880
+PrivateMemorySize64 : 109285376
+VirtualMemorySize64 : 2333023133696
+Threads             : {37624, 13564, 41508, 14848…}
+
+Id                  : 39616
+ProcessName         : pwsh
+StartTime           : 7/31/2026 5:38:29 PM
+CPU                 : 1.4375
+Responding          : True
+HandleCount         : 616
+WorkingSet64        : 100655104
+PrivateMemorySize64 : 30830592
+VirtualMemorySize64 : 2332914864128
+Threads             : {25024, 47212, 45992, 48228…}
+
+Id                  : 35952
+ProcessName         : RedSalamander
+StartTime           : 7/31/2026 5:46:08 PM
+CPU                 : 575.5
+Responding          : True
+HandleCount         : 11073
+WorkingSet64        : 595787776
+PrivateMemorySize64 : 641449984
+VirtualMemorySize64 : 58400342016
+Threads             : {17388, 38624, 4016, 4176…}
+
+

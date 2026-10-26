@@ -1,0 +1,1 @@
+Explicit pre-stage archive contract passed for 81 files before this receipt was added. Existing inventory passed for 15,374 files; see prior-inventory-check.txt.

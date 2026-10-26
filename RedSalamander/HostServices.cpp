@@ -4,6 +4,7 @@
 #include <atomic>
 #include <cstring>
 #include <cwctype>
+#include <deque>
 #include <filesystem>
 #include <format>
 #include <memory>
@@ -31,6 +32,7 @@
 #include "SettingsHotReload.h"
 #include "SettingsStore.h"
 #include "ThroughputParsing.h"
+#include "Ui/AlertOverlayTheme.h"
 #include "Ui/AlertOverlayWindow.h"
 #include "WindowMessages.h"
 #include "WindowsHello.h"
@@ -43,6 +45,8 @@ std::atomic<FolderWindow*> g_hostFolderWindow{nullptr};
 std::atomic<std::atomic<HWND>*> g_hostFolderWindowHwnd{nullptr};
 std::atomic<Common::Settings::Settings*> g_hostSettings{nullptr};
 std::atomic_bool g_hostPromptShutdown{false};
+// Blocking prompts whose nested loop is running (I35 R8.4: a decision mirror never appears above one).
+std::atomic<uint32_t> g_hostBlockingPromptDepth{0u};
 
 template <typename T> [[nodiscard]] T& RequireHostDependency(const std::atomic<T*>& dependency) noexcept
 {
@@ -496,28 +500,18 @@ RedSalamander::Ui::AlertTheme BuildHostAlertTheme() noexcept
         theme = HostFolderWindow().GetTheme();
     }
 
-    const FolderViewTheme& fv = theme.folderView;
-
-    RedSalamander::Ui::AlertTheme alertTheme{};
-    alertTheme.background          = fv.backgroundColor;
-    alertTheme.text                = fv.textNormal;
-    alertTheme.accent              = fv.focusBorder;
-    alertTheme.selectionBackground = fv.itemBackgroundSelected;
-    alertTheme.selectionText       = fv.textSelected;
-    alertTheme.errorBackground     = fv.errorBackground;
-    alertTheme.errorText           = fv.errorText;
-    alertTheme.warningBackground   = fv.warningBackground;
-    alertTheme.warningText         = fv.warningText;
-    alertTheme.infoBackground      = fv.infoBackground;
-    alertTheme.infoText            = fv.infoText;
-    alertTheme.darkBase            = fv.darkBase;
-    alertTheme.highContrast        = theme.highContrast;
-    return alertTheme;
+    return RedSalamander::Ui::MakeAlertTheme(theme);
 }
 
 } // namespace
 
-class HostServices final : public IHost, public IHostAlerts, public IHostPrompts, public IHostConnections, public IHostPaneExecute, public IHostViewers
+class HostServices final : public IHost,
+                           public IHostAlerts,
+                           public IHostPrompts,
+                           public IHostConnections,
+                           public IHostPaneExecute,
+                           public IHostViewers,
+                           public IHostViewerActions
 {
 public:
     HostServices() noexcept : _refCount(1)
@@ -533,6 +527,12 @@ public:
     {
         clearAllSessionSecrets();
     }
+#ifdef ENABLE_TESTS
+    [[nodiscard]] size_t DebugWindowAlertOverlayCount() const noexcept
+    {
+        return _windowOverlays.size();
+    }
+#endif
 
     HostServices(const HostServices&)            = delete;
     HostServices(HostServices&&)                 = delete;
@@ -584,6 +584,13 @@ public:
         if (riid == __uuidof(IHostViewers))
         {
             *ppvObject = static_cast<IHostViewers*>(this);
+            AddRef();
+            return S_OK;
+        }
+
+        if (riid == __uuidof(IHostViewerActions))
+        {
+            *ppvObject = static_cast<IHostViewerActions*>(this);
             AddRef();
             return S_OK;
         }
@@ -699,14 +706,13 @@ public:
         {
             const HostFileOperationPromptOptions& options = *request->fileOperationOptions;
             const bool validPresentation = request->presentation == HOST_PROMPT_PRESENTATION_COPY || request->presentation == HOST_PROMPT_PRESENTATION_MOVE;
-            const bool validLinkPolicy = options.linkPolicy == HOST_FILE_OPERATION_LINK_PRESERVE || options.linkPolicy == HOST_FILE_OPERATION_LINK_SKIP;
-            const bool validExecution = options.executionMode == HOST_FILE_OPERATION_EXECUTION_QUEUE ||
-                                        options.executionMode == HOST_FILE_OPERATION_EXECUTION_PARALLEL;
-            const bool validVerificationAvailability =
-                options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_SUPPORTED ||
-                options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED ||
-                options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_CHECK_DURING_OPERATION ||
-                options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE;
+            const bool validLinkPolicy   = options.linkPolicy == HOST_FILE_OPERATION_LINK_PRESERVE || options.linkPolicy == HOST_FILE_OPERATION_LINK_SKIP;
+            const bool validExecution =
+                options.executionMode == HOST_FILE_OPERATION_EXECUTION_QUEUE || options.executionMode == HOST_FILE_OPERATION_EXECUTION_PARALLEL;
+            const bool validVerificationAvailability = options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_SUPPORTED ||
+                                                       options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED ||
+                                                       options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_CHECK_DURING_OPERATION ||
+                                                       options.verificationAvailability == HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE;
             if (options.sizeBytes < sizeof(HostFileOperationPromptOptions) || ! validPresentation || ! validLinkPolicy || ! validExecution ||
                 ! validVerificationAvailability || options.verifyAfterCopy > 1u || options.clipboardMoveConsumesCutList > 1u)
             {
@@ -1032,6 +1038,38 @@ public:
         return UpgradeFtpAnonymousToPasswordOnUiThread(connectionName, ownerWindow);
     }
 
+    HRESULT STDMETHODCALLTYPE ExecuteViewerAction(const HostViewerActionRequest* request, uint64_t* taskId) noexcept override
+    {
+        if (taskId)
+            *taskId = 0u;
+        if (! request)
+            return E_POINTER;
+        if (request->sizeBytes < sizeof(HostViewerActionRequest) || ! request->fileSystem || ! request->paths || ! request->pathCount ||
+            request->pathCount > 128u ||
+            (request->action != HOST_VIEWER_OPEN_OTHER_PANE && request->action != HOST_VIEWER_OPEN_FOCUS_PANE && request->action != HOST_VIEWER_RECYCLE &&
+             request->action != HOST_VIEWER_DELETE) ||
+            ((request->action == HOST_VIEWER_OPEN_OTHER_PANE || request->action == HOST_VIEWER_OPEN_FOCUS_PANE) && request->pathCount != 1u))
+            return E_INVALIDARG;
+        if (request->focusItemDisplayName)
+        {
+            const size_t length = wcsnlen_s(request->focusItemDisplayName, 32769u);
+            if (! length || length > 32768u || std::wstring_view(request->focusItemDisplayName, length).find_first_of(L"/\\") != std::wstring_view::npos ||
+                (request->action != HOST_VIEWER_OPEN_OTHER_PANE && request->action != HOST_VIEWER_OPEN_FOCUS_PANE))
+                return E_INVALIDARG;
+        }
+        for (uint32_t index = 0u; index < request->pathCount; ++index)
+            if (! request->paths[index] || ! request->paths[index][0] || wcsnlen_s(request->paths[index], 32769u) > 32768u)
+                return E_INVALIDARG;
+        const HWND hostWindow = GetInitializedHostWindow();
+        if (! hostWindow)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_WINDOW_HANDLE);
+        // This optional service is synchronous on the host UI thread. No borrowed request
+        // or provider pointer is queued across threads or allowed to outlive plugin teardown.
+        if (! IsCurrentThreadWindowThread(hostWindow))
+            return RPC_E_WRONG_THREAD;
+        return HostFolderWindow().ExecuteViewerAction(*request, taskId);
+    }
+
     HRESULT STDMETHODCALLTYPE ExecuteInActivePane(const HostPaneExecuteRequest* request) noexcept override
     {
         if (! request)
@@ -1193,11 +1231,11 @@ public:
         return HostFolderWindow().OpenViewerWithPlugin(request->pluginId, context);
     }
 
-    bool TryHandleMessage(UINT message, WPARAM /*wParam*/, LPARAM lParam, LRESULT& result) noexcept
+    bool TryHandleMessage(HWND hwnd, UINT message, WPARAM /*wParam*/, LPARAM lParam, LRESULT& result) noexcept
     {
         if (message == WndMsg::kHostShowAlert)
         {
-            auto data = TakeMessagePayload<PendingAlert>(lParam);
+            auto data = TakeMessagePayload<PendingAlert>(hwnd, message, lParam);
             if (! data)
             {
                 result = static_cast<LRESULT>(E_POINTER);
@@ -1211,7 +1249,7 @@ public:
 
         if (message == WndMsg::kHostClearAlert)
         {
-            auto data = TakeMessagePayload<PendingClearAlert>(lParam);
+            auto data = TakeMessagePayload<PendingClearAlert>(hwnd, message, lParam);
             if (! data)
             {
                 result = static_cast<LRESULT>(E_POINTER);
@@ -1363,7 +1401,7 @@ public:
 
         if (message == WndMsg::kHostExecuteInPane)
         {
-            auto data = TakeMessagePayload<PendingExecuteInPane>(lParam);
+            auto data = TakeMessagePayload<PendingExecuteInPane>(hwnd, message, lParam);
             if (! data)
             {
                 result = static_cast<LRESULT>(E_POINTER);
@@ -2023,6 +2061,7 @@ private:
             if (! overlay)
             {
                 overlay = std::make_unique<RedSalamander::Ui::AlertOverlayWindow>();
+                overlay->SetTrackedWindowDestroyedCallback(this, &HostServices::OnWindowAlertTargetDestroyed);
             }
 
             return overlay->ShowForAnchor(request.targetWindow, theme, std::move(model), blocksInput);
@@ -2033,6 +2072,23 @@ private:
         HostFolderWindow().ShowPaneAlertOverlay(
             pane, FolderView::ErrorOverlayKind::Operation, folderSeverity, std::move(model.title), std::move(model.message), S_OK, closable, blocksInput);
         return S_OK;
+    }
+
+    // The target window of a window-scope alert is being destroyed: drop its entry, so the map does
+    // not grow and a recycled HWND value gets a fresh overlay. Runs last on the overlay's teardown
+    // path; authority is removed from the map before the overlay is deleted.
+    static void OnWindowAlertTargetDestroyed(void* context, RedSalamander::Ui::AlertOverlayWindow& overlay) noexcept
+    {
+        auto& overlays = static_cast<HostServices*>(context)->_windowOverlays;
+        for (auto it = overlays.begin(); it != overlays.end(); ++it)
+        {
+            if (it->second.get() == &overlay)
+            {
+                auto owned = std::move(it->second);
+                overlays.erase(it);
+                return;
+            }
+        }
     }
 
     HRESULT ClearAlertOnUiThread(HostAlertScope scope, void* cookie) noexcept
@@ -2055,9 +2111,14 @@ private:
             }
 
             const auto it = _windowOverlays.find(targetWindow);
-            if (it != _windowOverlays.end() && it->second)
+            if (it != _windowOverlays.end())
             {
-                it->second->Hide();
+                // Remove authority before Hide/Destroy can run synchronous
+                // window callbacks. A recycled HWND cannot reuse this overlay.
+                auto overlay = std::move(it->second);
+                _windowOverlays.erase(it);
+                if (overlay)
+                    overlay->Hide();
             }
             return S_OK;
         }
@@ -2129,6 +2190,7 @@ private:
                 model.presentation = RedSalamander::Ui::AlertPresentation::Severity;
                 operationLabel     = LoadStringResource(nullptr, IDS_FILEOPS_CONSENT_BTN_CONTINUE);
                 break;
+            case HOST_PROMPT_PRESENTATION_ARTIFACT_BLOCKED: model.presentation = RedSalamander::Ui::AlertPresentation::Severity; break;
             case HOST_PROMPT_PRESENTATION_DEFAULT:
             default: model.presentation = RedSalamander::Ui::AlertPresentation::Severity; break;
         }
@@ -2145,10 +2207,7 @@ private:
         if (request.fileOperationOptions)
         {
             const HostFileOperationPromptOptions& options = *request.fileOperationOptions;
-            auto addOption = [&model](uint32_t id,
-                                      std::wstring label,
-                                      std::vector<RedSalamander::Ui::AlertOptionChoice> choices,
-                                      uint64_t selectedValue)
+            auto addOption = [&model](uint32_t id, std::wstring label, std::vector<RedSalamander::Ui::AlertOptionChoice> choices, uint64_t selectedValue)
             {
                 RedSalamander::Ui::AlertOption option{};
                 option.id      = id;
@@ -2213,8 +2272,8 @@ private:
                 {500ull << 20u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_500_MIB)},
                 {1ull << 30u, LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BANDWIDTH_1_GIB)},
             };
-            const bool hasCurrentBandwidth = std::ranges::any_of(
-                bandwidthChoices, [&options](const auto& choice) noexcept { return choice.value == options.bandwidthLimitBytesPerSecond; });
+            const bool hasCurrentBandwidth =
+                std::ranges::any_of(bandwidthChoices, [&options](const auto& choice) noexcept { return choice.value == options.bandwidthLimitBytesPerSecond; });
             if (! hasCurrentBandwidth)
             {
                 bandwidthChoices.push_back(
@@ -2232,10 +2291,20 @@ private:
             }
         }
 
-        const std::wstring labelOk     = LoadStringResource(nullptr, IDS_BTN_OK);
-        const std::wstring labelCancel = LoadStringResource(nullptr, IDS_BTN_CANCEL);
-        const std::wstring labelYes    = LoadStringResource(nullptr, IDS_BTN_YES);
-        const std::wstring labelNo     = LoadStringResource(nullptr, IDS_BTN_NO);
+        std::wstring labelOk     = LoadStringResource(nullptr, IDS_BTN_OK);
+        std::wstring labelCancel = LoadStringResource(nullptr, IDS_BTN_CANCEL);
+        std::wstring labelYes    = LoadStringResource(nullptr, IDS_BTN_YES);
+        std::wstring labelNo     = LoadStringResource(nullptr, IDS_BTN_NO);
+        if (request.presentation == HOST_PROMPT_PRESENTATION_ARTIFACT_BLOCKED)
+        {
+            // I35 R7.1/R7.2: Retry, Open location in File Explorer and Close; see HostPromptPresentation.
+            std::wstring close        = LoadStringResource(nullptr, IDS_FILEOPS_BTN_CLOSE);
+            std::wstring openLocation = LoadStringResource(nullptr, IDS_FILEOPS_ARTIFACT_ACTION_OPEN_LOCATION);
+            labelYes                  = LoadStringResource(nullptr, IDS_FILEOPS_CONFLICT_BTN_RETRY);
+            labelOk                   = request.buttons == HOST_PROMPT_BUTTONS_OK ? close : openLocation;
+            labelNo                   = request.buttons == HOST_PROMPT_BUTTONS_YES_NO ? close : openLocation;
+            labelCancel               = std::move(close);
+        }
 
         auto addButton = [&](uint32_t id, const std::wstring& label, HostPromptResult thisResult) -> void
         {
@@ -2327,6 +2396,8 @@ private:
             return hrShow;
         }
 
+        g_hostBlockingPromptDepth.fetch_add(1u, std::memory_order_acq_rel);
+        const auto endBlockingPrompt = wil::scope_exit([]() noexcept { g_hostBlockingPromptDepth.fetch_sub(1u, std::memory_order_acq_rel); });
         while (! state.completed && overlayWindow.IsVisible() && ! g_hostPromptShutdown.load(std::memory_order_acquire))
         {
             MSG msg{};
@@ -2832,6 +2903,12 @@ void HostClearConnectionSessionState() noexcept
 {
     GetHostServicesImpl().ClearConnectionSessionState();
 }
+#ifdef ENABLE_TESTS
+size_t HostGetTestWindowAlertOverlayCount() noexcept
+{
+    return GetHostServicesImpl().DebugWindowAlertOverlayCount();
+}
+#endif
 
 void HostBeginPromptShutdown() noexcept
 {
@@ -2846,6 +2923,11 @@ void HostResetPromptShutdown() noexcept
 bool HostIsPromptShutdown() noexcept
 {
     return g_hostPromptShutdown.load(std::memory_order_acquire);
+}
+
+bool HostIsBlockingPromptActive() noexcept
+{
+    return g_hostBlockingPromptDepth.load(std::memory_order_acquire) != 0u;
 }
 
 HRESULT HostShowAlert(const HostAlertRequest& request, void* cookie) noexcept
@@ -2880,6 +2962,7 @@ std::atomic<uint64_t> g_testPromptRequestCount{0u};
 std::mutex g_testPromptSnapshotMutex;
 HostPromptDebugSnapshot g_testPromptSnapshot{};
 bool g_hasTestPromptSnapshot = false;
+std::deque<HostPromptResult> g_testPromptResultQueue;
 std::optional<HostFileOperationPromptOptions> g_testPromptFileOperationOptionsOverride;
 } // namespace
 #endif
@@ -2911,17 +2994,34 @@ HRESULT HostShowPrompt(const HostPromptRequest& request, void* cookie, HostPromp
     };
     {
         std::scoped_lock lock(g_testPromptSnapshotMutex);
-        g_testPromptSnapshot.severity          = request.severity;
-        g_testPromptSnapshot.buttons           = request.buttons;
-        g_testPromptSnapshot.defaultResult     = request.defaultResult;
-        g_testPromptSnapshot.presentation      = request.presentation;
-        g_testPromptSnapshot.title             = request.title ? request.title : L"";
-        g_testPromptSnapshot.message           = request.message ? request.message : L"";
+        g_testPromptSnapshot.scope                   = request.scope;
+        g_testPromptSnapshot.targetWindow            = request.targetWindow;
+        g_testPromptSnapshot.severity                = request.severity;
+        g_testPromptSnapshot.buttons                 = request.buttons;
+        g_testPromptSnapshot.defaultResult           = request.defaultResult;
+        g_testPromptSnapshot.presentation            = request.presentation;
+        g_testPromptSnapshot.title                   = request.title ? request.title : L"";
+        g_testPromptSnapshot.message                 = request.message ? request.message : L"";
         g_testPromptSnapshot.hasFileOperationOptions = request.fileOperationOptions != nullptr;
-        g_testPromptSnapshot.fileOperationOptions = request.fileOperationOptions ? *request.fileOperationOptions : HostFileOperationPromptOptions{};
-        g_hasTestPromptSnapshot                = true;
+        g_testPromptSnapshot.fileOperationOptions    = request.fileOperationOptions ? *request.fileOperationOptions : HostFileOperationPromptOptions{};
+        g_hasTestPromptSnapshot                      = true;
     }
     g_testPromptRequestCount.fetch_add(1u, std::memory_order_acq_rel);
+    {
+        // Queued answers are consumed one per prompt before the sticky override (multi-step flows
+        // such as Retry followed by Close).
+        std::scoped_lock lock(g_testPromptSnapshotMutex);
+        if (! g_testPromptResultQueue.empty())
+        {
+            const HostPromptResult queued = g_testPromptResultQueue.front();
+            g_testPromptResultQueue.pop_front();
+            if (PromptButtonsSupportResult(request.buttons, queued))
+            {
+                *result = queued;
+                return S_OK;
+            }
+        }
+    }
     const auto testPromptResultOverride = static_cast<HostPromptResult>(g_testPromptResultOverride.load(std::memory_order_acquire));
     if (testPromptResultOverride != HOST_PROMPT_RESULT_NONE && PromptButtonsSupportResult(request.buttons, testPromptResultOverride))
     {
@@ -2935,6 +3035,13 @@ HRESULT HostShowPrompt(const HostPromptRequest& request, void* cookie, HostPromp
 
     if (HostGetAutoAcceptPrompts())
     {
+        // A blocked artifact touch has no affirmative action: Retry could loop and Open location
+        // would launch File Explorer without a user. Automation closes it (I35 R7.1).
+        if (request.presentation == HOST_PROMPT_PRESENTATION_ARTIFACT_BLOCKED)
+        {
+            *result = EscapePromptResultForButtons(request.buttons);
+            return S_OK;
+        }
         const HostPromptResult accept = DefaultPromptResultForButtons(request.buttons);
         *result                       = PromptButtonsSupportResult(request.buttons, accept) ? accept : request.defaultResult;
         if (*result == HOST_PROMPT_RESULT_NONE)
@@ -3010,6 +3117,18 @@ void HostResetTestPromptRequestCount() noexcept
     g_hasTestPromptSnapshot = false;
 }
 
+void HostQueueTestPromptResults(std::initializer_list<HostPromptResult> results)
+{
+    std::scoped_lock lock(g_testPromptSnapshotMutex);
+    g_testPromptResultQueue.assign(results.begin(), results.end());
+}
+
+void HostClearTestPromptResultQueue() noexcept
+{
+    std::scoped_lock lock(g_testPromptSnapshotMutex);
+    g_testPromptResultQueue.clear();
+}
+
 uint64_t HostGetTestPromptRequestCount() noexcept
 {
     return g_testPromptRequestCount.load(std::memory_order_acquire);
@@ -3042,7 +3161,7 @@ LPARAM HostGetTestLastRetiredSynchronousPayloadToken() noexcept
 }
 #endif
 
-bool TryHandleHostServicesWindowMessage(UINT message, WPARAM wParam, LPARAM lParam, LRESULT& result) noexcept
+bool TryHandleHostServicesWindowMessage(HWND hwnd, UINT message, WPARAM wParam, LPARAM lParam, LRESULT& result) noexcept
 {
-    return GetHostServicesImpl().TryHandleMessage(message, wParam, lParam, result);
+    return GetHostServicesImpl().TryHandleMessage(hwnd, message, wParam, lParam, result);
 }

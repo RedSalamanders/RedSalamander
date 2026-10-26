@@ -1,0 +1,2331 @@
+{
+  "machine": "4cb089111a23",
+  "scope": "same 5000-file fixture and five case repetitions per profile; concurrent independent compilation observed; no quiet-host or tail-latency claim",
+  "phases": {
+    "baseline-debug": {
+      "raw_sha256": "895E0A0B60AB8E1D21BF6E74BB8B4C3EA6357DF1EC238949DECB8B84E121B310",
+      "samples": [
+        {
+          "repeat": 1,
+          "request": "Name Ascending",
+          "duration_us": 52393,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:21:50.26Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Extension Ascending",
+          "duration_us": 184646,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:50.449Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Time Descending",
+          "duration_us": 115650,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:50.566Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Size Descending",
+          "duration_us": 122424,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:50.69Z"
+        },
+        {
+          "repeat": 1,
+          "request": "None Ascending (first)",
+          "duration_us": 98464,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:50.791Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Name Descending",
+          "duration_us": 116999,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:50.91Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Extension Descending",
+          "duration_us": 152648,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:51.066Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Time Ascending",
+          "duration_us": 89933,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:51.158Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Size Ascending",
+          "duration_us": 110054,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:51.269Z"
+        },
+        {
+          "repeat": 1,
+          "request": "None Ascending (last)",
+          "duration_us": 87485,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:51.359Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Name Ascending",
+          "duration_us": 33435,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:21:58.078Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Extension Ascending",
+          "duration_us": 178975,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:58.261Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Time Descending",
+          "duration_us": 111832,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:58.374Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Size Descending",
+          "duration_us": 120673,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:58.497Z"
+        },
+        {
+          "repeat": 2,
+          "request": "None Ascending (first)",
+          "duration_us": 94836,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:58.593Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Name Descending",
+          "duration_us": 122247,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:58.717Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Extension Descending",
+          "duration_us": 151374,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:58.872Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Time Ascending",
+          "duration_us": 87446,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:58.961Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Size Ascending",
+          "duration_us": 103627,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:59.066Z"
+        },
+        {
+          "repeat": 2,
+          "request": "None Ascending (last)",
+          "duration_us": 88189,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:21:59.156Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Name Ascending",
+          "duration_us": 29739,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:22:06.174Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Extension Ascending",
+          "duration_us": 169800,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:06.347Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Time Descending",
+          "duration_us": 111443,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:06.46Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Size Descending",
+          "duration_us": 118315,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:06.58Z"
+        },
+        {
+          "repeat": 3,
+          "request": "None Ascending (first)",
+          "duration_us": 96184,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:06.679Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Name Descending",
+          "duration_us": 115330,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:06.796Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Extension Descending",
+          "duration_us": 150856,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:06.95Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Time Ascending",
+          "duration_us": 85480,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:07.037Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Size Ascending",
+          "duration_us": 110820,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:07.149Z"
+        },
+        {
+          "repeat": 3,
+          "request": "None Ascending (last)",
+          "duration_us": 83719,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:07.235Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Name Ascending",
+          "duration_us": 45101,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:22:14.59Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Extension Ascending",
+          "duration_us": 192300,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:14.787Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Time Descending",
+          "duration_us": 131028,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:14.919Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Size Descending",
+          "duration_us": 146873,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:15.068Z"
+        },
+        {
+          "repeat": 4,
+          "request": "None Ascending (first)",
+          "duration_us": 137216,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:15.207Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Name Descending",
+          "duration_us": 163819,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:15.373Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Extension Descending",
+          "duration_us": 161696,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:15.54Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Time Ascending",
+          "duration_us": 98679,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:15.641Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Size Ascending",
+          "duration_us": 110700,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:15.753Z"
+        },
+        {
+          "repeat": 4,
+          "request": "None Ascending (last)",
+          "duration_us": 83438,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:15.839Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Name Ascending",
+          "duration_us": 28525,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:22:23.015Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Extension Ascending",
+          "duration_us": 181383,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:23.202Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Time Descending",
+          "duration_us": 116481,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:23.32Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Size Descending",
+          "duration_us": 124955,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:23.447Z"
+        },
+        {
+          "repeat": 5,
+          "request": "None Ascending (first)",
+          "duration_us": 98612,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:23.548Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Name Descending",
+          "duration_us": 119756,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:23.669Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Extension Descending",
+          "duration_us": 146438,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:23.819Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Time Ascending",
+          "duration_us": 90322,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:23.911Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Size Ascending",
+          "duration_us": 104552,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:24.017Z"
+        },
+        {
+          "repeat": 5,
+          "request": "None Ascending (last)",
+          "duration_us": 84450,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:22:24.103Z"
+        }
+      ],
+      "requests": [
+        {
+          "request": "Name Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 28525,
+            "median_us": 33435,
+            "max_us": 52393
+          }
+        },
+        {
+          "request": "Extension Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 169800,
+            "median_us": 181383,
+            "max_us": 192300
+          }
+        },
+        {
+          "request": "Time Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 111443,
+            "median_us": 115650,
+            "max_us": 131028
+          }
+        },
+        {
+          "request": "Size Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 118315,
+            "median_us": 122424,
+            "max_us": 146873
+          }
+        },
+        {
+          "request": "None Ascending (first)",
+          "stats": {
+            "count": 5,
+            "min_us": 94836,
+            "median_us": 98464,
+            "max_us": 137216
+          }
+        },
+        {
+          "request": "Name Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 115330,
+            "median_us": 119756,
+            "max_us": 163819
+          }
+        },
+        {
+          "request": "Extension Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 146438,
+            "median_us": 151374,
+            "max_us": 161696
+          }
+        },
+        {
+          "request": "Time Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 85480,
+            "median_us": 89933,
+            "max_us": 98679
+          }
+        },
+        {
+          "request": "Size Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 103627,
+            "median_us": 110054,
+            "max_us": 110820
+          }
+        },
+        {
+          "request": "None Ascending (last)",
+          "stats": {
+            "count": 5,
+            "min_us": 83438,
+            "median_us": 84450,
+            "max_us": 88189
+          }
+        }
+      ],
+      "enumeration_sort_merge": {
+        "count": 10,
+        "min_us": 30964,
+        "median_us": 41383.5,
+        "max_us": 47945
+      },
+      "rank_preparation": null,
+      "retained_rank_bytes_per_listing": 0,
+      "apply_current_sort": {
+        "count": 59,
+        "min_us": 31083,
+        "median_us": 50151,
+        "max_us": 128663
+      }
+    },
+    "candidate-debug": {
+      "raw_sha256": "6B7D58C2170FA4D1C9AA60DA3791BBADC3D9B5D80B55CA8F234D77B2EEF5C2F3",
+      "samples": [
+        {
+          "repeat": 1,
+          "request": "Name Ascending",
+          "duration_us": 36863,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:28:52.004Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Extension Ascending",
+          "duration_us": 89196,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:52.097Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Time Descending",
+          "duration_us": 109883,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:52.208Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Size Descending",
+          "duration_us": 100508,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:52.31Z"
+        },
+        {
+          "repeat": 1,
+          "request": "None Ascending (first)",
+          "duration_us": 94461,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:52.406Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Name Descending",
+          "duration_us": 73968,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:52.482Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Extension Descending",
+          "duration_us": 76149,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:52.561Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Time Ascending",
+          "duration_us": 90251,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:52.653Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Size Ascending",
+          "duration_us": 86152,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:52.741Z"
+        },
+        {
+          "repeat": 1,
+          "request": "None Ascending (last)",
+          "duration_us": 84333,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:52.827Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Name Ascending",
+          "duration_us": 29102,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:28:59.09Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Extension Ascending",
+          "duration_us": 94465,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:59.189Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Time Descending",
+          "duration_us": 104842,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:59.295Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Size Descending",
+          "duration_us": 99343,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:59.396Z"
+        },
+        {
+          "repeat": 2,
+          "request": "None Ascending (first)",
+          "duration_us": 100272,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:59.499Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Name Descending",
+          "duration_us": 73786,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:59.574Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Extension Descending",
+          "duration_us": 65651,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:59.644Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Time Ascending",
+          "duration_us": 88141,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:59.734Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Size Ascending",
+          "duration_us": 85256,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:59.821Z"
+        },
+        {
+          "repeat": 2,
+          "request": "None Ascending (last)",
+          "duration_us": 86002,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:28:59.909Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Name Ascending",
+          "duration_us": 38205,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:29:06.844Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Extension Ascending",
+          "duration_us": 97671,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:06.945Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Time Descending",
+          "duration_us": 105314,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:07.052Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Size Descending",
+          "duration_us": 98597,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:07.153Z"
+        },
+        {
+          "repeat": 3,
+          "request": "None Ascending (first)",
+          "duration_us": 96776,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:07.251Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Name Descending",
+          "duration_us": 70237,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:07.323Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Extension Descending",
+          "duration_us": 77138,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:07.404Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Time Ascending",
+          "duration_us": 79236,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:07.485Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Size Ascending",
+          "duration_us": 86545,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:07.573Z"
+        },
+        {
+          "repeat": 3,
+          "request": "None Ascending (last)",
+          "duration_us": 82933,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:07.657Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Name Ascending",
+          "duration_us": 32772,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:29:14.876Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Extension Ascending",
+          "duration_us": 89590,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:14.97Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Time Descending",
+          "duration_us": 108102,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:15.081Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Size Descending",
+          "duration_us": 100106,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:15.183Z"
+        },
+        {
+          "repeat": 4,
+          "request": "None Ascending (first)",
+          "duration_us": 99682,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:15.285Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Name Descending",
+          "duration_us": 71567,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:15.358Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Extension Descending",
+          "duration_us": 65264,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:15.427Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Time Ascending",
+          "duration_us": 83092,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:15.511Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Size Ascending",
+          "duration_us": 87441,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:15.6Z"
+        },
+        {
+          "repeat": 4,
+          "request": "None Ascending (last)",
+          "duration_us": 79978,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:15.682Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Name Ascending",
+          "duration_us": 27788,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:29:22.856Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Extension Ascending",
+          "duration_us": 94533,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:22.954Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Time Descending",
+          "duration_us": 105358,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:23.061Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Size Descending",
+          "duration_us": 95131,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:23.158Z"
+        },
+        {
+          "repeat": 5,
+          "request": "None Ascending (first)",
+          "duration_us": 94419,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:23.254Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Name Descending",
+          "duration_us": 75567,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:23.331Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Extension Descending",
+          "duration_us": 74994,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:23.41Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Time Ascending",
+          "duration_us": 83172,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:23.494Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Size Ascending",
+          "duration_us": 81089,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:23.577Z"
+        },
+        {
+          "repeat": 5,
+          "request": "None Ascending (last)",
+          "duration_us": 80365,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:29:23.659Z"
+        }
+      ],
+      "requests": [
+        {
+          "request": "Name Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 27788,
+            "median_us": 32772,
+            "max_us": 38205
+          }
+        },
+        {
+          "request": "Extension Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 89196,
+            "median_us": 94465,
+            "max_us": 97671
+          }
+        },
+        {
+          "request": "Time Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 104842,
+            "median_us": 105358,
+            "max_us": 109883
+          }
+        },
+        {
+          "request": "Size Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 95131,
+            "median_us": 99343,
+            "max_us": 100508
+          }
+        },
+        {
+          "request": "None Ascending (first)",
+          "stats": {
+            "count": 5,
+            "min_us": 94419,
+            "median_us": 96776,
+            "max_us": 100272
+          }
+        },
+        {
+          "request": "Name Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 70237,
+            "median_us": 73786,
+            "max_us": 75567
+          }
+        },
+        {
+          "request": "Extension Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 65264,
+            "median_us": 74994,
+            "max_us": 77138
+          }
+        },
+        {
+          "request": "Time Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 79236,
+            "median_us": 83172,
+            "max_us": 90251
+          }
+        },
+        {
+          "request": "Size Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 81089,
+            "median_us": 86152,
+            "max_us": 87441
+          }
+        },
+        {
+          "request": "None Ascending (last)",
+          "stats": {
+            "count": 5,
+            "min_us": 79978,
+            "median_us": 82933,
+            "max_us": 86002
+          }
+        }
+      ],
+      "enumeration_sort_merge": {
+        "count": 9,
+        "min_us": 38428,
+        "median_us": 40883,
+        "max_us": 42639
+      },
+      "rank_preparation": {
+        "count": 9,
+        "min_us": 4844,
+        "median_us": 4964,
+        "max_us": 5761
+      },
+      "retained_rank_bytes_per_listing": 80000,
+      "apply_current_sort": {
+        "count": 59,
+        "min_us": 6341,
+        "median_us": 33264,
+        "max_us": 35891
+      }
+    },
+    "debug-rebuilt": {
+      "raw_sha256": "AB2E0FEF71CFF80823EF6741C931A3AD77A13D91E391FF9A2656A46B018FDF23",
+      "samples": [
+        {
+          "repeat": 1,
+          "request": "Name Ascending",
+          "duration_us": 55000,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:34.379Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Extension Ascending",
+          "duration_us": 92163,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:34.475Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Time Descending",
+          "duration_us": 104230,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:34.581Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Size Descending",
+          "duration_us": 93283,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:34.676Z"
+        },
+        {
+          "repeat": 1,
+          "request": "None Ascending (first)",
+          "duration_us": 102034,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:34.78Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Name Descending",
+          "duration_us": 70951,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:34.853Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Extension Descending",
+          "duration_us": 67791,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:34.924Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Time Ascending",
+          "duration_us": 82459,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:35.008Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Size Ascending",
+          "duration_us": 85156,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:35.095Z"
+        },
+        {
+          "repeat": 1,
+          "request": "None Ascending (last)",
+          "duration_us": 82644,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:35.179Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Name Ascending",
+          "duration_us": 31289,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:46:41.554Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Extension Ascending",
+          "duration_us": 93726,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:41.651Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Time Descending",
+          "duration_us": 110237,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:41.763Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Size Descending",
+          "duration_us": 105234,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:41.87Z"
+        },
+        {
+          "repeat": 2,
+          "request": "None Ascending (first)",
+          "duration_us": 106102,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:41.978Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Name Descending",
+          "duration_us": 76265,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:42.056Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Extension Descending",
+          "duration_us": 69179,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:42.129Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Time Ascending",
+          "duration_us": 89519,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:42.22Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Size Ascending",
+          "duration_us": 89155,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:42.311Z"
+        },
+        {
+          "repeat": 2,
+          "request": "None Ascending (last)",
+          "duration_us": 84723,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:42.397Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Name Ascending",
+          "duration_us": 28236,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:46:49.013Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Extension Ascending",
+          "duration_us": 85826,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:49.103Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Time Descending",
+          "duration_us": 107880,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:49.212Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Size Descending",
+          "duration_us": 95934,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:49.31Z"
+        },
+        {
+          "repeat": 3,
+          "request": "None Ascending (first)",
+          "duration_us": 105429,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:49.417Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Name Descending",
+          "duration_us": 67281,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:49.486Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Extension Descending",
+          "duration_us": 76650,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:49.566Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Time Ascending",
+          "duration_us": 85599,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:49.654Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Size Ascending",
+          "duration_us": 85968,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:49.741Z"
+        },
+        {
+          "repeat": 3,
+          "request": "None Ascending (last)",
+          "duration_us": 79674,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:49.822Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Name Ascending",
+          "duration_us": 34491,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:46:57.216Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Extension Ascending",
+          "duration_us": 88964,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:57.308Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Time Descending",
+          "duration_us": 104882,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:57.416Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Size Descending",
+          "duration_us": 99759,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:57.517Z"
+        },
+        {
+          "repeat": 4,
+          "request": "None Ascending (first)",
+          "duration_us": 97055,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:57.616Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Name Descending",
+          "duration_us": 73763,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:57.691Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Extension Descending",
+          "duration_us": 71505,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:57.766Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Time Ascending",
+          "duration_us": 83324,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:57.851Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Size Ascending",
+          "duration_us": 91487,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:57.944Z"
+        },
+        {
+          "repeat": 4,
+          "request": "None Ascending (last)",
+          "duration_us": 80784,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:46:58.027Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Name Ascending",
+          "duration_us": 32073,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:47:04.194Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Extension Ascending",
+          "duration_us": 87458,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:47:04.285Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Time Descending",
+          "duration_us": 106472,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:47:04.393Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Size Descending",
+          "duration_us": 101187,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:47:04.496Z"
+        },
+        {
+          "repeat": 5,
+          "request": "None Ascending (first)",
+          "duration_us": 98293,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:47:04.597Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Name Descending",
+          "duration_us": 70383,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:47:04.669Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Extension Descending",
+          "duration_us": 67308,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:47:04.74Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Time Ascending",
+          "duration_us": 83177,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:47:04.825Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Size Ascending",
+          "duration_us": 83032,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:47:04.909Z"
+        },
+        {
+          "repeat": 5,
+          "request": "None Ascending (last)",
+          "duration_us": 79043,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:47:04.99Z"
+        }
+      ],
+      "requests": [
+        {
+          "request": "Name Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 28236,
+            "median_us": 32073,
+            "max_us": 55000
+          }
+        },
+        {
+          "request": "Extension Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 85826,
+            "median_us": 88964,
+            "max_us": 93726
+          }
+        },
+        {
+          "request": "Time Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 104230,
+            "median_us": 106472,
+            "max_us": 110237
+          }
+        },
+        {
+          "request": "Size Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 93283,
+            "median_us": 99759,
+            "max_us": 105234
+          }
+        },
+        {
+          "request": "None Ascending (first)",
+          "stats": {
+            "count": 5,
+            "min_us": 97055,
+            "median_us": 102034,
+            "max_us": 106102
+          }
+        },
+        {
+          "request": "Name Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 67281,
+            "median_us": 70951,
+            "max_us": 76265
+          }
+        },
+        {
+          "request": "Extension Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 67308,
+            "median_us": 69179,
+            "max_us": 76650
+          }
+        },
+        {
+          "request": "Time Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 82459,
+            "median_us": 83324,
+            "max_us": 89519
+          }
+        },
+        {
+          "request": "Size Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 83032,
+            "median_us": 85968,
+            "max_us": 91487
+          }
+        },
+        {
+          "request": "None Ascending (last)",
+          "stats": {
+            "count": 5,
+            "min_us": 79043,
+            "median_us": 80784,
+            "max_us": 84723
+          }
+        }
+      ],
+      "enumeration_sort_merge": {
+        "count": 10,
+        "min_us": 29532,
+        "median_us": 39096,
+        "max_us": 43444
+      },
+      "rank_preparation": {
+        "count": 9,
+        "min_us": 4823,
+        "median_us": 4939,
+        "max_us": 5318
+      },
+      "retained_rank_bytes_per_listing": 80000,
+      "apply_current_sort": {
+        "count": 59,
+        "min_us": 6474,
+        "median_us": 33254,
+        "max_us": 37487
+      }
+    },
+    "debug-qualified": {
+      "raw_sha256": "7C52B3446A46C38FEB031A63D38D6681110B5980551A09C142ECCE52B48E5092",
+      "samples": [
+        {
+          "repeat": 1,
+          "request": "Name Ascending",
+          "duration_us": 29595,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:52:31.12Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Extension Ascending",
+          "duration_us": 84202,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:31.208Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Time Descending",
+          "duration_us": 104535,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:31.314Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Size Descending",
+          "duration_us": 105571,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:31.421Z"
+        },
+        {
+          "repeat": 1,
+          "request": "None Ascending (first)",
+          "duration_us": 101240,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:31.525Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Name Descending",
+          "duration_us": 81432,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:31.608Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Extension Descending",
+          "duration_us": 77178,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:31.688Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Time Ascending",
+          "duration_us": 83627,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:31.773Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Size Ascending",
+          "duration_us": 84757,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:31.86Z"
+        },
+        {
+          "repeat": 1,
+          "request": "None Ascending (last)",
+          "duration_us": 85226,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:31.947Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Name Ascending",
+          "duration_us": 28289,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:52:38.496Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Extension Ascending",
+          "duration_us": 87551,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:38.587Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Time Descending",
+          "duration_us": 103203,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:38.694Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Size Descending",
+          "duration_us": 102808,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:38.798Z"
+        },
+        {
+          "repeat": 2,
+          "request": "None Ascending (first)",
+          "duration_us": 97763,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:38.898Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Name Descending",
+          "duration_us": 69849,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:38.969Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Extension Descending",
+          "duration_us": 65629,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:39.038Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Time Ascending",
+          "duration_us": 82412,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:39.122Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Size Ascending",
+          "duration_us": 80080,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:39.204Z"
+        },
+        {
+          "repeat": 2,
+          "request": "None Ascending (last)",
+          "duration_us": 78866,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:39.284Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Name Ascending",
+          "duration_us": 28470,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:52:46.123Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Extension Ascending",
+          "duration_us": 92756,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:46.219Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Time Descending",
+          "duration_us": 103118,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:46.324Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Size Descending",
+          "duration_us": 107011,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:46.433Z"
+        },
+        {
+          "repeat": 3,
+          "request": "None Ascending (first)",
+          "duration_us": 93914,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:46.528Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Name Descending",
+          "duration_us": 68322,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:46.598Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Extension Descending",
+          "duration_us": 70729,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:46.672Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Time Ascending",
+          "duration_us": 82231,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:46.757Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Size Ascending",
+          "duration_us": 86671,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:46.845Z"
+        },
+        {
+          "repeat": 3,
+          "request": "None Ascending (last)",
+          "duration_us": 93292,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:46.94Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Name Ascending",
+          "duration_us": 28920,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:52:53.569Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Extension Ascending",
+          "duration_us": 90966,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:53.664Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Time Descending",
+          "duration_us": 103486,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:53.769Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Size Descending",
+          "duration_us": 90312,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:53.861Z"
+        },
+        {
+          "repeat": 4,
+          "request": "None Ascending (first)",
+          "duration_us": 88275,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:53.951Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Name Descending",
+          "duration_us": 65319,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:54.018Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Extension Descending",
+          "duration_us": 69995,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:54.091Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Time Ascending",
+          "duration_us": 89224,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:54.182Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Size Ascending",
+          "duration_us": 83098,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:54.267Z"
+        },
+        {
+          "repeat": 4,
+          "request": "None Ascending (last)",
+          "duration_us": 79620,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:52:54.348Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Name Ascending",
+          "duration_us": 23564,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:53:00.911Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Extension Ascending",
+          "duration_us": 85877,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:53:01.001Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Time Descending",
+          "duration_us": 102476,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:53:01.105Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Size Descending",
+          "duration_us": 94348,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:53:01.201Z"
+        },
+        {
+          "repeat": 5,
+          "request": "None Ascending (first)",
+          "duration_us": 99335,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:53:01.303Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Name Descending",
+          "duration_us": 66713,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:53:01.371Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Extension Descending",
+          "duration_us": 70058,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:53:01.445Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Time Ascending",
+          "duration_us": 87018,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:53:01.534Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Size Ascending",
+          "duration_us": 93820,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:53:01.629Z"
+        },
+        {
+          "repeat": 5,
+          "request": "None Ascending (last)",
+          "duration_us": 88408,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:53:01.72Z"
+        }
+      ],
+      "requests": [
+        {
+          "request": "Name Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 23564,
+            "median_us": 28470,
+            "max_us": 29595
+          }
+        },
+        {
+          "request": "Extension Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 84202,
+            "median_us": 87551,
+            "max_us": 92756
+          }
+        },
+        {
+          "request": "Time Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 102476,
+            "median_us": 103203,
+            "max_us": 104535
+          }
+        },
+        {
+          "request": "Size Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 90312,
+            "median_us": 102808,
+            "max_us": 107011
+          }
+        },
+        {
+          "request": "None Ascending (first)",
+          "stats": {
+            "count": 5,
+            "min_us": 88275,
+            "median_us": 97763,
+            "max_us": 101240
+          }
+        },
+        {
+          "request": "Name Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 65319,
+            "median_us": 68322,
+            "max_us": 81432
+          }
+        },
+        {
+          "request": "Extension Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 65629,
+            "median_us": 70058,
+            "max_us": 77178
+          }
+        },
+        {
+          "request": "Time Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 82231,
+            "median_us": 83627,
+            "max_us": 89224
+          }
+        },
+        {
+          "request": "Size Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 80080,
+            "median_us": 84757,
+            "max_us": 93820
+          }
+        },
+        {
+          "request": "None Ascending (last)",
+          "stats": {
+            "count": 5,
+            "min_us": 78866,
+            "median_us": 85226,
+            "max_us": 93292
+          }
+        }
+      ],
+      "enumeration_sort_merge": {
+        "count": 10,
+        "min_us": 22648,
+        "median_us": 41991,
+        "max_us": 51060
+      },
+      "rank_preparation": {
+        "count": 9,
+        "min_us": 4799,
+        "median_us": 5064,
+        "max_us": 8261
+      },
+      "retained_rank_bytes_per_listing": 80000,
+      "apply_current_sort": {
+        "count": 59,
+        "min_us": 6297,
+        "median_us": 32596,
+        "max_us": 39702
+      }
+    },
+    "candidate-release": {
+      "raw_sha256": "FC3E99A3943796293BA6E6C84565CFF7EC8D825D213E33D0366402169297073C",
+      "samples": [
+        {
+          "repeat": 1,
+          "request": "Name Ascending",
+          "duration_us": 11761,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:36:25.674Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Extension Ascending",
+          "duration_us": 76086,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:25.75Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Time Descending",
+          "duration_us": 65691,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:25.816Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Size Descending",
+          "duration_us": 64982,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:25.882Z"
+        },
+        {
+          "repeat": 1,
+          "request": "None Ascending (first)",
+          "duration_us": 66463,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:25.948Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Name Descending",
+          "duration_us": 67578,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:26.016Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Extension Descending",
+          "duration_us": 65334,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:26.082Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Time Ascending",
+          "duration_us": 67880,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:26.15Z"
+        },
+        {
+          "repeat": 1,
+          "request": "Size Ascending",
+          "duration_us": 64683,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:26.215Z"
+        },
+        {
+          "repeat": 1,
+          "request": "None Ascending (last)",
+          "duration_us": 66443,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:26.281Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Name Ascending",
+          "duration_us": 6248,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:36:32.018Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Extension Ascending",
+          "duration_us": 30791,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:32.05Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Time Descending",
+          "duration_us": 65988,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:32.116Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Size Descending",
+          "duration_us": 65305,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:32.181Z"
+        },
+        {
+          "repeat": 2,
+          "request": "None Ascending (first)",
+          "duration_us": 67889,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:32.25Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Name Descending",
+          "duration_us": 65773,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:32.316Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Extension Descending",
+          "duration_us": 65641,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:32.382Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Time Ascending",
+          "duration_us": 68204,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:32.45Z"
+        },
+        {
+          "repeat": 2,
+          "request": "Size Ascending",
+          "duration_us": 65666,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:32.516Z"
+        },
+        {
+          "repeat": 2,
+          "request": "None Ascending (last)",
+          "duration_us": 65251,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:32.582Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Name Ascending",
+          "duration_us": 5106,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:36:38.44Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Extension Ascending",
+          "duration_us": 24860,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:38.465Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Time Descending",
+          "duration_us": 49521,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:38.515Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Size Descending",
+          "duration_us": 66395,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:38.582Z"
+        },
+        {
+          "repeat": 3,
+          "request": "None Ascending (first)",
+          "duration_us": 68145,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:38.65Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Name Descending",
+          "duration_us": 64259,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:38.715Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Extension Descending",
+          "duration_us": 67382,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:38.783Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Time Ascending",
+          "duration_us": 66430,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:38.849Z"
+        },
+        {
+          "repeat": 3,
+          "request": "Size Ascending",
+          "duration_us": 65421,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:38.915Z"
+        },
+        {
+          "repeat": 3,
+          "request": "None Ascending (last)",
+          "duration_us": 66136,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:38.981Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Name Ascending",
+          "duration_us": 6527,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:36:45.847Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Extension Ascending",
+          "duration_us": 22108,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:45.87Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Time Descending",
+          "duration_us": 48065,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:45.918Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Size Descending",
+          "duration_us": 56383,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:45.975Z"
+        },
+        {
+          "repeat": 4,
+          "request": "None Ascending (first)",
+          "duration_us": 64610,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:46.04Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Name Descending",
+          "duration_us": 67229,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:46.107Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Extension Descending",
+          "duration_us": 57107,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:46.165Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Time Ascending",
+          "duration_us": 58889,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:46.224Z"
+        },
+        {
+          "repeat": 4,
+          "request": "Size Ascending",
+          "duration_us": 65249,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:46.29Z"
+        },
+        {
+          "repeat": 4,
+          "request": "None Ascending (last)",
+          "duration_us": 59949,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:46.35Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Name Ascending",
+          "duration_us": 9602,
+          "render_calls": 3,
+          "timestamp": "2026-10-17T18:36:52.587Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Extension Ascending",
+          "duration_us": 28344,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:52.616Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Time Descending",
+          "duration_us": 64860,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:52.682Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Size Descending",
+          "duration_us": 66420,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:52.748Z"
+        },
+        {
+          "repeat": 5,
+          "request": "None Ascending (first)",
+          "duration_us": 67153,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:52.816Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Name Descending",
+          "duration_us": 65611,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:52.881Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Extension Descending",
+          "duration_us": 66507,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:52.949Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Time Ascending",
+          "duration_us": 67303,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:53.016Z"
+        },
+        {
+          "repeat": 5,
+          "request": "Size Ascending",
+          "duration_us": 65126,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:53.081Z"
+        },
+        {
+          "repeat": 5,
+          "request": "None Ascending (last)",
+          "duration_us": 67234,
+          "render_calls": 4,
+          "timestamp": "2026-10-17T18:36:53.149Z"
+        }
+      ],
+      "requests": [
+        {
+          "request": "Name Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 5106,
+            "median_us": 6527,
+            "max_us": 11761
+          }
+        },
+        {
+          "request": "Extension Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 22108,
+            "median_us": 28344,
+            "max_us": 76086
+          }
+        },
+        {
+          "request": "Time Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 48065,
+            "median_us": 64860,
+            "max_us": 65988
+          }
+        },
+        {
+          "request": "Size Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 56383,
+            "median_us": 65305,
+            "max_us": 66420
+          }
+        },
+        {
+          "request": "None Ascending (first)",
+          "stats": {
+            "count": 5,
+            "min_us": 64610,
+            "median_us": 67153,
+            "max_us": 68145
+          }
+        },
+        {
+          "request": "Name Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 64259,
+            "median_us": 65773,
+            "max_us": 67578
+          }
+        },
+        {
+          "request": "Extension Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 57107,
+            "median_us": 65641,
+            "max_us": 67382
+          }
+        },
+        {
+          "request": "Time Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 58889,
+            "median_us": 67303,
+            "max_us": 68204
+          }
+        },
+        {
+          "request": "Size Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 64683,
+            "median_us": 65249,
+            "max_us": 65666
+          }
+        },
+        {
+          "request": "None Ascending (last)",
+          "stats": {
+            "count": 5,
+            "min_us": 59949,
+            "median_us": 66136,
+            "max_us": 67234
+          }
+        }
+      ],
+      "enumeration_sort_merge": {
+        "count": 9,
+        "min_us": 2558,
+        "median_us": 3127,
+        "max_us": 5871
+      },
+      "rank_preparation": {
+        "count": 9,
+        "min_us": 566,
+        "median_us": 617,
+        "max_us": 1035
+      },
+      "retained_rank_bytes_per_listing": 80000,
+      "apply_current_sort": {
+        "count": 59,
+        "min_us": 229,
+        "median_us": 1068,
+        "max_us": 2524
+      }
+    }
+  }
+}

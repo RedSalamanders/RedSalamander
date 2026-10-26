@@ -26,10 +26,9 @@ struct OwnedTerminalLocation final
 [[nodiscard]] OwnedTerminalLocation MakeTerminalLocation(const std::filesystem::path& path);
 [[nodiscard]] TerminalTheme BuildTerminalTheme(const AppTheme& appTheme, uint32_t dpi) noexcept;
 #if defined(ENABLE_TESTS)
+[[nodiscard]] bool DebugDocumentationSessionIsArmed() noexcept;
 [[nodiscard]] HRESULT DebugTerminateRootProcess(ITerminal* terminal, uint32_t exitCode) noexcept;
 [[nodiscard]] HRESULT DebugGetScreenText(ITerminal* terminal, std::wstring& text) noexcept;
-[[nodiscard]] HRESULT DebugRunCommandExperiencePerfSelfTests(
-    unsigned int* passedTests,
-    unsigned int* failedTests) noexcept;
+[[nodiscard]] HRESULT DebugRunCommandExperiencePerfSelfTests(unsigned int* passedTests, unsigned int* failedTests) noexcept;
 #endif
 } // namespace TerminalHostSupport

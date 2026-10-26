@@ -1,0 +1,45 @@
+Full failure details from last_run:
+
+suite                          kind             exit_code passed failed skipped duration_ms output_log_path
+-----                          ----             --------- ------ ------ ------- ----------- ---------------
+CompareDirectories             SelfTest                 1    206      1      30      246055 
+Commands                       SelfTest                 1    773      3       2     1009133 
+FileOperations                 SelfTest                 0    102      0      20      773566 
+DxUiTests                      Executable               0      1      0       0      281125 C:\Users\eric\AppData\Local…
+FileSystemCurlTests            Executable               0      1      0       0         251 C:\Users\eric\AppData\Local…
+ViewerPETests                  Executable               1      0      1       0      431846 C:\Users\eric\AppData\Local…
+ViewerSqliteTests              Executable               0      1      0       0       57511 C:\Users\eric\AppData\Local…
+MonitorTest                    Executable               0      1      0       0        9282 C:\Users\eric\AppData\Local…
+LocalizationTests              Executable               0      1      0       0         480 C:\Users\eric\AppData\Local…
+RedConfigureTests              Executable               0      1      0       0        1184 C:\Users\eric\AppData\Local…
+PluginContractTests            Executable               0      1      0       0        1973 C:\Users\eric\AppData\Local…
+SettingsSchemaTests            Executable               0      1      0       0         199 C:\Users\eric\AppData\Local…
+CrashHandlingTests             Executable               0      1      0       0         318 C:\Users\eric\AppData\Local…
+RedSalamanderMonitorEtwLatency Executable               1      0      1       0        1083 C:\Users\eric\AppData\Local…
+PerformanceTests2              CppUnitTest              0      1      0       0       32228 C:\Users\eric\AppData\Local…
+ToolsPesterTests               Pester                   1      0      1       0      231330 
+VcpkgMergeSynthetic            PowerShellScript         0      1      0       0         241 
+
+
+Commands failed cases:
+
+name        : cmd_pane_find_dialog_restored_combined_view_state_grid_doubleClick_activates_selection_after_sort_cycles_and_search_rerun
+duration_ms : 10184
+reason      : Reopened Find window did not re-expose the expected selected combined results-grid state after double-click sort cycles and search rerun.
+
+name        : cmd_pane_navigation_menu_keeps_navigation_shell_stable
+duration_ms : 6065
+reason      : Pane Menu did not activate a live DxUI main-menu session.
+
+name        : cmd_app_menuBar_persistent_mouseleave_clears_hover_without_live_cursor_switch
+duration_ms : 877
+reason      : WM_MOUSELEAVE must not switch the active top-level menu from the later live cursor (selectedBeforeHover=5, selectedAfterWait=4, expectedView=5, plugins=4, suppressedPoint=(549,253), suppressedHit=5, pointerSwitches=0).
+
+
+Compare failed cases:
+
+name        : local_search_service_single_request_uses_query
+duration_ms : 2156
+reason      : Service should still accept one more request after the search. hr=0x80070002
+
+

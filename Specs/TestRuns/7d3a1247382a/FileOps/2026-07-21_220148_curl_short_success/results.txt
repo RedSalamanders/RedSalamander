@@ -1,0 +1,21 @@
+Debug green:
+[       OK ] FileSystemCurl.dll: debug selftests pass (passed=102, failed=0, hr=0x00000000)
+PluginContractTests passed.
+
+Mutation RED (stagedProbeSize > fileSize):
+[ FAILED  ] FileSystemCurl.dll: debug selftests pass (passed=97, failed=5, hr=0x80004005)
+PluginContractTests FAILED.
+
+Test-enabled Release green:
+[       OK ] FileSystemCurl.dll: debug selftests pass (passed=102, failed=0, hr=0x00000000)
+PluginContractTests passed.
+
+Production Release:
+debug_selftest_export_count=0
+[  SKIPPED ] FileSystemCurl.dll: debug selftest export is not expected in this configuration
+PluginContractTests passed.
+
+Focused provider/source coverage:
+FileSystemCurlTests Debug: passed
+FileSystemCurlTests Release: passed
+TestHarnessSourceContracts: Passed 149, Failed 0, Skipped 0

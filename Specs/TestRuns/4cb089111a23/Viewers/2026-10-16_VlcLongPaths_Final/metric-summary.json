@@ -1,0 +1,22 @@
+[
+  {
+    "metric": "viewer.vlc.cleanup_us",
+    "count": 15,
+    "maxUs": 307513.0
+  },
+  {
+    "metric": "viewer.vlc.close_ui_us",
+    "count": 20,
+    "maxUs": 7697.0
+  },
+  {
+    "metric": "viewer.vlc.load_us",
+    "count": 30,
+    "maxUs": 262097.0
+  },
+  {
+    "metric": "viewer.vlc.queue",
+    "count": 57,
+    "maxUs": 251130.0
+  }
+]

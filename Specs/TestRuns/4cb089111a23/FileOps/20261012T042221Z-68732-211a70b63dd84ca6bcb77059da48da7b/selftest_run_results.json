@@ -1,0 +1,45 @@
+{
+    "run_started_utc": "2026-10-12T04:23:01.754Z",
+    "duration_ms": 2412,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1,
+    "case_filter": "FileOpsFamily_ClearflowPhase03_GraphFairness",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261012T042221Z-68732-211a70b63dd84ca6bcb77059da48da7b\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 1610,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "repeat_count": 1,
+            "case_filter": "FileOpsFamily_ClearflowPhase03_GraphFairness",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1454,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "FileOps_ParallelGraphFairColorWeight",
+                    "status": "passed",
+                    "duration_ms": 31,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 125,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

@@ -2,6 +2,7 @@ Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1') -Force
 $buildScript = Join-Path $repoRoot 'build.ps1'
 
 Describe 'Build output process preflight' {
@@ -291,7 +292,7 @@ namespace RedSalamander.ToolingTests
         $sentinel = Join-Path $outside 'sentinel.txt'
         New-Item -ItemType Directory -Path $buildRoot,$outside -Force | Out-Null
         [IO.File]::WriteAllText($sentinel, 'preserve-app-packages-target')
-        New-Item -ItemType Junction -Path $junction -Target $outside | Out-Null
+        New-RSTestSandboxLink -ItemType Junction -Path $junction -Target $outside | Out-Null
 
         try {
             {
@@ -316,7 +317,7 @@ namespace RedSalamander.ToolingTests
         $sentinel = Join-Path $outside 'sentinel.txt'
         New-Item -ItemType Directory -Path $testRepo,$outside -Force | Out-Null
         [IO.File]::WriteAllText($sentinel, 'preserve-build-target')
-        New-Item -ItemType Junction -Path $junction -Target $outside | Out-Null
+        New-RSTestSandboxLink -ItemType Junction -Path $junction -Target $outside | Out-Null
 
         try {
             {
@@ -385,7 +386,7 @@ namespace RedSalamander.ToolingTests
         $staged = Join-Path $output '.package.new.tmp.zip'
         [IO.File]::WriteAllText($sentinel, 'external-final-sentinel')
         [IO.File]::WriteAllText($staged, 'new-complete-zip')
-        [void](New-Item -ItemType SymbolicLink -Path $destination -Target $sentinel)
+        [void](New-RSTestSandboxLink -ItemType SymbolicLink -Path $destination -Target $sentinel)
 
         try {
             {

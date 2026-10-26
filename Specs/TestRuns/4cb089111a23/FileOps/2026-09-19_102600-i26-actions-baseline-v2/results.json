@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-09-19T10:26:17.594Z",
+    "suite": "FileOperations",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20260919T102221Z-93744-e6b559bc54234934ad4b90d893d39ff8\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 6421,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Active transfer controls must have positive bounds and matching hit targets: primary=false/false, cancel=false/false, speed=false/false, discovery=true.",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1328,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase6_PopupSmokeResizeAndPause",
+            "status": "failed",
+            "duration_ms": 5047,
+            "repeat_index": 1,
+            "reason": "Active transfer controls must have positive bounds and matching hit targets: primary=false/false, cancel=false/false, speed=false/false, discovery=true."
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 46,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 1
+}

@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-09-27T14:57:49.783Z",
+    "suite": "FileOperations",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20260927T145732Z-8716-4973ac91ddc04cab80d617e75ee47dbc\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 119578,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Terminal facts must update and retire on one HWND across count, collapse, footer, settings-change, and empty-summary transitions; see TerminalFactsTransition diagnostics.",
+    "cases": [
+        {
+            "name": "FileOps_VisualGallery",
+            "status": "failed",
+            "duration_ms": 119547,
+            "repeat_index": 1,
+            "reason": "Terminal facts must update and retire on one HWND across count, collapse, footer, settings-change, and empty-summary transitions; see TerminalFactsTransition diagnostics."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 1
+}

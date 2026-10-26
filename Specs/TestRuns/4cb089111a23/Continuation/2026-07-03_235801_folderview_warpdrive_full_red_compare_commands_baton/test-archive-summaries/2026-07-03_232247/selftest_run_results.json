@@ -1,0 +1,1245 @@
+{
+    "run_started_utc": "2026-07-03T21:17:27.208Z",
+    "duration_ms": 319939,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "suites": [
+        {
+            "suite": "CompareDirectories",
+            "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\compare",
+            "duration_ms": 319787,
+            "passed": 207,
+            "failed": 1,
+            "skipped": 30,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "failureMessage": "Forced NTFS traversal-seed service did not finish startup warmup. Last status: pid=101408 storeKind=2 warmupEnabled=true running=false completed=0 failed=1 total=1 currentRoot='' indexedVolumes=0 indexedEntries=0 ready=true inspected=true storePath='C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\compare\\work\\search_service_sqlite_ntfs_traversal_seed\\ntfs-traversal.sqlite3' walBytes=0 storeState=2 syncPhase=2 activeRoot='C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\compare\\work\\search_service_sqlite_ntfs_traversal_seed' discoveredRoots=1 lastFailure=true failureHr=0x80070002 failureRoot='C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\compare\\work\\search_service_sqlite_ntfs_traversal_seed' lastGetStatusHr=0x80070002.",
+            "cases": [
+                {
+                    "name": "windows_hello_cache",
+                    "status": "skipped",
+                    "duration_ms": 11,
+                    "reason": "Windows Hello cache requires initialized host connection UI; host returned ERROR_INVALID_WINDOW_HANDLE (hr=0x80070578)."
+                },
+                {
+                    "name": "oauth_refresh_token_storage",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "OAuth refresh token persisted store requires initialized host connection UI; host returned ERROR_INVALID_WINDOW_HANDLE (hr=0x80070578)."
+                },
+                {
+                    "name": "oauth_authmode_roundtrip",
+                    "status": "passed",
+                    "duration_ms": 11
+                },
+                {
+                    "name": "google_drive_plugin_contract",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "google_drive_navigation_menu_callback_clear_drains",
+                    "status": "passed",
+                    "duration_ms": 2
+                },
+                {
+                    "name": "google_drive_cleared_client_id_requires_configuration",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "Google Drive clientId gate requires initialized host connection UI; host returned ERROR_INVALID_WINDOW_HANDLE (hr=0x80070578)."
+                },
+                {
+                    "name": "google_drive_connection_requires_refresh_token",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "Google Drive refresh-token gate requires initialized host connection UI; host returned ERROR_INVALID_WINDOW_HANDLE (hr=0x80070578)."
+                },
+                {
+                    "name": "onedrive_personal_cleared_client_id_requires_configuration",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "OneDrive Personal clientId gate requires initialized host connection UI; host returned ERROR_INVALID_WINDOW_HANDLE (hr=0x80070578)."
+                },
+                {
+                    "name": "unique",
+                    "status": "passed",
+                    "duration_ms": 22
+                },
+                {
+                    "name": "typemismatch",
+                    "status": "passed",
+                    "duration_ms": 5
+                },
+                {
+                    "name": "size",
+                    "status": "passed",
+                    "duration_ms": 6
+                },
+                {
+                    "name": "time",
+                    "status": "passed",
+                    "duration_ms": 6
+                },
+                {
+                    "name": "attributes",
+                    "status": "passed",
+                    "duration_ms": 6
+                },
+                {
+                    "name": "content",
+                    "status": "passed",
+                    "duration_ms": 26
+                },
+                {
+                    "name": "content_dual_io",
+                    "status": "passed",
+                    "duration_ms": 26
+                },
+                {
+                    "name": "content_equal_size_equal_mtime_differs",
+                    "status": "passed",
+                    "duration_ms": 25
+                },
+                {
+                    "name": "content_unknown_size_streaming_compare",
+                    "status": "passed",
+                    "duration_ms": 45
+                },
+                {
+                    "name": "content_no_io_disables_compareContent",
+                    "status": "passed",
+                    "duration_ms": 7
+                },
+                {
+                    "name": "content_size_mismatch_no_pending",
+                    "status": "passed",
+                    "duration_ms": 5
+                },
+                {
+                    "name": "zero_vs_nonzero_content",
+                    "status": "passed",
+                    "duration_ms": 5
+                },
+                {
+                    "name": "unicode_filenames",
+                    "status": "passed",
+                    "duration_ms": 20
+                },
+                {
+                    "name": "content short reads",
+                    "status": "passed",
+                    "duration_ms": 29
+                },
+                {
+                    "name": "subdir pending",
+                    "status": "passed",
+                    "duration_ms": 8010
+                },
+                {
+                    "name": "subdirs",
+                    "status": "passed",
+                    "duration_ms": 7
+                },
+                {
+                    "name": "select_subdirs_only_in_one_pane",
+                    "status": "passed",
+                    "duration_ms": 7
+                },
+                {
+                    "name": "sync_manifest_nested_differences_only",
+                    "status": "passed",
+                    "duration_ms": 27
+                },
+                {
+                    "name": "sync_manifest_move_preserves_identical_children",
+                    "status": "passed",
+                    "duration_ms": 14
+                },
+                {
+                    "name": "sync_manifest_not_ready_without_cached_decision",
+                    "status": "passed",
+                    "duration_ms": 7
+                },
+                {
+                    "name": "sync_manifest_pending_blocks_and_schedules",
+                    "status": "passed",
+                    "duration_ms": 2022
+                },
+                {
+                    "name": "no_sync_deep_scan",
+                    "status": "passed",
+                    "duration_ms": 8
+                },
+                {
+                    "name": "subdirattrs",
+                    "status": "passed",
+                    "duration_ms": 4
+                },
+                {
+                    "name": "missing folder",
+                    "status": "passed",
+                    "duration_ms": 7
+                },
+                {
+                    "name": "missing_side_empty_enumeration",
+                    "status": "passed",
+                    "duration_ms": 6
+                },
+                {
+                    "name": "failed_enumeration_retries_without_version_bump",
+                    "status": "passed",
+                    "duration_ms": 6
+                },
+                {
+                    "name": "reparse",
+                    "status": "passed",
+                    "duration_ms": 8
+                },
+                {
+                    "name": "dummy_content",
+                    "status": "passed",
+                    "duration_ms": 27
+                },
+                {
+                    "name": "normalized_name_collision_preserves_same_side_entries",
+                    "status": "passed",
+                    "duration_ms": 1
+                },
+                {
+                    "name": "deep_tree",
+                    "status": "passed",
+                    "duration_ms": 5903
+                },
+                {
+                    "name": "invalidate",
+                    "status": "passed",
+                    "duration_ms": 397
+                },
+                {
+                    "name": "concurrent_get_or_compute_decision",
+                    "status": "passed",
+                    "duration_ms": 15
+                },
+                {
+                    "name": "empty_directories",
+                    "status": "passed",
+                    "duration_ms": 3
+                },
+                {
+                    "name": "ignore",
+                    "status": "passed",
+                    "duration_ms": 8
+                },
+                {
+                    "name": "ignore_direct_navigation_subtree",
+                    "status": "passed",
+                    "duration_ms": 16
+                },
+                {
+                    "name": "ignore_multiple_patterns",
+                    "status": "passed",
+                    "duration_ms": 9
+                },
+                {
+                    "name": "ignore_pattern_length_cap",
+                    "status": "passed",
+                    "duration_ms": 4
+                },
+                {
+                    "name": "ignore_pattern_count_cap",
+                    "status": "passed",
+                    "duration_ms": 4
+                },
+                {
+                    "name": "ignore_wildcard_pathology_runtime_bound",
+                    "status": "passed",
+                    "duration_ms": 1108
+                },
+                {
+                    "name": "crash_quarantine_synthetic_marker",
+                    "status": "passed",
+                    "duration_ms": 10
+                },
+                {
+                    "name": "showIdentical",
+                    "status": "passed",
+                    "duration_ms": 7
+                },
+                {
+                    "name": "content_pending_elided",
+                    "status": "passed",
+                    "duration_ms": 1167
+                },
+                {
+                    "name": "setCompareEnabled",
+                    "status": "passed",
+                    "duration_ms": 7
+                },
+                {
+                    "name": "invalidateForPath",
+                    "status": "passed",
+                    "duration_ms": 15
+                },
+                {
+                    "name": "decisionUpdatedCallback",
+                    "status": "passed",
+                    "duration_ms": 24
+                },
+                {
+                    "name": "uiVersion",
+                    "status": "passed",
+                    "duration_ms": 7
+                },
+                {
+                    "name": "accessors",
+                    "status": "passed",
+                    "duration_ms": 2
+                },
+                {
+                    "name": "plugin_path_math",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "connection_display_url",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "try_make_relative_outside_root",
+                    "status": "passed",
+                    "duration_ms": 2
+                },
+                {
+                    "name": "baseInterfaces",
+                    "status": "passed",
+                    "duration_ms": 1
+                },
+                {
+                    "name": "contentCacheHit",
+                    "status": "passed",
+                    "duration_ms": 8
+                },
+                {
+                    "name": "content_cache_hit_skips_io",
+                    "status": "passed",
+                    "duration_ms": 21
+                },
+                {
+                    "name": "root_decision_empty_directories",
+                    "status": "passed",
+                    "duration_ms": 2
+                },
+                {
+                    "name": "zeroByteContent",
+                    "status": "passed",
+                    "duration_ms": 6
+                },
+                {
+                    "name": "setSettingsInvalidates",
+                    "status": "passed",
+                    "duration_ms": 6
+                },
+                {
+                    "name": "setRoots_resets_and_bumps_version",
+                    "status": "passed",
+                    "duration_ms": 15
+                },
+                {
+                    "name": "dircache_not_polluted_by_compare_scan",
+                    "status": "passed",
+                    "duration_ms": 2990
+                },
+                {
+                    "name": "content_queue_bounded_hi_lo",
+                    "status": "passed",
+                    "duration_ms": 5832
+                },
+                {
+                    "name": "decision_cache_eviction_budget_pins_visible",
+                    "status": "passed",
+                    "duration_ms": 6844
+                },
+                {
+                    "name": "decision_cache_eviction_budget_pending_wide_tree",
+                    "status": "passed",
+                    "duration_ms": 3902
+                },
+                {
+                    "name": "decision_cache_evicted_content_update_reaches_ancestor",
+                    "status": "passed",
+                    "duration_ms": 70
+                },
+                {
+                    "name": "cancel_completes_bounded",
+                    "status": "passed",
+                    "duration_ms": 47
+                },
+                {
+                    "name": "invalid_directory_entry_buffer",
+                    "status": "passed",
+                    "duration_ms": 8
+                },
+                {
+                    "name": "invalidate_drops_stale_inflight_scan_writeback",
+                    "status": "passed",
+                    "duration_ms": 4249
+                },
+                {
+                    "name": "scan_inflight_stamp_guards_restart",
+                    "status": "passed",
+                    "duration_ms": 4043
+                },
+                {
+                    "name": "content_inflight_stamp_guards_restart",
+                    "status": "passed",
+                    "duration_ms": 55
+                },
+                {
+                    "name": "worker_shutdown_joins_before_state_teardown",
+                    "status": "passed",
+                    "duration_ms": 84
+                },
+                {
+                    "name": "directory_size_local_callback_contract",
+                    "status": "passed",
+                    "duration_ms": 4
+                },
+                {
+                    "name": "directory_size_dummy_callback_contract",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "directory_size_7z_callback_contract",
+                    "status": "passed",
+                    "duration_ms": 14
+                },
+                {
+                    "name": "remote_file_s3",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3')."
+                },
+                {
+                    "name": "remote_s3_directory_size_callback_contract",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3')."
+                },
+                {
+                    "name": "remote_s3_pagination",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3')."
+                },
+                {
+                    "name": "remote_file_onedrive_personal",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal')."
+                },
+                {
+                    "name": "remote_onedrive_personal_directory_size_callback_contract",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "OneDrive Personal: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_PERSONAL or create 'FileOpsSelfTest OneDrive Personal')."
+                },
+                {
+                    "name": "remote_file_onedrive_business",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "OneDrive Business: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS or create 'FileOpsSelfTest OneDrive Business')."
+                },
+                {
+                    "name": "remote_onedrive_business_directory_size_callback_contract",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "OneDrive Business: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_ONEDRIVE_BUSINESS or create 'FileOpsSelfTest OneDrive Business')."
+                },
+                {
+                    "name": "remote_file_sharepoint",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "SharePoint: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SHAREPOINT or create 'FileOpsSelfTest SharePoint')."
+                },
+                {
+                    "name": "remote_sharepoint_directory_size_callback_contract",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "SharePoint: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_SHAREPOINT or create 'FileOpsSelfTest SharePoint')."
+                },
+                {
+                    "name": "remote_file_ftp",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP')."
+                },
+                {
+                    "name": "remote_ftp_directory_size_callback_contract",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP')."
+                },
+                {
+                    "name": "remote_ftp_continue_on_error_partial",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP')."
+                },
+                {
+                    "name": "remote_s3_metadata_smoke",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3')."
+                },
+                {
+                    "name": "remote_s3_delete_missing",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "S3: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_S3 or create 'FileOpsSelfTest S3')."
+                },
+                {
+                    "name": "mtp_factory_single_mode_id_contract",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "mtp_live_device_smoke",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "MTP live smoke skipped: set REDSALAMANDER_SELFTEST_MTP_DEVICE to run against an approved device."
+                },
+                {
+                    "name": "mtp_queryinterface_matrix",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "mtp_json_return_buffers_are_bounded",
+                    "status": "passed",
+                    "duration_ms": 9
+                },
+                {
+                    "name": "mtp_capabilities_are_instance_honest",
+                    "status": "passed",
+                    "duration_ms": 1
+                },
+                {
+                    "name": "mtp_path_scheme_and_device_key_normalization",
+                    "status": "passed",
+                    "duration_ms": 19
+                },
+                {
+                    "name": "mtp_duplicate_names_require_stable_suffix",
+                    "status": "passed",
+                    "duration_ms": 6
+                },
+                {
+                    "name": "mtp_disconnect_mid_enumeration_surfaces_error",
+                    "status": "passed",
+                    "duration_ms": 3
+                },
+                {
+                    "name": "mtp_unload_quiet_point_no_callback_after_clear",
+                    "status": "passed",
+                    "duration_ms": 214
+                },
+                {
+                    "name": "mtp_drive_info_and_disconnect_menu",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "mtp_hung_device_times_out",
+                    "status": "passed",
+                    "duration_ms": 2041
+                },
+                {
+                    "name": "mtp_watchdog_requests_backend_cancel",
+                    "status": "passed",
+                    "duration_ms": 121
+                },
+                {
+                    "name": "mtp_runtime_refresh_defers_when_worker_quarantined",
+                    "status": "passed",
+                    "duration_ms": 5244
+                },
+                {
+                    "name": "mtp_mutating_create_directory_times_out",
+                    "status": "passed",
+                    "duration_ms": 2056
+                },
+                {
+                    "name": "mtp_mutating_item_commands_time_out",
+                    "status": "passed",
+                    "duration_ms": 8220
+                },
+                {
+                    "name": "mtp_writer_commit_times_out",
+                    "status": "passed",
+                    "duration_ms": 2046
+                },
+                {
+                    "name": "mtp_menu_and_directory_size_time_out",
+                    "status": "passed",
+                    "duration_ms": 4109
+                },
+                {
+                    "name": "mtp_reader_seek_contract",
+                    "status": "passed",
+                    "duration_ms": 1
+                },
+                {
+                    "name": "mtp_concurrency_is_serialized",
+                    "status": "passed",
+                    "duration_ms": 287
+                },
+                {
+                    "name": "mtp_property_fetch_is_batched",
+                    "status": "passed",
+                    "duration_ms": 3
+                },
+                {
+                    "name": "mtp_public_writer_stages_until_commit",
+                    "status": "passed",
+                    "duration_ms": 10
+                },
+                {
+                    "name": "mtp_fake_backend_enumerate_read_and_capabilities",
+                    "status": "passed",
+                    "duration_ms": 19
+                },
+                {
+                    "name": "mtp_overwrite_byte_verify_level_matches_capability",
+                    "status": "passed",
+                    "duration_ms": 27
+                },
+                {
+                    "name": "mtp_writer_overwrite_uses_temp_puid_swap",
+                    "status": "passed",
+                    "duration_ms": 11
+                },
+                {
+                    "name": "mtp_overwrite_temp_upload_failure_keeps_original_and_allows_retry",
+                    "status": "passed",
+                    "duration_ms": 18
+                },
+                {
+                    "name": "mtp_overwrite_empty_temp_puid_keeps_original_and_blocks_later_upload",
+                    "status": "passed",
+                    "duration_ms": 14
+                },
+                {
+                    "name": "mtp_overwrite_delete_original_failure_keeps_original_and_allows_retry",
+                    "status": "passed",
+                    "duration_ms": 15
+                },
+                {
+                    "name": "mtp_overwrite_journal_write_failure_aborts_before_upload",
+                    "status": "passed",
+                    "duration_ms": 30
+                },
+                {
+                    "name": "mtp_overwrite_journal_recovers_rename_temp_failure",
+                    "status": "passed",
+                    "duration_ms": 11
+                },
+                {
+                    "name": "mtp_overwrite_journal_replay_removes_temp_when_final_exists",
+                    "status": "passed",
+                    "duration_ms": 13
+                },
+                {
+                    "name": "mtp_overwrite_journal_replay_temp_cleanup_delete_failure_retries",
+                    "status": "passed",
+                    "duration_ms": 14
+                },
+                {
+                    "name": "mtp_overwrite_journal_recovers_committed_temp_without_tempPuid",
+                    "status": "passed",
+                    "duration_ms": 32
+                },
+                {
+                    "name": "mtp_overwrite_journal_replay_rename_rejection_is_bounded",
+                    "status": "passed",
+                    "duration_ms": 27
+                },
+                {
+                    "name": "mtp_overwrite_never_duplicates_or_halfwrites",
+                    "status": "passed",
+                    "duration_ms": 82
+                },
+                {
+                    "name": "mtp_overwrite_verify_input_by_source_kind",
+                    "status": "passed",
+                    "duration_ms": 36
+                },
+                {
+                    "name": "mtp_copy_move_overwrite_uses_temp_puid_swap",
+                    "status": "passed",
+                    "duration_ms": 22
+                },
+                {
+                    "name": "mtp_copy_move_overwrite_temp_copy_failure_keeps_original_and_allows_retry",
+                    "status": "passed",
+                    "duration_ms": 31
+                },
+                {
+                    "name": "mtp_move_fallback_delete_source_failure_leaves_duplicate_and_reports_partial",
+                    "status": "passed",
+                    "duration_ms": 4
+                },
+                {
+                    "name": "mtp_transfer_cancel_is_prompt",
+                    "status": "passed",
+                    "duration_ms": 1015
+                },
+                {
+                    "name": "mtp_batch_callbacks_report_item_indices",
+                    "status": "passed",
+                    "duration_ms": 4
+                },
+                {
+                    "name": "mtp_copy_from_device_accounting",
+                    "status": "passed",
+                    "duration_ms": 2
+                },
+                {
+                    "name": "mtp_copy_to_device_accounting",
+                    "status": "passed",
+                    "duration_ms": 4
+                },
+                {
+                    "name": "mtp_fake_backend_mutations_roundtrip",
+                    "status": "passed",
+                    "duration_ms": 16
+                },
+                {
+                    "name": "mtp_fake_backend_readonly_configuration_blocks_mutations",
+                    "status": "passed",
+                    "duration_ms": 1
+                },
+                {
+                    "name": "mtp_fake_backend_injection_uses_isolated_instance",
+                    "status": "passed",
+                    "duration_ms": 4
+                },
+                {
+                    "name": "local_search_qi_and_capabilities",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "local_search_callback_contract",
+                    "status": "passed",
+                    "duration_ms": 528
+                },
+                {
+                    "name": "local_search_backend_preferences_roundtrip",
+                    "status": "passed",
+                    "duration_ms": 519
+                },
+                {
+                    "name": "local_search_scan_follow_symlink_loop_guard",
+                    "status": "passed",
+                    "duration_ms": 4
+                },
+                {
+                    "name": "local_search_fallback_follow_symlink_loop_guard",
+                    "status": "passed",
+                    "duration_ms": 3
+                },
+                {
+                    "name": "local_search_fallback_single_pass_large_directory",
+                    "status": "passed",
+                    "duration_ms": 82
+                },
+                {
+                    "name": "local_search_fallback_malformed_entry_skips_with_warning",
+                    "status": "passed",
+                    "duration_ms": 1
+                },
+                {
+                    "name": "local_search_scan_wide_tree_parallel_walk_name_only",
+                    "status": "passed",
+                    "duration_ms": 19527
+                },
+                {
+                    "name": "local_search_scan_deferred_path_materialization",
+                    "status": "passed",
+                    "duration_ms": 1668
+                },
+                {
+                    "name": "local_search_name_wildcard_recursive",
+                    "status": "passed",
+                    "duration_ms": 563
+                },
+                {
+                    "name": "local_search_name_windows_filesystem_case_parity",
+                    "status": "passed",
+                    "duration_ms": 45
+                },
+                {
+                    "name": "local_search_content_literal",
+                    "status": "passed",
+                    "duration_ms": 13
+                },
+                {
+                    "name": "local_search_name_and_content_and_semantics",
+                    "status": "passed",
+                    "duration_ms": 22
+                },
+                {
+                    "name": "local_search_invalid_query_rejected",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "local_index_core_snapshot_reload",
+                    "status": "passed",
+                    "duration_ms": 19
+                },
+                {
+                    "name": "local_index_core_query_honors_cancel_check",
+                    "status": "passed",
+                    "duration_ms": 1823
+                },
+                {
+                    "name": "local_index_core_refs_probe_and_query_if_available",
+                    "status": "passed",
+                    "duration_ms": 18
+                },
+                {
+                    "name": "local_index_core_journal_replay_rename_delete_create",
+                    "status": "passed",
+                    "duration_ms": 174
+                },
+                {
+                    "name": "local_index_core_journal_replay_directory_moves_snapshot",
+                    "status": "passed",
+                    "duration_ms": 304
+                },
+                {
+                    "name": "local_index_core_journal_replay_invalidated_rebuilds",
+                    "status": "passed",
+                    "duration_ms": 52
+                },
+                {
+                    "name": "local_index_core_snapshot_corruption_rebuild",
+                    "status": "passed",
+                    "duration_ms": 30
+                },
+                {
+                    "name": "local_index_core_usn_record_bounds_reject_corruption",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "search_service_broker_query_batch_rejects_oversized_count",
+                    "status": "passed",
+                    "duration_ms": 10
+                },
+                {
+                    "name": "search_service_broker_buffered_query_caps_unbounded_stream",
+                    "status": "passed",
+                    "duration_ms": 509
+                },
+                {
+                    "name": "search_source_allocation_and_folding_guard",
+                    "status": "passed",
+                    "duration_ms": 38
+                },
+                {
+                    "name": "search_low_hardening_smoke",
+                    "status": "passed",
+                    "duration_ms": 66
+                },
+                {
+                    "name": "search_service_broker_stalled_query_honors_cancel",
+                    "status": "passed",
+                    "duration_ms": 63
+                },
+                {
+                    "name": "search_service_broker_streaming_query_honors_cancel",
+                    "status": "passed",
+                    "duration_ms": 1
+                },
+                {
+                    "name": "sqlite_index_store_bootstrap_creates_schema",
+                    "status": "passed",
+                    "duration_ms": 18
+                },
+                {
+                    "name": "sqlite_index_store_manual_compaction_reclaims_space",
+                    "status": "passed",
+                    "duration_ms": 206
+                },
+                {
+                    "name": "sqlite_index_store_automatic_checkpoint_truncates_wal",
+                    "status": "passed",
+                    "duration_ms": 206
+                },
+                {
+                    "name": "sqlite_index_store_automatic_compaction_is_bounded",
+                    "status": "passed",
+                    "duration_ms": 225
+                },
+                {
+                    "name": "sqlite_index_store_automatic_rewrites_legacy_auto_vacuum",
+                    "status": "passed",
+                    "duration_ms": 34
+                },
+                {
+                    "name": "search_service_rejects_device_root_and_continues",
+                    "status": "passed",
+                    "duration_ms": 207
+                },
+                {
+                    "name": "search_service_slow_partial_client_does_not_block_next_client",
+                    "status": "passed",
+                    "duration_ms": 467
+                },
+                {
+                    "name": "search_service_sqlite_legacy_auto_vacuum_queues_idle_maintenance",
+                    "status": "passed",
+                    "duration_ms": 1525
+                },
+                {
+                    "name": "sqlite_index_store_upgrade_paths",
+                    "status": "passed",
+                    "duration_ms": 58
+                },
+                {
+                    "name": "sqlite_index_store_load_and_apply_journal_delta",
+                    "status": "passed",
+                    "duration_ms": 76
+                },
+                {
+                    "name": "sqlite_index_store_root_lookup_case_insensitive",
+                    "status": "passed",
+                    "duration_ms": 38
+                },
+                {
+                    "name": "local_index_core_sqlite_option_keeps_snapshot_runtime_store",
+                    "status": "skipped",
+                    "duration_ms": 33,
+                    "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness."
+                },
+                {
+                    "name": "local_index_core_sqlite_cold_start_bypasses_snapshot_runtime_store",
+                    "status": "skipped",
+                    "duration_ms": 28,
+                    "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness."
+                },
+                {
+                    "name": "local_index_core_sqlite_authoritative_replays_without_snapshot_runtime_store",
+                    "status": "skipped",
+                    "duration_ms": 143,
+                    "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness."
+                },
+                {
+                    "name": "local_index_core_sqlite_authoritative_replays_directory_moves",
+                    "status": "passed",
+                    "duration_ms": 346
+                },
+                {
+                    "name": "local_index_core_sqlite_authoritative_reseeds_after_store_loss_during_replay",
+                    "status": "skipped",
+                    "duration_ms": 205,
+                    "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness."
+                },
+                {
+                    "name": "local_index_core_sqlite_cold_start_stale_root_refreshes_before_query",
+                    "status": "passed",
+                    "duration_ms": 100
+                },
+                {
+                    "name": "local_index_core_sqlite_direct_query_freshness_policy",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "local_index_core_sqlite_cutover_blocked_by_pending_legacy_import",
+                    "status": "skipped",
+                    "duration_ms": 32,
+                    "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness."
+                },
+                {
+                    "name": "local_index_core_sqlite_sidecar_imports_legacy_snapshot",
+                    "status": "passed",
+                    "duration_ms": 161
+                },
+                {
+                    "name": "local_index_core_sqlite_prefilter_classifies_name_patterns",
+                    "status": "skipped",
+                    "duration_ms": 39,
+                    "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness."
+                },
+                {
+                    "name": "sqlite_index_store_read_queries_stay_readonly_under_writer_lock",
+                    "status": "passed",
+                    "duration_ms": 32
+                },
+                {
+                    "name": "sqlite_index_store_prefix_prefilter_uses_range_and_literal_metacharacters",
+                    "status": "passed",
+                    "duration_ms": 34
+                },
+                {
+                    "name": "local_search_native_matches_host_fallback",
+                    "status": "passed",
+                    "duration_ms": 976
+                },
+                {
+                    "name": "local_search_native_unicode_long_path_matches_host_fallback",
+                    "status": "passed",
+                    "duration_ms": 28
+                },
+                {
+                    "name": "search_service_help_lists_cli_options",
+                    "status": "passed",
+                    "duration_ms": 93
+                },
+                {
+                    "name": "search_service_compact_cli_runs_manual_sqlite_maintenance",
+                    "status": "passed",
+                    "duration_ms": 370
+                },
+                {
+                    "name": "search_service_compact_request_roundtrip",
+                    "status": "passed",
+                    "duration_ms": 586
+                },
+                {
+                    "name": "search_service_sqlite_status_reports_maintenance_history",
+                    "status": "passed",
+                    "duration_ms": 439
+                },
+                {
+                    "name": "search_service_sqlite_idle_maintenance_queue_and_completion",
+                    "status": "passed",
+                    "duration_ms": 1784
+                },
+                {
+                    "name": "search_service_sqlite_delete_burst_maintenance_preserves_query_parity",
+                    "status": "passed",
+                    "duration_ms": 5438
+                },
+                {
+                    "name": "search_service_sqlite_bootstrap_status_roundtrip",
+                    "status": "passed",
+                    "duration_ms": 418
+                },
+                {
+                    "name": "search_service_sqlite_cold_start_bypasses_snapshot_runtime_store",
+                    "status": "passed",
+                    "duration_ms": 306
+                },
+                {
+                    "name": "search_service_sqlite_ntfs_traversal_seed_stays_degraded",
+                    "status": "failed",
+                    "duration_ms": 30245,
+                    "reason": "Forced NTFS traversal-seed service did not finish startup warmup. Last status: pid=101408 storeKind=2 warmupEnabled=true running=false completed=0 failed=1 total=1 currentRoot='' indexedVolumes=0 indexedEntries=0 ready=true inspected=true storePath='C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\compare\\work\\search_service_sqlite_ntfs_traversal_seed\\ntfs-traversal.sqlite3' walBytes=0 storeState=2 syncPhase=2 activeRoot='C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\compare\\work\\search_service_sqlite_ntfs_traversal_seed' discoveredRoots=1 lastFailure=true failureHr=0x80070002 failureRoot='C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\compare\\work\\search_service_sqlite_ntfs_traversal_seed' lastGetStatusHr=0x80070002."
+                },
+                {
+                    "name": "search_service_sqlite_cold_start_stale_root_refreshes_before_query",
+                    "status": "passed",
+                    "duration_ms": 5660
+                },
+                {
+                    "name": "search_service_sqlite_invalid_store_falls_back_live_scan",
+                    "status": "passed",
+                    "duration_ms": 341
+                },
+                {
+                    "name": "search_service_sqlite_query_failure_falls_back_live_scan",
+                    "status": "skipped",
+                    "duration_ms": 10,
+                    "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness."
+                },
+                {
+                    "name": "search_service_sqlite_midquery_failure_restarts_live_scan_without_duplicates",
+                    "status": "skipped",
+                    "duration_ms": 11,
+                    "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness."
+                },
+                {
+                    "name": "search_service_sqlite_prefilter_roundtrip",
+                    "status": "skipped",
+                    "duration_ms": 13,
+                    "reason": "Live journal cursor unavailable; direct SQLite query cutover cannot prove currentness."
+                },
+                {
+                    "name": "search_service_sqlite_status_reports_pending_legacy_import",
+                    "status": "passed",
+                    "duration_ms": 332
+                },
+                {
+                    "name": "search_service_binary_uses_console_subsystem",
+                    "status": "passed",
+                    "duration_ms": 2
+                },
+                {
+                    "name": "search_service_default_identity_matches_build",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "search_service_sqlite_default_store_uses_build_specific_programdata_root",
+                    "status": "passed",
+                    "duration_ms": 245
+                },
+                {
+                    "name": "search_service_sqlite_seeded_default_store_reuses_build_specific_programdata_root",
+                    "status": "passed",
+                    "duration_ms": 220
+                },
+                {
+                    "name": "search_service_discovers_fixed_local_roots_on_start",
+                    "status": "passed",
+                    "duration_ms": 179
+                },
+                {
+                    "name": "search_service_sqlite_startup_warms_overridden_roots",
+                    "status": "passed",
+                    "duration_ms": 1128
+                },
+                {
+                    "name": "search_service_sqlite_startup_warmup_failure_status_roundtrip",
+                    "status": "passed",
+                    "duration_ms": 6429
+                },
+                {
+                    "name": "search_service_foreground_rejects_second_instance",
+                    "status": "passed",
+                    "duration_ms": 78247
+                },
+                {
+                    "name": "search_service_foreground_logs_request_status",
+                    "status": "passed",
+                    "duration_ms": 348
+                },
+                {
+                    "name": "search_service_query_reports_live_progress",
+                    "status": "passed",
+                    "duration_ms": 306
+                },
+                {
+                    "name": "search_service_filters_cached_descendants_denied_to_client",
+                    "status": "passed",
+                    "duration_ms": 355
+                },
+                {
+                    "name": "search_service_status_and_query_roundtrip",
+                    "status": "passed",
+                    "duration_ms": 248
+                },
+                {
+                    "name": "local_search_service_single_request_uses_query",
+                    "status": "passed",
+                    "duration_ms": 1482
+                },
+                {
+                    "name": "local_search_service_content_early_stop_stats",
+                    "status": "passed",
+                    "duration_ms": 1027
+                },
+                {
+                    "name": "local_search_service_indexed_name_latency_and_parity",
+                    "status": "passed",
+                    "duration_ms": 291
+                },
+                {
+                    "name": "local_search_service_matches_host_fallback",
+                    "status": "passed",
+                    "duration_ms": 271
+                },
+                {
+                    "name": "local_search_service_protocol_mismatch_falls_back_local_index",
+                    "status": "passed",
+                    "duration_ms": 508
+                },
+                {
+                    "name": "local_search_service_disconnect_falls_back_local_index",
+                    "status": "passed",
+                    "duration_ms": 75268
+                },
+                {
+                    "name": "search_service_multi_client_and_rebuild_control",
+                    "status": "passed",
+                    "duration_ms": 152
+                },
+                {
+                    "name": "search_text_helpers_decoding_and_binary",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "search_invariant_case_folding_consistency",
+                    "status": "passed",
+                    "duration_ms": 17
+                },
+                {
+                    "name": "search_text_helpers_chunk_overlap_literal_and_regex",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "host_fallback_regex_rejected_single_completion",
+                    "status": "passed",
+                    "duration_ms": 6
+                },
+                {
+                    "name": "host_fallback_regex_oversized_content_reports_overflow",
+                    "status": "passed",
+                    "duration_ms": 23
+                },
+                {
+                    "name": "host_fallback_regex_cancel_before_after_name_candidate",
+                    "status": "passed",
+                    "duration_ms": 4
+                },
+                {
+                    "name": "host_fallback_search_local_plugin_path_root",
+                    "status": "passed",
+                    "duration_ms": 9
+                },
+                {
+                    "name": "host_fallback_search_content_degraded_without_io",
+                    "status": "passed",
+                    "duration_ms": 3
+                },
+                {
+                    "name": "host_fallback_search_access_denied_warning",
+                    "status": "passed",
+                    "duration_ms": 6
+                },
+                {
+                    "name": "host_fallback_search_short_read_and_cancel",
+                    "status": "passed",
+                    "duration_ms": 18
+                },
+                {
+                    "name": "host_fallback_search_dummy_name_only",
+                    "status": "passed",
+                    "duration_ms": 0
+                },
+                {
+                    "name": "host_fallback_search_7z_name_only",
+                    "status": "passed",
+                    "duration_ms": 3
+                },
+                {
+                    "name": "host_fallback_search_remote_ftp_name_only",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "reason": "FTP: connection profile not found (set REDSALAMANDER_SELFTEST_CONN_FTP or create 'FileOpsSelfTest FTP')."
+                }
+            ]
+        }
+    ],
+    "passed": 207,
+    "failed": 1,
+    "skipped": 30
+}

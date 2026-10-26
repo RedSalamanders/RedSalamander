@@ -1,0 +1,22 @@
+{
+  "source_path": "S:\\RedSalamander.Perf\\evidence\\i26-detail-interactions-v3-20260921\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "source_sha256": "602df89039c0f4cadd6d680df2673cf42e289f086bac0b50370a0e25a8975cfd",
+  "selected_original_line_numbers": [
+    470,
+    472,
+    473,
+    512,
+    513,
+    2714,
+    2716,
+    2717,
+    2756,
+    2757,
+    4958,
+    4960,
+    4961,
+    5000,
+    5001
+  ],
+  "selected_normalized_lf_sha256": "2cb34bf3f83a9c56316fda98f9ea3ff29e9d53138ff5e95cbd8c14ea7ca95c18"
+}

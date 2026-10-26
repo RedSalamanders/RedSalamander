@@ -1,0 +1,28 @@
+{
+  "elapsedMs": 6905,
+  "desktopLease": "Invoke-RSInteractiveDesktopOperation",
+  "commit": "6442f882da827be59f62f36759c5aff49c2091c8",
+  "rawTraceSha256": "6f7c82672dd01af2defd75f7c6225461c1d3101c77cd3d5c6c3037c15a7fe9c0",
+  "artifacts": [
+    {
+      "path": ".build/x64/Debug/ViewerPETests.exe",
+      "sha256": "66836beacc1bb5525a620571e07f9ea11c6f7bcdfed4e67ef5b44b6b3d7e842b"
+    },
+    {
+      "path": ".build/x64/Debug/Plugins/ViewerSpace.dll",
+      "sha256": "ddb385f4d513225682482c8a4e22233fc71ce73cb3fdd138cc8a6609264cb2d5"
+    },
+    {
+      "path": ".build/x64/Debug/Common.dll",
+      "sha256": "023bfa5a8e1dbb552482002e8107ae4557b0ccdc53d59b9a6b99b79b23fb8d7a"
+    },
+    {
+      "path": "Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp",
+      "sha256": "c4d90e34b2e268d038a5a7ceafe51e2ab47163f72e2ccbb109bce095014ebee1"
+    }
+  ],
+  "exitCode": 0,
+  "profile": "x64 Debug",
+  "status": "passed",
+  "case": "TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses"
+}

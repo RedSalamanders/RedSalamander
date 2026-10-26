@@ -1,0 +1,23 @@
+{
+  "schema": "viewer-space.cached-reopen-200-analysis.v1",
+  "status": "qualified",
+  "runId": "20261009T100441Z-34428-9335f664dcd84ec0981fbfef73598c0f",
+  "receiptId": "753df43abafc1939cd72afb70983f1b4bb043a2bc1dd5a6ef5e90948cf77b158",
+  "workspaceSnapshotId": "cbe50bd6f5762ef8010ef769ab202a544ecfd86d99e4ff163e101699c4031cd5",
+  "fixtureFiles": 10000,
+  "fixtureDirectories": 121,
+  "fixtureRootBytes": 302230,
+  "cacheHitCount": 200,
+  "sampleCount": 200,
+  "firstMeaningfulPaintUs": {
+    "min": 157380,
+    "median": 189020.0,
+    "p95": 234411,
+    "max": 269427,
+    "targetUs": 100000,
+    "targetMetCount": 0
+  },
+  "allSamplesCurrentPresented": true,
+  "interpretation": "candidate-only cached reopen samples; no baseline comparison or cache-phase-cap override",
+  "sourceArtifactSha256": "0030cca9a2769f5f74a25c9469c1b6c6664e742c3fd830a254d4a349cda60d21"
+}

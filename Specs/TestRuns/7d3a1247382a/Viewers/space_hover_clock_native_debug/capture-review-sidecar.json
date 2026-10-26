@@ -1,0 +1,77 @@
+{
+  "kind": "actual-application-harness-capture-review",
+  "reviewer": "root",
+  "reviewedUtc": "2026-10-09T09:32:15.207977+00:00",
+  "sourceRunId": "20261009T092014Z-27568-b30eaecd47024d9e919ec24a0fc1aa82",
+  "configuration": "Debug",
+  "receiptId": "4e2c3e2030fb55d83e9dc573f1455e545d73c38729892d0f8279573427e0645f",
+  "buildSourceSnapshotId": "846115f86b923381c3d9311025957793349fecaddbccab6fa1748db82982e131",
+  "receiptSha256": "76b82e2dd836cf72171441ed9632832c6d3ad00fc09ae962d25683e351354722",
+  "status": "accepted-for-exact-lifecycle-and-owned-window-scenarios",
+  "notes": "Root viewed all nine complete frames at original resolution. Before-data and partial scans show active progress; partial observed totals are one folder, two files and 384 bytes. Done contains the nested folder header and folded file corners with 896 total bytes. Refresh preserves the previous map while displaying candidate progress; cancellation returns to Done and refused refresh shows the rebuild instruction. Empty and provider-error states are distinct. The ninth frame is the owned-window inflight capture, with horizontal table scrolling; it has no adjacent original provenance, so its scenario identity is limited to the exact owned-window log and immutable build receipt. No other locale, DPI, platform, provider account, accessibility or performance endpoint is qualified by these frames.",
+  "frames": [
+    {
+      "file": "viewer-space-01-scanning-before-data.png",
+      "sha256": "471d80ab7e785b009495cab93f547ef6969278fa07c5d1cd53d677561485b9e2",
+      "provenance": "viewer-space-01-scanning-before-data.provenance.json",
+      "provenanceSha256": "dd51b92e35409cbb62f32750ed1cd9b50e871f2afc5f8bfa4d0eb2e4aa64db65",
+      "wholeFrameReview": "accepted"
+    },
+    {
+      "file": "viewer-space-02-partial-scan-observed-totals-inflight.png",
+      "sha256": "b1c15f89042b6bb3c1c3a138d42a51e6db364aede86f4fb257d1acf46a644b62",
+      "provenance": "viewer-space-02-partial-scan-observed-totals-inflight.provenance.json",
+      "provenanceSha256": "0ee7d5f2a063cf7a7c94a1a9c7d5d47a1b8eda2eec15d72bd72f9ff3dcf3aeb9",
+      "wholeFrameReview": "accepted"
+    },
+    {
+      "file": "viewer-space-03-done.png",
+      "sha256": "7228281f7e7de5e3eb9365db1396108d28dc9e3388b1c9f9ff9a332548bfd4fc",
+      "provenance": "viewer-space-03-done.provenance.json",
+      "provenanceSha256": "26bac01db02e8a09f7e921cb375313fbbff9791f8b59877d536bced34bf56c48",
+      "wholeFrameReview": "accepted"
+    },
+    {
+      "file": "viewer-space-04-refresh-pending-retained-display.png",
+      "sha256": "649e6209351b273760e780cc8d5a2f4659202e5db6e0c6043acc6642a22f909b",
+      "provenance": "viewer-space-04-refresh-pending-retained-display.provenance.json",
+      "provenanceSha256": "46ed43347d9571f0935b197dacd328afa654ad9d70d232ff5c04d452c6e4f060",
+      "wholeFrameReview": "accepted"
+    },
+    {
+      "file": "viewer-space-05-refresh-canceled-retained-display.png",
+      "sha256": "7228281f7e7de5e3eb9365db1396108d28dc9e3388b1c9f9ff9a332548bfd4fc",
+      "provenance": "viewer-space-05-refresh-canceled-retained-display.provenance.json",
+      "provenanceSha256": "b04b85d0751622ea843cce9542ebd8e19ea56bd145a73c60ce3fd6e49d3be721",
+      "wholeFrameReview": "accepted"
+    },
+    {
+      "file": "viewer-space-06-refresh-refused-retained-display.png",
+      "sha256": "223dc2ea46a502cab0ec60703a0836f697227de394c4b24849608ee3ca97839f",
+      "provenance": "viewer-space-06-refresh-refused-retained-display.provenance.json",
+      "provenanceSha256": "9b0bad417c8c825865bef4b702c52cfe1e206aee3d809faa35c57a9f9256e1d7",
+      "wholeFrameReview": "accepted"
+    },
+    {
+      "file": "viewer-space-07-empty.png",
+      "sha256": "b871121cd6bb44639110dcace0cedc3d51ed61558d96ff61762f49428142a502",
+      "provenance": "viewer-space-07-empty.provenance.json",
+      "provenanceSha256": "7dbd8d37c68536d01f16c19a2f1615cae8fbed0e209099e8d703ee986625f9c2",
+      "wholeFrameReview": "accepted"
+    },
+    {
+      "file": "viewer-space-08-provider-error.png",
+      "sha256": "82460f12aa0aa5af1ea1db40c880f67941618bc2fd663cf3a5f0155f0b1ed7d8",
+      "provenance": "viewer-space-08-provider-error.provenance.json",
+      "provenanceSha256": "1c988fb1b483046cbaa45f428889480efd60b249f3f33d023d24f97eb0bc2a4f",
+      "wholeFrameReview": "accepted"
+    },
+    {
+      "file": "viewer-space-inflight-scan.png",
+      "sha256": "7beb81bb99163524bcfcaa0cf4cc71e0a3dfd56d6a2959c85230e08dc9ce901f",
+      "provenance": null,
+      "provenanceSha256": null,
+      "wholeFrameReview": "accepted"
+    }
+  ]
+}

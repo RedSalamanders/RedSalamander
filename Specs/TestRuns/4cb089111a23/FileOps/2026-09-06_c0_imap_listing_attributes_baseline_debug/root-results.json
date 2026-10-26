@@ -1,0 +1,47 @@
+{
+    "run_started_utc": "2026-09-06T02:27:10.868Z",
+    "duration_ms": 2436,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "C0_CurlImapListingTruth",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-imap-attributes-baseline-debug-20260906\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 1734,
+            "passed": 2,
+            "failed": 1,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "C0_CurlImapListingTruth",
+            "failureMessage": "C0 Curl native safety test failed: 110 of 134 checks passed, 24 failed, hr=0x80004005. See FileOps.Curl metrics for the exact route.",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1359,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlImapListingTruth",
+                    "status": "failed",
+                    "duration_ms": 344,
+                    "repeat_index": 1,
+                    "reason": "C0 Curl native safety test failed: 110 of 134 checks passed, 24 failed, hr=0x80004005. See FileOps.Curl metrics for the exact route."
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 31,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0
+}

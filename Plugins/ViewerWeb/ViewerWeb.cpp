@@ -1790,11 +1790,7 @@ void ViewerWeb::OnCreate(HWND hwnd)
         _fileComboHost.SetRoot(std::move(combo));
     }
 
-    if (! _menuHandle)
-    {
-        _menuHandle.reset(GetMenu(hwnd));
-    }
-    if (_menuHandle)
+    if (GetMenu(hwnd))
     {
         _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _menuBarHost.SetRefreshMenuStateCallback([this]
@@ -1820,7 +1816,6 @@ void ViewerWeb::OnCreate(HWND hwnd)
             }
             return true;
         });
-        static_cast<void>(_menuBarHost.Attach(g_hInstance, hwnd, _menuHandle.get()));
     }
 
     ApplyTheme(hwnd);
@@ -1927,7 +1922,7 @@ void ViewerWeb::OnCommand(HWND hwnd, UINT commandId, [[maybe_unused]] UINT code,
 
 void ViewerWeb::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
 {
-    if (! _menuHandle)
+    if (! _menuHandle && ! GetMenu(hwnd))
     {
         _menuHandle.reset(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERWEB_MENU));
     }
@@ -2645,6 +2640,11 @@ HRESULT STDMETHODCALLTYPE ViewerWeb::Open(const ViewerOpenContext* context) noex
         ApplyPendingViewerWebClassBackgroundBrush(_hWnd.get());
 
         AddRef(); // Self-reference for window lifetime (released in WM_NCDESTROY)
+        if (! _embeddedMode)
+        {
+            _menuAttachResult = RedSalamander::ViewerMenuHost::Attach(g_hInstance, _hWnd.get(), _menuBarHost, _menuHandle);
+            Layout(_hWnd.get());
+        }
         ShowWindow(_hWnd.get(), embeddedMode ? SW_SHOWNA : SW_SHOWNORMAL);
         if (! embeddedMode)
         {
@@ -2806,6 +2806,20 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
         std::copy_n(_allowedDocumentUrl.begin(), copyLength, snapshot->allowedDocumentUrl.begin());
         snapshot->allowedDocumentUrl[copyLength] = L'\0';
         snapshot->scriptsEnabled                 = _documentScriptsEnabled ? TRUE : FALSE;
+#ifdef ENABLE_TESTS
+        if (g_sharedEnvironment.environment)
+        {
+            const auto environment = g_sharedEnvironment.environment.try_query<ICoreWebView2Environment7>();
+            wil::unique_cotaskmem_string userDataFolder;
+            if (environment && SUCCEEDED(environment->get_UserDataFolder(userDataFolder.put())) && userDataFolder)
+            {
+                const std::wstring_view folder(userDataFolder.get());
+                const size_t folderLength = std::min(folder.size(), snapshot->webViewUserDataFolder.size() - 1u);
+                std::copy_n(folder.begin(), folderLength, snapshot->webViewUserDataFolder.begin());
+                snapshot->webViewUserDataFolder[folderLength] = L'\0';
+            }
+        }
+#endif
         if (_webView)
         {
             wil::com_ptr<ICoreWebView2Settings> settings;
@@ -2857,6 +2871,19 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
     switch (msg)
     {
 #ifdef ENABLE_TESTS
+        case WndMsg::kViewerDebugGetMenuAttachmentSnapshot:
+        {
+            auto* snapshot = reinterpret_cast<WndMsg::ViewerMenuAttachmentDebugSnapshot*>(lp);
+            if (! snapshot)
+                return FALSE;
+            *snapshot = {_menuAttachResult.inputMenu,
+                         _menuAttachResult.menuAfterAttach,
+                         static_cast<unsigned>(_menuAttachResult.outcome),
+                         _menuAttachResult.fallbackError,
+                         _menuAttachResult.attempted,
+                         _menuAttachResult.attached};
+            return TRUE;
+        }
         case WndMsg::kViewerDebugGetNativeMenuModelSnapshot:
         {
             auto* snapshot = reinterpret_cast<WndMsg::ViewerNativeMenuModelDebugSnapshot*>(lp);
@@ -2914,13 +2941,13 @@ LRESULT ViewerWeb::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
         case WM_DPICHANGED: OnDpiChanged(hwnd, HIWORD(wp), reinterpret_cast<const RECT*>(lp)); return 0;
         case kAsyncLoadCompleteMessage:
         {
-            auto result = TakeMessagePayload<AsyncLoadResult>(lp);
+            auto result = TakeMessagePayload<AsyncLoadResult>(hwnd, msg, lp);
             OnAsyncLoadComplete(std::move(result));
             return 0;
         }
         case kAsyncSaveCompleteMessage:
         {
-            auto result = TakeMessagePayload<AsyncSaveWorkItem>(lp);
+            auto result = TakeMessagePayload<AsyncSaveWorkItem>(hwnd, msg, lp);
             OnAsyncSaveComplete(std::move(result));
             return 0;
         }

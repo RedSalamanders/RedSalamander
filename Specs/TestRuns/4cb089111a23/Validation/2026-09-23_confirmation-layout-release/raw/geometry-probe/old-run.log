@@ -1,0 +1,2 @@
+short: action=(8.320004,33.679993,269.679993,67.679993), fit=0, textbottom=0.000000, offset=492.870483,max=492.870483
+FAIL: Short confirmation lost its final action or reported invisible text as visible.

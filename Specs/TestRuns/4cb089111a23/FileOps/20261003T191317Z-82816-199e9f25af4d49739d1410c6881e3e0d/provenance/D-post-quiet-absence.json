@@ -1,0 +1,8 @@
+{
+  "schema": "i27.f7-alternate-root-post-quiet-absence.v1",
+  "captured_utc": "2026-10-03T19:49:58.6049922Z",
+  "run_id": "20261003T191317Z-82816-199e9f25af4d49739d1410c6881e3e0d",
+  "exact_alternate_run": "D:\\RedSalamander.Perf\\runs\\20261003T191317Z-82816-199e9f25af4d49739d1410c6881e3e0d",
+  "exists": false,
+  "interpretation": "Governed successful cleanup can prune the exact alternate run. No nonexistent tree is archived. Native original byte/hash witnesses remain required; global cleanliness is not claimed."
+}

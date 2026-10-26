@@ -1,0 +1,9 @@
+{
+  "compression": "gzip lossless",
+  "file": "full-manifest.json.gz",
+  "sha256": "04e6c30035c29ac1c12001db1b345c0fed4140d3bb6f355904a852518872eff1",
+  "uncompressed_sha256": "c4a83dec9e4417f948a1d49c7a59f3f2844f6b7ec86f1320e1d3b422afead885",
+  "uncompressed_bytes": 1847172,
+  "records": 7540,
+  "derivation": "Exact complete original source-hash JSON bytes, losslessly compressed; decompression digest verified before curation."
+}

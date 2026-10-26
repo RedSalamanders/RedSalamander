@@ -1,0 +1,9 @@
+{
+  "originalBytes": 118651,
+  "originalRows": 320,
+  "originalSha256": "27dd50c273b6e2cc013f88f6af131a718e5811d8353361052bf735121fd49a8d",
+  "selectedRows": 0,
+  "selectedBytes": 0,
+  "selectedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+  "selection": "All FileOps.SelfTest.* and the exact input_target/popup_close_focus witnesses, in original order."
+}

@@ -1,0 +1,29 @@
+
+-------------------------------------------------------------------------------
+   ROBOCOPY     ::     Robust File Copy for Windows                              
+-------------------------------------------------------------------------------
+
+  Started : mercredi 23 septembre 2026 20:04:42
+   Source : E:\RedSalamander.Perf\runs\20260923T180145Z-96520-f7e68d8f7ee34d96823bac9292d3247b\
+     Dest : C:\RedSalamander.Perf\evidence\i26-ui\status-semantics-qualified-20260923\runner-artifacts\
+
+    Files : *.*
+	    
+  Options : *.* /NDL /NFL /S /E /DCOPY:DA /COPY:DAT /NP /R:1 /W:1 
+
+------------------------------------------------------------------------------
+
+
+------------------------------------------------------------------------------
+
+               Total    Copied   Skipped  Mismatch    FAILED    Extras
+    Dirs :        28        28         0         0         0         0
+   Files :       538       538         0         0         0         0
+   Bytes :   55.63 m   55.63 m         0         0         0         0
+   Times :   0:00:00   0:00:00                       0:00:00   0:00:00
+
+
+   Speed :           195121568 Bytes/sec.
+   Speed :             11164,945 MegaBytes/min.
+   Ended : mercredi 23 septembre 2026 20:04:42
+

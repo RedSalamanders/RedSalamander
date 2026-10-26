@@ -1,0 +1,62 @@
+{
+    "run_started_utc": "2026-08-31T05:47:55.711Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\20260831T054742Z-89280-51019dc6d9764805a2e424d66e8095a7\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 2456,
+    "passed": 8,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_batchRename_recovery_journal_durable_transitions",
+            "status": "passed",
+            "duration_ms": 40,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_fileops_durable_store_safe_mechanics",
+            "status": "passed",
+            "duration_ms": 98,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_fileops_move_breadcrumb_durable_lifecycle",
+            "status": "passed",
+            "duration_ms": 141,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_recovery_resume_rollback_replacement",
+            "status": "passed",
+            "duration_ms": 48,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_recovery_malformed_large_selection",
+            "status": "passed",
+            "duration_ms": 24,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_batchRename_recovery_crash_step_cancellation",
+            "status": "passed",
+            "duration_ms": 62,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_fileops_artifact_registry_claim_identity_join",
+            "status": "passed",
+            "duration_ms": 24,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_fileops_artifact_recovery_provider_callbacks",
+            "status": "passed",
+            "duration_ms": 13,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

@@ -1,0 +1,45 @@
+{
+    "run_started_utc": "2026-08-21T08:36:06.407Z",
+    "duration_ms": 10559,
+    "fail_fast": false,
+    "timeout_scale": 8.0,
+    "repeat_count": 3,
+    "case_filter": "folderView_perf_focus_selection_state",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260821T083548Z-80844-ad2e6191887b4374ac9b22cde8951cd0\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 10049,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 8.0,
+            "repeat_count": 3,
+            "case_filter": "folderView_perf_focus_selection_state",
+            "cases": [
+                {
+                    "name": "folderView_perf_focus_selection_state",
+                    "status": "passed",
+                    "duration_ms": 2706,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "folderView_perf_focus_selection_state",
+                    "status": "passed",
+                    "duration_ms": 3669,
+                    "repeat_index": 2
+                },
+                {
+                    "name": "folderView_perf_focus_selection_state",
+                    "status": "passed",
+                    "duration_ms": 3148,
+                    "repeat_index": 3
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

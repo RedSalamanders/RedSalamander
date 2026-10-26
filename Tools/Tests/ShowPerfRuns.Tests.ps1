@@ -162,6 +162,26 @@ function Invoke-RSShowPerfRunsCommand {
 }
 
 Describe 'Show-PerfRuns quality gates' {
+    It 'reports product paint, legacy warm and writer attribution as separate metrics' {
+        $root = New-RSPerfRunsRoot
+        try {
+            $run = New-RSPerfRun -RunsRoot $root -RunName 'sort-protocols' -Metrics @(
+                (New-RSPerfMetric -Name 'folder.sort_product_paint_us' -Count 50 -StartValue 5000)
+                (New-RSPerfMetric -Name 'folder.sort_jsonl_write_us' -Count 50 -StartValue 1000)
+                (New-RSPerfMetric -Name 'folder.sort_toggle_us' -Count 50 -StartValue 60000)
+            )
+            $result = Invoke-RSShowPerfRuns -RunsRoot $root -Arguments @('-Run', $run, '-FolderViewPreset')
+            Assert-RSEqual -Actual $result.ExitCode -Expected 0 -Message "Sort protocols failed to report. $($result.Stderr)"
+            $result.Stdout | Should Match 'folder\.sort_product_paint_us'
+            $result.Stdout | Should Match 'folder\.sort_jsonl_write_us'
+            $result.Stdout | Should Match 'folder\.sort_toggle_us'
+        } finally {
+            if (Test-Path -LiteralPath $root) {
+                Remove-Item -LiteralPath $root -Recurse -Force
+            }
+        }
+    }
+
     It 'does not fail FolderViewPreset quality for one-shot gauges when distributions have enough samples' {
         $root = New-RSPerfRunsRoot
         try {

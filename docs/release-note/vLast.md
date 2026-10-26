@@ -1,8 +1,8 @@
 # RedSalamander vLast — Notes since v7.0.48
 
-Last published tag: [v7.0.48](https://github.com/RedSalamanders/RedSalamander/releases/tag/v7.0.48) (July 20, 2026).
+Development baseline: [v7.0.48](https://github.com/RedSalamanders/RedSalamander/releases/tag/v7.0.48) (July 20, 2026).
 
-This is the working note for the **next** release; `vLast` is not a version number. It describes everything that changed after v7.0.48. The published [v7.0.48 notes](v7.0.48.md) remain the last official changelog.
+This is the working note for the **next** release; `vLast` is not a version number. It describes everything that changed after v7.0.48. See the [published releases](https://github.com/RedSalamanders/RedSalamander/releases) for released versions.
 
 v7.0.48 was a reliability and data-safety release. This drop is a product release: RedSalamander gains an **embedded terminal**, a **command palette**, a **file-operations engine that renames instead of copying** when source and destination live in the same place, **writable cloud and remote destinations**, and a consistent **current-item / selection model** in the folder panes.
 
@@ -146,8 +146,12 @@ Every non-empty pane now has exactly one **current item** (the keyboard cursor).
 
 - Inline rename (`F2`) runs through the file-operations engine on a worker thread. A quick success is invisible; a slow or conflicting rename shows a task card.
 - Batch Rename runs as an ordinary task with Cancel, and now **refuses rename cycles up front** (for example swapping two names) with an explanation, instead of executing half of them.
-- Interrupted-operation leftovers (`.rs_tmp_`, `.rs_bak_`, `.rs_ren_`, `.rs_copy_tmp_`, `.~rs-write-`) are no longer hidden from panes, Find, Search or Compare. They carry a "Possible interrupted-operation artifact" badge and a Properties section explaining them. Viewing, copying and exporting them is unrestricted; renaming, deleting or overwriting one asks first. Nothing is deleted automatically.
+- Interrupted-operation leftovers (`.rs_tmp_`, `.rs_bak_`, `.rs_ren_`, `.rs_copy_tmp_`, `.~rs-write-`) are no longer hidden from panes, Find, Search or Compare. They carry a "Possibly incomplete file (left by an interrupted copy or move)" badge and a Properties section explaining them. Viewing, copying and exporting them is unrestricted; renaming, deleting or overwriting one asks first. Nothing is deleted automatically.
 - An interrupted Move leaves a note that is shown once on the next start, with Open source and Open destination.
+- Leftovers of interrupted uploads and device writes on FTP, SFTP, SCP, S3, Microsoft Drive and MTP locations are recognized and badged too. Except on MTP devices, where RedSalamander cannot delete files, they can still be deleted: the delete asks on its own card instead of being refused.
+- **Clean Up Leftovers of Interrupted Operations** (Commands menu, and the leftover's context submenu) lists the current folder's leftovers, optionally with subfolders, and deletes the ones you check with the ordinary Delete; possible originals are never pre-checked, folders an operation of the same window is working in are left out, a location that cannot delete gets no Delete button, and nothing runs automatically.
+- On network shares that cannot identify files (some NAS devices), files, folders and leftovers can now be deleted **by name** after one explicit confirmation. Right before each selected item is deleted, its attributes and dates (and a file's size) are checked again and a changed item is not deleted. A folder is listed when you confirm and only what was listed is deleted: anything added to it meanwhile, through any path or program, is never deleted, and a change to a listed item refuses the delete or stops it (a stopped delete says how many of the listed items it removed). A change that keeps a file's size and dates cannot be noticed, and some network shares report recent changes late, so such a delete may stop after removing part of a folder. Large folders are listed and deleted several items at a time. An operation started later in the same folder first asks whether to wait for the delete, and cannot run at the same time.
+- Canceling a copy to a slow network share no longer leaves its temporary file behind when the share is merely slow: cleanup gets its own short time budget.
 
 ### The File Operations popup
 
@@ -261,3 +265,36 @@ These are specified or under way but deliberately not part of this release:
 - Portable ZIP packages for x64 and ARM64 with a SHA-256 checksum manifest, plus the usual Winget package. Both packages include the Terminal plugin and its engine, and every release is now gated on a native ARM64 qualification run.
 - Third-party notices for the terminal engine ship in `Plugins\TerminalRuntime\`.
 - The next GitHub release will name the actual version and attach the packages. Until then, treat this file as the changelog for the unreleased tree after v7.0.48.
+
+## Documentation and File Operations follow-through (October 19)
+
+- File Operations cards keep the original operation subject, put counts below the
+  amount, align speed with Throughput and show effective automatic parallelism as
+  a short line below the buttons. Routine facts no longer need Technical details.
+- Count labels use **Folders** and **Files**, with **Counting…** while totals are
+  provisional and compact completion fractions when those receipts are available.
+  Ten synthetic native illustrations cover count authorities and task states.
+  A finished card wraps the full
+  Last note above progress/actions. The Issues illustration is the actual selected
+  Issues pane, with realistic invented Workshop paths and filenames.
+- Missing-source results distinguish unavailable originals from retained sources;
+  Move/conflict/source-retention explanations remain tied to the actual outcome.
+- Test-sandbox audits require current root/marker authority. Exact administrative
+  cleanup protects live owners, returns nonzero on failure and preserves useful
+  evidence before obsolete scratch is retired.
+- New guides cover portable devices, Terminal, Command Palette, selections and file
+  lists. Preferences, discovery internals, settings sections, diagnostics and the
+  product documentation map are reconciled with current source.
+- Public images exposing workspace/test-run paths, real filenames or obsolete UI
+  are retired. Updated captures use the native harness, invented data, no activation,
+  complete-frame review and adjacent provenance. Capture validation does not imply
+  Full, other-platform, foreground-input or storage-performance qualification.
+
+See the [documentation index](../README.md) and [File Operations](../FileOperations.md).
+
+- Documentation adds a native Visual Tour and 45 synthetic captures across Search,
+  Space, plugins/devices, Preferences, viewer content, commands and workspace themes.
+- PE report resource decoding explicitly uses UTF-8, preserving Unicode separators.
+
+- Add twenty-one native synthetic examples for Terminal layouts, utility dialogs,
+  loopback FTP/cloud/S3 and fake MTP browsing, and real generated-video playback/pause.

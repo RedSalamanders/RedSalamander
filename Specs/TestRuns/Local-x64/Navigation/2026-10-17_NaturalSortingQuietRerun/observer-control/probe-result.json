@@ -1,0 +1,6 @@
+{
+  "scope": "Synthetic observer positive control, not a performance benchmark",
+  "expected_pid": 91808,
+  "detected_expected_pid": true,
+  "sample_count": 5
+}

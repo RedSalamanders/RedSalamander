@@ -1,0 +1,111 @@
+diff --git a/RedSalamander/FolderWindow.FileOperations.Popup.cpp b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+index adef71cf3..ff81a60e1 100644
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+@@ -1559,7 +1559,8 @@ struct TerminalAxisBadge final
+             continue;
+         if (! result.empty())
+             result += L"\n";
+-        result += FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_FACT_AXIS, LoadStringResource(nullptr, labels[axis]), clauses);
++        const std::wstring label = LoadStringResource(nullptr, labels[axis]);
++        result += FormatEmbeddedStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_FACT_AXIS, label, clauses);
+     }
+     return result;
+ }
+@@ -11477,6 +11478,9 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnThemeChanged(HW
+     SetWindowTextW(hwnd, title.c_str());
+     RefreshLocalizedFooterText();
+     DiscardDeviceResources();
++    // WM_SETTINGCHANGE can replace the number-format locale without changing the
++    // selected language. Reformat localized count fragments on the next paint.
++    _terminalFacts.clear();
+ 
+     if (folderWindow && hostLifetime.lock())
+     {
+@@ -12596,7 +12600,9 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
+                 const auto& card                        = painted->second.card;
+                 result.taskTerminalFactsFits            = result.taskTerminalFactsFits && bounds.left >= card.left && bounds.right <= card.right &&
+                                                           bounds.top >= card.top && bounds.bottom <= card.bottom;
+-                result.taskTerminalFactsFollowsSummary  = result.taskTerminalSummaryVisible && paintedSummaryBounds.bottom <= bounds.top;
++                result.taskTerminalFactsFollowsSummary = taskIt->resultSummary.empty()
++                                                             ? bounds.top >= card.top + DipsToPixels(8.0f + 18.0f, _dpi)
++                                                             : result.taskTerminalSummaryVisible && paintedSummaryBounds.bottom <= bounds.top;
+                 result.taskTerminalFactsPrecedesActions = bounds.bottom <= painted->second.actions.top;
+             }
+         }
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
+index c4764e38d..37d74ea38 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
+@@ -1570,6 +1570,50 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+                         static_cast<void>(inspect(L"footer-restored", true, changedText, false, false));
+                         current.publishedItemCount = 9u;
+                         static_cast<void>(inspect(L"count-restored", true, originalText, false, false));
++
++                        // A format-locale setting notification must invalidate the retained
++                        // count layout even when the selected language and count stay fixed.
++                        // Use a grouped value without changing the machine's regional settings.
++                        constexpr unsigned long groupedCount = 1009u;
++                        const std::wstring groupedClause = FormatStringResource(nullptr, IDS_FMT_FILEOPS_TERMINAL_PUBLISHED, groupedCount);
++                        std::wstring groupedText         = originalText;
++                        const size_t groupedPosition     = groupedText.find(oldClause);
++                        const bool groupedOracle         = groupedPosition != std::wstring::npos && ! groupedClause.empty();
++                        if (groupedOracle)
++                            groupedText.replace(groupedPosition, oldClause.size(), groupedClause);
++                        terminalFactsTransitionsFit = terminalFactsTransitionsFit && groupedOracle;
++                        current.publishedItemCount  = groupedCount;
++                        const auto beforeSettingsText = inspect(L"count-1009", true, groupedText, false, false);
++                        const auto beforeSettings     = perfOffset();
++                        static_cast<void>(SendMessageW(popup.get(), WM_SETTINGCHANGE, 0, 0));
++                        const auto afterSettings      = inspect(L"settings-refreshed", true, groupedText, false, false);
++                        const auto settingsMeasures   = newMeasurements(beforeSettings);
++                        const auto beforeRepeat       = perfOffset();
++                        const auto repeatedSettings   = inspect(L"settings-unchanged", true, groupedText, false, false);
++                        const auto repeatMeasures     = newMeasurements(beforeRepeat);
++                        const auto& beforeRc          = beforeSettingsText.taskTerminalFactsPaintedRect;
++                        const auto& afterRc           = afterSettings.taskTerminalFactsPaintedRect;
++                        const auto& repeatedRc        = repeatedSettings.taskTerminalFactsPaintedRect;
++                        const bool settingsStable     = beforeRc.left == afterRc.left && beforeRc.top == afterRc.top && beforeRc.right == afterRc.right &&
++                                                        beforeRc.bottom == afterRc.bottom && afterRc.left == repeatedRc.left && afterRc.top == repeatedRc.top &&
++                                                        afterRc.right == repeatedRc.right && afterRc.bottom == repeatedRc.bottom &&
++                                                        afterSettings.taskTerminalFactsHostedName == groupedText &&
++                                                        repeatedSettings.taskTerminalFactsHostedName == groupedText &&
++                                                        settingsMeasures == std::optional<size_t>{1u} && repeatMeasures == std::optional<size_t>{0u};
++                        terminalFactsTransitionsFit = terminalFactsTransitionsFit && settingsStable;
++                        AppendLog(std::format(L"TerminalFactsSettingsRefresh: dpi={} width={} rebuilds={} repeats={} stable={}",
++                                              dpi,
++                                              widthDip,
++                                              settingsMeasures.value_or(SIZE_MAX),
++                                              repeatMeasures.value_or(SIZE_MAX),
++                                              settingsStable));
++
++                        current.resultSummary.clear();
++                        const auto factsOnly = inspect(L"summary-empty", true, groupedText, false, false);
++                        terminalFactsTransitionsFit = terminalFactsTransitionsFit && ! factsOnly.taskTerminalSummaryVisible;
++                        current.resultSummary       = scenario.tasks.front().resultSummary;
++                        current.publishedItemCount  = 9u;
++                        static_cast<void>(inspect(L"original-restored", true, originalText, false, false));
+                     }
+                     if (scenario.menu != PopupHitTest::Kind::None)
+                     {
+@@ -1749,9 +1793,9 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+     if (! terminalFactsFit || terminalFactsWitnessCount != 4u * monitors.size())
+         Fail(L"Mixed terminal Move must paint all nine localized publication/source/verification facts in one hosted region after the result summary and "
+              L"before actions at both widths and both tested themes.");
+-    if (! terminalFactsTransitionsFit || terminalFactsTransitionCount != 7u * monitors.size())
++    if (! terminalFactsTransitionsFit || terminalFactsTransitionCount != 12u * monitors.size())
+         Fail(
+-            L"Terminal facts must update and retire on the same HWND across count, collapse, and footer transitions; see TerminalFactsTransition diagnostics.");
++            L"Terminal facts must update and retire on one HWND across count, collapse, footer, settings-change, and empty-summary transitions; see TerminalFactsTransition diagnostics.");
+     if (! terminalPresentationFits)
+         Fail(L"Completed-group actions and badges, and full expanded terminal results, must remain readable without clipping.");
+     if (! completedSemanticsFit || doneHeadingWitnessCount != 4u * monitors.size() || groupBadgeWitnessCount != 2u * monitors.size())
+@@ -1767,7 +1811,7 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+     return statusChipLabelsFit && statusChipWitnessCount == 6u * monitors.size() && hostedProgressValuesMatch &&
+            hostedProgressWitnessCount == 9u * monitors.size() && completedSemanticsFit && doneHeadingWitnessCount == 4u * monitors.size() &&
+            groupBadgeWitnessCount == 2u * monitors.size() && terminalPresentationFits && terminalFactsFit &&
+-           terminalFactsWitnessCount == 4u * monitors.size() && terminalFactsTransitionsFit && terminalFactsTransitionCount == 7u * monitors.size() &&
++           terminalFactsWitnessCount == 4u * monitors.size() && terminalFactsTransitionsFit && terminalFactsTransitionCount == 12u * monitors.size() &&
+            speedLimitLabelsFit && waitingCardsFit && waitingTransitionsFit && supplemental && manifest.good() && pathLabelsFit && deletionPresentationFits &&
+            footerSummariesFit && destinationMenusFit && abbreviatedPathsFit;
+ }

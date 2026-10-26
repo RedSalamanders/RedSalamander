@@ -1,0 +1,27 @@
+{
+  "variant": "clipboard-medium-candidate",
+  "passed": 0,
+  "failed": 6,
+  "skipped": 0,
+  "source_snapshot": "ba65594884c434b46027ac4a5b4e3cce182d9a46450bf4c7a9b36aa4ebd1092e",
+  "build_receipt": "f14b850258d4d62ab4dab255fd06f8fc2f69636ab602529e04965df203184162",
+  "selected_metric_counts": {
+    "FileOps.Popup.Render.PreparedBackground": 1098,
+    "FileOps.Popup.Capture.LegacyContentPixels": 12,
+    "FileOps.Popup.Capture.CoveredContentPixels": 6,
+    "FileOps.Popup.PathAccess.RedrawBatchUs": 60,
+    "FileOps.Popup.Capture.DiscoveryProgressPixels": 12,
+    "FileOps.Popup.Capture.GraphLabelPixels": 15
+  },
+  "audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": true,
+    "issue_count": 0,
+    "test_root": "S:\\RedSalamander.Perf",
+    "run_id": "i26-clipboard-medium-candidate",
+    "allowed_run_ids": [
+      "i26-clipboard-medium-candidate"
+    ],
+    "issues": []
+  }
+}

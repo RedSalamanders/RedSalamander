@@ -1,0 +1,67 @@
+[
+  {
+    "Id": "standalone.product-ui",
+    "Kind": "Executable",
+    "RequiresInteractiveDesktop": false
+  },
+  {
+    "Id": "standalone.filesystem-curl",
+    "Kind": "Executable",
+    "RequiresInteractiveDesktop": false
+  },
+  {
+    "Id": "viewer-pe.noninteractive",
+    "Kind": "Executable",
+    "RequiresInteractiveDesktop": false
+  },
+  {
+    "Id": "viewer-sqlite.noninteractive",
+    "Kind": "Executable",
+    "RequiresInteractiveDesktop": false
+  },
+  {
+    "Id": "standalone.monitor",
+    "Kind": "Executable",
+    "RequiresInteractiveDesktop": false
+  },
+  {
+    "Id": "standalone.localization",
+    "Kind": "Executable",
+    "RequiresInteractiveDesktop": false
+  },
+  {
+    "Id": "standalone.red-configure",
+    "Kind": "Executable",
+    "RequiresInteractiveDesktop": false
+  },
+  {
+    "Id": "standalone.plugin-contract",
+    "Kind": "Executable",
+    "RequiresInteractiveDesktop": false
+  },
+  {
+    "Id": "standalone.settings-schema",
+    "Kind": "Executable",
+    "RequiresInteractiveDesktop": false
+  },
+  {
+    "Id": "standalone.crash-handling",
+    "Kind": "Executable",
+    "RequiresInteractiveDesktop": false
+  },
+  {
+    "Id": "perf.performance-tests2",
+    "Kind": "CppUnitTest",
+    "RequiresInteractiveDesktop": false
+  },
+  {
+    "Id": "tooling.pester",
+    "Kind": "Pester",
+    "RequiresInteractiveDesktop": false
+  },
+  {
+    "Id": "tooling.vcpkg-merge-synthetic",
+    "Kind": "PowerShellScript",
+    "RequiresInteractiveDesktop": false
+  }
+]

@@ -1,0 +1,66 @@
+   ____          _ ____        _                                _           
+  |  _ \ ___  __| / ___|  __ _| | __ _ _ __ ___   __ _ _ __   __| | ___ _ __ 
+  | |_) / _ \/ _` \___ \ / _` | |/ _` | '_ ` _ \ / _` | '_ \ / _` |/ _ \ '__|
+  |  _ <  __/ (_| |___) | (_| | | (_| | | | | | | (_| | | | | (_| |  __/ |   
+  |_| \_\___|\__,_|____/ \__,_|_|\__,_|_| |_| |_|\__,_|_| |_|\__,_|\___|_|   
+                     Build, package, and validate with confidence
+
+Locating MSBuild...
+  Found vswhere: C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe
+Found: Visual Studio Professional 2026 (18.11.12217.175)
+MSBuild: C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\amd64\MSBuild.exe
+Detection method: vswhere
+
+Build Configuration:
+  Solution:      C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander\RedSalamander.sln
+  Target:        ViewerPETests
+  Configuration: Debug
+  Platform:      x64
+  Build workers: 2
+  Version:       7.0.1 beta Debug (x64)
+  Build number:  1
+  Version state: C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander\.build\version\current-version.json
+  Action:        Build
+  Package:       None
+  Monitor diag:  Runtime flag (--etw)
+
+Computing build evidence identity...
+Visual Studio: C:\Program Files\Microsoft Visual Studio\18\Insiders
+MSVC toolset:  14.51.36231, the default MSBuild compiles with; vcpkg is pinned to 14.51
+Overlay triplet C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander\.build\dependencies\DxUi\1c3a0f1bdd87b292\vcpkg-triplets\x64\x64-windows.cmake unchanged
+Installing DxUi dependencies (x64-windows)
+Detecting compiler hash for triplet x64-windows...
+Compiler found: C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe
+The following packages are already installed:
+  * vcpkg-cmake:x64-windows@2024-04-23
+  * vcpkg-cmake-config:x64-windows@2026-07-21
+    wil:x64-windows@1.0.260126.7
+wil provides CMake targets:
+
+  # this is heuristically generated, and may not be correct
+  find_package(wil CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE WIL::WIL)
+
+All requested installations completed successfully in: 433 us
+vcpkg dependencies are ready.
+DxUi restored at e0260dde04695f0794eed79708030798b7575e0c for x64; output identity 1c3a0f1bdd87b292e28c14b048be612690db13d563c6e4be2cf5cd511e8a0052.
+No compatible build receipt exists; first attestation requires Rebuild.
+Starting build...
+
+  ViewerPE.Tests.Runner.cpp
+  ViewerPE.Tests.Scope.Tests.ViewerSpaceListingValidation.cpp
+  ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp
+  TestSupport.Tests.WindowScreenshot.cpp
+  Generating Code...
+  ViewerPETests.vcxproj -> C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander\.build\x64\Debug\ViewerPETests.exe
+Captured log: C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander\.build\logs\msbuild-20261016_142113_758-pid93076-fad93418.log
+Diagnostics: 0 warning(s), 0 error(s)
+Build artifacts attested: e0b442b82971a58b8d8f8874ef4190858a7075c82cf84de854e00d62864783bf
+
+========================================
+Build completed successfully!
+Configuration: Debug | Platform: x64
+Build time: 00:29
+========================================
+Outputs (copy/paste any PowerShell command to run):
+& "C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander\.build\x64\Debug\ViewerPETests.exe" # 6.91 MiB

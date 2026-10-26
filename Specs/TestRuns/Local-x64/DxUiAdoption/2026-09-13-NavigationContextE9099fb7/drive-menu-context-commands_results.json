@@ -1,0 +1,794 @@
+{
+    "run_started_utc": "2026-09-13T10:21:17.771Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260913T102057Z-100884-0526d5ce745d4390bcadba0a7713cfce\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 310844,
+    "passed": 130,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_itemProperties_window_ctrlA_copy_exports_full_text",
+            "status": "passed",
+            "duration_ms": 620,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 3198,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_open_close_stays_stable",
+            "status": "passed",
+            "duration_ms": 1331,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_access_key_routes_ok",
+            "status": "passed",
+            "duration_ms": 120,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_enter_and_escape_route_ok",
+            "status": "passed",
+            "duration_ms": 207,
+            "repeat_index": 1
+        },
+        {
+            "name": "menu_load_selection_links_restore",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "menu_copy_text_group_contract",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "dispatch_smoke_all_commands",
+            "status": "passed",
+            "duration_ms": 17845,
+            "repeat_index": 1
+        },
+        {
+            "name": "modeless_window_ownership",
+            "status": "passed",
+            "duration_ms": 963,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_app_fullScreen",
+            "status": "passed",
+            "duration_ms": 61,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_app_fullScreen_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 241,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_app_openDriveMenus",
+            "status": "passed",
+            "duration_ms": 284,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_app_openDriveMenus_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 542,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_ctrlA_copy_exports_full_text",
+            "status": "passed",
+            "duration_ms": 478,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 3216,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_open_close_stays_stable",
+            "status": "passed",
+            "duration_ms": 1335,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_access_key_routes_ok",
+            "status": "passed",
+            "duration_ms": 114,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_enter_and_escape_route_ok",
+            "status": "passed",
+            "duration_ms": 182,
+            "repeat_index": 2
+        },
+        {
+            "name": "menu_load_selection_links_restore",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 2
+        },
+        {
+            "name": "menu_copy_text_group_contract",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 2
+        },
+        {
+            "name": "dispatch_smoke_all_commands",
+            "status": "passed",
+            "duration_ms": 19736,
+            "repeat_index": 2
+        },
+        {
+            "name": "modeless_window_ownership",
+            "status": "passed",
+            "duration_ms": 947,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_app_fullScreen",
+            "status": "passed",
+            "duration_ms": 62,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_app_fullScreen_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 227,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_app_openDriveMenus",
+            "status": "passed",
+            "duration_ms": 257,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_app_openDriveMenus_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 534,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_ctrlA_copy_exports_full_text",
+            "status": "passed",
+            "duration_ms": 574,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 3215,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_open_close_stays_stable",
+            "status": "passed",
+            "duration_ms": 1342,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_access_key_routes_ok",
+            "status": "passed",
+            "duration_ms": 113,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_enter_and_escape_route_ok",
+            "status": "passed",
+            "duration_ms": 202,
+            "repeat_index": 3
+        },
+        {
+            "name": "menu_load_selection_links_restore",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 3
+        },
+        {
+            "name": "menu_copy_text_group_contract",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 3
+        },
+        {
+            "name": "dispatch_smoke_all_commands",
+            "status": "passed",
+            "duration_ms": 19928,
+            "repeat_index": 3
+        },
+        {
+            "name": "modeless_window_ownership",
+            "status": "passed",
+            "duration_ms": 957,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_app_fullScreen",
+            "status": "passed",
+            "duration_ms": 59,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_app_fullScreen_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 244,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_app_openDriveMenus",
+            "status": "passed",
+            "duration_ms": 256,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_app_openDriveMenus_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 552,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_ctrlA_copy_exports_full_text",
+            "status": "passed",
+            "duration_ms": 488,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 3238,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_open_close_stays_stable",
+            "status": "passed",
+            "duration_ms": 1302,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_access_key_routes_ok",
+            "status": "passed",
+            "duration_ms": 112,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_enter_and_escape_route_ok",
+            "status": "passed",
+            "duration_ms": 213,
+            "repeat_index": 4
+        },
+        {
+            "name": "menu_load_selection_links_restore",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 4
+        },
+        {
+            "name": "menu_copy_text_group_contract",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 4
+        },
+        {
+            "name": "dispatch_smoke_all_commands",
+            "status": "passed",
+            "duration_ms": 20333,
+            "repeat_index": 4
+        },
+        {
+            "name": "modeless_window_ownership",
+            "status": "passed",
+            "duration_ms": 953,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_app_fullScreen",
+            "status": "passed",
+            "duration_ms": 71,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_app_fullScreen_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 221,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_app_openDriveMenus",
+            "status": "passed",
+            "duration_ms": 296,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_app_openDriveMenus_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 565,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_ctrlA_copy_exports_full_text",
+            "status": "passed",
+            "duration_ms": 587,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 3222,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_open_close_stays_stable",
+            "status": "passed",
+            "duration_ms": 1331,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_access_key_routes_ok",
+            "status": "passed",
+            "duration_ms": 118,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_enter_and_escape_route_ok",
+            "status": "passed",
+            "duration_ms": 185,
+            "repeat_index": 5
+        },
+        {
+            "name": "menu_load_selection_links_restore",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 5
+        },
+        {
+            "name": "menu_copy_text_group_contract",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 5
+        },
+        {
+            "name": "dispatch_smoke_all_commands",
+            "status": "passed",
+            "duration_ms": 20280,
+            "repeat_index": 5
+        },
+        {
+            "name": "modeless_window_ownership",
+            "status": "passed",
+            "duration_ms": 946,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_app_fullScreen",
+            "status": "passed",
+            "duration_ms": 79,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_app_fullScreen_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 234,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_app_openDriveMenus",
+            "status": "passed",
+            "duration_ms": 299,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_app_openDriveMenus_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 550,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_ctrlA_copy_exports_full_text",
+            "status": "passed",
+            "duration_ms": 463,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 3207,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_open_close_stays_stable",
+            "status": "passed",
+            "duration_ms": 1344,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_access_key_routes_ok",
+            "status": "passed",
+            "duration_ms": 106,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_enter_and_escape_route_ok",
+            "status": "passed",
+            "duration_ms": 208,
+            "repeat_index": 6
+        },
+        {
+            "name": "menu_load_selection_links_restore",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 6
+        },
+        {
+            "name": "menu_copy_text_group_contract",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 6
+        },
+        {
+            "name": "dispatch_smoke_all_commands",
+            "status": "passed",
+            "duration_ms": 20067,
+            "repeat_index": 6
+        },
+        {
+            "name": "modeless_window_ownership",
+            "status": "passed",
+            "duration_ms": 948,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_app_fullScreen",
+            "status": "passed",
+            "duration_ms": 74,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_app_fullScreen_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 233,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_app_openDriveMenus",
+            "status": "passed",
+            "duration_ms": 328,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_app_openDriveMenus_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 547,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_ctrlA_copy_exports_full_text",
+            "status": "passed",
+            "duration_ms": 602,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 3223,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_open_close_stays_stable",
+            "status": "passed",
+            "duration_ms": 1305,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_access_key_routes_ok",
+            "status": "passed",
+            "duration_ms": 123,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_enter_and_escape_route_ok",
+            "status": "passed",
+            "duration_ms": 214,
+            "repeat_index": 7
+        },
+        {
+            "name": "menu_load_selection_links_restore",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 7
+        },
+        {
+            "name": "menu_copy_text_group_contract",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 7
+        },
+        {
+            "name": "dispatch_smoke_all_commands",
+            "status": "passed",
+            "duration_ms": 20086,
+            "repeat_index": 7
+        },
+        {
+            "name": "modeless_window_ownership",
+            "status": "passed",
+            "duration_ms": 931,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_app_fullScreen",
+            "status": "passed",
+            "duration_ms": 68,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_app_fullScreen_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 237,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_app_openDriveMenus",
+            "status": "passed",
+            "duration_ms": 300,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_app_openDriveMenus_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 598,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_ctrlA_copy_exports_full_text",
+            "status": "passed",
+            "duration_ms": 593,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 3218,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_open_close_stays_stable",
+            "status": "passed",
+            "duration_ms": 1320,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_access_key_routes_ok",
+            "status": "passed",
+            "duration_ms": 120,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_enter_and_escape_route_ok",
+            "status": "passed",
+            "duration_ms": 237,
+            "repeat_index": 8
+        },
+        {
+            "name": "menu_load_selection_links_restore",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 8
+        },
+        {
+            "name": "menu_copy_text_group_contract",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 8
+        },
+        {
+            "name": "dispatch_smoke_all_commands",
+            "status": "passed",
+            "duration_ms": 19963,
+            "repeat_index": 8
+        },
+        {
+            "name": "modeless_window_ownership",
+            "status": "passed",
+            "duration_ms": 946,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_app_fullScreen",
+            "status": "passed",
+            "duration_ms": 56,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_app_fullScreen_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 232,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_app_openDriveMenus",
+            "status": "passed",
+            "duration_ms": 284,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_app_openDriveMenus_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 535,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_ctrlA_copy_exports_full_text",
+            "status": "passed",
+            "duration_ms": 586,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 3210,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_open_close_stays_stable",
+            "status": "passed",
+            "duration_ms": 1370,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_access_key_routes_ok",
+            "status": "passed",
+            "duration_ms": 139,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_enter_and_escape_route_ok",
+            "status": "passed",
+            "duration_ms": 192,
+            "repeat_index": 9
+        },
+        {
+            "name": "menu_load_selection_links_restore",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 9
+        },
+        {
+            "name": "menu_copy_text_group_contract",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 9
+        },
+        {
+            "name": "dispatch_smoke_all_commands",
+            "status": "passed",
+            "duration_ms": 20028,
+            "repeat_index": 9
+        },
+        {
+            "name": "modeless_window_ownership",
+            "status": "passed",
+            "duration_ms": 964,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_app_fullScreen",
+            "status": "passed",
+            "duration_ms": 69,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_app_fullScreen_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 233,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_app_openDriveMenus",
+            "status": "passed",
+            "duration_ms": 286,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_app_openDriveMenus_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 481,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_ctrlA_copy_exports_full_text",
+            "status": "passed",
+            "duration_ms": 598,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_scrolling_stays_bounded",
+            "status": "passed",
+            "duration_ms": 3238,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_long_run_open_close_stays_stable",
+            "status": "passed",
+            "duration_ms": 1409,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_access_key_routes_ok",
+            "status": "passed",
+            "duration_ms": 133,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_pane_itemProperties_window_enter_and_escape_route_ok",
+            "status": "passed",
+            "duration_ms": 206,
+            "repeat_index": 10
+        },
+        {
+            "name": "menu_load_selection_links_restore",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 10
+        },
+        {
+            "name": "menu_copy_text_group_contract",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 10
+        },
+        {
+            "name": "dispatch_smoke_all_commands",
+            "status": "passed",
+            "duration_ms": 20127,
+            "repeat_index": 10
+        },
+        {
+            "name": "modeless_window_ownership",
+            "status": "passed",
+            "duration_ms": 931,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_app_fullScreen",
+            "status": "passed",
+            "duration_ms": 68,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_app_fullScreen_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 227,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_app_openDriveMenus",
+            "status": "passed",
+            "duration_ms": 296,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_app_openDriveMenus_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 570,
+            "repeat_index": 10
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 10
+}

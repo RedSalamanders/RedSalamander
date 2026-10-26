@@ -1,0 +1,10 @@
+{
+  "source_path": "S:\\RedSalamander.Perf\\evidence\\i26-projection-baseline-v1-20260921\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "source_sha256": "8b7fdb90cbd42af3349644ad5947ad30ca9d1fa30fae35d3f18d6a4b82cabb15",
+  "selected_original_line_numbers": [
+    244,
+    353,
+    462
+  ],
+  "selected_normalized_lf_sha256": "d0e949b653ae0b119ac852be5260928e9c2160e2e0d2ea9bd358167b2fcd4067"
+}

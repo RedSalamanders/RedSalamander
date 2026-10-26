@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-10-26T14:05:46.599Z",
+    "suite": "Commands",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20261026T140543Z-84472-46500ce666294e379dd1d10660d9549b\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 11604,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "The task disclosure must expose a measured pointer target: hr=0x00000000 collapse=true bounds=0,0,0,0 visible=true animating=false scroll=0 viewport=0,0,694,558.",
+    "cases": [
+        {
+            "name": "theme_cycle_overlay_retention",
+            "status": "passed",
+            "duration_ms": 8455,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_fileops_move_breadcrumb_durable_lifecycle",
+            "status": "passed",
+            "duration_ms": 382,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_two_pending_task_identity",
+            "status": "failed",
+            "duration_ms": 1548,
+            "repeat_index": 1,
+            "reason": "The task disclosure must expose a measured pointer target: hr=0x00000000 collapse=true bounds=0,0,0,0 visible=true animating=false scroll=0 viewport=0,0,694,558."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

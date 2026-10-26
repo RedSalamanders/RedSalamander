@@ -1,0 +1,221 @@
+{
+  "schema": "viewer-space.prepush-capture-pairs.v2",
+  "scope": "commands-captures",
+  "captureCount": 11,
+  "captures": [
+    {
+      "group": "commands",
+      "png": {
+        "path": "selftest/last_run/perf/viewer_space_captures/analyst-dark.png",
+        "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\analyst-dark.png",
+        "bytes": 433317,
+        "sha256": "124363da05d309709eca2cd9d340effbe40226abdc8aed98d8a476a47f24c4c0"
+      },
+      "provenancePolicy": "shared-directory-manifest",
+      "provenance": [
+        {
+          "path": "selftest/last_run/perf/viewer_space_captures/provenance.json",
+          "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\provenance.json",
+          "bytes": 4093,
+          "sha256": "8b5f5d7b6561baa9cf0a46f9566d6c9188789e0af6a11bccff704eccaaaf56da"
+        }
+      ],
+      "provenanceStatus": "PRESENT"
+    },
+    {
+      "group": "commands",
+      "png": {
+        "path": "selftest/last_run/perf/viewer_space_captures/analyst-high-contrast.png",
+        "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\analyst-high-contrast.png",
+        "bytes": 163273,
+        "sha256": "e5693483d79d2cb68fe7e7d2feec7dd8334d50d840b0805f9559ebf23b4dbc57"
+      },
+      "provenancePolicy": "shared-directory-manifest",
+      "provenance": [
+        {
+          "path": "selftest/last_run/perf/viewer_space_captures/provenance.json",
+          "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\provenance.json",
+          "bytes": 4093,
+          "sha256": "8b5f5d7b6561baa9cf0a46f9566d6c9188789e0af6a11bccff704eccaaaf56da"
+        }
+      ],
+      "provenanceStatus": "PRESENT"
+    },
+    {
+      "group": "commands",
+      "png": {
+        "path": "selftest/last_run/perf/viewer_space_captures/analyst-rainbow.png",
+        "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\analyst-rainbow.png",
+        "bytes": 383793,
+        "sha256": "3960a081a380ee9708c3e9cc7564542e9a811bc0ffaf96066abda089c3bdf41b"
+      },
+      "provenancePolicy": "shared-directory-manifest",
+      "provenance": [
+        {
+          "path": "selftest/last_run/perf/viewer_space_captures/provenance.json",
+          "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\provenance.json",
+          "bytes": 4093,
+          "sha256": "8b5f5d7b6561baa9cf0a46f9566d6c9188789e0af6a11bccff704eccaaaf56da"
+        }
+      ],
+      "provenanceStatus": "PRESENT"
+    },
+    {
+      "group": "commands",
+      "png": {
+        "path": "selftest/last_run/perf/viewer_space_captures/boundary-body-455.png",
+        "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\boundary-body-455.png",
+        "bytes": 353577,
+        "sha256": "7ff1cd22b04beb0ea9490138054c00eba56711850ca400b40a8807d0bc882423"
+      },
+      "provenancePolicy": "shared-directory-manifest",
+      "provenance": [
+        {
+          "path": "selftest/last_run/perf/viewer_space_captures/provenance.json",
+          "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\provenance.json",
+          "bytes": 4093,
+          "sha256": "8b5f5d7b6561baa9cf0a46f9566d6c9188789e0af6a11bccff704eccaaaf56da"
+        }
+      ],
+      "provenanceStatus": "PRESENT"
+    },
+    {
+      "group": "commands",
+      "png": {
+        "path": "selftest/last_run/perf/viewer_space_captures/boundary-body-456.png",
+        "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\boundary-body-456.png",
+        "bytes": 195264,
+        "sha256": "733e8bfd5f474a31afd1e1f30fb116e492efa49d57afa445b41b6625844107c8"
+      },
+      "provenancePolicy": "shared-directory-manifest",
+      "provenance": [
+        {
+          "path": "selftest/last_run/perf/viewer_space_captures/provenance.json",
+          "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\provenance.json",
+          "bytes": 4093,
+          "sha256": "8b5f5d7b6561baa9cf0a46f9566d6c9188789e0af6a11bccff704eccaaaf56da"
+        }
+      ],
+      "provenanceStatus": "PRESENT"
+    },
+    {
+      "group": "commands",
+      "png": {
+        "path": "selftest/last_run/perf/viewer_space_captures/boundary-width-1099.png",
+        "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\boundary-width-1099.png",
+        "bytes": 403720,
+        "sha256": "0e3c514947354b0ed5eccfc48c28a3a728fa70e6055d9c197af0ea4a4fbe1ed9"
+      },
+      "provenancePolicy": "shared-directory-manifest",
+      "provenance": [
+        {
+          "path": "selftest/last_run/perf/viewer_space_captures/provenance.json",
+          "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\provenance.json",
+          "bytes": 4093,
+          "sha256": "8b5f5d7b6561baa9cf0a46f9566d6c9188789e0af6a11bccff704eccaaaf56da"
+        }
+      ],
+      "provenanceStatus": "PRESENT"
+    },
+    {
+      "group": "commands",
+      "png": {
+        "path": "selftest/last_run/perf/viewer_space_captures/boundary-width-1100.png",
+        "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\boundary-width-1100.png",
+        "bytes": 524017,
+        "sha256": "ef93f50b8c042834aaedf5ea1c0bc7222d16a8b7a7a0b86925e3c3ce169024d2"
+      },
+      "provenancePolicy": "shared-directory-manifest",
+      "provenance": [
+        {
+          "path": "selftest/last_run/perf/viewer_space_captures/provenance.json",
+          "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\provenance.json",
+          "bytes": 4093,
+          "sha256": "8b5f5d7b6561baa9cf0a46f9566d6c9188789e0af6a11bccff704eccaaaf56da"
+        }
+      ],
+      "provenanceStatus": "PRESENT"
+    },
+    {
+      "group": "commands",
+      "png": {
+        "path": "selftest/last_run/perf/viewer_space_captures/boundary-width-503.png",
+        "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\boundary-width-503.png",
+        "bytes": 342698,
+        "sha256": "3d89c5f4bf20854af53a89c435a473040042bf63f497a113c4c94cb5ebd283fc"
+      },
+      "provenancePolicy": "shared-directory-manifest",
+      "provenance": [
+        {
+          "path": "selftest/last_run/perf/viewer_space_captures/provenance.json",
+          "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\provenance.json",
+          "bytes": 4093,
+          "sha256": "8b5f5d7b6561baa9cf0a46f9566d6c9188789e0af6a11bccff704eccaaaf56da"
+        }
+      ],
+      "provenanceStatus": "PRESENT"
+    },
+    {
+      "group": "commands",
+      "png": {
+        "path": "selftest/last_run/perf/viewer_space_captures/boundary-width-504.png",
+        "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\boundary-width-504.png",
+        "bytes": 208529,
+        "sha256": "739de91eedbf094cb7593479facda3d2da07a4537c6cb5e3aea267150fb0eddf"
+      },
+      "provenancePolicy": "shared-directory-manifest",
+      "provenance": [
+        {
+          "path": "selftest/last_run/perf/viewer_space_captures/provenance.json",
+          "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\provenance.json",
+          "bytes": 4093,
+          "sha256": "8b5f5d7b6561baa9cf0a46f9566d6c9188789e0af6a11bccff704eccaaaf56da"
+        }
+      ],
+      "provenanceStatus": "PRESENT"
+    },
+    {
+      "group": "commands",
+      "png": {
+        "path": "selftest/last_run/perf/viewer_space_captures/explorer-light.png",
+        "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\explorer-light.png",
+        "bytes": 503887,
+        "sha256": "d34452778aa6413f65b8df79446db6c37fa7a2e707aca9c6c3b0618f87b416d7"
+      },
+      "provenancePolicy": "shared-directory-manifest",
+      "provenance": [
+        {
+          "path": "selftest/last_run/perf/viewer_space_captures/provenance.json",
+          "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\provenance.json",
+          "bytes": 4093,
+          "sha256": "8b5f5d7b6561baa9cf0a46f9566d6c9188789e0af6a11bccff704eccaaaf56da"
+        }
+      ],
+      "provenanceStatus": "PRESENT"
+    },
+    {
+      "group": "commands",
+      "png": {
+        "path": "selftest/last_run/perf/viewer_space_captures/explorer-narrow.png",
+        "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\explorer-narrow.png",
+        "bytes": 198288,
+        "sha256": "532101fce7a010d3b655810e9223555da2c6269793715201bfc8077fd684d1d7"
+      },
+      "provenancePolicy": "shared-directory-manifest",
+      "provenance": [
+        {
+          "path": "selftest/last_run/perf/viewer_space_captures/provenance.json",
+          "sourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\provenance.json",
+          "bytes": 4093,
+          "sha256": "8b5f5d7b6561baa9cf0a46f9566d6c9188789e0af6a11bccff704eccaaaf56da"
+        }
+      ],
+      "provenanceStatus": "PRESENT"
+    }
+  ],
+  "policies": {
+    "native": "same-stem existing .provenance.json/.provenance.txt; no sidecar is synthesized",
+    "commands": "each PNG is bound to the existing shared sibling provenance.json; manifest is preserved byte-exact"
+  },
+  "runId": "20261009T213050Z-43264-4bde93ea855e44c885a3277a68e89038"
+}

@@ -1,0 +1,21 @@
+
+
+
+
+
+Describing Operation Startrail governed impact graph
+ [+] accumulates production/shared mappings and keeps File Operations test-only changes narrow 1.08s
+ [+] uses both rename sides and widens an unknown relevant path to Full 85ms
+ [+] treats documentation-only changes as no-build with no affected runtime entries 63ms
+ [+] selects executable Specs inputs and keeps only Markdown prose inert 453ms
+ [+] governs every tracked project import and runtime graph input 760ms
+ [-] routes current product UI tests through their live consumer project 31ms
+   Expected: {1}
+   But was:  {0}
+   102:         $owned.Count | Should Be 1
+   at <ScriptBlock>, Z:\RsI19Toolchain\Tools\Tests\ValidationImpact.Tests.ps1: line 102
+ [+] keeps current UI adapters and the exact library pin covered by product UI tests 260ms
+ [+] emits deterministic schema-valid shadow decisions and never claims reuse 149ms
+ [+] freezes the phase-4 mode gate and runner ordering contract 16ms
+Tests completed in 2.9s
+Passed: 8 Failed: 1 Skipped: 0 Pending: 0 Inconclusive: 0

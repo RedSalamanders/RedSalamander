@@ -1,0 +1,37 @@
+Skipping build (verified receipt 256d18be002b07877b2e00cd18181d35fc30a3f3a702e6c436b8f8fc1ff35de7).
+Validation plan: 710007dddc39cdc6d3bbe0ef3eb2ff463e9cf1700122a511f2e730a581a743a1
+Entry fingerprints: 9477277c851ccd031dbf63a25e5ddfcf140fbf1c92f3e698ac6694ce409ed46a (100 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: FileOperations
+======================================================================
+  Exe:  C:\RsI27Followup\.build\x64\Release\RedSalamander.exe
+  Args: --fileops-selftest --selftest-no-activate --selftest-case=FileOps_SafetyRemediationContracts
+
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [PASS] FileOperations  (33,2s)
+         Passed: 3  Failed: 0  Skipped: 0
+
+  -------------------------------------------------------
+
+  Overall: PASSED  Total: 3  Passed: 3  Failed: 0  Skipped: 0
+  Wall time: 47,5s
+  Classifications: flaky=0 regression=0 isolation_suspect=0 unclassified_failure=0
+  Quarantine: active=0 invalid=0 repair_attempts=0 repair_reproduced=0
+
+--- ARTIFACTS ---
+  Test root: C:\RedSalamander.Perf
+  Run id:    20261003T205312Z-42648-c0fd3b2f5d1c4732b3b78ec1f39a0ec5
+  Disk audit issues: 265
+  Last run: C:\RedSalamander.Perf\runs\20261003T205312Z-42648-c0fd3b2f5d1c4732b3b78ec1f39a0ec5\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.file-operations.json
+    workspace-final.json
+    fileops\results.json
+

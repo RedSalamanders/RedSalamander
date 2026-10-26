@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-09-21T11:39:59.226Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\i26-clipboard-format-diagnostic-20260921\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 14482,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_global_summary_ignores_finished_tasks",
+            "status": "passed",
+            "duration_ms": 1,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_progress_contracts",
+            "status": "passed",
+            "duration_ms": 2,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "passed",
+            "duration_ms": 13166,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 1
+}

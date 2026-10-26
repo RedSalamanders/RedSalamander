@@ -1192,6 +1192,18 @@
           "title": "Auto-dismiss Success",
           "description": "Automatically dismiss completed successful file-operation tasks."
         },
+        "showInformationalNotes": {
+          "type": "boolean",
+          "default": false,
+          "title": "Show Informational Notes",
+          "description": "Show notes about expected outcomes (inherited permissions, questions you answered, skipped links) on file-operation task cards and in the Issues pane. They are always kept in the task log and export."
+        },
+        "mirrorDecisionsInPane": {
+          "type": "boolean",
+          "default": true,
+          "title": "Show Questions In The Pane",
+          "description": "When a file operation waits for a decision about a folder a pane shows, also show the question over that pane. The question always stays on the task card in the File Operations window."
+        },
         "popupFooterOnly": {
           "type": "boolean",
           "default": false,
@@ -1203,6 +1215,12 @@
           "default": false,
           "title": "Compact Popup Density",
           "description": "Render file-operation popup cards as compact one-line rows until expanded density is restored."
+        },
+        "popupThroughputExpanded": {
+          "type": "boolean",
+          "default": true,
+          "title": "Expanded Throughput",
+          "description": "Use an expanded throughput graph by default for new or recreated eligible file-operation task cards. Existing cards keep their current live disclosure state."
         },
         "verifyAfterCopy": {
           "type": "boolean",

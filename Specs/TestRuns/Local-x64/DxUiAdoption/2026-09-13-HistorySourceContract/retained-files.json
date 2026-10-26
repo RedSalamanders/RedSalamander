@@ -1,0 +1,38 @@
+[
+  {
+    "file": "before.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\history-source-contract\\before.log",
+    "bytes": 74634,
+    "sha256": "077bfc88e2346ceced97d646011ab2784ef0a6e129eeabd4947f4a15dbb9146f"
+  },
+  {
+    "file": "before.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\history-source-contract\\before.json",
+    "bytes": 58076,
+    "sha256": "4ef6d0e0ce1c963da0dc9b21e06e9d59e91ddce208db6f32c41894eef2552455"
+  },
+  {
+    "file": "after.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\history-source-contract\\after.log",
+    "bytes": 19232,
+    "sha256": "a82ad7659dd2dd3864715a7ba71dbed7df064ccf6f8142421b7efe44ee55950d"
+  },
+  {
+    "file": "after.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\history-source-contract\\after.json",
+    "bytes": 527,
+    "sha256": "b2ee626d7af8519ee685dde52da1452769b98030736117ded1851ff55abf0068"
+  },
+  {
+    "file": "tool-inventory.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\history-source-contract\\tool-inventory.log",
+    "bytes": 51392,
+    "sha256": "41d623f4d69b258838009cd5fa7ce8d36943a8191734c285e3180cac229951b1"
+  },
+  {
+    "file": "spec-inventory.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\history-source-contract\\spec-inventory.log",
+    "bytes": 339,
+    "sha256": "982d79c39160c522e56a6f6e559389384d49d1c748823f3db2d80c6d2c9a3d4e"
+  }
+]

@@ -1,0 +1,272 @@
+{
+  "runId": "20261019T200836Z-71584-d95d43560f9e49dc965896580241ef06",
+  "archive": "D:\\RedSalamander.Perf\\evidence\\screenshot-gaps-20261019\\provider-routing-failed-native-run.zip",
+  "sha256": "9022fc13478bbd1e4203c24536621c47447c7485ccbd28822d4ce9bd7a08051b",
+  "files": [
+    {
+      "path": "artifacts/archive/4cb089111a23/Commands/2026-10-19_221314/commands_results.json",
+      "sha256": "5e6f7241d973716e2593c5cd4d6f3662975930262109175c77404882c8cd3515",
+      "bytes": 719
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/Commands/2026-10-19_221314/commands_trace.txt",
+      "sha256": "9d62acd2c948b7b9d1a16c93b3971c4ceec6fa7cdd119088a49be4392712511c",
+      "bytes": 742
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/Commands/2026-10-19_221314/compare_trace.txt",
+      "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "bytes": 2
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/Commands/2026-10-19_221314/env.txt",
+      "sha256": "e653c4cea64fc90ebb0693c00c0e812f21b09a5d18b02737ae8e1a8f8fe9b737",
+      "bytes": 582
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/Commands/2026-10-19_221314/fileops_trace.txt",
+      "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "bytes": 2
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/Commands/2026-10-19_221314/selftest.txt",
+      "sha256": "9efb7fef0a7fb934aeda8af2b3bba183870dcc1ab5f7447c5b2fef8e390689d7",
+      "bytes": 87
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/Commands/2026-10-19_221314/selftest_run_results.json",
+      "sha256": "7c0583814706d84b05d4b2caab2ff13a4d0122dff02f222e5235a0b247400ca8",
+      "bytes": 1184
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/Commands/2026-10-19_221314/selftest_run_trace.txt",
+      "sha256": "887f3e852f00de0b6985cd4ca5e4655b816f6a21633c4c9f050a735bd1a31cbd",
+      "bytes": 27206
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/Commands/2026-10-19_221314/perf/perf_metrics.jsonl",
+      "sha256": "d34b993a708660833c45bb0c30b0bfead69d14989606924b92da57d2c434c88a",
+      "bytes": 544444
+    },
+    {
+      "path": "artifacts/selftest/last_run/results.json",
+      "sha256": "7c0583814706d84b05d4b2caab2ff13a4d0122dff02f222e5235a0b247400ca8",
+      "bytes": 1184
+    },
+    {
+      "path": "artifacts/selftest/last_run/run-all-tests-case-history.jsonl",
+      "sha256": "3761df87e41fb4c20b537c26d1cdfddf97dd1e8c5128779dc705e2f16c5f5088",
+      "bytes": 428
+    },
+    {
+      "path": "artifacts/selftest/last_run/run-all-tests-dashboard.md",
+      "sha256": "19bab7a44249babb6f05c516374e52081ec46a2766d87250a36e8bd3935c24c5",
+      "bytes": 636
+    },
+    {
+      "path": "artifacts/selftest/last_run/run-all-tests-results.json",
+      "sha256": "37e292424928c470808b1c556bba22fd464913310074bc73e4407c99f88c8484",
+      "bytes": 2609
+    },
+    {
+      "path": "artifacts/selftest/last_run/trace.txt",
+      "sha256": "2f883e33e28b6fa54474e235a567cc1ba93163cb8f2afd7416b38a567065f4bb",
+      "bytes": 27364
+    },
+    {
+      "path": "artifacts/selftest/last_run/workspace-after-selftest.commands.json",
+      "sha256": "f59505fe931f7d2018c2de016936ff50a2c612c8a99b3add2fa43f2393833747",
+      "bytes": 74091
+    },
+    {
+      "path": "artifacts/selftest/last_run/workspace-final.json",
+      "sha256": "e1ac83c2860a1e19eed127bc958620f801ca2b78c84f7bbd1f147c02e222a6b9",
+      "bytes": 74091
+    },
+    {
+      "path": "artifacts/selftest/previous_run/entry-fingerprints.json",
+      "sha256": "b25e16025e29291d7d5a0a0a0e6a399323d71a3250da56b045397c3c7d2fb23f",
+      "bytes": 1687
+    },
+    {
+      "path": "artifacts/selftest/previous_run/validation-plan-decision.json",
+      "sha256": "10bbffbcf357f83fe9fe4f137f98e5a6784faec5c28f4e719e4d01c75deebdb8",
+      "bytes": 9445
+    },
+    {
+      "path": "artifacts/selftest/previous_run/validation-plan.json",
+      "sha256": "13650d7eb91f61b8dfa1fa43c1306a2b990edbf6eb3e9f9e05bdfa8d71e1e456",
+      "bytes": 1526
+    },
+    {
+      "path": "artifacts/selftest/previous_run/workspace-initial.json",
+      "sha256": "5f574e2e56913c4c7396d83d37117f4acbbfd50ee797afff1d576a576a802e47",
+      "bytes": 74091
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/results.json",
+      "sha256": "5e6f7241d973716e2593c5cd4d6f3662975930262109175c77404882c8cd3515",
+      "bytes": 719
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/trace.txt",
+      "sha256": "202c6c4eafe8a1aef98ac209cd71c54cefc01404bf14760418fad1826ae871b8",
+      "bytes": 840
+    },
+    {
+      "path": "artifacts/selftest/last_run/compare/trace.txt",
+      "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "bytes": 2
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/trace.txt",
+      "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "bytes": 2
+    },
+    {
+      "path": "artifacts/selftest/last_run/perf/perf_metrics.jsonl",
+      "sha256": "d34b993a708660833c45bb0c30b0bfead69d14989606924b92da57d2c434c88a",
+      "bytes": 544444
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/archive-pack.png",
+      "sha256": "7f648aef15ff8e2328d92687ce81e0e8c455c3b57598ddccff3c0657477b94ef",
+      "bytes": 28897
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/archive-unpack.png",
+      "sha256": "ade56589afe00f7f8ebac3b2d55b1bb181c8f06ab623a7c29e6218f6d38272c4",
+      "bytes": 35997
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/change-attributes.png",
+      "sha256": "2edb6a8432fefeeeef3b47913b090805fc25c298226c020d60177527e21464b5",
+      "bytes": 61158
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/change-case.png",
+      "sha256": "ccf82c8a0fa18c6822a7541440a6300abe259557c77ddb7f0cb86d4722f0d417",
+      "bytes": 26455
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/create-directory.png",
+      "sha256": "c0f18b5e30e2b2492c9e7740c3a1ae91891a9a6aa9c94a13277b6c88f2b9db02",
+      "bytes": 19781
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/file-filter.png",
+      "sha256": "f5c97ef7243ade48262641b4c2219e051fd07abf9240b5fe008f469865bb57b6",
+      "bytes": 54428
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/folder-view-brief-detailed.png",
+      "sha256": "b68714b709359c902582e9249700f120aad046de86fd360d4930bc93cf3867b5",
+      "bytes": 101525
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/folder-view-extra-detailed.png",
+      "sha256": "b9411bdf5614c2b933611636f3b0884a6969efef5f602951c564be60a1574f4c",
+      "bytes": 106263
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/make-file-list.png",
+      "sha256": "f0a31d27ae3c2bfb0d49d703ebb6a300c18d67df538f5fa88f8ac7bdcb03ac51",
+      "bytes": 46719
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/new-file.png",
+      "sha256": "f8000d934acdc266688d9c56f36731f738493fdec93390390b3f201dd6740811",
+      "bytes": 23046
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/scenarios.tsv",
+      "sha256": "b3b6415afe25e5f465f8d7ae38310676ba26f37fa27c8828a2d42120409d1e0d",
+      "bytes": 736
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/selection-mask.png",
+      "sha256": "8a4852ea5e19f46a0ef1d1368b974b09c077cf70421b0645ae09c1580925b5b1",
+      "bytes": 12277
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/shared-directories.png",
+      "sha256": "ada2f952df358bbc81cf85ab5969bceea00c6273b5086922774b6c228d2bc2ab",
+      "bytes": 32734
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/shortcuts-terminal.png",
+      "sha256": "487a1973b50336b4a4437ee27da5824fc5da4263e6b393c61f5d61cdfc16d26f",
+      "bytes": 146756
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/terminal-embedded.png",
+      "sha256": "32e9327e03923915b8e2b5dc5ab2875491b44118ef301f14b6038b00cd9f9b87",
+      "bytes": 124258
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/terminal-find.png",
+      "sha256": "f44c5dc8f163054b75cfd7c7e104ff7616571ac302f6514b7ab5aead93c04568",
+      "bytes": 68327
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/terminal-floating-tabs.png",
+      "sha256": "0835d98011b844c1d29f1534173828e309e4cd6d77dac8faf14c0234415b169d",
+      "bytes": 58386
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/theme-dark.png",
+      "sha256": "b9411bdf5614c2b933611636f3b0884a6969efef5f602951c564be60a1574f4c",
+      "bytes": 106263
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/theme-high-contrast-app.png",
+      "sha256": "d77c20e380589f8e0898aada08539f7d57949bc9aea2ff18a0dbcda095480d47",
+      "bytes": 101017
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/theme-light.png",
+      "sha256": "f189c6dff59977c55512bd37499c1acad3f5e76ed727dd1055218a33562be901",
+      "bytes": 104838
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/product-documentation/theme-rainbow.png",
+      "sha256": "e385fd79f9a5de2109bb49d363e7827075e8fad923f94a5d26784ba47b14d03b",
+      "bytes": 106220
+    },
+    {
+      "path": "scratch/process-temp/vcpkg/vcpkg-2026-07-27.exe",
+      "sha256": "13b8175e99a884c5ad34249218754b45541a1a63f216e92603aee57a285ac741",
+      "bytes": 6745912
+    },
+    {
+      "path": "scratch/process-temp/vcpkg/vcpkg36a9a77b-2fa4-4e40-be66-b04d1adf03b2.txt",
+      "sha256": "7e9512b9a039e101348e865220c9a202a4940bda0390a686a5a5ecc6948a01c9",
+      "bytes": 2386
+    },
+    {
+      "path": "scratch/process-temp/vcpkg/vcpkg5c9897ed-be20-41bd-8fde-22c06cca23be.txt",
+      "sha256": "ca21444f54236df43a9e220772eb9b1eb7e64266ea9ae0b05e2a051229d3e666",
+      "bytes": 2386
+    },
+    {
+      "path": "scratch/process-temp/vcpkg/vcpkgb09ddff7-af38-4aec-9a8d-d60f44f6827d.txt",
+      "sha256": "baf8ad5a7b367aa7363426651341e508af1912912362578f85385b81010035d5",
+      "bytes": 2386
+    },
+    {
+      "path": "scratch/settings-store/RedSalamander/Settings/RedSalamander-debug.settings.json",
+      "sha256": "e5deffdc41ff109bdd2a65613aad43a6de72e791b160fd4146acc5d6b52131d2",
+      "bytes": 25122
+    },
+    {
+      "path": "scratch/settings-store/RedSalamander/Settings/RedSalamander-debug.settings.json.lock",
+      "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "bytes": 0
+    },
+    {
+      "path": "scratch/settings-store/RedSalamander/Settings/RedSalamander.settings.schema.json",
+      "sha256": "3caa96c566a9380b09f8b0b40294ebb4afa5218c27491474f7e2073dce8eca24",
+      "bytes": 133709
+    }
+  ]
+}

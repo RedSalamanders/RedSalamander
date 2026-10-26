@@ -1,0 +1,114 @@
+[
+  {
+    "file": "perf_metrics.jsonl",
+    "metric": "dxui.accessibility.grid_snapshot_rebuild_us",
+    "count": 48,
+    "p50Us": 24,
+    "p95Us": 40,
+    "maxUs": 76
+  },
+  {
+    "file": "perf_metrics.jsonl",
+    "metric": "viewer.space.render.paint_us",
+    "count": 65,
+    "p50Us": 5145,
+    "p95Us": 8212,
+    "maxUs": 29191
+  },
+  {
+    "file": "perf_metrics.jsonl",
+    "metric": "viewer.space.render.present_us",
+    "count": 65,
+    "p50Us": 57,
+    "p95Us": 328,
+    "maxUs": 1626
+  },
+  {
+    "file": "perf_metrics.jsonl",
+    "metric": "viewer.space.workspace.layout_us",
+    "count": 41,
+    "p50Us": 509,
+    "p95Us": 1280,
+    "maxUs": 67250
+  },
+  {
+    "file": "lifecycle_metrics.jsonl",
+    "metric": "dxui.accessibility.grid_snapshot_rebuild_us",
+    "count": 72,
+    "p50Us": 1,
+    "p95Us": 16,
+    "maxUs": 28
+  },
+  {
+    "file": "lifecycle_metrics.jsonl",
+    "metric": "viewer.space.render.paint_us",
+    "count": 91,
+    "p50Us": 701,
+    "p95Us": 10973,
+    "maxUs": 28460
+  },
+  {
+    "file": "lifecycle_metrics.jsonl",
+    "metric": "viewer.space.render.present_us",
+    "count": 91,
+    "p50Us": 54,
+    "p95Us": 419,
+    "maxUs": 2784
+  },
+  {
+    "file": "lifecycle_metrics.jsonl",
+    "metric": "viewer.space.workspace.layout_us",
+    "count": 22,
+    "p50Us": 454,
+    "p95Us": 11807,
+    "maxUs": 58381
+  },
+  {
+    "file": "interactive_metrics.jsonl",
+    "metric": "dxui.accessibility.grid_snapshot_rebuild_us",
+    "count": 118,
+    "p50Us": 21,
+    "p95Us": 41,
+    "maxUs": 134
+  },
+  {
+    "file": "interactive_metrics.jsonl",
+    "metric": "viewer.space.navigation.choice_menu_us",
+    "count": 6,
+    "p50Us": 1,
+    "p95Us": 1,
+    "maxUs": 1
+  },
+  {
+    "file": "interactive_metrics.jsonl",
+    "metric": "viewer.space.navigation.folder_menu_us",
+    "count": 3,
+    "p50Us": 2,
+    "p95Us": 3,
+    "maxUs": 3
+  },
+  {
+    "file": "interactive_metrics.jsonl",
+    "metric": "viewer.space.render.paint_us",
+    "count": 93,
+    "p50Us": 420,
+    "p95Us": 1220,
+    "maxUs": 31692
+  },
+  {
+    "file": "interactive_metrics.jsonl",
+    "metric": "viewer.space.render.present_us",
+    "count": 93,
+    "p50Us": 41,
+    "p95Us": 399,
+    "maxUs": 2201
+  },
+  {
+    "file": "interactive_metrics.jsonl",
+    "metric": "viewer.space.workspace.layout_us",
+    "count": 74,
+    "p50Us": 224,
+    "p95Us": 1274,
+    "maxUs": 85209
+  }
+]

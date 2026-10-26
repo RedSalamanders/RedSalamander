@@ -27,6 +27,18 @@
     dependency locks or creating staging state, every manifest version floor and
     exact override is required to exist in the selected registry version database.
 
+    vcpkg builds with the Visual Studio installation and default MSVC toolset the build
+    discovers, not the newest toolset it finds. MSBuild compiles and links this product
+    with the installation's default toolset (VC\Auxiliary\Build\Microsoft.VCToolsVersion
+    .default.txt), and a compiled library from a newer toolset is a link hazard; a newer
+    toolset beside the default can also lack a compiler for a target. Every selected
+    triplet gets an overlay triplet beneath .build\vcpkg-triplets\<platform>: the
+    selected vcpkg root's own triplet plus VCPKG_VISUAL_STUDIO_PATH and
+    VCPKG_PLATFORM_TOOLSET_VERSION, rewritten only when its contents change and passed
+    as --overlay-triplets. A missing or malformed toolset version file fails before any
+    lock, staging directory or download. Changing the triplet changes vcpkg's package ABI
+    hash, so the first install after a change rebuilds the packages.
+
 .PARAMETER Platform
     Target platform (x64, ARM64, or All). Default is "All" which installs both platforms.
 
@@ -299,9 +311,21 @@ Assert-RSVcpkgManifestVersionConstraintsAvailable `
     -ManifestPath (Join-Path $manifestRoot 'vcpkg.json') `
     -RegistryRoot $vcpkgRegistryRoot
 
+# vcpkg picks the newest MSVC toolset of the installation it prefers; the build compiles with the installation's default
+# toolset. Resolve both here, before any lock, staging directory or download, so a broken installation fails at once and
+# every triplet below is pinned to what the build uses.
+$visualStudioInstallation = Get-RSVcpkgVisualStudioInstallation
+$msvcToolset = Get-RSVcpkgDefaultToolset -Installation $visualStudioInstallation
+[xml]$msvcPolicy = Get-Content -Raw -LiteralPath (Join-Path $repoRoot 'Directory.Build.props')
+$requiredTools = $msvcPolicy.SelectSingleNode('/Project/PropertyGroup/RequiredMsvcToolsVersion').InnerText
+if ($msvcToolset.MajorMinor -cne $requiredTools) { throw "RedSalamander requires default MSVC $requiredTools.x; selected $($msvcToolset.Version)." }
+$tripletOverlayRoot = Resolve-RSVcpkgSafeChildPath -Root $repoRoot -Child ".build\vcpkg-triplets" -Description "vcpkg triplet overlay root"
+
 Write-Host "vcpkg exe:     $vcpkgExePath" -ForegroundColor Cyan
 Write-Host "vcpkg commit:  $($vcpkgToolPin.Commit)" -ForegroundColor Cyan
 Write-Host "vcpkg root:    $vcpkgRegistryRoot" -ForegroundColor Cyan
+Write-Host "Visual Studio: $visualStudioInstallation" -ForegroundColor Cyan
+Write-Host "MSVC toolset:  $($msvcToolset.Version), the default the build compiles with; vcpkg is pinned to $($msvcToolset.MajorMinor)" -ForegroundColor Cyan
 Write-Host "manifest root: $manifestRoot" -ForegroundColor Cyan
 Write-Host "install base:  $installBaseRoot" -ForegroundColor Cyan
 Write-Host "staging root:  $stagingRoot" -ForegroundColor Cyan
@@ -360,13 +384,25 @@ foreach ($triplet in $tripletsToInstall) {
     }
     New-Item -ItemType Directory -Path $tripletStagingRoot -Force | Out-Null
 
+    # The selected vcpkg root's own triplet, copied and pinned; vcpkg takes an overlay in place of the triplet of the same name.
+    $tripletOverlayDirectory = Resolve-RSVcpkgSafeChildPath -Root $tripletOverlayRoot -Child $platformScopeName -Description "triplet overlay directory"
+    $tripletOverlay = Update-RSVcpkgOverlayTriplet `
+        -StockTripletPath (Resolve-RSVcpkgStockTripletPath -RegistryRoot $vcpkgRegistryRoot -Triplet $triplet) `
+        -Toolset $msvcToolset `
+        -OutputDirectory $tripletOverlayDirectory
+    Write-Host "Overlay triplet $($tripletOverlay.Path) $(if ($tripletOverlay.Changed) { 'written' } else { 'unchanged' })" -ForegroundColor Cyan
+
     $vcpkgArguments = [System.Collections.Generic.List[string]]::new()
     foreach ($argument in @(
             'install',
             '--triplet', $triplet,
             '--x-manifest-root', $manifestRoot,
-            '--x-install-root', $tripletStagingRoot)) {
+            '--x-install-root', $tripletStagingRoot,
+            "--overlay-triplets=$($tripletOverlay.Directory)")) {
         [void]$vcpkgArguments.Add($argument)
+    }
+    if ($triplet -like 'arm64-*') {
+        [void]$vcpkgArguments.Add('--overlay-ports=' + (Join-Path $repoRoot 'Build/vcpkg-ports'))
     }
     if ($null -ne $vcpkgRootPath) {
         [void]$vcpkgArguments.Add("--vcpkg-root=$vcpkgRootPath")

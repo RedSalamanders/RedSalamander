@@ -110,7 +110,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="SettingsSchemaTests.cpp" />
+    <ClCompile Include="SettingsSchema.Tests.Runner.cpp" />
     <!-- Compiled directly (not exported from any DLL) so the test exercises the exact host-side
          schema parser that drives the Preferences UI and settings persistence. -->
     <ClCompile Include="..\..\RedSalamander\SettingsSchemaParser.cpp" />

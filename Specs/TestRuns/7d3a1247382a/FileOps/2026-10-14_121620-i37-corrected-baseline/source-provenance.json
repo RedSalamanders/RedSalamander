@@ -1,0 +1,32 @@
+{
+  "head": "93de8fd846d78828681baa99d5f455b75bf80457",
+  "reconstructionScriptSha256": "51B73967E29926A83DC27F5DCB95E7B5E6F9D687880B4F8DD1806FB6B999F672",
+  "overlayDiffSha256": "FBA2D5F36E77828DD07F9762632D2407A7DB7085C760B0F1CF11A7C530266E10",
+  "runtimeIdentity": [
+    {
+      "headBlob": "8cb7b5d84637a2072b0071d348677df9aa3053ba",
+      "workingTreeBlob": "8cb7b5d84637a2072b0071d348677df9aa3053ba",
+      "sha256": "CD2429056BAB855FFA6F9A4A2B701C6A61498FD633843862DD73203AF6E12EA3",
+      "path": "Common/PlugInterfaces/FileSystem.h"
+    },
+    {
+      "headBlob": "94b4237c0cf38c46439ce0adc3bb92593ccba9f0",
+      "workingTreeBlob": "94b4237c0cf38c46439ce0adc3bb92593ccba9f0",
+      "sha256": "A1962EAB320045253EC612F42C14AF62A8C045C7C1EC8FBAB6269CCE9B3F6458",
+      "path": "Plugins/FileSystem/FileSystem.FileOps.cpp"
+    },
+    {
+      "headBlob": "55f84e773eb1f88ea53e3f094fdf2da930d7af80",
+      "workingTreeBlob": "55f84e773eb1f88ea53e3f094fdf2da930d7af80",
+      "sha256": "2C1BC87D9C5C189A8CBE24FC8CB872FF97098813C46B5A5926F3418DA96CDE4F",
+      "path": "RedSalamander/FolderWindow.FileOperations.State.cpp"
+    },
+    {
+      "headBlob": "a03574d2b7d4ff3c15c51a3a70b0605953d72a53",
+      "workingTreeBlob": "a03574d2b7d4ff3c15c51a3a70b0605953d72a53",
+      "sha256": "86A192435665561B4E147C0E597FB46515696DF065E0FA001815EFDD22E389F6",
+      "path": "RedSalamander/FolderWindow.FileOperationsInternal.h"
+    }
+  ],
+  "candidateBackup": "D:\\RedSalamander.Perf\\evidence\\folder-copy-progress-candidate-source-20261014-01"
+}

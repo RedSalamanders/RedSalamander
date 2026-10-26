@@ -50,6 +50,7 @@ struct BatchRenameExecutionOp final
     std::wstring providerFinalCollisionKey;
     size_t depth     = 0u;
     bool isDirectory = false;
+    bool attempted   = false;
     bool completed   = false;
     bool skipped     = false;
     bool failed      = false;
@@ -70,10 +71,14 @@ struct BatchRenameExecutionSchedule final
     std::vector<size_t> cycleOperationIndices;
 };
 
+// attempted is true only when the mutation callback was invoked for the row. A row the
+// scheduler never reached carries ERROR_OPERATION_ABORTED (or the cancellation HRESULT),
+// never the status of the row whose failure stopped the run.
 struct BatchRenameExecutionItemResult final
 {
     size_t operationIndex = 0u;
     HRESULT status        = E_PENDING;
+    bool attempted        = false;
     bool completed        = false;
     bool skipped          = false;
 };
@@ -102,9 +107,9 @@ struct BatchRenameExecutionOptions final
 {
     BatchRenameExecutionProgressCallback progressCallback = nullptr;
     void* progressContext                                 = nullptr;
-    BatchRenameMutationCallback mutationCallback           = nullptr;
-    void* mutationContext                                  = nullptr;
-    const BatchRenameExecutionSchedule* schedule            = nullptr;
+    BatchRenameMutationCallback mutationCallback          = nullptr;
+    void* mutationContext                                 = nullptr;
+    const BatchRenameExecutionSchedule* schedule          = nullptr;
 };
 
 [[nodiscard]] bool IsBatchRenameCancellationHRESULT(HRESULT hr) noexcept;

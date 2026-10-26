@@ -27,7 +27,7 @@ struct BatchRenamePaneContext
     {
         std::vector<BatchRenameExecutionOp> operations;
         std::optional<FileSystemPathIdentity> pathIdentity;
-        size_t totalRows = 0u;
+        size_t totalRows     = 0u;
         size_t unchangedRows = 0u;
         std::function<void(BatchRenameExecutionResult result)> onCompleted;
         std::function<void(uint64_t completedItems, uint64_t totalItems)> onProgress;
@@ -47,6 +47,9 @@ struct BatchRenamePaneContext
     // sequentially to compute final paths (see FolderWindow::RefreshPanesAfterBatchRename).
     std::function<void(std::span<const std::filesystem::path> sourcePaths, std::span<const std::filesystem::path> targetPaths)> onSuccessfulRename;
     std::function<bool(const std::filesystem::path& path)> onRevealPath;
+    // onStartRename returns kStartRefusedForPendingExit when the host refused the run because an
+    // accepted application exit is pending. The host already showed why, and no row was attempted.
+    static constexpr HRESULT kStartRefusedForPendingExit = HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IS_SCHEDULED);
     std::function<HRESULT(CentralExecutionRequest request, uint64_t* taskIdOut)> onStartRename;
     std::function<void(uint64_t taskId)> onCancelRename;
 };
@@ -185,9 +188,7 @@ void DebugClearBatchRenameWindowDestinationProbeFailurePath() noexcept;
                                                                         const std::filesystem::path& root,
                                                                         size_t& refreshedRows,
                                                                         uint64_t& identityComparisons) noexcept;
-[[nodiscard]] bool DebugMeasureBatchRenameCollisionNameIndexForTests(size_t nameCount,
-                                                                     size_t componentLength,
-                                                                     uint64_t& retainedBytes) noexcept;
+[[nodiscard]] bool DebugMeasureBatchRenameCollisionNameIndexForTests(size_t nameCount, size_t componentLength, uint64_t& retainedBytes) noexcept;
 [[nodiscard]] BatchRename::Plan DebugBuildBatchRenamePlanForContextForTests(const BatchRenamePaneContext& context,
                                                                             const std::vector<BatchRename::Target>& targets,
                                                                             const BatchRename::Rules& rules) noexcept;

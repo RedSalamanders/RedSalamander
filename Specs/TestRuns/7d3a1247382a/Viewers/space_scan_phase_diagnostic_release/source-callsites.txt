@@ -1,0 +1,5 @@
+Read-only source reference; code is not copied. Hashes identify the cited files in the recorded immutable source snapshot.
+path=Plugins\ViewerSpace\ViewerSpace.cpp lines=8517-8527,8572-8577,8621-8628 bytes=549549 sha256=f16f238599207b8ad32098e7921676b5229b3f5cb305d25a507470fc57e62cca
+path=Plugins\FileSystem\FileSystem.DirectoryOps.cpp lines=372-438,515-559,1146-1150 bytes=57564 sha256=fb3a32f4489b9e29c21d3d3acfc506e0eefaeb183d25a6c20c9ecf59adae6775
+path=Common\Helpers.h lines=1800-1822,1849-1900 bytes=98247 sha256=4bfabb6302b55499b030feef3717145f3e3939ddd68c13045725fd149905e45e
+path=Common\Common\PerfJsonl.cpp lines=184-300 bytes=16495 sha256=8c52fb7828e01af2c0c497adc78717929eaf261576f3cffad4b27711b9a17125

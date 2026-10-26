@@ -1,0 +1,14 @@
+test_boolean_api_revision_is_rejected (__main__.DxUiRuntimeGuardTests.test_boolean_api_revision_is_rejected) ... ok
+test_current_real_sidecars_are_parsed_and_pair_checked (__main__.DxUiRuntimeGuardTests.test_current_real_sidecars_are_parsed_and_pair_checked) ... ok
+test_dependency_mismatch_is_rejected (__main__.DxUiRuntimeGuardTests.test_dependency_mismatch_is_rejected) ... ok
+test_duplicate_json_keys_are_rejected (__main__.DxUiRuntimeGuardTests.test_duplicate_json_keys_are_rejected) ... ok
+test_manifest_pin_tampering_is_rejected (__main__.DxUiRuntimeGuardTests.test_manifest_pin_tampering_is_rejected) ... ok
+test_matched_dependency_allows_different_application_binaries (__main__.DxUiRuntimeGuardTests.test_matched_dependency_allows_different_application_binaries) ... ok
+test_missing_actual_schema_key_is_rejected (__main__.DxUiRuntimeGuardTests.test_missing_actual_schema_key_is_rejected) ... ok
+test_missing_sidecar_is_rejected (__main__.DxUiRuntimeGuardTests.test_missing_sidecar_is_rejected) ... ok
+test_tampered_sidecar_after_pinning_is_rejected (__main__.DxUiRuntimeGuardTests.test_tampered_sidecar_after_pinning_is_rejected) ... ok
+
+----------------------------------------------------------------------
+Ran 9 tests in 0.414s
+
+OK

@@ -1,5 +1,7 @@
-#include "FileSystem.Internal.h"
 #include "Blake3Digest.h"
+#include "DirectoryRecordCursor.h"
+#include "FileOperationTraversalPolicy.h"
+#include "FileSystem.Internal.h"
 #include "Helpers.h"
 #include "PathUtils.h"
 #include "SynchronousIoCancelWatch.h"
@@ -29,18 +31,67 @@
 namespace
 {
 #if defined(ENABLE_TESTS)
-constexpr std::wstring_view kStagedCopyPromoteFailPathEnvVar  = L"REDSALAMANDER_FILEOPS_STAGED_COPY_PROMOTE_FAIL_PATH";
-constexpr std::wstring_view kStagedCopyPromoteFailFiredEnvVar = L"REDSALAMANDER_FILEOPS_STAGED_COPY_PROMOTE_FAIL_FIRED";
-constexpr std::wstring_view kFinalAttributesFailPathEnvVar     = L"REDSALAMANDER_FILEOPS_FINAL_ATTRIBUTES_FAIL_PATH";
-constexpr std::wstring_view kFinalAttributesFailFiredEnvVar    = L"REDSALAMANDER_FILEOPS_FINAL_ATTRIBUTES_FAIL_FIRED";
-constexpr std::wstring_view kMetadataForcePresentMaskEnvVar    = L"REDSALAMANDER_FILEOPS_METADATA_FORCE_PRESENT_MASK";
-constexpr std::wstring_view kMetadataFailMaskEnvVar            = L"REDSALAMANDER_FILEOPS_METADATA_FAIL_MASK";
-constexpr std::wstring_view kStageIdentityUnsupportedPathEnvVar = L"REDSALAMANDER_FILEOPS_STAGE_IDENTITY_UNSUPPORTED_PATH";
+enum class AdmissionProbeSlot : size_t
+{
+    Schema,
+    OwnerTid,
+    RouteFacts,
+    RouteFactsCopy,
+    RouteFactsMove,
+    LegacyPathCapabilities,
+    PeerAllowed,
+    Descriptor,
+    BuildRoute,
+    RealVolumePath,
+    RealVolumeName,
+    RootBufferAllocations,
+    RootRequestedBytes,
+    RootCapacityBytes,
+    GuidBufferAllocations,
+    GuidRequestedBytes,
+    GuidCapacityBytes,
+    CacheHits,
+    CacheMisses,
+    Count
+};
+constexpr size_t kAdmissionProbeSlots = static_cast<size_t>(AdmissionProbeSlot::Count);
+struct AdmissionProbe final
+{
+    bool enabled = false;
+    std::array<uint64_t, kAdmissionProbeSlots> values{};
+};
+thread_local AdmissionProbe g_admissionProbe;
+void CountAdmissionProbe(AdmissionProbeSlot slot, uint64_t value = 1u) noexcept
+{
+    if (g_admissionProbe.enabled)
+        g_admissionProbe.values[static_cast<size_t>(slot)] += value;
+}
+#endif
+#if defined(ENABLE_TESTS)
+constexpr std::wstring_view kStagedCopyPromoteFailPathEnvVar     = L"REDSALAMANDER_FILEOPS_STAGED_COPY_PROMOTE_FAIL_PATH";
+constexpr std::wstring_view kStagedCopyPromoteFailFiredEnvVar    = L"REDSALAMANDER_FILEOPS_STAGED_COPY_PROMOTE_FAIL_FIRED";
+constexpr std::wstring_view kFinalAttributesFailPathEnvVar       = L"REDSALAMANDER_FILEOPS_FINAL_ATTRIBUTES_FAIL_PATH";
+constexpr std::wstring_view kFinalAttributesFailFiredEnvVar      = L"REDSALAMANDER_FILEOPS_FINAL_ATTRIBUTES_FAIL_FIRED";
+constexpr std::wstring_view kMetadataForcePresentMaskEnvVar      = L"REDSALAMANDER_FILEOPS_METADATA_FORCE_PRESENT_MASK";
+constexpr std::wstring_view kMetadataFailMaskEnvVar              = L"REDSALAMANDER_FILEOPS_METADATA_FAIL_MASK";
+constexpr std::wstring_view kStageIdentityUnsupportedPathEnvVar  = L"REDSALAMANDER_FILEOPS_STAGE_IDENTITY_UNSUPPORTED_PATH";
 constexpr std::wstring_view kStageIdentityUnsupportedFiredEnvVar = L"REDSALAMANDER_FILEOPS_STAGE_IDENTITY_UNSUPPORTED_FIRED";
-constexpr std::wstring_view kRenameCommittedFailurePathEnvVar = L"REDSALAMANDER_FILEOPS_RENAME_COMMITTED_FAILURE_PATH";
-constexpr std::wstring_view kRenameCommittedFailureFiredEnvVar = L"REDSALAMANDER_FILEOPS_RENAME_COMMITTED_FAILURE_FIRED";
-constexpr std::wstring_view kDeleteCommittedFailurePathEnvVar = L"REDSALAMANDER_FILEOPS_DELETE_COMMITTED_FAILURE_PATH";
-constexpr std::wstring_view kDeleteCommittedFailureFiredEnvVar = L"REDSALAMANDER_FILEOPS_DELETE_COMMITTED_FAILURE_FIRED";
+// I35: emulates a redirector without FileIdInfo (the NAS probe of 2026-10-11) for every path at or
+// below the configured root. Unlike the one-shot injections it stays set until the test clears it.
+constexpr std::wstring_view kBindIdentityUnsupportedRootEnvVar = L"REDSALAMANDER_FILEOPS_BIND_IDENTITY_UNSUPPORTED_PATH";
+// I35 R7.1: the no-follow open of exactly this path fails with ERROR_NOT_SUPPORTED (a redirector that
+// refuses the open itself); it stays set until the test clears it.
+constexpr std::wstring_view kBindOpenNotSupportedPathEnvVar = L"REDSALAMANDER_FILEOPS_BIND_OPEN_NOT_SUPPORTED_PATH";
+// I35 R7.3: a smaller entry bound for the listing of a folder deleted by name (a number of entries).
+constexpr std::wstring_view kDeleteByNameEntryBudgetEnvVar = L"REDSALAMANDER_FILEOPS_BYNAME_ENTRY_BUDGET";
+// I35 R7.3: the listing of a folder deleted by name reports no file index (a redirector without id listings).
+constexpr std::wstring_view kDeleteByNameListWithoutIndexEnvVar = L"REDSALAMANDER_FILEOPS_BYNAME_LIST_WITHOUT_INDEX";
+constexpr std::wstring_view kRenameCommittedFailurePathEnvVar   = L"REDSALAMANDER_FILEOPS_RENAME_COMMITTED_FAILURE_PATH";
+constexpr std::wstring_view kRenameCommittedFailureFiredEnvVar  = L"REDSALAMANDER_FILEOPS_RENAME_COMMITTED_FAILURE_FIRED";
+constexpr std::wstring_view kDeleteCommittedFailurePathEnvVar   = L"REDSALAMANDER_FILEOPS_DELETE_COMMITTED_FAILURE_PATH";
+constexpr std::wstring_view kDeleteCommittedFailureFiredEnvVar  = L"REDSALAMANDER_FILEOPS_DELETE_COMMITTED_FAILURE_FIRED";
+constexpr std::wstring_view kDeleteCommittedRetainedPathEnvVar  = L"REDSALAMANDER_FILEOPS_DELETE_COMMITTED_RETAINED_PATH";
+constexpr std::wstring_view kDeleteCommittedRetainedFiredEnvVar = L"REDSALAMANDER_FILEOPS_DELETE_COMMITTED_RETAINED_FIRED";
 
 [[nodiscard]] uint32_t ReadSelfTestMetadataMask(std::wstring_view name) noexcept
 {
@@ -50,7 +101,7 @@ constexpr std::wstring_view kDeleteCommittedFailureFiredEnvVar = L"REDSALAMANDER
     {
         return 0u;
     }
-    wchar_t* end = nullptr;
+    wchar_t* end               = nullptr;
     const unsigned long parsed = std::wcstoul(value.data(), &end, 0);
     return end != value.data() && end != nullptr && *end == L'\0' ? static_cast<uint32_t>(parsed) : 0u;
 }
@@ -88,26 +139,69 @@ constexpr std::wstring_view kDeleteCommittedFailureFiredEnvVar = L"REDSALAMANDER
 }
 
 [[nodiscard]] bool ConsumeMatchingPathInjectionForSelfTest(const wchar_t* path,
-                                                            std::wstring_view pathEnvironmentVariable,
-                                                            std::wstring_view firedEnvironmentVariable,
-                                                            std::wstring_view counterName) noexcept
+                                                           std::wstring_view pathEnvironmentVariable,
+                                                           std::wstring_view firedEnvironmentVariable,
+                                                           std::wstring_view counterName) noexcept
 {
-    return path != nullptr && path[0] != L'\0' &&
-           ShouldFailOwnedPublicationForSelfTest(path, pathEnvironmentVariable, firedEnvironmentVariable, counterName);
+    return path != nullptr && path[0] != L'\0' && ShouldFailOwnedPublicationForSelfTest(path, pathEnvironmentVariable, firedEnvironmentVariable, counterName);
+}
+
+// True while the persistent identity-unsupported injection names `path` or one of its ancestors.
+[[nodiscard]] bool IsBindIdentityUnsupportedForSelfTest(const wchar_t* path) noexcept
+{
+    if (path == nullptr || path[0] == L'\0')
+    {
+        return false;
+    }
+    const DWORD required = GetEnvironmentVariableW(kBindIdentityUnsupportedRootEnvVar.data(), nullptr, 0u);
+    if (required == 0u)
+    {
+        return false;
+    }
+    std::wstring configured(static_cast<size_t>(required), L'\0');
+    const DWORD written = GetEnvironmentVariableW(kBindIdentityUnsupportedRootEnvVar.data(), configured.data(), required);
+    if (written == 0u || written >= required)
+    {
+        return false;
+    }
+    configured.resize(written);
+    while (! configured.empty() && (configured.back() == L'\\' || configured.back() == L'/'))
+    {
+        configured.pop_back();
+    }
+    const std::wstring root   = FileSystemInternal::ToExtendedPath(configured);
+    const std::wstring actual = FileSystemInternal::ToExtendedPath(path);
+    if (root.empty() || actual.size() < root.size() || ! OrdinalString::EqualsNoCase(std::wstring_view(actual).substr(0u, root.size()), root))
+    {
+        return false;
+    }
+    return actual.size() == root.size() || actual[root.size()] == L'\\';
+}
+
+// True while the persistent open-failure injection names exactly `path`.
+[[nodiscard]] bool IsBindOpenNotSupportedForSelfTest(const wchar_t* path) noexcept
+{
+    if (path == nullptr || path[0] == L'\0')
+    {
+        return false;
+    }
+    const DWORD required = GetEnvironmentVariableW(kBindOpenNotSupportedPathEnvVar.data(), nullptr, 0u);
+    if (required == 0u)
+    {
+        return false;
+    }
+    std::wstring configured(static_cast<size_t>(required), L'\0');
+    const DWORD written = GetEnvironmentVariableW(kBindOpenNotSupportedPathEnvVar.data(), configured.data(), required);
+    if (written == 0u || written >= required)
+    {
+        return false;
+    }
+    configured.resize(written);
+    return OrdinalString::EqualsNoCase(FileSystemInternal::ToExtendedPath(configured), FileSystemInternal::ToExtendedPath(path));
 }
 #endif
 
-using NtCreateFile_t = NTSTATUS(NTAPI*)(PHANDLE,
-                                        ACCESS_MASK,
-                                        POBJECT_ATTRIBUTES,
-                                        PIO_STATUS_BLOCK,
-                                        PLARGE_INTEGER,
-                                        ULONG,
-                                        ULONG,
-                                        ULONG,
-                                        ULONG,
-                                        PVOID,
-                                        ULONG);
+using NtCreateFile_t = NTSTATUS(NTAPI*)(PHANDLE, ACCESS_MASK, POBJECT_ATTRIBUTES, PIO_STATUS_BLOCK, PLARGE_INTEGER, ULONG, ULONG, ULONG, ULONG, PVOID, ULONG);
 using RtlNtStatusToDosError_t = ULONG(NTAPI*)(NTSTATUS);
 
 [[nodiscard]] NtCreateFile_t GetNtCreateFile() noexcept
@@ -147,7 +241,7 @@ using RtlNtStatusToDosError_t = ULONG(NTAPI*)(NTSTATUS);
 [[nodiscard]] HRESULT CreateExclusiveDirectoryHandle(std::wstring_view stagePath, wil::unique_handle& directory) noexcept
 {
     directory.reset();
-    const NtCreateFile_t ntCreateFile = GetNtCreateFile();
+    const NtCreateFile_t ntCreateFile              = GetNtCreateFile();
     const RtlNtStatusToDosError_t statusToDosError = GetRtlNtStatusToDosError();
     if (ntCreateFile == nullptr || statusToDosError == nullptr)
     {
@@ -157,7 +251,7 @@ using RtlNtStatusToDosError_t = ULONG(NTAPI*)(NTSTATUS);
     const std::wstring extended = FileSystemInternal::ToExtendedPath(std::wstring(stagePath));
     std::wstring ntPath;
     constexpr std::wstring_view extendedUncPrefix = L"\\\\?\\UNC\\";
-    constexpr std::wstring_view extendedPrefix = L"\\\\?\\";
+    constexpr std::wstring_view extendedPrefix    = L"\\\\?\\";
     if (extended.starts_with(extendedUncPrefix))
     {
         ntPath.assign(L"\\??\\UNC\\");
@@ -180,14 +274,14 @@ using RtlNtStatusToDosError_t = ULONG(NTAPI*)(NTSTATUS);
     }
 
     UNICODE_STRING name{};
-    name.Length = static_cast<USHORT>(pathBytes);
+    name.Length        = static_cast<USHORT>(pathBytes);
     name.MaximumLength = name.Length;
-    name.Buffer = ntPath.data();
+    name.Buffer        = ntPath.data();
     OBJECT_ATTRIBUTES attributes{};
     InitializeObjectAttributes(&attributes, &name, OBJ_CASE_INSENSITIVE, nullptr, nullptr);
 
     IO_STATUS_BLOCK ioStatus{};
-    HANDLE rawHandle = INVALID_HANDLE_VALUE;
+    HANDLE rawHandle      = INVALID_HANDLE_VALUE;
     const NTSTATUS status = ntCreateFile(&rawHandle,
                                          DELETE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
                                          &attributes,
@@ -765,8 +859,8 @@ struct SymbolicLinkReparseDataBufferForProperties final
 }
 
 [[nodiscard]] HRESULT CanonicalizeReparsePointPolicyConfiguration(const Common::Json::ObjectDocument& source,
-                                                                   FileSystemReparsePointPolicy policy,
-                                                                   std::string& configurationJson) noexcept
+                                                                  FileSystemReparsePointPolicy policy,
+                                                                  std::string& configurationJson) noexcept
 {
     if (! source)
     {
@@ -794,8 +888,7 @@ struct SymbolicLinkReparseDataBufferForProperties final
 
     size_t length = 0;
     yyjson_write_err error{};
-    Common::Json::UniqueMallocString text(
-        yyjson_mut_write_opts(document.get(), YYJSON_WRITE_NOFLAG, nullptr, &length, &error));
+    Common::Json::UniqueMallocString text(yyjson_mut_write_opts(document.get(), YYJSON_WRITE_NOFLAG, nullptr, &length, &error));
     if (! text)
     {
         return E_OUTOFMEMORY;
@@ -857,51 +950,54 @@ struct SymbolicLinkReparseDataBufferForProperties final
     return "auto";
 }
 
-[[nodiscard]] std::wstring_view StripExtendedPrefix(std::wstring_view path) noexcept
+// `\\?\C:\x` -> `C:\x`; every other path is returned unchanged. An extended UNC path's plain form
+// needs a `\\` that a view cannot supply (ExtractDriveRoot builds it).
+[[nodiscard]] std::wstring_view StripExtendedDrivePrefix(std::wstring_view path) noexcept
 {
-    if (path.rfind(L"\\\\?\\UNC\\", 0) == 0)
-    {
-        return path.substr(6);
-    }
-    if (path.rfind(L"\\\\?\\", 0) == 0)
-    {
-        return path.substr(4);
-    }
-    return path;
+    return Common::Paths::ClassifyWindowsPath(path) == Common::Paths::WindowsPathClass::ExtendedDriveAbsolute ? path.substr(4u) : path;
 }
 
+// A plain (`\\server\share`) or extended (`\\?\UNC\server\share`) UNC path; never a device path (`\\.\`).
 [[nodiscard]] bool IsUncPath(std::wstring_view path) noexcept
 {
-    const std::wstring_view normalized = StripExtendedPrefix(path);
-    return normalized.size() >= 2 && normalized[0] == L'\\' && normalized[1] == L'\\';
+    return Common::Paths::IsUncWindowsPath(path);
 }
 
+// The root GetDriveTypeW and the storage cache key name a path by: `C:\` for a drive path and the plain
+// `\\server\share\` for a UNC path, either in plain or extended form; empty for any other path.
 [[nodiscard]] std::wstring ExtractDriveRoot(std::wstring_view path) noexcept
 {
-    const std::wstring_view normalized = StripExtendedPrefix(path);
-    if (normalized.size() >= 3 && normalized[1] == L':' && (normalized[2] == L'\\' || normalized[2] == L'/'))
+    const std::wstring_view drivePath = StripExtendedDrivePrefix(path);
+    if (drivePath.size() >= 3 && drivePath[1] == L':' && (drivePath[2] == L'\\' || drivePath[2] == L'/'))
     {
-        return std::format(L"{}:\\", static_cast<wchar_t>(towupper(normalized[0])));
+        return std::format(L"{}:\\", static_cast<wchar_t>(towupper(drivePath[0])));
     }
 
-    if (! IsUncPath(path))
+    const Common::Paths::WindowsPathClass pathClass = Common::Paths::ClassifyWindowsPath(path);
+    if (pathClass != Common::Paths::WindowsPathClass::Unc && pathClass != Common::Paths::WindowsPathClass::ExtendedUnc)
     {
         return {};
     }
 
-    size_t serverEnd = normalized.find_first_of(L"\\/", 2);
+    // The server starts after `\\` or `\\?\UNC\`; an extended root is given in its plain form.
+    const size_t serverStart = pathClass == Common::Paths::WindowsPathClass::Unc ? 2u : 8u;
+    const size_t serverEnd   = path.find_first_of(L"\\/", serverStart);
     if (serverEnd == std::wstring_view::npos)
     {
         return {};
     }
 
-    size_t shareEnd = normalized.find_first_of(L"\\/", serverEnd + 1);
+    std::wstring root     = pathClass == Common::Paths::WindowsPathClass::Unc ? std::wstring(path.substr(0u, 2u)) : std::wstring(L"\\\\");
+    const size_t shareEnd = path.find_first_of(L"\\/", serverEnd + 1);
     if (shareEnd == std::wstring_view::npos)
     {
-        return std::wstring(normalized) + L"\\";
+        root.append(path.substr(serverStart));
+        root.push_back(L'\\');
+        return root;
     }
 
-    return std::wstring(normalized.substr(0, shareEnd + 1));
+    root.append(path.substr(serverStart, shareEnd + 1 - serverStart));
+    return root;
 }
 
 #ifdef _DEBUG
@@ -921,6 +1017,10 @@ struct StorageProbeDebugHooks
                             DWORD outBufferBytes,
                             LPDWORD bytesReturned,
                             LPOVERLAPPED overlapped) noexcept                                                                                  = nullptr;
+    wil::unique_hfile (*openFollowingPath)(
+        void* context, const wchar_t* path, DWORD desiredAccess, DWORD shareMode, DWORD creationDisposition, DWORD flags) noexcept = nullptr;
+    DWORD (*getFinalPathName)(void* context, HANDLE file, wchar_t* path, DWORD bufferLength, DWORD flags) noexcept                 = nullptr;
+    UINT (*getDriveType)(void* context, const wchar_t* rootPath) noexcept                                                          = nullptr;
 };
 
 std::atomic<StorageProbeDebugHooks*> g_storageProbeDebugHooks{nullptr};
@@ -966,6 +1066,9 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
     }
 #endif
 
+#if defined(ENABLE_TESTS)
+    CountAdmissionProbe(AdmissionProbeSlot::RealVolumePath);
+#endif
     return GetVolumePathNameW(fileName, volumePathName, bufferLength);
 }
 
@@ -979,6 +1082,9 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
     }
 #endif
 
+#if defined(ENABLE_TESTS)
+    CountAdmissionProbe(AdmissionProbeSlot::RealVolumeName);
+#endif
     return GetVolumeNameForVolumeMountPointW(volumeMountPoint, volumeName, bufferLength);
 }
 
@@ -995,6 +1101,20 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
     return QueryDosDeviceW(deviceName, targetPath, bufferLength);
 }
 
+// A UNC root's drive type is a network round trip to its server; the debug hook keeps self-tests off the network.
+[[nodiscard]] UINT GetDriveTypeForStorageProbe(const wchar_t* rootPath) noexcept
+{
+#ifdef _DEBUG
+    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
+    if (hooks != nullptr && hooks->getDriveType != nullptr)
+    {
+        return hooks->getDriveType(hooks->context, rootPath);
+    }
+#endif
+
+    return GetDriveTypeW(rootPath);
+}
+
 [[nodiscard]] wil::unique_hfile OpenStorageProbeVolume(const wchar_t* volumePath) noexcept
 {
 #ifdef _DEBUG
@@ -1006,6 +1126,37 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
 #endif
 
     return wil::unique_hfile(CreateFileW(volumePath, 0, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr));
+}
+
+// Admission observes the followed endpoint's volume, unlike mutation BindObject,
+// which must retain the no-follow object. Borrow the ABI's terminated path only
+// synchronously, request no data access, and never retain this handle in a cache.
+[[nodiscard]] wil::unique_hfile OpenFollowingPathForRouteObservation(const wchar_t* path) noexcept
+{
+    constexpr DWORD shareMode = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    constexpr DWORD flags     = FILE_FLAG_BACKUP_SEMANTICS;
+#ifdef _DEBUG
+    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
+    if (hooks != nullptr)
+    {
+        // Existing synthetic storage hooks must not escape into real path I/O.
+        return hooks->openFollowingPath != nullptr ? hooks->openFollowingPath(hooks->context, path, 0u, shareMode, OPEN_EXISTING, flags) : wil::unique_hfile{};
+    }
+#endif
+    return wil::unique_hfile(CreateFileW(path, 0u, shareMode, nullptr, OPEN_EXISTING, flags, nullptr));
+}
+
+[[nodiscard]] DWORD GetFinalPathNameForRouteObservation(HANDLE file, wchar_t* path, DWORD bufferLength) noexcept
+{
+    constexpr DWORD flags = FILE_NAME_OPENED | VOLUME_NAME_GUID;
+#ifdef _DEBUG
+    StorageProbeDebugHooks* hooks = g_storageProbeDebugHooks.load(std::memory_order_acquire);
+    if (hooks != nullptr)
+    {
+        return hooks->getFinalPathName != nullptr ? hooks->getFinalPathName(hooks->context, file, path, bufferLength, flags) : 0u;
+    }
+#endif
+    return GetFinalPathNameByHandleW(file, path, bufferLength, flags);
 }
 
 [[nodiscard]] BOOL DeviceIoControlForStorageProbe(HANDLE device,
@@ -1036,13 +1187,46 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
     }
 
     std::wstring input(path);
+    std::array<wchar_t, MAX_PATH> inlineRoot{};
+    if (GetVolumePathNameForStorageProbe(input.c_str(), inlineRoot.data(), static_cast<DWORD>(inlineRoot.size())))
+    {
+        const auto terminator = std::ranges::find(inlineRoot, L'\0');
+        if (terminator != inlineRoot.begin() && terminator != inlineRoot.end() && *(terminator - 1) == L'\\')
+        {
+            std::wstring volumeRoot(inlineRoot.data(), static_cast<size_t>(terminator - inlineRoot.begin()));
+#if defined(ENABLE_TESTS)
+            // Count the materialized root if it exceeds this implementation's
+            // inline string capacity; a mounted root may still need a small heap.
+            if (volumeRoot.capacity() > std::wstring{}.capacity())
+            {
+                CountAdmissionProbe(AdmissionProbeSlot::RootBufferAllocations);
+                CountAdmissionProbe(AdmissionProbeSlot::RootRequestedBytes, static_cast<uint64_t>(volumeRoot.size()) * sizeof(wchar_t));
+                CountAdmissionProbe(AdmissionProbeSlot::RootCapacityBytes, static_cast<uint64_t>(volumeRoot.capacity() + 1u) * sizeof(wchar_t));
+            }
+#endif
+            return volumeRoot;
+        }
+    }
+    // The API does not promise a specific too-small error, and a one-character
+    // short buffer may succeed without the trailing slash. Retry the same real
+    // path once at the previous bound; never manufacture a root from path text.
     std::wstring volumeRoot(32768u, L'\0');
+#if defined(ENABLE_TESTS)
+    CountAdmissionProbe(AdmissionProbeSlot::RootBufferAllocations);
+    CountAdmissionProbe(AdmissionProbeSlot::RootRequestedBytes, 32768u * sizeof(wchar_t));
+    CountAdmissionProbe(AdmissionProbeSlot::RootCapacityBytes, static_cast<uint64_t>(volumeRoot.capacity() + 1u) * sizeof(wchar_t));
+#endif
     if (! GetVolumePathNameForStorageProbe(input.c_str(), volumeRoot.data(), static_cast<DWORD>(volumeRoot.size())))
     {
         return {};
     }
 
-    TrimAfterFirstNull(volumeRoot);
+    const size_t terminator = volumeRoot.find(L'\0');
+    if (terminator == std::wstring::npos || terminator == 0u || volumeRoot[terminator - 1u] != L'\\')
+    {
+        return {};
+    }
+    volumeRoot.resize(terminator);
     return volumeRoot;
 }
 
@@ -1076,14 +1260,19 @@ void TrimAfterFirstNull(std::wstring& text) noexcept
     }
 
     std::wstring volumeRootText(volumeRoot);
-    std::wstring volumeName(32768u, L'\0');
+    // GetVolumeNameForVolumeMountPointW documents 50 characters for its largest
+    // volume GUID path. The input mount root can still be an extended long path.
+    std::array<wchar_t, 50u> volumeName{};
     if (! GetVolumeNameForVolumeMountPointForStorageProbe(volumeRootText.c_str(), volumeName.data(), static_cast<DWORD>(volumeName.size())))
     {
         return {};
     }
-
-    TrimAfterFirstNull(volumeName);
-    return BuildOpenableVolumeGuidDevicePath(volumeName);
+    const auto terminator = std::ranges::find(volumeName, L'\0');
+    if (terminator == volumeName.begin() || terminator == volumeName.end())
+    {
+        return {};
+    }
+    return BuildOpenableVolumeGuidDevicePath(std::wstring_view(volumeName.data(), static_cast<size_t>(terminator - volumeName.begin())));
 }
 
 struct LocalCapabilityRouteInfo final
@@ -1105,8 +1294,8 @@ struct LocalCapabilityRouteInfo final
 
 // Route facts are queried once per child name by Create Directory, Batch Rename, and Change
 // Case, often on the UI thread. A volume's identity and drive type are stable for the life of
-// a mount, so remember the last resolved volume briefly and pay one GetVolumePathNameW per
-// query instead of the volume-GUID and drive-type lookups as well.
+// a mount, so remember the last resolved volume briefly. Reuse still requires a
+// fresh observation of each requested path; a lexical prefix is never volume authority.
 struct LocalVolumeRouteCache final
 {
     LocalVolumeRouteCache()                                        = default;
@@ -1117,21 +1306,101 @@ struct LocalVolumeRouteCache final
 
     std::mutex mutex;
     std::wstring volumeRoot;
+    std::wstring volumeGuidDevicePath;
     LocalCapabilityRouteInfo route;
     ULONGLONG resolvedTick = 0u;
 };
 LocalVolumeRouteCache g_localVolumeRouteCache;
 constexpr ULONGLONG kLocalVolumeRouteCacheTtlMs = 2'000u;
 
-[[nodiscard]] LocalCapabilityRouteInfo BuildLocalCapabilityRouteInfo(std::wstring_view path) noexcept
+[[nodiscard]] std::optional<LocalCapabilityRouteInfo> TryObserveCachedLocalRoute(const wchar_t* path, bool& rejectResolvedRootCache) noexcept
 {
+    const std::wstring_view pathView(path);
+    if (! Common::Paths::IsSupportedLocalFileOperationPath(pathView))
+    {
+        return std::nullopt;
+    }
+
+    std::wstring cachedRoot;
+    std::wstring cachedGuid;
+    LocalCapabilityRouteInfo cachedRoute;
+    ULONGLONG cachedTick = 0u;
+    {
+        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
+        if (g_localVolumeRouteCache.route.remote || g_localVolumeRouteCache.volumeGuidDevicePath.empty() ||
+            GetTickCount64() - g_localVolumeRouteCache.resolvedTick > kLocalVolumeRouteCacheTtlMs || ! g_localVolumeRouteCache.volumeRoot.ends_with(L'\\') ||
+            ! OrdinalString::StartsWithNoCase(pathView, g_localVolumeRouteCache.volumeRoot))
+        {
+            return std::nullopt;
+        }
+        cachedRoot  = g_localVolumeRouteCache.volumeRoot;
+        cachedGuid  = g_localVolumeRouteCache.volumeGuidDevicePath;
+        cachedRoute = g_localVolumeRouteCache.route;
+        cachedTick  = g_localVolumeRouteCache.resolvedTick;
+    }
+    if (! OrdinalString::StartsWithNoCase(cachedGuid, L"\\\\?\\Volume{") || ! cachedGuid.ends_with(L'}'))
+    {
+        return std::nullopt;
+    }
+
+    // The prefix above only limits the optimization. Opening this exact path
+    // follows current junction/symlink routing anew on every query. Missing or
+    // inaccessible paths and non-Mount-Manager/SMB endpoints keep the old resolver.
+    const wil::unique_hfile file = OpenFollowingPathForRouteObservation(path);
+    if (! file)
+    {
+        return std::nullopt;
+    }
+    std::array<wchar_t, MAX_PATH> finalPath{};
+    const DWORD length = GetFinalPathNameForRouteObservation(file.get(), finalPath.data(), static_cast<DWORD>(finalPath.size()));
+    if (length == 0u || length >= finalPath.size() || finalPath[length] != L'\0')
+    {
+        return std::nullopt;
+    }
+    const std::wstring_view finalName(finalPath.data(), length);
+    if (finalName.size() <= cachedGuid.size() || finalName[cachedGuid.size()] != L'\\' ||
+        ! OrdinalString::EqualsNoCase(finalName.substr(0u, cachedGuid.size()), cachedGuid))
+    {
+        // A known new endpoint must not fall through to a stale same-spelling
+        // mount cache hit (for example, a junction retarget or remounted drive).
+        rejectResolvedRootCache = true;
+        return std::nullopt;
+    }
+    const std::wstring currentMountGuid = ResolveVolumeGuidDevicePath(cachedRoot);
+    if (! OrdinalString::EqualsNoCase(currentMountGuid, cachedGuid))
+    {
+        rejectResolvedRootCache = true;
+        return std::nullopt;
+    }
+    if (GetTickCount64() - cachedTick > kLocalVolumeRouteCacheTtlMs)
+    {
+        return std::nullopt;
+    }
+#if defined(ENABLE_TESTS)
+    CountAdmissionProbe(AdmissionProbeSlot::CacheHits);
+#endif
+    return cachedRoute;
+}
+
+[[nodiscard]] LocalCapabilityRouteInfo BuildLocalCapabilityRouteInfo(const wchar_t* pathText) noexcept
+{
+#if defined(ENABLE_TESTS)
+    CountAdmissionProbe(AdmissionProbeSlot::BuildRoute);
+#endif
+    const std::wstring_view path(pathText);
     LocalCapabilityRouteInfo route{};
     if (IsUncPath(path))
     {
         route.remote                    = true;
         const std::wstring rootIdentity = ExtractDriveRoot(path);
-        route.rootId = rootIdentity.empty() ? std::string("local-provider-root") : EncodeLocalRootId(rootIdentity);
+        route.rootId                    = rootIdentity.empty() ? std::string("local-provider-root") : EncodeLocalRootId(rootIdentity);
         return route;
+    }
+
+    bool rejectResolvedRootCache = false;
+    if (const std::optional<LocalCapabilityRouteInfo> observed = TryObserveCachedLocalRoute(pathText, rejectResolvedRootCache); observed.has_value())
+    {
+        return observed.value();
     }
 
     const std::wstring volumeRoot = ResolveLocalVolumeRootPath(path);
@@ -1146,14 +1415,22 @@ constexpr ULONGLONG kLocalVolumeRouteCacheTtlMs = 2'000u;
     const ULONGLONG nowTick = GetTickCount64();
     {
         std::scoped_lock lock(g_localVolumeRouteCache.mutex);
-        if (g_localVolumeRouteCache.volumeRoot == volumeRoot && nowTick - g_localVolumeRouteCache.resolvedTick <= kLocalVolumeRouteCacheTtlMs)
+        if (! rejectResolvedRootCache && g_localVolumeRouteCache.volumeRoot == volumeRoot &&
+            nowTick - g_localVolumeRouteCache.resolvedTick <= kLocalVolumeRouteCacheTtlMs)
         {
+#if defined(ENABLE_TESTS)
+            CountAdmissionProbe(AdmissionProbeSlot::CacheHits);
+#endif
             return g_localVolumeRouteCache.route;
         }
     }
 
-    route.remote              = GetDriveTypeW(volumeRoot.c_str()) == DRIVE_REMOTE;
-    std::wstring rootIdentity = ResolveVolumeGuidDevicePath(volumeRoot);
+#if defined(ENABLE_TESTS)
+    CountAdmissionProbe(AdmissionProbeSlot::CacheMisses);
+#endif
+    route.remote                      = GetDriveTypeW(volumeRoot.c_str()) == DRIVE_REMOTE;
+    std::wstring rootIdentity         = ResolveVolumeGuidDevicePath(volumeRoot);
+    std::wstring volumeGuidDevicePath = rootIdentity;
     if (rootIdentity.empty())
     {
         rootIdentity = volumeRoot;
@@ -1161,15 +1438,16 @@ constexpr ULONGLONG kLocalVolumeRouteCacheTtlMs = 2'000u;
     route.rootId = EncodeLocalRootId(std::move(rootIdentity));
 
     std::scoped_lock lock(g_localVolumeRouteCache.mutex);
-    g_localVolumeRouteCache.volumeRoot   = volumeRoot;
-    g_localVolumeRouteCache.route        = route;
-    g_localVolumeRouteCache.resolvedTick = nowTick;
+    g_localVolumeRouteCache.volumeRoot           = volumeRoot;
+    g_localVolumeRouteCache.volumeGuidDevicePath = std::move(volumeGuidDevicePath);
+    g_localVolumeRouteCache.route                = route;
+    g_localVolumeRouteCache.resolvedTick         = nowTick;
     return route;
 }
 
 [[nodiscard]] std::wstring ResolveSubstTargetPath(std::wstring_view volumeRoot) noexcept
 {
-    const std::wstring_view normalized = StripExtendedPrefix(volumeRoot);
+    const std::wstring_view normalized = StripExtendedDrivePrefix(volumeRoot);
     if (normalized.size() < 2 || normalized[1] != L':')
     {
         return {};
@@ -1388,8 +1666,28 @@ struct DebugMountedVolumeStorageProbeState
     std::wstring openedVolumePath;
     std::wstring lastVolumePathInput;
     std::wstring lastVolumeNameInput;
-    unsigned int volumePathCalls = 0;
-    unsigned int volumeNameCalls = 0;
+    unsigned int volumePathCalls      = 0;
+    unsigned int volumeNameCalls      = 0;
+    DWORD firstVolumePathBufferLength = 0u;
+    DWORD lastVolumePathBufferLength  = 0u;
+    DWORD lastVolumeNameBufferLength  = 0u;
+    DWORD volumePathError             = ERROR_SUCCESS;
+    DWORD volumeNameError             = ERROR_SUCCESS;
+    bool oneShortSuccess              = false;
+    std::wstring finalPath            = L"\\\\?\\Volume{11111111-2222-3333-4444-555555555555}\\Folder\\file.bin";
+    std::wstring mountGuidAfterFinal;
+    std::wstring lastFollowingPath;
+    unsigned int followingOpenCalls = 0u;
+    unsigned int finalPathCalls     = 0u;
+    DWORD followingDesiredAccess    = MAXDWORD;
+    DWORD followingShareMode        = 0u;
+    DWORD followingDisposition      = 0u;
+    DWORD followingFlags            = 0u;
+    DWORD finalFlags                = 0u;
+    DWORD finalBufferLength         = 0u;
+    DWORD forcedFinalLength         = 0u;
+    bool failFollowingOpen          = false;
+    bool failFinalQuery             = false;
 };
 
 bool DebugCopyStringToBuffer(std::wstring_view text, wchar_t* buffer, DWORD bufferLength) noexcept
@@ -1422,7 +1720,18 @@ BOOL DebugMountedVolumeGetVolumePathName(void* context, const wchar_t* fileName,
     }
 
     ++state->volumePathCalls;
-    state->lastVolumePathInput = fileName != nullptr ? fileName : L"";
+    if (state->volumePathCalls == 1u)
+        state->firstVolumePathBufferLength = bufferLength;
+    state->lastVolumePathBufferLength = bufferLength;
+    state->lastVolumePathInput        = fileName != nullptr ? fileName : L"";
+    if (state->volumePathError != ERROR_SUCCESS)
+    {
+        SetLastError(state->volumePathError);
+        return FALSE;
+    }
+    if (state->oneShortSuccess && state->volumeRoot.size() == bufferLength && state->volumeRoot.ends_with(L'\\'))
+        return DebugCopyStringToBuffer(std::wstring_view(state->volumeRoot).substr(0u, state->volumeRoot.size() - 1u), volumePathName, bufferLength) ? TRUE
+                                                                                                                                                     : FALSE;
     return DebugCopyStringToBuffer(state->volumeRoot, volumePathName, bufferLength) ? TRUE : FALSE;
 }
 
@@ -1436,7 +1745,13 @@ BOOL DebugMountedVolumeGetVolumeNameForVolumeMountPoint(void* context, const wch
     }
 
     ++state->volumeNameCalls;
-    state->lastVolumeNameInput = volumeMountPoint != nullptr ? volumeMountPoint : L"";
+    state->lastVolumeNameBufferLength = bufferLength;
+    state->lastVolumeNameInput        = volumeMountPoint != nullptr ? volumeMountPoint : L"";
+    if (state->volumeNameError != ERROR_SUCCESS)
+    {
+        SetLastError(state->volumeNameError);
+        return FALSE;
+    }
     return DebugCopyStringToBuffer(state->volumeName, volumeName, bufferLength) ? TRUE : FALSE;
 }
 
@@ -1454,6 +1769,228 @@ wil::unique_hfile DebugMountedVolumeOpenVolume(void* context, const wchar_t* vol
         state->openedVolumePath = volumePath != nullptr ? volumePath : L"";
     }
     return {};
+}
+
+wil::unique_hfile DebugOpenFollowingRoutePath(
+    void* context, const wchar_t* path, DWORD desiredAccess, DWORD shareMode, DWORD creationDisposition, DWORD flags) noexcept
+{
+    auto* state = static_cast<DebugMountedVolumeStorageProbeState*>(context);
+    ++state->followingOpenCalls;
+    state->lastFollowingPath      = path;
+    state->followingDesiredAccess = desiredAccess;
+    state->followingShareMode     = shareMode;
+    state->followingDisposition   = creationDisposition;
+    state->followingFlags         = flags;
+    if (state->failFollowingOpen)
+    {
+        SetLastError(ERROR_FILE_NOT_FOUND);
+        return {};
+    }
+    // A real owned kernel handle exercises every early-exit cleanup path. The
+    // final-name hook supplies synthetic metadata; no fake R: path is opened.
+    return wil::unique_hfile(CreateEventW(nullptr, TRUE, FALSE, nullptr));
+}
+
+DWORD DebugGetFinalRoutePath(void* context, HANDLE file, wchar_t* path, DWORD bufferLength, DWORD flags) noexcept
+{
+    auto* state = static_cast<DebugMountedVolumeStorageProbeState*>(context);
+    ++state->finalPathCalls;
+    state->finalFlags        = flags;
+    state->finalBufferLength = bufferLength;
+    DWORD handleFlags        = 0u;
+    if (! GetHandleInformation(file, &handleFlags) || state->failFinalQuery)
+    {
+        SetLastError(ERROR_ACCESS_DENIED);
+        return 0u;
+    }
+    if (state->forcedFinalLength != 0u)
+    {
+        return state->forcedFinalLength;
+    }
+    if (! DebugCopyStringToBuffer(state->finalPath, path, bufferLength))
+    {
+        return static_cast<DWORD>(state->finalPath.size() + 1u);
+    }
+    if (! state->mountGuidAfterFinal.empty())
+    {
+        state->volumeName = state->mountGuidAfterFinal;
+    }
+    return static_cast<DWORD>(state->finalPath.size());
+}
+
+void RunDebugLocalRouteObservationSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    DebugMountedVolumeStorageProbeState state;
+    StorageProbeDebugHooks hooks{
+        .context                          = &state,
+        .getVolumePathName                = DebugMountedVolumeGetVolumePathName,
+        .getVolumeNameForVolumeMountPoint = DebugMountedVolumeGetVolumeNameForVolumeMountPoint,
+        .openFollowingPath                = DebugOpenFollowingRoutePath,
+        .getFinalPathName                 = DebugGetFinalRoutePath,
+    };
+    StorageProbeDebugScope scope(hooks);
+    std::wstring savedRoot;
+    std::wstring savedGuid;
+    LocalCapabilityRouteInfo savedRoute;
+    ULONGLONG savedTick = 0u;
+    {
+        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
+        savedRoot  = g_localVolumeRouteCache.volumeRoot;
+        savedGuid  = g_localVolumeRouteCache.volumeGuidDevicePath;
+        savedRoute = g_localVolumeRouteCache.route;
+        savedTick  = g_localVolumeRouteCache.resolvedTick;
+    }
+    const auto restore = wil::scope_exit([&]
+    {
+        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
+        g_localVolumeRouteCache.volumeRoot           = std::move(savedRoot);
+        g_localVolumeRouteCache.volumeGuidDevicePath = std::move(savedGuid);
+        g_localVolumeRouteCache.route                = std::move(savedRoute);
+        g_localVolumeRouteCache.resolvedTick         = savedTick;
+    });
+    const auto seed    = [&]
+    {
+        state                   = DebugMountedVolumeStorageProbeState{};
+        const std::wstring guid = BuildOpenableVolumeGuidDevicePath(state.volumeName);
+        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
+        g_localVolumeRouteCache.volumeRoot           = state.volumeRoot;
+        g_localVolumeRouteCache.volumeGuidDevicePath = guid;
+        g_localVolumeRouteCache.route                = LocalCapabilityRouteInfo{EncodeLocalRootId(guid), false};
+        g_localVolumeRouteCache.resolvedTick         = GetTickCount64();
+    };
+    const auto currentRoute       = [&] { return BuildLocalCapabilityRouteInfo(L"R:\\MountedVolume\\Folder\\file.bin"); };
+    const std::string firstId     = EncodeLocalRootId(BuildOpenableVolumeGuidDevicePath(state.volumeName));
+    const std::wstring secondGuid = L"\\\\?\\Volume{AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE}\\";
+    const std::string secondId    = EncodeLocalRootId(BuildOpenableVolumeGuidDevicePath(secondGuid));
+
+    seed();
+    const LocalCapabilityRouteInfo hit = currentRoute();
+    DebugCheck(hit.rootId == firstId && ! hit.remote && state.volumePathCalls == 0u && state.volumeNameCalls == 1u && state.followingOpenCalls == 1u &&
+                   state.finalPathCalls == 1u && state.lastFollowingPath == L"R:\\MountedVolume\\Folder\\file.bin",
+               L"an existing route must observe the exact followed path and revalidate its cached mount GUID",
+               passed,
+               failed);
+    DebugCheck(state.followingDesiredAccess == 0u && state.followingShareMode == (FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE) &&
+                   state.followingDisposition == OPEN_EXISTING && state.followingFlags == FILE_FLAG_BACKUP_SEMANTICS &&
+                   state.finalFlags == (FILE_NAME_OPENED | VOLUME_NAME_GUID) && state.finalBufferLength == MAX_PATH,
+               L"route observation must request no data access, follow links, and use bounded opened-name GUID output",
+               passed,
+               failed);
+
+    seed();
+    state.failFollowingOpen = true;
+    const auto missing      = currentRoute();
+    DebugCheck(missing.rootId == firstId && state.volumePathCalls == 1u && state.finalPathCalls == 0u,
+               L"an absent or inaccessible endpoint must retain the original volume-path resolver",
+               passed,
+               failed);
+
+    seed();
+    state.failFinalQuery   = true;
+    const auto unsupported = currentRoute();
+    DebugCheck(unsupported.rootId == firstId && state.volumePathCalls == 1u && state.volumeNameCalls == 0u,
+               L"an unsupported final-name query must retain the original resolved-root cache policy",
+               passed,
+               failed);
+
+    seed();
+    state.forcedFinalLength = MAX_PATH + 42u;
+    const auto oversized    = currentRoute();
+    DebugCheck(oversized.rootId == firstId && state.volumePathCalls == 1u && state.finalBufferLength == MAX_PATH,
+               L"an oversized final name must fall back without allocating or trusting truncated identity",
+               passed,
+               failed);
+
+    seed();
+    state.finalPath       = secondGuid + L"Folder\\file.bin";
+    state.volumeName      = secondGuid;
+    const auto retargeted = currentRoute();
+    DebugCheck(retargeted.rootId == secondId && state.volumePathCalls == 1u && state.volumeNameCalls == 1u,
+               L"a changed followed endpoint must not authorize a stale same-spelling mount cache hit",
+               passed,
+               failed);
+
+    seed();
+    state.finalPath               = secondGuid + L"Folder\\file.bin";
+    state.volumePathError         = ERROR_ACCESS_DENIED;
+    const auto unresolvedRetarget = currentRoute();
+    DebugCheck(unresolvedRetarget.rootId == "local-provider-root" && state.volumePathCalls == 2u && state.volumeNameCalls == 0u,
+               L"a changed endpoint whose fallback resolution fails must never reuse the previously cached GUID",
+               passed,
+               failed);
+
+    seed();
+    state.mountGuidAfterFinal = secondGuid;
+    const auto remounted      = currentRoute();
+    DebugCheck(remounted.rootId == secondId && state.volumePathCalls == 1u && state.volumeNameCalls == 2u,
+               L"a cached mount changed during observation must be re-resolved instead of returning the old GUID",
+               passed,
+               failed);
+
+    seed();
+    {
+        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
+        g_localVolumeRouteCache.resolvedTick = GetTickCount64() - kLocalVolumeRouteCacheTtlMs - 1u;
+    }
+    const auto expired = currentRoute();
+    DebugCheck(expired.rootId == firstId && state.followingOpenCalls == 0u && state.volumePathCalls == 1u && state.volumeNameCalls == 1u,
+               L"expired route facts must be queried through the original resolver without a following-handle shortcut",
+               passed,
+               failed);
+
+    seed();
+    const auto unc = BuildLocalCapabilityRouteInfo(L"\\\\server\\share\\Folder\\file.bin");
+    DebugCheck(unc.remote && ! unc.rootId.empty() && state.followingOpenCalls == 0u && state.volumePathCalls == 0u,
+               L"UNC classification must bypass local following-handle observation",
+               passed,
+               failed);
+
+    seed();
+    {
+        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
+        g_localVolumeRouteCache.volumeGuidDevicePath.clear();
+    }
+    const auto noGuid = currentRoute();
+    DebugCheck(noGuid.rootId == firstId && state.followingOpenCalls == 0u && state.volumePathCalls == 1u,
+               L"a cache without a retained GUID must preserve the original resolved-root cache policy",
+               passed,
+               failed);
+
+    seed();
+    state.volumeNameError = ERROR_NOT_SUPPORTED;
+    {
+        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
+        g_localVolumeRouteCache.volumeGuidDevicePath.clear();
+        g_localVolumeRouteCache.resolvedTick = GetTickCount64() - kLocalVolumeRouteCacheTtlMs - 1u;
+    }
+    const auto unavailableGuid = currentRoute();
+    DebugCheck(unavailableGuid.rootId == EncodeLocalRootId(state.volumeRoot) && state.followingOpenCalls == 0u && state.volumePathCalls == 1u &&
+                   state.volumeNameCalls == 1u,
+               L"an unavailable Mount Manager GUID must preserve the original system-resolved root token",
+               passed,
+               failed);
+
+    // Exercise all owned-handle early exits repeatedly, including mismatched
+    // metadata. Small unrelated handle noise cannot conceal a 64-handle leak.
+    for (unsigned int mode = 0u; mode < 4u; ++mode)
+    {
+        seed();
+        state.failFinalQuery       = mode == 1u;
+        state.forcedFinalLength    = mode == 2u ? MAX_PATH + 42u : 0u;
+        state.finalPath            = mode == 3u ? secondGuid + L"Folder\\file.bin" : state.finalPath;
+        DWORD handlesBefore        = 0u;
+        DWORD handlesAfter         = 0u;
+        const bool beforeAvailable = GetProcessHandleCount(GetCurrentProcess(), &handlesBefore) != FALSE;
+        for (unsigned int iteration = 0u; iteration < 64u; ++iteration)
+        {
+            static_cast<void>(currentRoute());
+        }
+        const bool afterAvailable = GetProcessHandleCount(GetCurrentProcess(), &handlesAfter) != FALSE;
+        DebugCheck(beforeAvailable && afterAvailable && state.followingOpenCalls == 64u && handlesAfter <= handlesBefore + 2u,
+                   L"successful, failed, oversized and mismatched observations must close every owned path handle",
+                   passed,
+                   failed);
+    }
 }
 
 void RunDebugMountedVolumeStorageProbeSelfTest(unsigned int& passed, unsigned int& failed) noexcept
@@ -1476,15 +2013,17 @@ void RunDebugMountedVolumeStorageProbeSelfTest(unsigned int& passed, unsigned in
         return;
     }
 
-    const HRESULT hr = fileSystem->GetStorageCharacteristics(L"R:\\MountedVolume\\Folder\\file.bin", &characteristics);
+    const HRESULT hr                        = fileSystem->GetStorageCharacteristics(L"R:\\MountedVolume\\Folder\\file.bin", &characteristics);
     const unsigned int firstVolumeNameCalls = state.volumeNameCalls;
-    const HRESULT cachedHr = fileSystem->GetStorageCharacteristics(L"R:\\MountedVolume\\Other\\second.bin", &characteristics);
+    const HRESULT cachedHr                  = fileSystem->GetStorageCharacteristics(L"R:\\MountedVolume\\Other\\second.bin", &characteristics);
     fileSystem->Release();
 
     DebugCheck(hr == S_OK, L"mounted-volume storage probe should keep GetStorageCharacteristics non-failing", passed, failed);
     DebugCheck(cachedHr == S_OK, L"cached mounted-volume storage query should remain non-failing", passed, failed);
     DebugCheck(state.volumeNameCalls == firstVolumeNameCalls,
-               L"repeated storage queries for one resolved volume should reuse the per-instance physical probe", passed, failed);
+               L"repeated storage queries for one resolved volume should reuse the per-instance physical probe",
+               passed,
+               failed);
     DebugCheck(state.volumePathCalls > 0u, L"mounted-volume storage probe should resolve the real volume root", passed, failed);
     DebugCheck(state.volumeNameCalls > 0u, L"mounted-volume storage probe should resolve a volume GUID path", passed, failed);
     DebugCheck(state.lastVolumeNameInput == state.volumeRoot, L"mounted-volume storage probe should resolve the returned mount root", passed, failed);
@@ -1496,6 +2035,66 @@ void RunDebugMountedVolumeStorageProbeSelfTest(unsigned int& passed, unsigned in
     }
     DebugCheck(state.openedVolumePath == expectedOpenPath, L"mounted-volume storage probe should open the resolved volume GUID device", passed, failed);
     DebugCheck(state.openedVolumePath != L"\\\\.\\R:", L"mounted-volume storage probe must not open the lexical drive letter", passed, failed);
+
+    // Reuse the existing storage hooks; these controls isolate output-buffer
+    // behavior from cache/per-instance storage policy and real-volume fixtures.
+    state                         = DebugMountedVolumeStorageProbeState{};
+    const std::wstring shortInput = state.volumeRoot + L"file.bin";
+    const auto shortRoot          = ResolveLocalVolumeRootPath(shortInput);
+    const auto shortGuid          = ResolveVolumeGuidDevicePath(shortRoot);
+    DebugCheck(shortRoot == state.volumeRoot && state.volumePathCalls == 1u && state.firstVolumePathBufferLength == MAX_PATH,
+               L"short mounted root should use one actual wrapper call and preserve the returned mount root",
+               passed,
+               failed);
+    DebugCheck(shortGuid == expectedOpenPath && state.volumeNameCalls == 1u && state.lastVolumeNameBufferLength == 50u,
+               L"GUID result should preserve exact openable identity through the documented bounded output buffer",
+               passed,
+               failed);
+
+    state                = DebugMountedVolumeStorageProbeState{};
+    state.volumeRoot     = L"R:\\" + std::wstring(MAX_PATH + 17u, L'x') + L"\\";
+    const auto longInput = state.volumeRoot + L"file.bin";
+    const auto longRoot  = ResolveLocalVolumeRootPath(longInput);
+    DebugCheck(longRoot == state.volumeRoot && state.volumePathCalls == 2u && state.firstVolumePathBufferLength == MAX_PATH &&
+                   state.lastVolumePathBufferLength == 32768u && state.lastVolumePathInput == longInput,
+               L"long mount root should retry the exact input once at the prior bound, without lexical drive fallback",
+               passed,
+               failed);
+    const auto longGuid = ResolveVolumeGuidDevicePath(longRoot);
+    DebugCheck(longGuid == expectedOpenPath && state.lastVolumeNameInput == state.volumeRoot && state.lastVolumeNameBufferLength == 50u,
+               L"long mounted input must not truncate or change the GUID query's root",
+               passed,
+               failed);
+
+    state                   = DebugMountedVolumeStorageProbeState{};
+    state.volumeRoot        = L"R:\\" + std::wstring(MAX_PATH - 4u, L'x') + L"\\";
+    state.oneShortSuccess   = true;
+    const auto boundaryRoot = ResolveLocalVolumeRootPath(state.volumeRoot + L"file.bin");
+    DebugCheck(boundaryRoot == state.volumeRoot && boundaryRoot.ends_with(L'\\') && state.volumePathCalls == 2u && state.lastVolumePathBufferLength == 32768u,
+               L"one-short successful output without a slash must be retried, not used as mount identity",
+               passed,
+               failed);
+
+    state                 = DebugMountedVolumeStorageProbeState{};
+    state.volumePathError = ERROR_ACCESS_DENIED;
+    const auto failedRoot = ResolveLocalVolumeRootPath(L"R:\\MountedVolume\\file.bin");
+    DebugCheck(failedRoot.empty() && state.volumePathCalls == 2u && state.lastVolumePathBufferLength == 32768u,
+               L"persistent volume query failure must stay empty after one bounded retry",
+               passed,
+               failed);
+    state.volumePathError = ERROR_SUCCESS;
+    state.volumeNameError = ERROR_PATH_NOT_FOUND;
+    DebugCheck(ResolveVolumeGuidDevicePath(state.volumeRoot).empty() && state.volumeNameCalls == 1u,
+               L"GUID failure must stay empty so existing SUBST/storage fallback policy owns recovery",
+               passed,
+               failed);
+
+    state            = DebugMountedVolumeStorageProbeState{};
+    state.volumeRoot = L"R:\\" + std::wstring(32768u, L'x') + L"\\";
+    DebugCheck(ResolveLocalVolumeRootPath(state.volumeRoot + L"file.bin").empty() && state.volumePathCalls == 2u && state.lastVolumePathBufferLength == 32768u,
+               L"root output beyond the existing bound must not grow, truncate or invent capability identity",
+               passed,
+               failed);
 }
 
 struct DebugSubstStorageProbeState
@@ -1753,9 +2352,125 @@ void RunDebugNvmeFallbackStorageProbeSelfTest(unsigned int& passed, unsigned int
     DebugCheck(characteristics.preferredCopyMoveConcurrency == 8u, L"NVMe fallback storage probe should keep the deep-queue copy/move budget", passed, failed);
 }
 
+struct DebugUncStorageProbeState final
+{
+    std::vector<std::wstring> driveTypeRoots;
+    unsigned int volumePathCalls = 0u;
+};
+
+UINT DebugUncGetDriveType(void* context, const wchar_t* rootPath) noexcept
+{
+    auto& state = *static_cast<DebugUncStorageProbeState*>(context);
+    state.driveTypeRoots.emplace_back(rootPath != nullptr ? rootPath : L"");
+    return DRIVE_REMOTE;
+}
+
+BOOL DebugUncGetVolumePathName(void* context, const wchar_t*, wchar_t*, DWORD) noexcept
+{
+    ++static_cast<DebugUncStorageProbeState*>(context)->volumePathCalls;
+    SetLastError(ERROR_INVALID_PARAMETER);
+    return FALSE;
+}
+
+// An extended UNC path (`\\?\UNC\server\share\...`) names the same share as its plain form: it is a
+// UNC path, its root is the plain `\\server\share\` that GetDriveTypeW and the storage cache key use,
+// it is high-latency for the storage and transfer queries, and admission gives it the same remote root.
+// The drive type is hooked, so nothing here reaches the network.
+void RunDebugUncPathClassificationSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    const std::wstring plain     = L"\\\\server\\share\\dir\\file.bin";
+    const std::wstring extended  = L"\\\\?\\UNC\\server\\share\\dir\\file.bin";
+    const std::wstring shareRoot = L"\\\\server\\share\\";
+
+    DebugCheck(IsUncPath(plain) && IsUncPath(extended) && IsUncPath(L"\\\\?\\unc\\server\\share") && IsUncPath(L"//server/share/dir"),
+               L"plain, extended (in any case) and slash-separated UNC paths are UNC",
+               passed,
+               failed);
+    DebugCheck(! IsUncPath(L"C:\\dir") && ! IsUncPath(L"\\\\?\\C:\\dir") && ! IsUncPath(L"\\\\?\\Volume{00000000-0000-0000-0000-000000000000}\\dir") &&
+                   ! IsUncPath(L"\\\\.\\C:\\dir") && ! IsUncPath(L"\\\\.\\pipe\\name"),
+               L"drive, extended drive, volume GUID and device paths are not UNC",
+               passed,
+               failed);
+
+    DebugCheck(ExtractDriveRoot(plain) == shareRoot && ExtractDriveRoot(extended) == shareRoot,
+               L"an extended UNC path has the plain share root of its plain form",
+               passed,
+               failed);
+    DebugCheck(ExtractDriveRoot(L"\\\\server\\share") == shareRoot && ExtractDriveRoot(L"\\\\?\\UNC\\server\\share") == shareRoot,
+               L"a share named without its trailing separator still has the share root, in both forms",
+               passed,
+               failed);
+    DebugCheck(ExtractDriveRoot(L"\\\\server").empty() && ExtractDriveRoot(L"\\\\?\\UNC\\server").empty(),
+               L"a UNC path without a share has no root, in both forms",
+               passed,
+               failed);
+    DebugCheck(ExtractDriveRoot(L"c:\\dir") == L"C:\\" && ExtractDriveRoot(L"\\\\?\\c:\\dir") == L"C:\\",
+               L"a drive path has its drive root, in both forms",
+               passed,
+               failed);
+    DebugCheck(ExtractDriveRoot(L"\\\\?\\Volume{00000000-0000-0000-0000-000000000000}\\dir").empty() && ExtractDriveRoot(L"\\\\.\\C:\\dir").empty(),
+               L"volume GUID and device paths have no drive root",
+               passed,
+               failed);
+
+    DebugUncStorageProbeState state;
+    StorageProbeDebugHooks hooks{
+        .context           = &state,
+        .getVolumePathName = DebugUncGetVolumePathName,
+        .getDriveType      = DebugUncGetDriveType,
+    };
+    StorageProbeDebugScope scope(hooks);
+    auto* fileSystem = new (std::nothrow) FileSystem();
+    if (! DebugCheck(fileSystem != nullptr, L"UNC classification selftest should allocate a FileSystem instance", passed, failed))
+    {
+        return;
+    }
+
+    FileSystemStorageCharacteristics plainStorage{};
+    plainStorage.sizeBytes = sizeof(FileSystemStorageCharacteristics);
+    FileSystemStorageCharacteristics extendedStorage{};
+    extendedStorage.sizeBytes = sizeof(FileSystemStorageCharacteristics);
+    FileSystemTransferHints plainHints{};
+    plainHints.sizeBytes = sizeof(FileSystemTransferHints);
+    FileSystemTransferHints extendedHints{};
+    extendedHints.sizeBytes         = sizeof(FileSystemTransferHints);
+    const HRESULT plainStorageHr    = fileSystem->GetStorageCharacteristics(plain.c_str(), &plainStorage);
+    const HRESULT extendedStorageHr = fileSystem->GetStorageCharacteristics(extended.c_str(), &extendedStorage);
+    const HRESULT plainHintsHr      = fileSystem->GetTransferHints(plain.c_str(), FILESYSTEM_COPY, FILESYSTEM_TRANSFER_DESTINATION_WRITE, &plainHints);
+    const HRESULT extendedHintsHr   = fileSystem->GetTransferHints(extended.c_str(), FILESYSTEM_COPY, FILESYSTEM_TRANSFER_DESTINATION_WRITE, &extendedHints);
+    const LocalCapabilityRouteInfo plainRoute    = BuildLocalCapabilityRouteInfo(plain.c_str());
+    const LocalCapabilityRouteInfo extendedRoute = BuildLocalCapabilityRouteInfo(extended.c_str());
+    fileSystem->Release();
+
+    DebugCheck(SUCCEEDED(plainStorageHr) && SUCCEEDED(extendedStorageHr) && SUCCEEDED(plainHintsHr) && SUCCEEDED(extendedHintsHr),
+               L"UNC storage and transfer queries succeed in both forms",
+               passed,
+               failed);
+    DebugCheck((plainStorage.flags & FILESYSTEM_STORAGE_FLAG_HIGH_LATENCY) != 0u && (extendedStorage.flags & FILESYSTEM_STORAGE_FLAG_HIGH_LATENCY) != 0u &&
+                   plainStorage.storageKind == FILESYSTEM_STORAGE_NETWORK_SHARE && extendedStorage.storageKind == FILESYSTEM_STORAGE_NETWORK_SHARE,
+               L"an extended UNC path is a high-latency network share, as its plain form is",
+               passed,
+               failed);
+    DebugCheck(plainHints.latencyClass == FILESYSTEM_TRANSFER_LATENCY_LAN && extendedHints.latencyClass == FILESYSTEM_TRANSFER_LATENCY_LAN &&
+                   plainHints.preferredBufferBytes == extendedHints.preferredBufferBytes && extendedHints.preferredBufferBytes == 8u * 1024u * 1024u,
+               L"an extended UNC path gets the high-latency transfer hints of its plain form",
+               passed,
+               failed);
+    DebugCheck(state.driveTypeRoots.size() == 4u && std::ranges::all_of(state.driveTypeRoots, [&](const std::wstring& root) { return root == shareRoot; }),
+               L"every UNC storage and transfer query asks the drive type of the plain share root",
+               passed,
+               failed);
+    DebugCheck(state.volumePathCalls == 0u, L"a UNC path, plain or extended, never resolves a local volume root", passed, failed);
+    DebugCheck(plainRoute.remote && extendedRoute.remote && ! plainRoute.rootId.empty() && plainRoute.rootId == extendedRoute.rootId,
+               L"admission gives an extended UNC path the remote root of its plain form",
+               passed,
+               failed);
+}
+
 void RunDebugOperationControlSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
 void RunDebugSynchronousIoCancelWatchSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
 void RunDebugCreateDirectoryAdmissionSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
+void RunDebugDeleteManifestSelfTest(unsigned int& passed, unsigned int& failed) noexcept;
 
 extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemDebugSelfTests(unsigned int* passed, unsigned int* failed)
 {
@@ -1768,17 +2483,22 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemDebugS
     *failed = 0;
 
     RunDebugMountedVolumeStorageProbeSelfTest(*passed, *failed);
+    RunDebugLocalRouteObservationSelfTest(*passed, *failed);
     RunDebugSubstStorageProbeSelfTest(*passed, *failed);
     RunDebugNvmeFallbackStorageProbeSelfTest(*passed, *failed);
+    RunDebugUncPathClassificationSelfTest(*passed, *failed);
     FileSystemInternal::RunDebugPathNormalizationSelfTest(*passed, *failed);
     FileSystemInternal::RunDebugReparseCopyErrorMappingSelfTest(*passed, *failed);
+    FileSystemInternal::RunDebugRecycleItemVerdictSelfTest(*passed, *failed);
     FileSystemInternal::RunDebugDirectorySizeErrorPolicySelfTest(*passed, *failed);
     FileSystemInternal::RunDebugSharedFileOpsSchedulerShutdownSelfTest(*passed, *failed);
     FileSystemInternal::RunDebugSearchServiceFallbackCandidateSelfTest(*passed, *failed);
     FileSystemInternal::RunDebugObjectBindingSelfTest(*passed, *failed);
+    FileSystemInternal::RunDebugRecycleHeldCancellationSelfTest(*passed, *failed);
     RunDebugOperationControlSelfTest(*passed, *failed);
     RunDebugSynchronousIoCancelWatchSelfTest(*passed, *failed);
     RunDebugCreateDirectoryAdmissionSelfTest(*passed, *failed);
+    RunDebugDeleteManifestSelfTest(*passed, *failed);
 
     return *failed == 0u ? S_OK : E_FAIL;
 }
@@ -1814,7 +2534,9 @@ class Win32FileReader final : public IFileReader
 {
 public:
     Win32FileReader(wil::unique_handle file, uint64_t sizeBytes, const FileSystemOptions* options) noexcept
-        : _file(std::move(file)), _sizeBytes(sizeBytes), _hasOperationOptions(options != nullptr)
+        : _file(std::move(file)),
+          _sizeBytes(sizeBytes),
+          _hasOperationOptions(options != nullptr)
     {
         if (options != nullptr)
         {
@@ -2085,12 +2807,10 @@ constexpr std::array<unsigned char, 8> kRetainedHandleNamespace{{'R', 'S', 'L', 
     return identity.namespaceTag == kRetainedHandleNamespace;
 }
 
-[[nodiscard]] HRESULT MakePersistentLocalObjectIdentity(const FILE_ID_INFO& fileIdInfo,
-                                                         LocalObjectIdentityPayload& identity) noexcept
+[[nodiscard]] HRESULT MakePersistentLocalObjectIdentity(const FILE_ID_INFO& fileIdInfo, LocalObjectIdentityPayload& identity) noexcept
 {
-    const bool emptyFileId = std::all_of(std::begin(fileIdInfo.FileId.Identifier),
-                                         std::end(fileIdInfo.FileId.Identifier),
-                                         [](BYTE value) noexcept { return value == 0u; });
+    const bool emptyFileId =
+        std::all_of(std::begin(fileIdInfo.FileId.Identifier), std::end(fileIdInfo.FileId.Identifier), [](BYTE value) noexcept { return value == 0u; });
     if (emptyFileId)
     {
         identity = {};
@@ -2113,7 +2833,7 @@ constexpr std::array<unsigned char, 8> kRetainedHandleNamespace{{'R', 'S', 'L', 
         return nonceHr;
     }
 
-    identity = {};
+    identity              = {};
     identity.namespaceTag = kRetainedHandleNamespace;
     static_assert(sizeof(nonce) == sizeof(identity.fileId));
     std::memcpy(&identity.fileId, &nonce, sizeof(nonce));
@@ -2143,20 +2863,18 @@ constexpr std::array<unsigned char, 8> kRetainedHandleNamespace{{'R', 'S', 'L', 
 }
 
 [[nodiscard]] HRESULT ResolveNewStageIdentity(HANDLE file,
-                                               const wchar_t* stagePath,
-                                               std::wstring_view objectKind,
-                                               const LocalObjectIdentityPayload& retainedIdentity,
-                                               LocalObjectIdentityPayload& identity) noexcept
+                                              const wchar_t* stagePath,
+                                              std::wstring_view objectKind,
+                                              const LocalObjectIdentityPayload& retainedIdentity,
+                                              LocalObjectIdentityPayload& identity) noexcept
 {
-#if !defined(ENABLE_TESTS)
+#if ! defined(ENABLE_TESTS)
     static_cast<void>(stagePath);
 #endif
     HRESULT identityHr = S_OK;
 #if defined(ENABLE_TESTS)
-    if (ConsumeMatchingPathInjectionForSelfTest(stagePath,
-                                                kStageIdentityUnsupportedPathEnvVar,
-                                                kStageIdentityUnsupportedFiredEnvVar,
-                                                L"FileOps.Local.StageIdentityUnsupportedInjected"))
+    if (ConsumeMatchingPathInjectionForSelfTest(
+            stagePath, kStageIdentityUnsupportedPathEnvVar, kStageIdentityUnsupportedFiredEnvVar, L"FileOps.Local.StageIdentityUnsupportedInjected"))
     {
         identityHr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
@@ -2183,23 +2901,18 @@ constexpr std::array<unsigned char, 8> kRetainedHandleNamespace{{'R', 'S', 'L', 
 
 interface __declspec(uuid("c1884e97-02e5-4c89-99b0-a619e8f78625")) __declspec(novtable) ILocalBoundObjectControl : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE RenameExactTo(const wchar_t* destinationPath,
-                                                     BOOL replaceIfExists,
-                                                     FileSystemConditionalMutationResult* result) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE DeleteExact(FileSystemConditionalMutationResult* result) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE DuplicateExactHandle(HANDLE* duplicated) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE RenameExactTo(
+        const wchar_t* destinationPath, BOOL replaceIfExists, FileSystemConditionalMutationResult* result) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE DeleteExact(FileSystemConditionalMutationResult * result) noexcept            = 0;
+    virtual HRESULT STDMETHODCALLTYPE DuplicateExactHandle(HANDLE * duplicated) noexcept                            = 0;
 };
 
-constexpr size_t kBackupStreamHeaderBytes = offsetof(WIN32_STREAM_ID, cStreamName);
+constexpr size_t kBackupStreamHeaderBytes         = offsetof(WIN32_STREAM_ID, cStreamName);
 constexpr DWORD kBackupMetadataMaxStreamNameBytes = 64u * 1024u;
-constexpr size_t kBackupMetadataIoBufferBytes = 64u * 1024u;
-constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYSTEM_METADATA_ALTERNATE_STREAMS |
-                                             FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES;
+constexpr size_t kBackupMetadataIoBufferBytes     = 64u * 1024u;
+constexpr uint32_t kMetadataBackupFeatures        = FILESYSTEM_METADATA_MOTW | FILESYSTEM_METADATA_ALTERNATE_STREAMS | FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES;
 
-[[nodiscard]] HRESULT ReopenExactFile(HANDLE source,
-                                      DWORD desiredAccess,
-                                      wil::unique_handle& reopened,
-                                      DWORD additionalFlags = 0u) noexcept
+[[nodiscard]] HRESULT ReopenExactFile(HANDLE source, DWORD desiredAccess, wil::unique_handle& reopened, DWORD additionalFlags = 0u) noexcept
 {
     reopened.reset(ReOpenFile(source,
                               desiredAccess,
@@ -2213,24 +2926,14 @@ constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYST
     return S_OK;
 }
 
-[[nodiscard]] HRESULT BackupReadExact(HANDLE file,
-                                      void*& context,
-                                      void* buffer,
-                                      DWORD bytesToRead,
-                                      DWORD& bytesRead) noexcept
+[[nodiscard]] HRESULT BackupReadExact(HANDLE file, void*& context, void* buffer, DWORD bytesToRead, DWORD& bytesRead) noexcept
 {
-    bytesRead = 0u;
+    bytesRead    = 0u;
     auto* output = static_cast<std::byte*>(buffer);
     while (bytesRead < bytesToRead)
     {
         DWORD current = 0u;
-        if (BackupRead(file,
-                       reinterpret_cast<LPBYTE>(output + bytesRead),
-                       bytesToRead - bytesRead,
-                       &current,
-                       FALSE,
-                       FALSE,
-                       &context) == FALSE)
+        if (BackupRead(file, reinterpret_cast<LPBYTE>(output + bytesRead), bytesToRead - bytesRead, &current, FALSE, FALSE, &context) == FALSE)
         {
             const DWORD error = GetLastError();
             return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
@@ -2244,23 +2947,16 @@ constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYST
     return S_OK;
 }
 
-[[nodiscard]] HRESULT BackupWriteExact(HANDLE file,
-                                       void*& context,
-                                       const void* buffer,
-                                       DWORD bytesToWrite) noexcept
+[[nodiscard]] HRESULT BackupWriteExact(HANDLE file, void*& context, const void* buffer, DWORD bytesToWrite) noexcept
 {
     DWORD bytesWritten = 0u;
-    const auto* input = static_cast<const std::byte*>(buffer);
+    const auto* input  = static_cast<const std::byte*>(buffer);
     while (bytesWritten < bytesToWrite)
     {
         DWORD current = 0u;
-        if (BackupWrite(file,
-                        const_cast<LPBYTE>(reinterpret_cast<const BYTE*>(input + bytesWritten)),
-                        bytesToWrite - bytesWritten,
-                        &current,
-                        FALSE,
-                        FALSE,
-                        &context) == FALSE)
+        if (BackupWrite(
+                file, const_cast<LPBYTE>(reinterpret_cast<const BYTE*>(input + bytesWritten)), bytesToWrite - bytesWritten, &current, FALSE, FALSE, &context) ==
+            FALSE)
         {
             const DWORD error = GetLastError();
             return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
@@ -2278,9 +2974,9 @@ constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYST
 {
     while (bytes != 0u)
     {
-        const DWORD low = static_cast<DWORD>(bytes & 0xffffffffu);
-        const DWORD high = static_cast<DWORD>(bytes >> 32u);
-        DWORD lowSkipped = 0u;
+        const DWORD low   = static_cast<DWORD>(bytes & 0xffffffffu);
+        const DWORD high  = static_cast<DWORD>(bytes >> 32u);
+        DWORD lowSkipped  = 0u;
         DWORD highSkipped = 0u;
         if (BackupSeek(file, low, high, &lowSkipped, &highSkipped, &context) == FALSE)
         {
@@ -2297,8 +2993,7 @@ constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYST
     return S_OK;
 }
 
-[[nodiscard]] uint32_t BackupStreamMetadataFeature(const WIN32_STREAM_ID& stream,
-                                                   std::wstring_view streamName) noexcept
+[[nodiscard]] uint32_t BackupStreamMetadataFeature(const WIN32_STREAM_ID& stream, std::wstring_view streamName) noexcept
 {
     if (stream.dwStreamId == BACKUP_EA_DATA)
     {
@@ -2308,9 +3003,7 @@ constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYST
     {
         return 0u;
     }
-    return OrdinalString::EqualsNoCase(streamName, L":Zone.Identifier:$DATA")
-        ? FILESYSTEM_METADATA_MOTW
-        : FILESYSTEM_METADATA_ALTERNATE_STREAMS;
+    return OrdinalString::EqualsNoCase(streamName, L":Zone.Identifier:$DATA") ? FILESYSTEM_METADATA_MOTW : FILESYSTEM_METADATA_ALTERNATE_STREAMS;
 }
 
 [[nodiscard]] HRESULT InspectBackupMetadataStreams(HANDLE exactFile, uint32_t& presentFeatures) noexcept
@@ -2323,7 +3016,7 @@ constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYST
         return hr;
     }
 
-    void* readContext = nullptr;
+    void* readContext    = nullptr;
     const auto abortRead = wil::scope_exit([&]() noexcept
     {
         DWORD ignored = 0u;
@@ -2333,7 +3026,7 @@ constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYST
     {
         WIN32_STREAM_ID stream{};
         DWORD headerBytes = 0u;
-        hr = BackupReadExact(source.get(), readContext, &stream, static_cast<DWORD>(kBackupStreamHeaderBytes), headerBytes);
+        hr                = BackupReadExact(source.get(), readContext, &stream, static_cast<DWORD>(kBackupStreamHeaderBytes), headerBytes);
         if (FAILED(hr))
         {
             return hr;
@@ -2367,9 +3060,7 @@ constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYST
     }
 }
 
-[[nodiscard]] HRESULT CopyBackupMetadataStreams(HANDLE exactSource,
-                                                HANDLE exactDestination,
-                                                FileSystemMetadataTransferResult& result) noexcept
+[[nodiscard]] HRESULT CopyBackupMetadataStreams(HANDLE exactSource, HANDLE exactDestination, FileSystemMetadataTransferResult& result) noexcept
 {
     wil::unique_handle source;
     wil::unique_handle destination;
@@ -2383,8 +3074,8 @@ constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYST
         return hr;
     }
 
-    void* readContext = nullptr;
-    void* writeContext = nullptr;
+    void* readContext        = nullptr;
+    void* writeContext       = nullptr;
     const auto abortContexts = wil::scope_exit([&]() noexcept
     {
         DWORD ignored = 0u;
@@ -2403,7 +3094,7 @@ constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYST
     {
         WIN32_STREAM_ID stream{};
         DWORD headerBytes = 0u;
-        hr = BackupReadExact(source.get(), readContext, &stream, static_cast<DWORD>(kBackupStreamHeaderBytes), headerBytes);
+        hr                = BackupReadExact(source.get(), readContext, &stream, static_cast<DWORD>(kBackupStreamHeaderBytes), headerBytes);
         if (FAILED(hr))
         {
             return hr;
@@ -2429,7 +3120,7 @@ constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYST
             }
         }
         const std::wstring_view name(reinterpret_cast<const wchar_t*>(nameBytes.data()), nameBytes.size() / sizeof(wchar_t));
-        const uint32_t feature = BackupStreamMetadataFeature(stream, name);
+        const uint32_t feature      = BackupStreamMetadataFeature(stream, name);
         const uint64_t payloadBytes = static_cast<uint64_t>(stream.Size.QuadPart);
         if (feature == 0u)
         {
@@ -2451,8 +3142,8 @@ constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYST
         while (SUCCEEDED(hr) && remaining != 0u)
         {
             const DWORD chunk = static_cast<DWORD>(std::min<uint64_t>(remaining, kBackupMetadataIoBufferBytes));
-            DWORD bytesRead = 0u;
-            hr = BackupReadExact(source.get(), readContext, buffer.get(), chunk, bytesRead);
+            DWORD bytesRead   = 0u;
+            hr                = BackupReadExact(source.get(), readContext, buffer.get(), chunk, bytesRead);
             if (SUCCEEDED(hr) && bytesRead != chunk)
             {
                 hr = HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
@@ -2476,6 +3167,86 @@ constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYST
     }
 }
 
+static_assert(Common::SynchronousIoCancelWatch::kMaxCleanupWindowMs == FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS,
+              "the cancel watch's cleanup window is the owned-stage cleanup budget");
+
+// I35 R7.4: the cleanup window of an owned-object cleanup control (MakeOwnedStageCleanupOptions: no
+// operation control, a fresh deadline); 0, no window, for any primary control.
+[[nodiscard]] ULONGLONG OwnedStageCleanupWindowDeadline(const FileSystemOptions* options) noexcept
+{
+    return options != nullptr && options->operationControl == nullptr ? options->deadlineTickCount64 : 0u;
+}
+
+// I35 R7.4: a fresh cleanup budget for compensation that has no cleanup control of its own (the raw
+// removal of a stage just created, a publication rollback that restores the user's original).
+[[nodiscard]] ULONGLONG FreshOwnedStageCleanupDeadline() noexcept
+{
+    return GetTickCount64() + FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS;
+}
+
+#if defined(ENABLE_TESTS)
+constexpr std::wstring_view kStageCleanupDelayRootEnvVar  = L"REDSALAMANDER_FILEOPS_STAGE_CLEANUP_DELAY_ROOT";
+constexpr std::wstring_view kStageCleanupDelayFiredEnvVar = L"REDSALAMANDER_FILEOPS_STAGE_CLEANUP_DELAY_FIRED";
+
+// I35 R7.4: holds the removal of one owned stage at or below the configured root for one second in a
+// synchronous pipe read that a helper thread completes. Unlike a sleep, CancelSynchronousIo can cancel
+// that read, so a case passes only while the cancel watch leaves owned-stage cleanup alone for its
+// budget. One-shot: the variable is cleared and the FIRED variable records "1" or "aborted".
+[[nodiscard]] HRESULT DelayOwnedStageCleanupForSelfTest(const std::wstring& stagePath) noexcept
+{
+    const DWORD required = GetEnvironmentVariableW(kStageCleanupDelayRootEnvVar.data(), nullptr, 0u);
+    if (required == 0u || stagePath.empty())
+    {
+        return S_OK;
+    }
+    std::wstring configured(static_cast<size_t>(required), L'\0');
+    const DWORD written = GetEnvironmentVariableW(kStageCleanupDelayRootEnvVar.data(), configured.data(), required);
+    if (written == 0u || written >= required)
+    {
+        return S_OK;
+    }
+    configured.resize(written);
+    while (! configured.empty() && (configured.back() == L'\\' || configured.back() == L'/'))
+    {
+        configured.pop_back();
+    }
+    const std::wstring root   = FileSystemInternal::ToExtendedPath(configured);
+    const std::wstring actual = FileSystemInternal::ToExtendedPath(stagePath);
+    if (root.empty() || actual.size() <= root.size() || ! OrdinalString::EqualsNoCase(std::wstring_view(actual).substr(0u, root.size()), root) ||
+        actual[root.size()] != L'\\')
+    {
+        return S_OK;
+    }
+    static_cast<void>(SetEnvironmentVariableW(kStageCleanupDelayRootEnvVar.data(), nullptr));
+
+    HANDLE readRaw  = nullptr;
+    HANDLE writeRaw = nullptr;
+    if (CreatePipe(&readRaw, &writeRaw, nullptr, 0u) == FALSE)
+    {
+        return HRESULT_FROM_WIN32(GetLastError());
+    }
+    wil::unique_handle readEnd(readRaw);
+    wil::unique_handle writeEnd(writeRaw);
+    BOOL completed = FALSE;
+    DWORD error    = ERROR_SUCCESS;
+    {
+        std::jthread writer([&writeEnd]() noexcept
+        {
+            Sleep(1'000u);
+            DWORD wrote = 0u;
+            static_cast<void>(WriteFile(writeEnd.get(), "x", 1u, &wrote, nullptr));
+        });
+        std::array<std::byte, 1u> buffer{};
+        DWORD read = 0u;
+        completed  = ReadFile(readEnd.get(), buffer.data(), static_cast<DWORD>(buffer.size()), &read, nullptr);
+        error      = completed != FALSE ? ERROR_SUCCESS : GetLastError();
+    }
+    static_cast<void>(SetEnvironmentVariableW(kStageCleanupDelayFiredEnvVar.data(), completed != FALSE ? L"1" : L"aborted"));
+    Debug::Perf::EmitCounter(L"FileOps.Local.StageCleanupDelayInjected");
+    return completed != FALSE ? S_OK : HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_OPERATION_ABORTED);
+}
+#endif
+
 [[nodiscard]] HRESULT DeleteExactHandle(HANDLE file) noexcept
 {
     if (file == nullptr || file == INVALID_HANDLE_VALUE)
@@ -2484,8 +3255,7 @@ constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYST
     }
 
     FILE_DISPOSITION_INFO_EX disposition{};
-    disposition.Flags = FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS |
-                        FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE;
+    disposition.Flags = FILE_DISPOSITION_FLAG_DELETE | FILE_DISPOSITION_FLAG_POSIX_SEMANTICS | FILE_DISPOSITION_FLAG_IGNORE_READONLY_ATTRIBUTE;
     if (SetFileInformationByHandle(file, FileDispositionInfoEx, &disposition, sizeof(disposition)) != FALSE)
     {
         return S_OK;
@@ -2495,21 +3265,31 @@ constexpr uint32_t kMetadataBackupFeatures = FILESYSTEM_METADATA_MOTW | FILESYST
     if (error == ERROR_INVALID_PARAMETER || error == ERROR_INVALID_FUNCTION || error == ERROR_NOT_SUPPORTED)
     {
         FILE_BASIC_INFO basic{};
-        if (GetFileInformationByHandleEx(file, FileBasicInfo, &basic, sizeof(basic)) != FALSE &&
-            (basic.FileAttributes & FILE_ATTRIBUTE_READONLY) != 0u)
+        bool restoreReadonly         = false;
+        const auto restoreAttributes = wil::scope_exit([&]() noexcept
         {
-            basic.FileAttributes &= ~FILE_ATTRIBUTE_READONLY;
-            if (basic.FileAttributes == 0u)
+            if (restoreReadonly)
             {
-                basic.FileAttributes = FILE_ATTRIBUTE_NORMAL;
+                if (SetFileInformationByHandle(file, FileBasicInfo, &basic, sizeof(basic)) == FALSE)
+                    Debug::Warning(L"FileSystem: failed to restore read-only attributes after an exact deletion failed (error={}).", GetLastError());
             }
-            static_cast<void>(SetFileInformationByHandle(file, FileBasicInfo, &basic, sizeof(basic)));
+        });
+        if (GetFileInformationByHandleEx(file, FileBasicInfo, &basic, sizeof(basic)) != FALSE && (basic.FileAttributes & FILE_ATTRIBUTE_READONLY) != 0u)
+        {
+            FILE_BASIC_INFO writable = basic;
+            writable.FileAttributes &= ~FILE_ATTRIBUTE_READONLY;
+            if (writable.FileAttributes == 0u)
+            {
+                writable.FileAttributes = FILE_ATTRIBUTE_NORMAL;
+            }
+            restoreReadonly = SetFileInformationByHandle(file, FileBasicInfo, &writable, sizeof(writable)) != FALSE;
         }
 
         FILE_DISPOSITION_INFO fallback{};
         fallback.DeleteFile = TRUE;
         if (SetFileInformationByHandle(file, FileDispositionInfo, &fallback, sizeof(fallback)) != FALSE)
         {
+            restoreReadonly = false;
             return S_OK;
         }
         error = GetLastError();
@@ -2530,12 +3310,12 @@ class LocalBoundObject final : public IFileSystemBoundObject,
 {
 public:
     LocalBoundObject(wil::unique_handle file,
-                      LocalObjectIdentityPayload identity,
-                      FileSystemBoundObjectKind kind,
-                      uint64_t committedSizeBytes,
-                      FileSystemBindFlags grantedFlags,
-                      bool ownedStage,
-                      std::wstring path) noexcept
+                     LocalObjectIdentityPayload identity,
+                     FileSystemBoundObjectKind kind,
+                     uint64_t committedSizeBytes,
+                     FileSystemBindFlags grantedFlags,
+                     bool ownedStage,
+                     std::wstring path) noexcept
         : _file(std::move(file)),
           _identity(identity),
           _kind(kind),
@@ -2644,13 +3424,12 @@ public:
 
         FileSystemBoundObjectSnapshot otherSnapshot{};
         otherSnapshot.sizeBytes = sizeof(otherSnapshot);
-        const HRESULT hr = other->GetSnapshot(&otherSnapshot);
+        const HRESULT hr        = other->GetSnapshot(&otherSnapshot);
         if (FAILED(hr))
         {
             return hr;
         }
-        if (otherSnapshot.sizeBytes != sizeof(otherSnapshot) ||
-            otherSnapshot.objectIdBytes != sizeof(_identity) || otherSnapshot.objectId == nullptr ||
+        if (otherSnapshot.sizeBytes != sizeof(otherSnapshot) || otherSnapshot.objectIdBytes != sizeof(_identity) || otherSnapshot.objectId == nullptr ||
             (otherSnapshot.revisionIdBytes != 0u && otherSnapshot.revisionId == nullptr))
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
@@ -2701,8 +3480,7 @@ public:
         if (GetFileSizeEx(reopened.get(), &fileSize) == FALSE || fileSize.QuadPart < 0)
         {
             const DWORD error = GetLastError();
-            return fileSize.QuadPart < 0 ? HRESULT_FROM_WIN32(ERROR_INVALID_DATA)
-                                         : HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+            return fileSize.QuadPart < 0 ? HRESULT_FROM_WIN32(ERROR_INVALID_DATA) : HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
         }
 
         auto* impl = new (std::nothrow) Win32FileReader(std::move(reopened), static_cast<uint64_t>(fileSize.QuadPart), options);
@@ -2714,8 +3492,7 @@ public:
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE GetContentProof(const FileSystemOptions* options,
-                                              FileSystemContentProof* proof) noexcept override
+    HRESULT STDMETHODCALLTYPE GetContentProof(const FileSystemOptions* options, FileSystemContentProof* proof) noexcept override
     {
         if (proof == nullptr)
         {
@@ -2725,7 +3502,7 @@ public:
         {
             return E_INVALIDARG;
         }
-        *proof = {};
+        *proof           = {};
         proof->sizeBytes = sizeof(FileSystemContentProof);
         if ((_grantedFlags & FILESYSTEM_BIND_READ_CONTENT) == 0u || _kind != FILESYSTEM_BOUND_REGULAR_FILE)
         {
@@ -2739,20 +3516,20 @@ public:
             return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
         uint64_t sizeBytes = 0u;
-        hr = reader->GetSize(&sizeBytes);
+        hr                 = reader->GetSize(&sizeBytes);
         if (FAILED(hr))
         {
             return hr;
         }
         uint64_t position = 0u;
-        hr = reader->Seek(0, FILE_BEGIN, &position);
+        hr                = reader->Seek(0, FILE_BEGIN, &position);
         if (FAILED(hr) || position != 0u)
         {
             return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
         constexpr size_t kBufferBytes = 1024u * 1024u;
-        auto buffer = std::unique_ptr<std::byte[]>(new (std::nothrow) std::byte[kBufferBytes]);
+        auto buffer                   = std::unique_ptr<std::byte[]>(new (std::nothrow) std::byte[kBufferBytes]);
         if (! buffer)
         {
             return E_OUTOFMEMORY;
@@ -2767,7 +3544,7 @@ public:
                 return hr;
             }
             unsigned long bytesRead = 0u;
-            hr = reader->Read(buffer.get(), static_cast<unsigned long>(kBufferBytes), &bytesRead);
+            hr                      = reader->Read(buffer.get(), static_cast<unsigned long>(kBufferBytes), &bytesRead);
             if (FAILED(hr))
             {
                 return hr;
@@ -2789,8 +3566,8 @@ public:
         }
 
         const Common::Crypto::Blake3Digest digest = hasher.Finalize();
-        proof->algorithm = FILESYSTEM_CONTENT_PROOF_BLAKE3_256;
-        proof->contentSizeBytes = totalRead;
+        proof->algorithm                          = FILESYSTEM_CONTENT_PROOF_BLAKE3_256;
+        proof->contentSizeBytes                   = totalRead;
         static_assert(sizeof(proof->digest) == digest.size());
         std::memcpy(proof->digest, digest.data(), digest.size());
         return S_OK;
@@ -2852,8 +3629,7 @@ public:
         return S_OK;
     }
 
-    HRESULT STDMETHODCALLTYPE GetMetadataSnapshot(const FileSystemOptions* options,
-                                                  FileSystemMetadataSnapshot* snapshot) noexcept override
+    HRESULT STDMETHODCALLTYPE GetMetadataSnapshot(const FileSystemOptions* options, FileSystemMetadataSnapshot* snapshot) noexcept override
     {
         if (snapshot == nullptr)
         {
@@ -2873,14 +3649,13 @@ public:
             return controlHr;
         }
 
-        *snapshot = {};
-        snapshot->sizeBytes = sizeof(FileSystemMetadataSnapshot);
-        snapshot->supportedFeatures = FILESYSTEM_METADATA_BASIC_TIMES_ATTRIBUTES | FILESYSTEM_METADATA_MOTW |
-                                      FILESYSTEM_METADATA_ALTERNATE_STREAMS | FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES |
-                                      FILESYSTEM_METADATA_SECURITY | FILESYSTEM_METADATA_SPARSE | FILESYSTEM_METADATA_COMPRESSION |
-                                      FILESYSTEM_METADATA_EFS | FILESYSTEM_METADATA_PLACEHOLDER;
-        snapshot->presentFeatures = FILESYSTEM_METADATA_BASIC_TIMES_ATTRIBUTES | FILESYSTEM_METADATA_SECURITY;
-        snapshot->logicalSizeBytes = _committedSizeBytes;
+        *snapshot                    = {};
+        snapshot->sizeBytes          = sizeof(FileSystemMetadataSnapshot);
+        snapshot->supportedFeatures  = FILESYSTEM_METADATA_BASIC_TIMES_ATTRIBUTES | FILESYSTEM_METADATA_MOTW | FILESYSTEM_METADATA_ALTERNATE_STREAMS |
+                                       FILESYSTEM_METADATA_EXTENDED_ATTRIBUTES | FILESYSTEM_METADATA_SECURITY | FILESYSTEM_METADATA_SPARSE |
+                                       FILESYSTEM_METADATA_COMPRESSION | FILESYSTEM_METADATA_EFS | FILESYSTEM_METADATA_PLACEHOLDER;
+        snapshot->presentFeatures    = FILESYSTEM_METADATA_BASIC_TIMES_ATTRIBUTES | FILESYSTEM_METADATA_SECURITY;
+        snapshot->logicalSizeBytes   = _committedSizeBytes;
         snapshot->allocatedSizeBytes = std::numeric_limits<uint64_t>::max();
 
         FILE_ATTRIBUTE_TAG_INFO tagInfo{};
@@ -2925,7 +3700,7 @@ public:
         }
 
         uint32_t backupFeatures = snapshot->presentFeatures;
-        const HRESULT streamHr = InspectBackupMetadataStreams(_file.get(), backupFeatures);
+        const HRESULT streamHr  = InspectBackupMetadataStreams(_file.get(), backupFeatures);
         if (FAILED(streamHr))
         {
             // An inspection failure is not "unsupported": reporting the backup classes as
@@ -2946,12 +3721,37 @@ public:
         {
             return E_POINTER;
         }
-        if (result->sizeBytes != sizeof(FileSystemMetadataTransferResult) ||
+        const uint32_t callerResultBytes = result->sizeBytes;
+        if ((callerResultBytes != sizeof(FileSystemMetadataTransferResult) && callerResultBytes != FILESYSTEM_METADATA_TRANSFER_RESULT_LEGACY_SIZE) ||
             (phase != FILESYSTEM_METADATA_TRANSFER_PREPARE_CONTENT && phase != FILESYSTEM_METADATA_TRANSFER_FINALIZE) ||
             ! FileSystemOptionsHaveValidHeader(options))
         {
             return E_INVALIDARG;
         }
+        // Compute into a full-size result and copy back only the caller's prefix, so a legacy-size
+        // caller never receives bytes past its structure.
+        FileSystemMetadataTransferResult transfer{};
+        transfer.sizeBytes = sizeof(transfer);
+        const auto publish = wil::scope_exit([&]() noexcept
+        {
+            if (callerResultBytes == FILESYSTEM_METADATA_TRANSFER_RESULT_LEGACY_SIZE)
+            {
+                // Legacy callers saw every security difference, and an unverifiable descriptor, as changed.
+                transfer.changedFeatures |= transfer.informationalFeatures | (transfer.lostFeatures & FILESYSTEM_METADATA_SECURITY);
+                transfer.lostFeatures &= ~static_cast<uint32_t>(FILESYSTEM_METADATA_SECURITY);
+                transfer.informationalFeatures = 0u;
+            }
+            transfer.sizeBytes = callerResultBytes;
+            std::memcpy(result, &transfer, callerResultBytes);
+        });
+        return TransferMetadataToImpl(destination, phase, options, &transfer);
+    }
+
+    HRESULT TransferMetadataToImpl(IFileSystemBoundObject* destination,
+                                   FileSystemMetadataTransferPhase phase,
+                                   const FileSystemOptions* options,
+                                   FileSystemMetadataTransferResult* result) noexcept
+    {
         if ((_grantedFlags & FILESYSTEM_BIND_READ_METADATA) == 0u || ! _file)
         {
             return E_ACCESSDENIED;
@@ -2962,8 +3762,8 @@ public:
             return controlHr;
         }
 
-        *result = {};
-        result->sizeBytes = sizeof(FileSystemMetadataTransferResult);
+        *result              = {};
+        result->sizeBytes    = sizeof(FileSystemMetadataTransferResult);
         result->firstFailure = S_OK;
         wil::com_ptr<ILocalBoundObjectControl> destinationControl;
         const HRESULT queryHr = destination->QueryInterface(__uuidof(ILocalBoundObjectControl), destinationControl.put_void());
@@ -2972,7 +3772,7 @@ public:
             return FAILED(queryHr) ? queryHr : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
         HANDLE duplicatedDestination = INVALID_HANDLE_VALUE;
-        HRESULT hr = destinationControl->DuplicateExactHandle(&duplicatedDestination);
+        HRESULT hr                   = destinationControl->DuplicateExactHandle(&duplicatedDestination);
         if (FAILED(hr))
         {
             return hr;
@@ -2981,7 +3781,7 @@ public:
 
         FileSystemMetadataSnapshot sourceSnapshot{};
         sourceSnapshot.sizeBytes = sizeof(sourceSnapshot);
-        hr = GetMetadataSnapshot(options, &sourceSnapshot);
+        hr                       = GetMetadataSnapshot(options, &sourceSnapshot);
         if (FAILED(hr))
         {
             return hr;
@@ -3036,9 +3836,13 @@ public:
         }
 
         HRESULT backupHr = S_OK;
+        // I35 R10.3 candidate (d): the snapshot's inspection pass just read the source's streams. When
+        // it found no named stream, MOTW or extended attribute there is nothing to copy, and the pass
+        // would only reopen both objects (a round trip on a network destination).
+        const bool skipAbsentBackupStreams = (sourceSnapshot.presentFeatures & kMetadataBackupFeatures) == 0u && options != nullptr &&
+                                             (options->transferTuning & FILESYSTEM_TRANSFER_TUNING_SKIP_ABSENT_BACKUP_STREAMS) != 0u;
 #if defined(ENABLE_TESTS)
-        const uint32_t forcedBackupLoss = ReadSelfTestMetadataMask(kMetadataFailMaskEnvVar) &
-            sourceSnapshot.presentFeatures & kMetadataBackupFeatures;
+        const uint32_t forcedBackupLoss = ReadSelfTestMetadataMask(kMetadataFailMaskEnvVar) & sourceSnapshot.presentFeatures & kMetadataBackupFeatures;
         if (forcedBackupLoss != 0u)
         {
             result->attemptedFeatures |= forcedBackupLoss;
@@ -3047,6 +3851,7 @@ public:
         }
         else
 #endif
+            if (! skipAbsentBackupStreams)
         {
             backupHr = CopyBackupMetadataStreams(_file.get(), destinationHandle.get(), *result);
         }
@@ -3074,11 +3879,10 @@ public:
             destinationBasic.sizeBytes = sizeof(destinationBasic);
             if (SUCCEEDED(destination->GetBasicInformation(&destinationBasic)))
             {
-                constexpr DWORD kProviderManagedAttributes = FILE_ATTRIBUTE_COMPRESSED | FILE_ATTRIBUTE_ENCRYPTED |
-                                                             FILE_ATTRIBUTE_SPARSE_FILE | FILE_ATTRIBUTE_REPARSE_POINT |
-                                                             FILE_ATTRIBUTE_RECALL_ON_OPEN | FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS;
-                basic.attributes = (basic.attributes & ~kProviderManagedAttributes) |
-                                   (destinationBasic.attributes & kProviderManagedAttributes);
+                constexpr DWORD kProviderManagedAttributes = FILE_ATTRIBUTE_COMPRESSED | FILE_ATTRIBUTE_ENCRYPTED | FILE_ATTRIBUTE_SPARSE_FILE |
+                                                             FILE_ATTRIBUTE_REPARSE_POINT | FILE_ATTRIBUTE_RECALL_ON_OPEN |
+                                                             FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS;
+                basic.attributes = (basic.attributes & ~kProviderManagedAttributes) | (destinationBasic.attributes & kProviderManagedAttributes);
             }
             hr = destination->SetBasicInformation(&basic);
         }
@@ -3096,50 +3900,79 @@ public:
         result->attemptedFeatures |= FILESYSTEM_METADATA_SECURITY;
         wil::unique_handle sourceSecurity;
         wil::unique_handle destinationSecurity;
-        const HRESULT sourceSecurityHr = ReopenExactFile(_file.get(), READ_CONTROL, sourceSecurity);
+        const HRESULT sourceSecurityHr      = ReopenExactFile(_file.get(), READ_CONTROL, sourceSecurity);
         const HRESULT destinationSecurityHr = ReopenExactFile(destinationHandle.get(), READ_CONTROL, destinationSecurity);
         if (SUCCEEDED(sourceSecurityHr) && SUCCEEDED(destinationSecurityHr))
         {
-            DWORD sourceBytes = 0u;
+            DWORD sourceBytes      = 0u;
             DWORD destinationBytes = 0u;
-            static_cast<void>(GetKernelObjectSecurity(sourceSecurity.get(),
-                                                      OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION |
-                                                          DACL_SECURITY_INFORMATION,
-                                                      nullptr,
-                                                      0u,
-                                                      &sourceBytes));
+            static_cast<void>(GetKernelObjectSecurity(
+                sourceSecurity.get(), OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION, nullptr, 0u, &sourceBytes));
             static_cast<void>(GetKernelObjectSecurity(destinationSecurity.get(),
-                                                      OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION |
-                                                          DACL_SECURITY_INFORMATION,
+                                                      OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
                                                       nullptr,
                                                       0u,
                                                       &destinationBytes));
             std::vector<std::byte> sourceDescriptor(sourceBytes);
             std::vector<std::byte> destinationDescriptor(destinationBytes);
-            const bool sourceRead = sourceBytes != 0u &&
-                GetKernelObjectSecurity(sourceSecurity.get(),
-                                        OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
-                                        reinterpret_cast<PSECURITY_DESCRIPTOR>(sourceDescriptor.data()),
-                                        sourceBytes,
-                                        &sourceBytes) != FALSE;
-            const bool destinationRead = destinationBytes != 0u &&
-                GetKernelObjectSecurity(destinationSecurity.get(),
-                                        OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
-                                        reinterpret_cast<PSECURITY_DESCRIPTOR>(destinationDescriptor.data()),
-                                        destinationBytes,
-                                        &destinationBytes) != FALSE;
-            if (sourceRead && destinationRead && sourceDescriptor == destinationDescriptor)
+            const bool sourceRead =
+                sourceBytes != 0u && GetKernelObjectSecurity(sourceSecurity.get(),
+                                                             OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                                                             reinterpret_cast<PSECURITY_DESCRIPTOR>(sourceDescriptor.data()),
+                                                             sourceBytes,
+                                                             &sourceBytes) != FALSE;
+            const bool destinationRead =
+                destinationBytes != 0u && GetKernelObjectSecurity(destinationSecurity.get(),
+                                                                  OWNER_SECURITY_INFORMATION | GROUP_SECURITY_INFORMATION | DACL_SECURITY_INFORMATION,
+                                                                  reinterpret_cast<PSECURITY_DESCRIPTOR>(destinationDescriptor.data()),
+                                                                  destinationBytes,
+                                                                  &destinationBytes) != FALSE;
+#if defined(ENABLE_TESTS)
+            const bool forcedSecurityFailure = (ReadSelfTestMetadataMask(kMetadataFailMaskEnvVar) & FILESYSTEM_METADATA_SECURITY) != 0u;
+#else
+            constexpr bool forcedSecurityFailure = false;
+#endif
+            if (! forcedSecurityFailure && sourceRead && destinationRead && sourceDescriptor == destinationDescriptor)
             {
                 result->preservedFeatures |= FILESYSTEM_METADATA_SECURITY;
             }
+            else if (! forcedSecurityFailure && sourceRead && destinationRead)
+            {
+                // I35 R5.4 / D-5.1: the destination's inheritance decides ACEs, owner and primary group,
+                // so those differences are expected (Information). Only a protected source DACL that
+                // the destination replaced by an inherited one is a deviation the user may act on.
+                SECURITY_DESCRIPTOR_CONTROL sourceSdControl      = 0u;
+                SECURITY_DESCRIPTOR_CONTROL destinationSdControl = 0u;
+                DWORD sourceRevision                             = 0u;
+                DWORD destinationRevision                        = 0u;
+                const bool controlsRead =
+                    GetSecurityDescriptorControl(reinterpret_cast<PSECURITY_DESCRIPTOR>(sourceDescriptor.data()), &sourceSdControl, &sourceRevision) != FALSE &&
+                    GetSecurityDescriptorControl(
+                        reinterpret_cast<PSECURITY_DESCRIPTOR>(destinationDescriptor.data()), &destinationSdControl, &destinationRevision) != FALSE;
+                const bool protectedDaclReplaced =
+                    ! controlsRead || ((sourceSdControl & SE_DACL_PROTECTED) != 0u && (destinationSdControl & SE_DACL_PROTECTED) == 0u);
+                if (protectedDaclReplaced)
+                {
+                    result->changedFeatures |= FILESYSTEM_METADATA_SECURITY;
+                }
+                else
+                {
+                    result->informationalFeatures |= FILESYSTEM_METADATA_SECURITY;
+                }
+            }
             else
             {
-                result->changedFeatures |= FILESYSTEM_METADATA_SECURITY;
+                // An unreadable descriptor cannot be compared: the outcome is unverifiable (lost).
+                result->lostFeatures |= FILESYSTEM_METADATA_SECURITY;
+                if (SUCCEEDED(result->firstFailure))
+                {
+                    result->firstFailure = forcedSecurityFailure ? HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED) : HRESULT_FROM_WIN32(ERROR_INVALID_SECURITY_DESCR);
+                }
             }
         }
         else
         {
-            result->changedFeatures |= FILESYSTEM_METADATA_SECURITY;
+            result->lostFeatures |= FILESYSTEM_METADATA_SECURITY;
             if (SUCCEEDED(result->firstFailure))
             {
                 result->firstFailure = FAILED(sourceSecurityHr) ? sourceSecurityHr : destinationSecurityHr;
@@ -3155,8 +3988,7 @@ public:
                                         FileSystemConditionalMutationResult* result,
                                         IFileSystemBoundObject** published) noexcept override
     {
-        return ConditionalRename(
-            finalPath, expectedDestination, flags, options, FILESYSTEM_BIND_PUBLICATION, true, result, published);
+        return ConditionalRename(finalPath, expectedDestination, flags, options, FILESYSTEM_BIND_PUBLICATION, true, result, published);
     }
 
     HRESULT STDMETHODCALLTYPE RenameIfUnchanged(const wchar_t* destinationPath,
@@ -3166,8 +3998,7 @@ public:
                                                 FileSystemConditionalMutationResult* result,
                                                 IFileSystemBoundObject** renamed) noexcept override
     {
-        return ConditionalRename(
-            destinationPath, expectedDestination, flags, options, FILESYSTEM_BIND_RENAME, false, result, renamed);
+        return ConditionalRename(destinationPath, expectedDestination, flags, options, FILESYSTEM_BIND_RENAME, false, result, renamed);
     }
 
     HRESULT STDMETHODCALLTYPE DeleteIfUnchanged(FileSystemFlags flags,
@@ -3183,7 +4014,7 @@ public:
         {
             return E_INVALIDARG;
         }
-        constexpr uint32_t allowedFlags = FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR;
+        constexpr uint32_t allowedFlags = FILESYSTEM_FLAG_RECURSIVE | FILESYSTEM_FLAG_CONTINUE_ON_ERROR | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY;
         if ((static_cast<uint32_t>(flags) & ~allowedFlags) != 0u)
         {
             return E_INVALIDARG;
@@ -3199,6 +4030,57 @@ public:
             return controlHr;
         }
 
+        FILE_BASIC_INFO rootBasic{};
+        if (GetFileInformationByHandleEx(_file.get(), FileBasicInfo, &rootBasic, sizeof(rootBasic)) == FALSE)
+            return HRESULT_FROM_WIN32(GetLastError());
+        const bool directoryLink = _kind == FILESYSTEM_BOUND_LINK && (rootBasic.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u;
+        const bool completionKnown =
+            _kind != FILESYSTEM_BOUND_OTHER && (_kind != FILESYSTEM_BOUND_REGULAR_FILE || _committedSizeBytes != std::numeric_limits<uint64_t>::max());
+        const auto reportWork = [&](FileSystemFileWorkPhase phase) noexcept
+        {
+            if (options == nullptr || options->fileWorkCallback == nullptr)
+                return;
+            FileSystemFileWorkProgress report{};
+            report.sizeBytes       = sizeof(report);
+            report.phase           = phase;
+            report.kind            = FileSystemFileWorkKind::Directory;
+            report.scopeBytesKnown = TRUE;
+            if (! completionKnown)
+            {
+                report.phase = FileSystemFileWorkPhase::CountsUnavailable;
+            }
+            if (phase == FileSystemFileWorkPhase::ObjectCompleted)
+            {
+                report.kind = _kind == FILESYSTEM_BOUND_DIRECTORY ? FileSystemFileWorkKind::Directory
+                              : _kind == FILESYSTEM_BOUND_LINK    ? (directoryLink ? FileSystemFileWorkKind::DirectoryLink : FileSystemFileWorkKind::FileLink)
+                                                                  : FileSystemFileWorkKind::RegularFile;
+                report.sourcePath  = _path.c_str();
+                report.disposition = FileSystemFileWorkDisposition::Completed;
+                report.sizeKnown   = TRUE;
+                report.totalBytes =
+                    _kind == FILESYSTEM_BOUND_REGULAR_FILE && _committedSizeBytes != std::numeric_limits<uint64_t>::max() ? _committedSizeBytes : 0u;
+                report.completedBytes = report.totalBytes;
+            }
+            else if (phase == FileSystemFileWorkPhase::ReadOnlyDeleteBlocked)
+            {
+                report.kind =
+                    (rootBasic.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) != 0u ? FileSystemFileWorkKind::Directory : FileSystemFileWorkKind::RegularFile;
+                report.sourcePath  = _path.c_str();
+                report.disposition = FileSystemFileWorkDisposition::Failed;
+                report.status      = HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+            }
+            static_cast<void>(options->fileWorkCallback->FileSystemReportFileWork(&report, options->fileWorkCookie));
+        };
+        reportWork(FileSystemFileWorkPhase::ScopeSupported);
+        if ((rootBasic.FileAttributes & FILE_ATTRIBUTE_READONLY) != 0u && (flags & FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) == 0u)
+        {
+            // The exact cleanup primitive may ignore readonly for its already-authorized internal
+            // compensation. Public conditional deletion needs a separate explicit readonly grant,
+            // including selected files and empty directories before any descendants are touched.
+            reportWork(FileSystemFileWorkPhase::ReadOnlyDeleteBlocked);
+            return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
+        }
+
         if (_kind != FILESYSTEM_BOUND_DIRECTORY && options != nullptr && options->operationControl != nullptr)
         {
             FileSystemDiscoveryProgress discovery{};
@@ -3208,16 +4090,14 @@ public:
             discovery.discoveredDirectories = 0u;
             discovery.queuedItems           = 1u;
             discovery.traversalClosed       = TRUE;
-            const HRESULT discoveryHr = options->operationControl->FileSystemReportDiscoveryProgress(
-                &discovery, options->operationControlCookie);
+            const HRESULT discoveryHr       = options->operationControl->FileSystemReportDiscoveryProgress(&discovery, options->operationControlCookie);
             if (FAILED(discoveryHr))
             {
                 return discoveryHr;
             }
         }
 
-        if (_kind == FILESYSTEM_BOUND_DIRECTORY &&
-            (static_cast<uint32_t>(flags) & static_cast<uint32_t>(FILESYSTEM_FLAG_RECURSIVE)) != 0u)
+        if (_kind == FILESYSTEM_BOUND_DIRECTORY && (static_cast<uint32_t>(flags) & static_cast<uint32_t>(FILESYSTEM_FLAG_RECURSIVE)) != 0u)
         {
             const HRESULT contentsHr = FileSystemInternal::DeleteBoundLocalDirectoryContents(_path.c_str(), flags, options);
             if (FAILED(contentsHr))
@@ -3229,7 +4109,23 @@ public:
             }
         }
 
-        return DeleteExact(result);
+#if defined(ENABLE_TESTS)
+        // Deliberately contradictory provider receipt: retain the exact object and
+        // its handle so the host must reject committed-with-original-present truth.
+        if (_kind != FILESYSTEM_BOUND_DIRECTORY &&
+            ConsumeMatchingPathInjectionForSelfTest(
+                _path.c_str(), kDeleteCommittedRetainedPathEnvVar, kDeleteCommittedRetainedFiredEnvVar, L"FileOps.Local.DeleteCommittedRetainedInjected"))
+        {
+            result->outcomeKnown         = TRUE;
+            result->mutationCommitted    = TRUE;
+            result->originalStillPresent = TRUE;
+            return S_OK;
+        }
+#endif
+        const HRESULT deleteHr = DeleteExact(result);
+        if (deleteHr == S_OK && result->outcomeKnown == TRUE && result->mutationCommitted == TRUE && result->originalStillPresent == FALSE)
+            reportWork(FileSystemFileWorkPhase::ObjectCompleted);
+        return deleteHr;
     }
 
     HRESULT STDMETHODCALLTYPE AbortOwnedObject(const FileSystemOptions* options, FileSystemConditionalMutationResult* result) noexcept override
@@ -3254,12 +4150,18 @@ public:
             return controlHr;
         }
 
-        return DeleteExact(result);
+        // I35 R7.4: every caller (the host bridge and this provider's own stages) removes the owned
+        // object under a short cleanup control; the cancel watch leaves that I/O alone until its deadline.
+        const Common::SynchronousIoCancelWatch::CleanupWindow cleanupWindow(OwnedStageCleanupWindowDeadline(options));
+        HRESULT abortHr = DeleteExact(result);
+        if (cleanupWindow.CanceledInsideWindow(abortHr))
+        {
+            abortHr = DeleteExact(result);
+        }
+        return abortHr;
     }
 
-    HRESULT STDMETHODCALLTYPE RenameExactTo(const wchar_t* destinationPath,
-                                             BOOL replaceIfExists,
-                                             FileSystemConditionalMutationResult* result) noexcept override
+    HRESULT STDMETHODCALLTYPE RenameExactTo(const wchar_t* destinationPath, BOOL replaceIfExists, FileSystemConditionalMutationResult* result) noexcept override
     {
         const HRESULT resultHr = InitializeMutationResult(result);
         if (FAILED(resultHr))
@@ -3276,7 +4178,7 @@ public:
         }
 
         const std::wstring extendedDestination = FileSystemInternal::ToExtendedPath(destinationPath);
-        const size_t fileNameBytes              = extendedDestination.size() * sizeof(wchar_t);
+        const size_t fileNameBytes             = extendedDestination.size() * sizeof(wchar_t);
         if (fileNameBytes > (std::numeric_limits<DWORD>::max)())
         {
             return HRESULT_FROM_WIN32(ERROR_FILENAME_EXCED_RANGE);
@@ -3290,24 +4192,14 @@ public:
             return E_OUTOFMEMORY;
         }
         std::memset(buffer.get(), 0, bufferBytes);
-        auto* renameInfo            = reinterpret_cast<FILE_RENAME_INFO*>(buffer.get());
-        renameInfo->Flags           = replaceIfExists != FALSE ? FILE_RENAME_FLAG_REPLACE_IF_EXISTS : 0u;
-        renameInfo->RootDirectory   = nullptr;
-        renameInfo->FileNameLength  = static_cast<DWORD>(fileNameBytes);
+        auto* renameInfo           = reinterpret_cast<FILE_RENAME_INFO*>(buffer.get());
+        renameInfo->Flags          = replaceIfExists != FALSE ? FILE_RENAME_FLAG_REPLACE_IF_EXISTS : 0u;
+        renameInfo->RootDirectory  = nullptr;
+        renameInfo->FileNameLength = static_cast<DWORD>(fileNameBytes);
         std::memcpy(renameInfo->FileName, extendedDestination.data(), fileNameBytes);
 
         bool renamed = SetFileInformationByHandle(_file.get(), FileRenameInfoEx, renameInfo, static_cast<DWORD>(bufferBytes)) != FALSE;
-        DWORD error = renamed ? ERROR_SUCCESS : GetLastError();
-#if defined(ENABLE_TESTS)
-        if (renamed && ConsumeMatchingPathInjectionForSelfTest(destinationPath,
-                                                               kRenameCommittedFailurePathEnvVar,
-                                                               kRenameCommittedFailureFiredEnvVar,
-                                                               L"FileOps.Local.RenameCommittedFailureInjected"))
-        {
-            renamed = false;
-            error   = ERROR_IO_INCOMPLETE;
-        }
-#endif
+        DWORD error  = renamed ? ERROR_SUCCESS : GetLastError();
         if (! renamed)
         {
             if (error == ERROR_INVALID_PARAMETER || error == ERROR_INVALID_FUNCTION || error == ERROR_NOT_SUPPORTED)
@@ -3324,22 +4216,31 @@ public:
             }
         }
 
+#if defined(ENABLE_TESTS)
+        // Inject after either rename API succeeds; SMB servers can require the legacy fallback.
+        if (renamed &&
+            ConsumeMatchingPathInjectionForSelfTest(
+                destinationPath, kRenameCommittedFailurePathEnvVar, kRenameCommittedFailureFiredEnvVar, L"FileOps.Local.RenameCommittedFailureInjected"))
+        {
+            renamed = false;
+            error   = ERROR_IO_INCOMPLETE;
+        }
+#endif
         if (! renamed)
         {
-            bool sameAtDestination = false;
+            bool sameAtDestination    = false;
             const HRESULT reconcileHr = PathRefersToThisObject(extendedDestination, sameAtDestination);
             if (SUCCEEDED(reconcileHr) && sameAtDestination)
             {
-                _path                         = destinationPath;
+                _path                        = destinationPath;
                 result->mutationCommitted    = TRUE;
                 result->originalStillPresent = FALSE;
                 return S_OK;
             }
 
-            bool sameAtOriginal = false;
-            const HRESULT originalHr = IsRetainedHandleIdentity(_identity)
-                ? HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)
-                : PathRefersToThisObject(FileSystemInternal::ToExtendedPath(_path), sameAtOriginal);
+            bool sameAtOriginal      = false;
+            const HRESULT originalHr = IsRetainedHandleIdentity(_identity) ? HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED)
+                                                                           : PathRefersToThisObject(FileSystemInternal::ToExtendedPath(_path), sameAtOriginal);
             if (SUCCEEDED(originalHr) && sameAtOriginal)
             {
                 return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
@@ -3347,10 +4248,11 @@ public:
 
             result->outcomeKnown = FALSE;
             Debug::Perf::EmitCounter(L"fileops.local.mutation.rename_reconcile_unknown");
+            Debug::Perf::Emit(L"FileOps.Local.RenameReconcileUnknown", _path, 0u, error, static_cast<uint64_t>(_kind), HRESULT_FROM_WIN32(error));
             return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
         }
 
-        _path                         = destinationPath;
+        _path                        = destinationPath;
         result->mutationCommitted    = TRUE;
         result->originalStillPresent = FALSE;
         return S_OK;
@@ -3368,12 +4270,22 @@ public:
             return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
         }
 
+#if defined(ENABLE_TESTS)
+        if (_ownedStage)
+        {
+            // Nothing was attempted yet: an interrupted delay is a known non-commit.
+            const HRESULT delayHr = DelayOwnedStageCleanupForSelfTest(_path);
+            if (FAILED(delayHr))
+            {
+                return delayHr;
+            }
+        }
+#endif
         HRESULT deleteHr = DeleteExactHandle(_file.get());
 #if defined(ENABLE_TESTS)
-        if (SUCCEEDED(deleteHr) && ConsumeMatchingPathInjectionForSelfTest(_path.c_str(),
-                                                                          kDeleteCommittedFailurePathEnvVar,
-                                                                          kDeleteCommittedFailureFiredEnvVar,
-                                                                          L"FileOps.Local.DeleteCommittedFailureInjected"))
+        if (SUCCEEDED(deleteHr) &&
+            ConsumeMatchingPathInjectionForSelfTest(
+                _path.c_str(), kDeleteCommittedFailurePathEnvVar, kDeleteCommittedFailureFiredEnvVar, L"FileOps.Local.DeleteCommittedFailureInjected"))
         {
             deleteHr = HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
         }
@@ -3393,7 +4305,7 @@ public:
         }
 
         _file.reset();
-        _ownedStage = false;
+        _ownedStage                  = false;
         result->mutationCommitted    = TRUE;
         result->originalStillPresent = FALSE;
         return S_OK;
@@ -3412,13 +4324,7 @@ public:
         }
 
         HANDLE result = INVALID_HANDLE_VALUE;
-        if (DuplicateHandle(GetCurrentProcess(),
-                            _file.get(),
-                            GetCurrentProcess(),
-                            &result,
-                            0u,
-                            FALSE,
-                            DUPLICATE_SAME_ACCESS) == FALSE)
+        if (DuplicateHandle(GetCurrentProcess(), _file.get(), GetCurrentProcess(), &result, 0u, FALSE, DUPLICATE_SAME_ACCESS) == FALSE)
         {
             const DWORD error = GetLastError();
             return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_INVALID_HANDLE);
@@ -3440,9 +4346,9 @@ private:
         {
             return E_INVALIDARG;
         }
-        result->mutationCommitted   = FALSE;
+        result->mutationCommitted    = FALSE;
         result->originalStillPresent = TRUE;
-        result->outcomeKnown        = TRUE;
+        result->outcomeKnown         = TRUE;
         return S_OK;
     }
 
@@ -3454,12 +4360,12 @@ private:
             return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
         }
         wil::unique_handle current(CreateFileW(extendedPath.c_str(),
-                                                FILE_READ_ATTRIBUTES,
-                                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                                nullptr,
-                                                OPEN_EXISTING,
-                                                FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
-                                                nullptr));
+                                               FILE_READ_ATTRIBUTES,
+                                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                               nullptr,
+                                               OPEN_EXISTING,
+                                               FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                               nullptr));
         if (! current)
         {
             const DWORD error = GetLastError();
@@ -3525,19 +4431,19 @@ private:
     }
 
     [[nodiscard]] HRESULT ConditionalRename(const wchar_t* destinationPath,
-                                             IFileSystemBoundObject* expectedDestination,
-                                             FileSystemFlags flags,
-                                             const FileSystemOptions* options,
-                                             FileSystemBindFlags requiredGrant,
-                                             bool requireOwnedStage,
-                                             FileSystemConditionalMutationResult* result,
-                                             IFileSystemBoundObject** renamed) noexcept
+                                            IFileSystemBoundObject* expectedDestination,
+                                            FileSystemFlags flags,
+                                            const FileSystemOptions* options,
+                                            FileSystemBindFlags requiredGrant,
+                                            bool requireOwnedStage,
+                                            FileSystemConditionalMutationResult* result,
+                                            IFileSystemBoundObject** renamed) noexcept
     {
         if (renamed == nullptr)
         {
             return E_POINTER;
         }
-        *renamed = nullptr;
+        *renamed               = nullptr;
         const HRESULT resultHr = InitializeMutationResult(result);
         if (FAILED(resultHr))
         {
@@ -3556,14 +4462,11 @@ private:
             return E_ACCESSDENIED;
         }
 
-        constexpr uint32_t allowedFlags = FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY |
-                                          FILESYSTEM_FLAG_ALLOW_REPLACE_LINK;
-        const uint32_t requestedFlags = static_cast<uint32_t>(flags);
+        constexpr uint32_t allowedFlags = FILESYSTEM_FLAG_ALLOW_OVERWRITE | FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY | FILESYSTEM_FLAG_ALLOW_REPLACE_LINK;
+        const uint32_t requestedFlags   = static_cast<uint32_t>(flags);
         if ((requestedFlags & ~allowedFlags) != 0u ||
-            ((requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) != 0u &&
-             (requestedFlags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0u) ||
-            ((requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_LINK) != 0u &&
-             (requestedFlags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0u) ||
+            ((requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) != 0u && (requestedFlags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0u) ||
+            ((requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_LINK) != 0u && (requestedFlags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0u) ||
             (expectedDestination != nullptr && (requestedFlags & FILESYSTEM_FLAG_ALLOW_OVERWRITE) == 0u))
         {
             return E_INVALIDARG;
@@ -3585,9 +4488,9 @@ private:
 
         wil::com_ptr<ILocalBoundObjectControl> expectedControl;
         bool destinationMovedToBackup = false;
-        bool expectedReadOnlyCleared = false;
+        bool expectedReadOnlyCleared  = false;
         FileSystemBasicInformation expectedInfo{};
-        expectedInfo.sizeBytes = sizeof(expectedInfo);
+        expectedInfo.sizeBytes             = sizeof(expectedInfo);
         const auto restoreExpectedReadOnly = wil::scope_exit([&]() noexcept
         {
             if (expectedReadOnlyCleared && expectedDestination != nullptr)
@@ -3600,12 +4503,12 @@ private:
         {
             FileSystemBoundObjectSnapshot expectedSnapshot{};
             expectedSnapshot.sizeBytes = sizeof(expectedSnapshot);
-            HRESULT hr = expectedDestination->GetSnapshot(&expectedSnapshot);
+            HRESULT hr                 = expectedDestination->GetSnapshot(&expectedSnapshot);
             if (FAILED(hr))
             {
                 return hr;
             }
-            const bool expectedIsLink = expectedSnapshot.kind == FILESYSTEM_BOUND_LINK;
+            const bool expectedIsLink     = expectedSnapshot.kind == FILESYSTEM_BOUND_LINK;
             const bool replaceLinkGranted = (requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_LINK) != 0u;
             if (expectedIsLink != replaceLinkGranted)
             {
@@ -3622,12 +4525,12 @@ private:
 
             const std::wstring extendedDestination = FileSystemInternal::ToExtendedPath(destinationPath);
             wil::unique_handle currentDestination(CreateFileW(extendedDestination.c_str(),
-                                                               FILE_READ_ATTRIBUTES,
-                                                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                                               nullptr,
-                                                               OPEN_EXISTING,
-                                                               FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
-                                                               nullptr));
+                                                              FILE_READ_ATTRIBUTES,
+                                                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                              nullptr,
+                                                              OPEN_EXISTING,
+                                                              FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                                              nullptr));
             if (! currentDestination)
             {
                 const DWORD error = GetLastError();
@@ -3648,8 +4551,7 @@ private:
             {
                 return hr;
             }
-            if ((expectedInfo.attributes & FILE_ATTRIBUTE_READONLY) != 0u &&
-                (requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) == 0u)
+            if ((expectedInfo.attributes & FILE_ATTRIBUTE_READONLY) != 0u && (requestedFlags & FILESYSTEM_FLAG_ALLOW_REPLACE_READONLY) == 0u)
             {
                 return HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED);
             }
@@ -3680,7 +4582,7 @@ private:
                 }
                 FileSystemConditionalMutationResult backupResult{};
                 backupResult.sizeBytes = sizeof(backupResult);
-                hr = expectedControl->RenameExactTo(backupPath.c_str(), FALSE, &backupResult);
+                hr                     = expectedControl->RenameExactTo(backupPath.c_str(), FALSE, &backupResult);
                 if (SUCCEEDED(hr) && backupResult.outcomeKnown != FALSE && backupResult.mutationCommitted != FALSE)
                 {
                     destinationMovedToBackup = true;
@@ -3702,14 +4604,31 @@ private:
             }
         }
 
-        const HRESULT attributesHr = ClearTemporaryAttributes();
+        HRESULT attributesHr = ClearTemporaryAttributes();
+        if (SUCCEEDED(attributesHr))
+        {
+            // SMB metadata preparation can outlive the cancel watch's grace. Recheck at the
+            // last reversible boundary instead of starting a rename after Cancel already won.
+            attributesHr = FileSystemCheckOperationControl(options);
+            if (FAILED(attributesHr))
+            {
+                Debug::Perf::Emit(L"FileOps.Local.PublicationCanceledBeforeRename", destinationPath, 0u, static_cast<uint64_t>(_kind), 0u, attributesHr);
+            }
+        }
         if (FAILED(attributesHr))
         {
             if (destinationMovedToBackup)
             {
+                // I35 R7.4: restoring the user's original from its backup has the cleanup budget; a
+                // canceled rollback would leave the original under its backup name.
+                const Common::SynchronousIoCancelWatch::CleanupWindow rollbackWindow(FreshOwnedStageCleanupDeadline());
                 FileSystemConditionalMutationResult rollbackResult{};
                 rollbackResult.sizeBytes = sizeof(rollbackResult);
-                const HRESULT rollbackHr = expectedControl->RenameExactTo(destinationPath, FALSE, &rollbackResult);
+                HRESULT rollbackHr       = expectedControl->RenameExactTo(destinationPath, FALSE, &rollbackResult);
+                if (rollbackWindow.CanceledInsideWindow(rollbackHr))
+                {
+                    rollbackHr = expectedControl->RenameExactTo(destinationPath, FALSE, &rollbackResult);
+                }
                 if (FAILED(rollbackHr) || rollbackResult.outcomeKnown == FALSE || rollbackResult.mutationCommitted == FALSE)
                 {
                     result->outcomeKnown = FALSE;
@@ -3731,9 +4650,14 @@ private:
         {
             if (destinationMovedToBackup)
             {
+                const Common::SynchronousIoCancelWatch::CleanupWindow rollbackWindow(FreshOwnedStageCleanupDeadline());
                 FileSystemConditionalMutationResult rollbackResult{};
                 rollbackResult.sizeBytes = sizeof(rollbackResult);
-                const HRESULT rollbackHr = expectedControl->RenameExactTo(destinationPath, FALSE, &rollbackResult);
+                HRESULT rollbackHr       = expectedControl->RenameExactTo(destinationPath, FALSE, &rollbackResult);
+                if (rollbackWindow.CanceledInsideWindow(rollbackHr))
+                {
+                    rollbackHr = expectedControl->RenameExactTo(destinationPath, FALSE, &rollbackResult);
+                }
                 if (FAILED(rollbackHr) || rollbackResult.outcomeKnown == FALSE || rollbackResult.mutationCommitted == FALSE)
                 {
                     result->outcomeKnown = FALSE;
@@ -3743,17 +4667,23 @@ private:
             return FAILED(publishHr) ? publishHr : E_UNEXPECTED;
         }
 
-        _ownedStage = false;
+        _ownedStage                  = false;
         result->mutationCommitted    = TRUE;
         result->originalStillPresent = FALSE;
-        *renamed = static_cast<IFileSystemBoundObject*>(this);
+        *renamed                     = static_cast<IFileSystemBoundObject*>(this);
         AddRef();
 
         if (destinationMovedToBackup)
         {
+            // I35 R7.4: the replaced original's backup is removed under the cleanup budget too.
+            const Common::SynchronousIoCancelWatch::CleanupWindow backupCleanupWindow(FreshOwnedStageCleanupDeadline());
             FileSystemConditionalMutationResult cleanupResult{};
             cleanupResult.sizeBytes = sizeof(cleanupResult);
-            const HRESULT cleanupHr = expectedControl->DeleteExact(&cleanupResult);
+            HRESULT cleanupHr       = expectedControl->DeleteExact(&cleanupResult);
+            if (backupCleanupWindow.CanceledInsideWindow(cleanupHr))
+            {
+                cleanupHr = expectedControl->DeleteExact(&cleanupResult);
+            }
             if (FAILED(cleanupHr) || cleanupResult.outcomeKnown == FALSE || cleanupResult.mutationCommitted == FALSE)
             {
                 return HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
@@ -3776,18 +4706,20 @@ private:
     std::atomic_ulong _refCount{1u};
     wil::unique_handle _file;
     LocalObjectIdentityPayload _identity{};
-    FileSystemBoundObjectKind _kind = FILESYSTEM_BOUND_OTHER;
-    uint64_t _committedSizeBytes    = std::numeric_limits<uint64_t>::max();
+    FileSystemBoundObjectKind _kind   = FILESYSTEM_BOUND_OTHER;
+    uint64_t _committedSizeBytes      = std::numeric_limits<uint64_t>::max();
     FileSystemBindFlags _grantedFlags = FILESYSTEM_BIND_NO_FOLLOW;
-    bool _ownedStage = false;
+    bool _ownedStage                  = false;
     std::wstring _path;
 };
 
-class Win32FileWriter final : public IFileWriter
+class Win32FileWriter final : public IFileWriter, public ILocalFileWriterAllocation
 {
 public:
     Win32FileWriter(wil::unique_handle file, std::wstring path, const FileSystemOptions* options) noexcept
-        : _file(std::move(file)), _path(std::move(path)), _hasOperationOptions(options != nullptr)
+        : _file(std::move(file)),
+          _path(std::move(path)),
+          _hasOperationOptions(options != nullptr)
     {
         if (options != nullptr)
         {
@@ -3795,11 +4727,8 @@ public:
         }
     }
 
-    Win32FileWriter(wil::unique_handle file,
-                    std::wstring tempPath,
-                    std::wstring finalPath,
-                    bool allowReplaceReadOnly,
-                    const FileSystemOptions* options) noexcept
+    Win32FileWriter(
+        wil::unique_handle file, std::wstring tempPath, std::wstring finalPath, bool allowReplaceReadOnly, const FileSystemOptions* options) noexcept
         : _file(std::move(file)),
           _path(std::move(tempPath)),
           _finalPath(std::move(finalPath)),
@@ -3831,9 +4760,46 @@ public:
             AddRef();
             return S_OK;
         }
+        if (riid == __uuidof(ILocalFileWriterAllocation))
+        {
+            *ppvObject = static_cast<ILocalFileWriterAllocation*>(this);
+            AddRef();
+            return S_OK;
+        }
 
         *ppvObject = nullptr;
         return E_NOINTERFACE;
+    }
+
+    HRESULT STDMETHODCALLTYPE ReserveAllocation(uint64_t sizeBytes) noexcept override
+    {
+        const HRESULT controlHr = FileSystemCheckOperationControl(OperationOptions());
+        if (FAILED(controlHr))
+        {
+            return controlHr;
+        }
+        if (! _file)
+        {
+            return HRESULT_FROM_WIN32(ERROR_INVALID_HANDLE);
+        }
+        if (sizeBytes > static_cast<uint64_t>(std::numeric_limits<LONGLONG>::max()))
+        {
+            return E_INVALIDARG;
+        }
+
+        FILE_ALLOCATION_INFO allocation{};
+        allocation.AllocationSize.QuadPart = static_cast<LONGLONG>(sizeBytes);
+        if (SetFileInformationByHandle(_file.get(), FileAllocationInfo, &allocation, sizeof(allocation)) != FALSE)
+        {
+            return S_OK;
+        }
+        const DWORD error = GetLastError();
+        // A destination that cannot reserve space receives the bytes exactly as before.
+        if (error == ERROR_NOT_SUPPORTED || error == ERROR_INVALID_PARAMETER || error == ERROR_INVALID_FUNCTION)
+        {
+            return S_FALSE;
+        }
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
     }
 
     ULONG STDMETHODCALLTYPE AddRef() noexcept override
@@ -4039,8 +5005,8 @@ public:
         return S_OK;
     }
 
-    bool abortRequested = false;
-    HRESULT abortStatus = S_OK;
+    bool abortRequested      = false;
+    HRESULT abortStatus      = S_OK;
     unsigned int abortChecks = 0u;
 };
 
@@ -4054,11 +5020,10 @@ void RunDebugOperationControlSelfTest(unsigned int& passed, unsigned int& failed
                passed,
                failed);
     FILE_ID_INFO validFileIdInfo{};
-    validFileIdInfo.VolumeSerialNumber = 42u;
+    validFileIdInfo.VolumeSerialNumber   = 42u;
     validFileIdInfo.FileId.Identifier[0] = 1u;
     LocalObjectIdentityPayload validIdentity{};
-    DebugCheck(SUCCEEDED(MakePersistentLocalObjectIdentity(validFileIdInfo, validIdentity)) &&
-                   ! IsRetainedHandleIdentity(validIdentity),
+    DebugCheck(SUCCEEDED(MakePersistentLocalObjectIdentity(validFileIdInfo, validIdentity)) && ! IsRetainedHandleIdentity(validIdentity),
                L"a nonzero FILE_ID_128 should remain persistent object identity",
                passed,
                failed);
@@ -4069,16 +5034,13 @@ void RunDebugOperationControlSelfTest(unsigned int& passed, unsigned int& failed
     options.linkPolicy       = FILESYSTEM_LINK_PRESERVE;
     options.operationControl = &control;
 
-    DebugCheck(FileSystemCheckOperationControl(&options) == S_OK,
-               L"operation-control checkpoint should accept a live non-aborted operation",
-               passed,
-               failed);
+    DebugCheck(FileSystemCheckOperationControl(&options) == S_OK, L"operation-control checkpoint should accept a live non-aborted operation", passed, failed);
     control.abortRequested = true;
     DebugCheck(FileSystemCheckOperationControl(&options) == HRESULT_FROM_WIN32(ERROR_CANCELLED),
                L"operation-control checkpoint should map an abort request to ERROR_CANCELLED",
                passed,
                failed);
-    const uint64_t cleanupStartedAt = GetTickCount64();
+    const uint64_t cleanupStartedAt        = GetTickCount64();
     const FileSystemOptions cleanupOptions = MakeOwnedStageCleanupOptions(&options);
     DebugCheck(cleanupOptions.operationControl == nullptr && cleanupOptions.operationControlCookie == nullptr &&
                    cleanupOptions.deadlineTickCount64 > cleanupStartedAt &&
@@ -4087,7 +5049,7 @@ void RunDebugOperationControlSelfTest(unsigned int& passed, unsigned int& failed
                L"owned-stage cleanup control should ignore primary cancellation under a fresh short deadline",
                passed,
                failed);
-    control.abortRequested = false;
+    control.abortRequested      = false;
     options.deadlineTickCount64 = 1u;
     DebugCheck(FileSystemCheckOperationControl(&options) == HRESULT_FROM_WIN32(ERROR_TIMEOUT),
                L"operation-control checkpoint should keep deadline expiry distinct from cancellation",
@@ -4097,11 +5059,10 @@ void RunDebugOperationControlSelfTest(unsigned int& passed, unsigned int& failed
     wchar_t tempDirectory[MAX_PATH]{};
     wchar_t tempPath[MAX_PATH]{};
     const DWORD tempDirectoryLength = GetTempPathW(static_cast<DWORD>(std::size(tempDirectory)), tempDirectory);
-    if (! DebugCheck(tempDirectoryLength != 0u && tempDirectoryLength < std::size(tempDirectory) &&
-                        GetTempFileNameW(tempDirectory, L"rso", 0u, tempPath) != 0u,
-                    L"operation-control selftest should create a temporary file",
-                    passed,
-                    failed))
+    if (! DebugCheck(tempDirectoryLength != 0u && tempDirectoryLength < std::size(tempDirectory) && GetTempFileNameW(tempDirectory, L"rso", 0u, tempPath) != 0u,
+                     L"operation-control selftest should create a temporary file",
+                     passed,
+                     failed))
     {
         return;
     }
@@ -4114,29 +5075,25 @@ void RunDebugOperationControlSelfTest(unsigned int& passed, unsigned int& failed
                                               OPEN_EXISTING,
                                               FILE_ATTRIBUTE_TEMPORARY,
                                               nullptr));
-    if (! DebugCheck(static_cast<bool>(seedHandle),
-                    L"operation-control selftest should open its temporary seed handle",
-                    passed,
-                    failed))
+    if (! DebugCheck(static_cast<bool>(seedHandle), L"operation-control selftest should open its temporary seed handle", passed, failed))
     {
         return;
     }
     constexpr std::array<std::byte, 4u> seed{};
     DWORD wrote = 0u;
-    if (! DebugCheck(WriteFile(seedHandle.get(), seed.data(), static_cast<DWORD>(seed.size()), &wrote, nullptr) != FALSE &&
-                        wrote == seed.size(),
-                    L"operation-control selftest should seed the reader payload",
-                    passed,
-                    failed))
+    if (! DebugCheck(WriteFile(seedHandle.get(), seed.data(), static_cast<DWORD>(seed.size()), &wrote, nullptr) != FALSE && wrote == seed.size(),
+                     L"operation-control selftest should seed the reader payload",
+                     passed,
+                     failed))
     {
         return;
     }
     wil::unique_handle readerHandle;
     const HRESULT readerReopenHr = ReopenExactFile(seedHandle.get(), GENERIC_READ, readerHandle, FILE_FLAG_OVERLAPPED);
     if (! DebugCheck(SUCCEEDED(readerReopenHr) && static_cast<bool>(readerHandle),
-                    L"operation-control selftest should reopen an overlapped reader handle",
-                    passed,
-                    failed))
+                     L"operation-control selftest should reopen an overlapped reader handle",
+                     passed,
+                     failed))
     {
         return;
     }
@@ -4151,22 +5108,16 @@ void RunDebugOperationControlSelfTest(unsigned int& passed, unsigned int& failed
     control.abortRequested = true;
     std::array<std::byte, 4u> readBuffer{};
     unsigned long bytesRead = 0u;
-    DebugCheck(reader->Read(readBuffer.data(), static_cast<unsigned long>(readBuffer.size()), &bytesRead) ==
-                   HRESULT_FROM_WIN32(ERROR_CANCELLED) &&
+    DebugCheck(reader->Read(readBuffer.data(), static_cast<unsigned long>(readBuffer.size()), &bytesRead) == HRESULT_FROM_WIN32(ERROR_CANCELLED) &&
                    bytesRead == 0u,
                L"an already-open reader should observe a later abort before reading bytes",
                passed,
                failed);
 
-    control.abortRequested = false;
+    control.abortRequested      = false;
     options.deadlineTickCount64 = 1u;
-    wil::unique_handle writerHandle(CreateFileW(tempPath,
-                                                GENERIC_WRITE,
-                                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                                nullptr,
-                                                OPEN_EXISTING,
-                                                FILE_ATTRIBUTE_TEMPORARY,
-                                                nullptr));
+    wil::unique_handle writerHandle(CreateFileW(
+        tempPath, GENERIC_WRITE, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, FILE_ATTRIBUTE_TEMPORARY, nullptr));
     wil::com_ptr<IFileWriter> writer;
     if (writerHandle)
     {
@@ -4177,9 +5128,7 @@ void RunDebugOperationControlSelfTest(unsigned int& passed, unsigned int& failed
         return;
     }
     unsigned long bytesWritten = 0u;
-    DebugCheck(writer->Write(seed.data(), static_cast<unsigned long>(seed.size()), &bytesWritten) ==
-                   HRESULT_FROM_WIN32(ERROR_TIMEOUT) &&
-                   bytesWritten == 0u,
+    DebugCheck(writer->Write(seed.data(), static_cast<unsigned long>(seed.size()), &bytesWritten) == HRESULT_FROM_WIN32(ERROR_TIMEOUT) && bytesWritten == 0u,
                L"an already-open writer should observe its captured deadline before writing bytes",
                passed,
                failed);
@@ -4191,23 +5140,15 @@ void RunDebugOperationControlSelfTest(unsigned int& passed, unsigned int& failed
     reader.reset();
     writer.reset();
     const std::wstring copyPath = std::wstring(tempPath) + L".copy";
-    const auto removeCopy = wil::scope_exit([&]() noexcept { static_cast<void>(DeleteFileW(copyPath.c_str())); });
-    control.abortRequested = true;
+    const auto removeCopy       = wil::scope_exit([&]() noexcept { static_cast<void>(DeleteFileW(copyPath.c_str())); });
+    control.abortRequested      = true;
     options.deadlineTickCount64 = 0u;
-    auto* fileSystem = new (std::nothrow) FileSystem();
-    if (! DebugCheck(fileSystem != nullptr,
-                    L"operation-control selftest should allocate a FileSystem instance",
-                    passed,
-                    failed))
+    auto* fileSystem            = new (std::nothrow) FileSystem();
+    if (! DebugCheck(fileSystem != nullptr, L"operation-control selftest should allocate a FileSystem instance", passed, failed))
     {
         return;
     }
-    const HRESULT copyHr = fileSystem->CopyItem(tempPath,
-                                                copyPath.c_str(),
-                                                FILESYSTEM_FLAG_NONE,
-                                                &options,
-                                                nullptr,
-                                                nullptr);
+    const HRESULT copyHr = fileSystem->CopyItem(tempPath, copyPath.c_str(), FILESYSTEM_FLAG_NONE, &options, nullptr, nullptr);
     fileSystem->Release();
     DebugCheck(copyHr == HRESULT_FROM_WIN32(ERROR_CANCELLED) && GetFileAttributesW(copyPath.c_str()) == INVALID_FILE_ATTRIBUTES,
                L"callback-free Local Copy should honor operationControl before destination mutation",
@@ -4223,7 +5164,7 @@ void RunDebugSynchronousIoCancelWatchSelfTest(unsigned int& passed, unsigned int
     class CancelControl final : public IFileSystemOperationControl
     {
     public:
-        CancelControl() noexcept = default;
+        CancelControl() noexcept                       = default;
         CancelControl(const CancelControl&)            = delete;
         CancelControl& operator=(const CancelControl&) = delete;
         CancelControl(CancelControl&&)                 = delete;
@@ -4276,8 +5217,7 @@ void RunDebugSynchronousIoCancelWatchSelfTest(unsigned int& passed, unsigned int
     std::thread reader([&]() noexcept
     {
         const Common::SynchronousIoCancelWatch::Scope scope(
-            [](void* context) noexcept { return FAILED(FileSystemCheckOperationControl(static_cast<const FileSystemOptions*>(context))); },
-            &options);
+            [](void* context) noexcept { return FAILED(FileSystemCheckOperationControl(static_cast<const FileSystemOptions*>(context))); }, &options);
         registered.store(scope.Registered(), std::memory_order_release);
         entered.store(true, std::memory_order_release);
         entered.notify_all();
@@ -4291,7 +5231,7 @@ void RunDebugSynchronousIoCancelWatchSelfTest(unsigned int& passed, unsigned int
     Sleep(100u); // let the read reach the kernel before cancel is requested
     const ULONGLONG cancelRequestedTick = GetTickCount64();
     control.abortRequested.store(true, std::memory_order_release);
-    const bool returned = WaitForSingleObject(reader.native_handle(), 5'000u) == WAIT_OBJECT_0;
+    const bool returned       = WaitForSingleObject(reader.native_handle(), 5'000u) == WAIT_OBJECT_0;
     const ULONGLONG elapsedMs = GetTickCount64() - cancelRequestedTick;
     if (! returned)
     {
@@ -4309,15 +5249,133 @@ void RunDebugSynchronousIoCancelWatchSelfTest(unsigned int& passed, unsigned int
                failed);
     DebugCheck(elapsedMs < 3'000u, L"the cancel watch must return a wedged call within its grace plus a few polls", passed, failed);
     DebugCheck(cancelIssued.load(std::memory_order_acquire) >= 1u, L"the cancel watch must have issued CancelSynchronousIo", passed, failed);
+
+    // I35 R7.4: owned-stage cleanup has its own budget. Inside a cleanup window the watch issues no
+    // cancel for the window's deadline although cancellation is requested (the grace passes inside it),
+    // then cancels the still-wedged call as before, so a dead share still returns.
+    HANDLE windowReadRaw  = nullptr;
+    HANDLE windowWriteRaw = nullptr;
+    if (! DebugCheck(CreatePipe(&windowReadRaw, &windowWriteRaw, nullptr, 0u) != FALSE, L"cleanup-window self-test needs an anonymous pipe", passed, failed))
+    {
+        return;
+    }
+    wil::unique_handle windowReadEnd(windowReadRaw);
+    wil::unique_handle windowWriteEnd(windowWriteRaw);
+    CancelControl windowControl;
+    FileSystemOptions windowOptions{};
+    windowOptions.sizeBytes        = sizeof(windowOptions);
+    windowOptions.linkPolicy       = FILESYSTEM_LINK_PRESERVE;
+    windowOptions.operationControl = &windowControl;
+
+    std::atomic<bool> windowEntered{false};
+    std::atomic<bool> windowReturned{false};
+    std::atomic<bool> releaseWindowScope{false};
+    std::atomic<HRESULT> windowStatus{E_PENDING};
+    std::atomic<ULONGLONG> windowOpenedTick{0u};
+    std::atomic<ULONGLONG> windowReturnedTick{0u};
+    std::atomic<const Common::SynchronousIoCancelWatch::Scope*> windowScope{nullptr};
+    std::thread windowReader([&]() noexcept
+    {
+        const Common::SynchronousIoCancelWatch::Scope scope(
+            [](void* context) noexcept { return FAILED(FileSystemCheckOperationControl(static_cast<const FileSystemOptions*>(context))); }, &windowOptions);
+        windowScope.store(&scope, std::memory_order_release);
+        {
+            const Common::SynchronousIoCancelWatch::CleanupWindow window(GetTickCount64() + FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS);
+            windowOpenedTick.store(GetTickCount64(), std::memory_order_release);
+            windowEntered.store(true, std::memory_order_release);
+            windowEntered.notify_all();
+            std::byte buffer[16]{};
+            DWORD read    = 0u;
+            const BOOL ok = ReadFile(windowReadEnd.get(), buffer, static_cast<DWORD>(sizeof(buffer)), &read, nullptr);
+            windowStatus.store(ok != FALSE ? S_OK : HRESULT_FROM_WIN32(GetLastError()), std::memory_order_release);
+        }
+        windowReturnedTick.store(GetTickCount64(), std::memory_order_release);
+        windowReturned.store(true, std::memory_order_release);
+        windowReturned.notify_all();
+        // Keeps the registration alive until the checks below have read its counter.
+        releaseWindowScope.wait(false, std::memory_order_acquire);
+        windowScope.store(nullptr, std::memory_order_release);
+    });
+    windowEntered.wait(false, std::memory_order_acquire);
+    Sleep(100u); // let the read reach the kernel before cancel is requested
+    windowControl.abortRequested.store(true, std::memory_order_release);
+    Sleep(1'500u);
+    const Common::SynchronousIoCancelWatch::Scope* liveScope = windowScope.load(std::memory_order_acquire);
+    const unsigned int issuedInsideWindow = liveScope != nullptr ? liveScope->CancelIssuedCount() : (std::numeric_limits<unsigned int>::max)();
+    const bool pendingInsideWindow        = ! windowReturned.load(std::memory_order_acquire);
+    const ULONGLONG waitStartedTick       = GetTickCount64();
+    while (! windowReturned.load(std::memory_order_acquire) && GetTickCount64() - waitStartedTick < 4'000u)
+    {
+        Sleep(20u);
+    }
+    const bool returnedAfterWindow = windowReturned.load(std::memory_order_acquire);
+    if (! returnedAfterWindow)
+    {
+        // Release the wedged read so the self-test process can exit; the checks below record the failure.
+        DWORD wrote = 0u;
+        static_cast<void>(WriteFile(windowWriteEnd.get(), "x", 1u, &wrote, nullptr));
+        windowReturned.wait(false, std::memory_order_acquire);
+    }
+    const unsigned int issuedAfterWindow = liveScope != nullptr ? liveScope->CancelIssuedCount() : 0u;
+    releaseWindowScope.store(true, std::memory_order_release);
+    releaseWindowScope.notify_all();
+    windowReader.join();
+
+    const ULONGLONG windowHeldMs = windowReturnedTick.load(std::memory_order_acquire) - windowOpenedTick.load(std::memory_order_acquire);
+    DebugCheck(liveScope != nullptr && pendingInsideWindow && issuedInsideWindow == 0u,
+               L"the cancel watch must issue no CancelSynchronousIo for 1.5 s inside an owned-stage cleanup window",
+               passed,
+               failed);
+    DebugCheck(returnedAfterWindow && windowStatus.load(std::memory_order_acquire) == HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED) && issuedAfterWindow >= 1u,
+               L"after the cleanup window's deadline the cancel watch must cancel the still-wedged call",
+               passed,
+               failed);
+    DebugCheck(windowHeldMs + 100u >= FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS && windowHeldMs < FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS + 2'000u,
+               L"a wedged cleanup call must keep its whole budget and no more than a few polls beyond it",
+               passed,
+               failed);
+
+    // Windows nest: an inner window is capped at the budget and restores the outer deadline, and the
+    // outermost restores none.
+    std::atomic<ULONGLONG>* const threadDeadline = Common::SynchronousIoCancelWatch::CurrentThreadCleanupDeadline();
+    const ULONGLONG noWindow                     = threadDeadline != nullptr ? threadDeadline->load() : 1u;
+    bool nestedRestores                          = threadDeadline != nullptr && noWindow == 0u;
+    if (nestedRestores)
+    {
+        const Common::SynchronousIoCancelWatch::CleanupWindow outer(GetTickCount64() + 500u);
+        const ULONGLONG outerDeadline = threadDeadline->load();
+        {
+            const Common::SynchronousIoCancelWatch::CleanupWindow inner(GetTickCount64() + 60'000u);
+            nestedRestores =
+                threadDeadline->load() >= outerDeadline && threadDeadline->load() <= GetTickCount64() + Common::SynchronousIoCancelWatch::kMaxCleanupWindowMs;
+        }
+        nestedRestores = nestedRestores && threadDeadline->load() == outerDeadline;
+    }
+    nestedRestores = nestedRestores && threadDeadline->load() == 0u;
+    DebugCheck(nestedRestores, L"nested cleanup windows must cap at the budget and restore the previous deadline", passed, failed);
+
+    // A call canceled inside its own open window (a poll that read the window before it opened) is
+    // retried once; any other result, or a window whose deadline has passed, is not.
+    bool retryRule = threadDeadline != nullptr;
+    if (retryRule)
+    {
+        const Common::SynchronousIoCancelWatch::CleanupWindow open(GetTickCount64() + 2'000u);
+        retryRule = open.CanceledInsideWindow(HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED)) && ! open.CanceledInsideWindow(S_OK) &&
+                    ! open.CanceledInsideWindow(HRESULT_FROM_WIN32(ERROR_ACCESS_DENIED));
+    }
+    if (retryRule)
+    {
+        const ULONGLONG now = GetTickCount64();
+        const Common::SynchronousIoCancelWatch::CleanupWindow expired(now > 1u ? now - 1u : 0u);
+        retryRule = ! expired.CanceledInsideWindow(HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED));
+    }
+    DebugCheck(retryRule, L"only a cleanup call canceled inside its own unexpired window is retried", passed, failed);
 }
 
 void RunDebugCreateDirectoryAdmissionSelfTest(unsigned int& passed, unsigned int& failed) noexcept
 {
     auto* fileSystem = new (std::nothrow) FileSystem();
-    if (! DebugCheck(fileSystem != nullptr,
-                    L"Create Directory admission selftest should allocate a FileSystem instance",
-                    passed,
-                    failed))
+    if (! DebugCheck(fileSystem != nullptr, L"Create Directory admission selftest should allocate a FileSystem instance", passed, failed))
     {
         return;
     }
@@ -4337,8 +5395,357 @@ void RunDebugCreateDirectoryAdmissionSelfTest(unsigned int& passed, unsigned int
                passed,
                failed);
 }
+
+// I35 R7.3 (pinned tree): the manifest of a folder deleted by name is canonical (ordinal over the upper-case
+// form, every entry after the folder that holds it), the same for an unchanged tree, different once an entry
+// is added deep in it, and leaves a folder's last-write time out; a listed file's own handle matches its entry
+// until the file changes; a tree over the entry bound is refused.
+void RunDebugDeleteManifestSelfTest(unsigned int& passed, unsigned int& failed) noexcept
+{
+    std::array<wchar_t, MAX_PATH + 1u> tempPathBuffer{};
+    const DWORD tempPathLength = GetTempPathW(static_cast<DWORD>(tempPathBuffer.size()), tempPathBuffer.data());
+    if (! DebugCheck(tempPathLength > 0u && tempPathLength < tempPathBuffer.size(), L"delete manifest selftest needs a temporary path", passed, failed))
+    {
+        return;
+    }
+    const std::filesystem::path root =
+        std::filesystem::path(tempPathBuffer.data()) / std::format(L"RedSalamander-DeleteManifest-{}-{}", GetCurrentProcessId(), GetTickCount64());
+    const auto cleanup   = wil::scope_exit([&]() noexcept
+    {
+        std::error_code ignored;
+        static_cast<void>(std::filesystem::remove_all(root, ignored));
+    });
+    const auto writeFile = [](const std::filesystem::path& path, std::string_view bytes) noexcept -> bool
+    {
+        wil::unique_hfile file(CreateFileW(path.c_str(), GENERIC_WRITE, 0u, nullptr, CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, nullptr));
+        DWORD written = 0u;
+        return file && WriteFile(file.get(), bytes.data(), static_cast<DWORD>(bytes.size()), &written, nullptr) != FALSE && written == bytes.size();
+    };
+    if (! DebugCheck(CreateDirectoryW(root.c_str(), nullptr) != FALSE && CreateDirectoryW((root / L"A").c_str(), nullptr) != FALSE &&
+                         CreateDirectoryW((root / L"A B").c_str(), nullptr) != FALSE && CreateDirectoryW((root / L"A" / L"B").c_str(), nullptr) != FALSE &&
+                         writeFile(root / L"A" / L"B" / L"c.txt", "c") && writeFile(root / L"A" / L"d.txt", "dd") && writeFile(root / L"e.txt", "eee"),
+                     L"delete manifest selftest fixture should be created",
+                     passed,
+                     failed))
+    {
+        return;
+    }
+
+    const std::wstring extendedRoot = FileSystemInternal::ToExtendedPath(root.native());
+    const auto list                 = [&](FileSystemInternal::LocalDeleteManifest& manifest, const unsigned int concurrency = 1u) noexcept -> HRESULT
+    {
+        wil::unique_handle folder(CreateFileW(extendedRoot.c_str(),
+                                              FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
+                                              FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                              nullptr,
+                                              OPEN_EXISTING,
+                                              FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                              nullptr));
+        if (! folder)
+        {
+            return HRESULT_FROM_WIN32(GetLastError());
+        }
+        FileSystemInternal::LocalDeleteManifestListing listing{};
+        listing.concurrency = concurrency;
+        return FileSystemInternal::ListLocalDeleteManifest(folder.get(), extendedRoot, listing, manifest);
+    };
+    FileSystemInternal::LocalDeleteManifest first;
+    FileSystemInternal::LocalDeleteManifest second;
+    if (! DebugCheck(SUCCEEDED(list(first)) && SUCCEEDED(list(second)), L"delete manifest should list the fixture twice", passed, failed))
+    {
+        return;
+    }
+    constexpr std::array<std::wstring_view, 6> kExpectedOrder{{L"A", L"A B", L"A\\B", L"A\\B\\c.txt", L"A\\d.txt", L"e.txt"}};
+    bool ordered = first.entries.size() == kExpectedOrder.size();
+    for (size_t index = 0u; ordered && index < kExpectedOrder.size(); ++index)
+    {
+        ordered = first.entries[index].relativePath == kExpectedOrder[index];
+    }
+    DebugCheck(ordered && first.files == 3u && first.directories == 3u && first.links == 0u,
+               L"the delete manifest sorts ordinally over the upper-case form, every entry after the folder that holds it",
+               passed,
+               failed);
+    DebugCheck(first.digest == second.digest, L"an unchanged tree lists to the same manifest digest", passed, failed);
+    FileSystemInternal::LocalDeleteManifest parallel;
+    DebugCheck(SUCCEEDED(list(parallel, 4u)) && parallel.digest == first.digest && parallel.entries.size() == first.entries.size(),
+               L"listing a tree's folders at the same time gives the serial listing's manifest",
+               passed,
+               failed);
+    DebugCheck(std::ranges::all_of(first.entries,
+                                   [](const FileSystemInternal::LocalDeleteManifestEntry& entry) noexcept
+    { return (entry.attributes & FILE_ATTRIBUTE_DIRECTORY) == 0u || (entry.lastWrite == 0u && entry.sizeBytes == 0u); }),
+               L"a folder's last-write time and size are left out of the manifest",
+               passed,
+               failed);
+
+    // An entry added deep in the tree changes the digest and the counts.
+    FileSystemInternal::LocalDeleteManifest deeper;
+    DebugCheck(writeFile(root / L"A" / L"B" / L"new.txt", "n") && SUCCEEDED(list(deeper)) && deeper.digest != first.digest && deeper.files == 4u,
+               L"an entry added deep in the tree changes the manifest digest",
+               passed,
+               failed);
+
+    // A listed file's own no-follow handle matches its entry until the file changes.
+    const auto listedE =
+        std::ranges::find_if(first.entries, [](const FileSystemInternal::LocalDeleteManifestEntry& entry) noexcept { return entry.relativePath == L"e.txt"; });
+    const auto factsOf = [](const std::filesystem::path& path, BY_HANDLE_FILE_INFORMATION& information) noexcept -> bool
+    {
+        wil::unique_handle file(CreateFileW(path.c_str(),
+                                            FILE_READ_ATTRIBUTES,
+                                            FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                            nullptr,
+                                            OPEN_EXISTING,
+                                            FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                            nullptr));
+        return file && GetFileInformationByHandle(file.get(), &information) != FALSE;
+    };
+    BY_HANDLE_FILE_INFORMATION before{};
+    BY_HANDLE_FILE_INFORMATION after{};
+    DebugCheck(listedE != first.entries.end() && factsOf(root / L"e.txt", before) && FileSystemInternal::LocalDeleteManifestEntryMatches(*listedE, before) &&
+                   writeFile(root / L"e.txt", "eeee") && factsOf(root / L"e.txt", after) &&
+                   ! FileSystemInternal::LocalDeleteManifestEntryMatches(*listedE, after),
+               L"a listed file's handle matches its entry until the file changes",
+               passed,
+               failed);
+
+#if defined(ENABLE_TESTS)
+    // Over the entry bound (a test-only bound of 2 here) the listing is refused.
+    FileSystemInternal::LocalDeleteManifest overBound;
+    const bool boundSet       = SetEnvironmentVariableW(kDeleteByNameEntryBudgetEnvVar.data(), L"2") != FALSE;
+    const HRESULT overBoundHr = boundSet ? list(overBound) : E_FAIL;
+    static_cast<void>(SetEnvironmentVariableW(kDeleteByNameEntryBudgetEnvVar.data(), nullptr));
+    DebugCheck(boundSet && overBoundHr == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA) && overBound.entries.empty(),
+               L"a tree over the delete manifest's entry bound is refused",
+               passed,
+               failed);
+#endif
+}
 #endif
 } // namespace
+
+namespace
+{
+// The self-test injection that emulates a redirector without FileIdInfo (the NAS probed on 2026-10-11) for every
+// path at or below its root.
+[[nodiscard]] bool LocalDirectoryFileIdUnsupportedForSelfTest([[maybe_unused]] const std::wstring& path) noexcept
+{
+#if defined(ENABLE_TESTS)
+    if (IsBindIdentityUnsupportedForSelfTest(path.c_str()))
+    {
+        Debug::Perf::EmitCounter(L"FileOps.Local.DirectoryIdentityUnsupportedInjected");
+        return true;
+    }
+#endif
+    return false;
+}
+
+// The volume serial number and nonzero 64-bit file index of an open folder that is not a reparse point.
+[[nodiscard]] HRESULT QueryLocalDirectoryFileIndex(HANDLE directory, FileSystemInternal::LocalDirectoryIdentity& identity) noexcept
+{
+    identity = {};
+    BY_HANDLE_FILE_INFORMATION information{};
+    if (GetFileInformationByHandle(directory, &information) == FALSE)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+    if ((information.dwFileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0u || (information.dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+    {
+        return HRESULT_FROM_WIN32(ERROR_DIRECTORY);
+    }
+    const uint64_t index = (static_cast<uint64_t>(information.nFileIndexHigh) << 32u) | information.nFileIndexLow;
+    // A server without file numbers reports zero (or all ones): that is no identity at all.
+    if (index == 0u || index == (std::numeric_limits<uint64_t>::max)())
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+    identity.proof              = FileSystemInternal::LocalDirectoryIdentity::Proof::FileIndex;
+    identity.volumeSerialNumber = information.dwVolumeSerialNumber;
+    identity.fileIndex          = index;
+    return S_OK;
+}
+} // namespace
+
+bool FileSystemInternal::IsRemoteStoragePath(std::wstring_view path) noexcept
+{
+    if (IsUncPath(path))
+        return true;
+    const std::wstring driveRoot = ExtractDriveRoot(path);
+    return ! driveRoot.empty() && GetDriveTypeW(driveRoot.c_str()) == DRIVE_REMOTE;
+}
+
+HRESULT FileSystemInternal::CaptureLocalDirectoryIdentity(IFileSystemBoundObject* published,
+                                                          const std::wstring& path,
+                                                          LocalDirectoryIdentity& identity) noexcept
+{
+    identity = {};
+    if (published == nullptr)
+    {
+        return E_POINTER;
+    }
+    FileSystemBoundObjectSnapshot snapshot{};
+    snapshot.sizeBytes = sizeof(snapshot);
+    HRESULT hr         = published->GetSnapshot(&snapshot);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    if (snapshot.kind != FILESYSTEM_BOUND_DIRECTORY || snapshot.objectId == nullptr || snapshot.objectIdBytes != sizeof(LocalObjectIdentityPayload))
+    {
+        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+    }
+    LocalObjectIdentityPayload payload{};
+    std::memcpy(&payload, snapshot.objectId, sizeof(payload));
+    if (! IsRetainedHandleIdentity(payload) && ! LocalDirectoryFileIdUnsupportedForSelfTest(path))
+    {
+        identity.proof              = LocalDirectoryIdentity::Proof::FileId;
+        identity.volumeSerialNumber = payload.volumeSerialNumber;
+        identity.fileId             = payload.fileId;
+        return S_OK;
+    }
+
+    // No FileIdInfo: the stage's identity is its retained handle, which is still open, so the file index it reports
+    // belongs to this folder now.
+    wil::com_ptr<ILocalBoundObjectControl> control;
+    hr = published->QueryInterface(__uuidof(ILocalBoundObjectControl), control.put_void());
+    if (FAILED(hr) || ! control)
+    {
+        return FAILED(hr) ? hr : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+    HANDLE duplicated = INVALID_HANDLE_VALUE;
+    hr                = control->DuplicateExactHandle(&duplicated);
+    if (FAILED(hr))
+    {
+        return hr;
+    }
+    const wil::unique_handle handle(duplicated);
+    return QueryLocalDirectoryFileIndex(handle.get(), identity);
+}
+
+HRESULT FileSystemInternal::RestoreLocalDirectoryBasicInformation(const std::wstring& path,
+                                                                  const LocalDirectoryIdentity& identity,
+                                                                  const FileSystemBasicInformation& info) noexcept
+{
+    if (path.empty() || identity.proof == LocalDirectoryIdentity::Proof::None || info.sizeBytes != sizeof(FileSystemBasicInformation))
+    {
+        return E_INVALIDARG;
+    }
+    const std::wstring extendedPath = ToExtendedPath(path);
+    const wil::unique_handle directory(CreateFileW(extendedPath.c_str(),
+                                                   FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES | SYNCHRONIZE,
+                                                   FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                                   nullptr,
+                                                   OPEN_EXISTING,
+                                                   FILE_FLAG_BACKUP_SEMANTICS | FILE_FLAG_OPEN_REPARSE_POINT,
+                                                   nullptr));
+    if (! directory)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+
+    bool same = false;
+    if (identity.proof == LocalDirectoryIdentity::Proof::FileId)
+    {
+        FILE_ATTRIBUTE_TAG_INFO tag{};
+        if (GetFileInformationByHandleEx(directory.get(), FileAttributeTagInfo, &tag, sizeof(tag)) == FALSE)
+        {
+            const DWORD error = GetLastError();
+            return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        }
+        if ((tag.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0u || (tag.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+        {
+            return HRESULT_FROM_WIN32(ERROR_DIRECTORY);
+        }
+        // Recorded by FileIdInfo, compared by FileIdInfo only: a file index is never a substitute for it.
+        if (LocalDirectoryFileIdUnsupportedForSelfTest(path))
+        {
+            return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+        }
+        LocalObjectIdentityPayload current{};
+        const HRESULT identityHr = QueryExactLocalObjectIdentity(directory.get(), current);
+        if (FAILED(identityHr))
+        {
+            return identityHr;
+        }
+        same = current.volumeSerialNumber == identity.volumeSerialNumber && std::memcmp(&current.fileId, &identity.fileId, sizeof(identity.fileId)) == 0;
+    }
+    else
+    {
+        LocalDirectoryIdentity current{};
+        const HRESULT identityHr = QueryLocalDirectoryFileIndex(directory.get(), current);
+        if (FAILED(identityHr))
+        {
+            return identityHr;
+        }
+        same = current.volumeSerialNumber == identity.volumeSerialNumber && current.fileIndex == identity.fileIndex;
+    }
+    if (! same)
+    {
+        return HRESULT_FROM_WIN32(ERROR_FILE_INVALID);
+    }
+
+    FILE_BASIC_INFO basic{};
+    basic.CreationTime.QuadPart   = info.creationTime;
+    basic.LastAccessTime.QuadPart = info.lastAccessTime;
+    basic.LastWriteTime.QuadPart  = info.lastWriteTime;
+    basic.FileAttributes          = info.attributes;
+    if (SetFileInformationByHandle(directory.get(), FileBasicInfo, &basic, sizeof(basic)) == FALSE)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+    return S_OK;
+}
+
+#if defined(ENABLE_TESTS)
+// Test-only POD boundary. Begin/End and snapshot operate on caller TLS only.
+// Cache reset is caller-authorized only after the fixture establishes worker quiet.
+extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestAdmissionProbe(uint32_t action, uint32_t slotCount, uint64_t* slots) noexcept
+{
+    if (slotCount != kAdmissionProbeSlots || slots == nullptr || action > 4u)
+        return E_INVALIDARG;
+    if (action == 2u || action == 4u)
+    {
+        if (g_admissionProbe.enabled)
+            return HRESULT_FROM_WIN32(ERROR_BUSY);
+        std::scoped_lock lock(g_localVolumeRouteCache.mutex);
+        if (action == 2u)
+        {
+            g_localVolumeRouteCache.volumeRoot.clear();
+            g_localVolumeRouteCache.volumeGuidDevicePath.clear();
+            g_localVolumeRouteCache.route        = {};
+            g_localVolumeRouteCache.resolvedTick = 0u;
+        }
+        std::fill_n(slots, kAdmissionProbeSlots, 0u);
+        slots[static_cast<size_t>(AdmissionProbeSlot::Schema)]   = 1u;
+        slots[static_cast<size_t>(AdmissionProbeSlot::OwnerTid)] = GetCurrentThreadId();
+        // Action 4 has a distinct metadata response: slot 2 is cache resolvedTick.
+        // This is not a count sample; caller reads it before Begin overwrites slots.
+        slots[2] = g_localVolumeRouteCache.resolvedTick;
+        return S_OK;
+    }
+    if (action == 0u)
+    {
+        if (g_admissionProbe.enabled)
+            return HRESULT_FROM_WIN32(ERROR_BUSY);
+        g_admissionProbe.values                                                    = {};
+        g_admissionProbe.values[static_cast<size_t>(AdmissionProbeSlot::Schema)]   = 1u;
+        g_admissionProbe.values[static_cast<size_t>(AdmissionProbeSlot::OwnerTid)] = GetCurrentThreadId();
+        g_admissionProbe.enabled                                                   = true;
+    }
+    else if (action == 1u)
+    {
+        if (! g_admissionProbe.enabled)
+            return HRESULT_FROM_WIN32(ERROR_INVALID_STATE);
+        g_admissionProbe.enabled = false;
+    }
+    else if (g_admissionProbe.enabled)
+        return HRESULT_FROM_WIN32(ERROR_BUSY);
+    std::copy(g_admissionProbe.values.begin(), g_admissionProbe.values.end(), slots);
+    return S_OK;
+}
+#endif
 
 HRESULT STDMETHODCALLTYPE FileSystem::QueryInterface(REFIID riid, void** ppvObject) noexcept
 {
@@ -4371,6 +5778,13 @@ HRESULT STDMETHODCALLTYPE FileSystem::QueryInterface(REFIID riid, void** ppvObje
     if (riid == __uuidof(IFileSystemObjectBinding))
     {
         *ppvObject = static_cast<IFileSystemObjectBinding*>(this);
+        AddRef();
+        return S_OK;
+    }
+
+    if (riid == __uuidof(IFileSystemIdentityDelete))
+    {
+        *ppvObject = static_cast<IFileSystemIdentityDelete*>(this);
         AddRef();
         return S_OK;
     }
@@ -4506,11 +5920,11 @@ namespace
 class LocalReaderCancellationTestControl final : public IFileSystemOperationControl
 {
 public:
-    LocalReaderCancellationTestControl() = default;
-    LocalReaderCancellationTestControl(const LocalReaderCancellationTestControl&) = delete;
-    LocalReaderCancellationTestControl(LocalReaderCancellationTestControl&&) = delete;
+    LocalReaderCancellationTestControl()                                                     = default;
+    LocalReaderCancellationTestControl(const LocalReaderCancellationTestControl&)            = delete;
+    LocalReaderCancellationTestControl(LocalReaderCancellationTestControl&&)                 = delete;
     LocalReaderCancellationTestControl& operator=(const LocalReaderCancellationTestControl&) = delete;
-    LocalReaderCancellationTestControl& operator=(LocalReaderCancellationTestControl&&) = delete;
+    LocalReaderCancellationTestControl& operator=(LocalReaderCancellationTestControl&&)      = delete;
 
     HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void*) noexcept override
     {
@@ -4544,39 +5958,37 @@ public:
 
 [[nodiscard]] uint64_t LocalReaderTestElapsedUs(const std::chrono::steady_clock::time_point startedAt) noexcept
 {
-    return static_cast<uint64_t>(
-        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count());
+    return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count());
 }
 } // namespace
 
-extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestLocalReaderCancellation(
-    const wchar_t* ordinaryPath,
-    uint64_t* cancelDurationUs,
-    uint64_t* ordinaryDurationUs,
-    uint64_t* ordinaryBytesRead,
-    unsigned int* abortCheckCount,
-    unsigned long* bytesReadAfterCancel,
-    HRESULT* blockedReadStatus,
-    BOOL* enteredPending,
-    BOOL* seekReplayMatched,
-    BOOL* cleanupComplete) noexcept
+extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestLocalReaderCancellation(const wchar_t* ordinaryPath,
+                                                                                                      uint64_t* cancelDurationUs,
+                                                                                                      uint64_t* ordinaryDurationUs,
+                                                                                                      uint64_t* ordinaryBytesRead,
+                                                                                                      unsigned int* abortCheckCount,
+                                                                                                      unsigned long* bytesReadAfterCancel,
+                                                                                                      HRESULT* blockedReadStatus,
+                                                                                                      BOOL* enteredPending,
+                                                                                                      BOOL* seekReplayMatched,
+                                                                                                      BOOL* cleanupComplete) noexcept
 {
-    if (ordinaryPath == nullptr || ordinaryPath[0] == L'\0' || cancelDurationUs == nullptr || ordinaryDurationUs == nullptr ||
-        ordinaryBytesRead == nullptr || abortCheckCount == nullptr || bytesReadAfterCancel == nullptr || blockedReadStatus == nullptr ||
-        enteredPending == nullptr || seekReplayMatched == nullptr || cleanupComplete == nullptr)
+    if (ordinaryPath == nullptr || ordinaryPath[0] == L'\0' || cancelDurationUs == nullptr || ordinaryDurationUs == nullptr || ordinaryBytesRead == nullptr ||
+        abortCheckCount == nullptr || bytesReadAfterCancel == nullptr || blockedReadStatus == nullptr || enteredPending == nullptr ||
+        seekReplayMatched == nullptr || cleanupComplete == nullptr)
     {
         return E_POINTER;
     }
 
-    *cancelDurationUs    = 0u;
-    *ordinaryDurationUs  = 0u;
-    *ordinaryBytesRead   = 0u;
-    *abortCheckCount     = 0u;
+    *cancelDurationUs     = 0u;
+    *ordinaryDurationUs   = 0u;
+    *ordinaryBytesRead    = 0u;
+    *abortCheckCount      = 0u;
     *bytesReadAfterCancel = 0u;
-    *blockedReadStatus   = E_PENDING;
-    *enteredPending      = FALSE;
-    *seekReplayMatched   = FALSE;
-    *cleanupComplete     = FALSE;
+    *blockedReadStatus    = E_PENDING;
+    *enteredPending       = FALSE;
+    *seekReplayMatched    = FALSE;
+    *cleanupComplete      = FALSE;
 
     auto* fileSystem = new (std::nothrow) FileSystem();
     if (fileSystem == nullptr)
@@ -4615,7 +6027,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestLo
     }
 
     uint64_t expectedSize = 0u;
-    hr = legacyReader->GetSize(&expectedSize);
+    hr                    = legacyReader->GetSize(&expectedSize);
     if (FAILED(hr))
     {
         return hr;
@@ -4630,7 +6042,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestLo
         total = 0u;
         for (;;)
         {
-            unsigned long read = 0u;
+            unsigned long read   = 0u;
             const HRESULT readHr = reader.Read(buffer.get(), 1024u * 1024u, &read);
             if (FAILED(readHr))
             {
@@ -4650,7 +6062,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestLo
 
     uint64_t legacyBytes = 0u;
     uint64_t boundBytes  = 0u;
-    hr = readWhole(*legacyReader, legacyBytes);
+    hr                   = readWhole(*legacyReader, legacyBytes);
     if (SUCCEEDED(hr))
     {
         hr = readWhole(*boundReader, boundBytes);
@@ -4667,7 +6079,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestLo
     std::array<std::byte, 4096u> boundReplay{};
     unsigned long legacyReplayBytes = 0u;
     unsigned long boundReplayBytes  = 0u;
-    hr = legacyReader->Seek(replayOffset, FILE_BEGIN, &newPosition);
+    hr                              = legacyReader->Seek(replayOffset, FILE_BEGIN, &newPosition);
     if (SUCCEEDED(hr))
     {
         hr = legacyReader->Read(legacyReplay.data(), static_cast<unsigned long>(legacyReplay.size()), &legacyReplayBytes);
@@ -4684,16 +6096,12 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestLo
     {
         return hr;
     }
-    *seekReplayMatched = legacyReplayBytes == boundReplayBytes &&
-                                std::equal(legacyReplay.begin(), legacyReplay.begin() + legacyReplayBytes, boundReplay.begin())
-                            ? TRUE
-                            : FALSE;
+    *seekReplayMatched =
+        legacyReplayBytes == boundReplayBytes && std::equal(legacyReplay.begin(), legacyReplay.begin() + legacyReplayBytes, boundReplay.begin()) ? TRUE : FALSE;
     *ordinaryDurationUs = LocalReaderTestElapsedUs(ordinaryStartedAt);
 
-    const std::wstring pipeName = std::format(L"\\\\.\\pipe\\RedSalamander.LocalReaderCancel.{}.{}.{}",
-                                              GetCurrentProcessId(),
-                                              GetCurrentThreadId(),
-                                              GetTickCount64());
+    const std::wstring pipeName =
+        std::format(L"\\\\.\\pipe\\RedSalamander.LocalReaderCancel.{}.{}.{}", GetCurrentProcessId(), GetCurrentThreadId(), GetTickCount64());
     wil::unique_handle serverPipe(CreateNamedPipeW(pipeName.c_str(),
                                                    PIPE_ACCESS_OUTBOUND | FILE_FLAG_FIRST_PIPE_INSTANCE,
                                                    PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
@@ -4706,13 +6114,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestLo
     {
         return HRESULT_FROM_WIN32(GetLastError());
     }
-    wil::unique_handle clientPipe(CreateFileW(pipeName.c_str(),
-                                              GENERIC_READ,
-                                              0u,
-                                              nullptr,
-                                              OPEN_EXISTING,
-                                              FILE_FLAG_OVERLAPPED,
-                                              nullptr));
+    wil::unique_handle clientPipe(CreateFileW(pipeName.c_str(), GENERIC_READ, 0u, nullptr, OPEN_EXISTING, FILE_FLAG_OVERLAPPED, nullptr));
     if (! clientPipe)
     {
         return HRESULT_FROM_WIN32(GetLastError());
@@ -4741,7 +6143,7 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderFileSystemTestLo
     std::jthread readerThread([&]() noexcept
     {
         std::byte byte{};
-        unsigned long read = 0u;
+        unsigned long read   = 0u;
         const HRESULT readHr = blockedReader->Read(&byte, 1u, &read);
         readBytes.store(read, std::memory_order_release);
         readStatus.store(readHr, std::memory_order_release);
@@ -4841,10 +6243,10 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateFileWriter(const wchar_t* path, File
         }
         const std::wstring prefix = std::wstring(filePath.substr(separator + 1u)) + L".~rs-write-";
         const Common::Paths::UniqueSiblingFileOptions options{.prefix             = prefix,
-                                                               .suffix             = L".tmp",
-                                                               .shareMode          = FILE_SHARE_READ,
-                                                               .flagsAndAttributes = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_TEMPORARY,
-                                                               .maximumAttempts   = 32u};
+                                                              .suffix             = L".tmp",
+                                                              .shareMode          = FILE_SHARE_READ,
+                                                              .flagsAndAttributes = FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_TEMPORARY,
+                                                              .maximumAttempts    = 32u};
         const HRESULT tempHr = Common::Paths::CreateUniqueSiblingFile(filePath, options, tempPath, file);
         if (FAILED(tempHr))
         {
@@ -4976,10 +6378,32 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetFileBasicInformation(const wchar_t* pat
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystem::GetPathCapabilities(const wchar_t* path,
-                                                           FileSystemOperation operation,
-                                                           const char** jsonUtf8) noexcept
+#if defined(ENABLE_TESTS)
+HRESULT STDMETHODCALLTYPE FileSystem::GetRouteFacts(const wchar_t* path,
+                                                    FileSystemOperation operation,
+                                                    FileSystemArena* arena,
+                                                    FileSystemRouteFacts* facts) noexcept
 {
+    CountAdmissionProbe(AdmissionProbeSlot::RouteFacts);
+    if (operation == FILESYSTEM_COPY)
+        CountAdmissionProbe(AdmissionProbeSlot::RouteFactsCopy);
+    else if (operation == FILESYSTEM_MOVE)
+        CountAdmissionProbe(AdmissionProbeSlot::RouteFactsMove);
+    return FileSystemRouteCapabilitiesBase::GetRouteFacts(path, operation, arena, facts);
+}
+HRESULT STDMETHODCALLTYPE FileSystem::IsTransferPeerAllowed(
+    const wchar_t* path, FileSystemOperation operation, FileSystemTransferPeerRole role, const wchar_t* peerPluginId, BOOL* allowed) noexcept
+{
+    CountAdmissionProbe(AdmissionProbeSlot::PeerAllowed);
+    return FileSystemRouteCapabilitiesBase::IsTransferPeerAllowed(path, operation, role, peerPluginId, allowed);
+}
+#endif
+
+HRESULT STDMETHODCALLTYPE FileSystem::GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept
+{
+#if defined(ENABLE_TESTS)
+    CountAdmissionProbe(AdmissionProbeSlot::LegacyPathCapabilities);
+#endif
     if (jsonUtf8 == nullptr)
     {
         return E_POINTER;
@@ -5008,10 +6432,11 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetPathCapabilities(const wchar_t* path,
     return S_OK;
 }
 
-HRESULT FileSystem::BuildFileSystemRouteDescriptor(const wchar_t* path,
-                                                    FileSystemOperation operation,
-                                                    FileSystemRouteDescriptor& descriptor) noexcept
+HRESULT FileSystem::BuildFileSystemRouteDescriptor(const wchar_t* path, FileSystemOperation operation, FileSystemRouteDescriptor& descriptor) noexcept
 {
+#if defined(ENABLE_TESTS)
+    CountAdmissionProbe(AdmissionProbeSlot::Descriptor);
+#endif
     static_cast<void>(operation);
     if (path == nullptr || path[0] == L'\0')
     {
@@ -5029,10 +6454,10 @@ HRESULT FileSystem::BuildFileSystemRouteDescriptor(const wchar_t* path,
     }
 
     const LocalCapabilityRouteInfo route = BuildLocalCapabilityRouteInfo(path);
-    descriptor = {};
-    descriptor.providerId = kPluginId;
-    descriptor.pathProfileId = route.remote ? L"local-win32-smb" : L"local-win32";
-    descriptor.rootId = Common::Strings::Utf16FromUtf8StrictOrEmpty(route.rootId);
+    descriptor                           = {};
+    descriptor.providerId                = kPluginId;
+    descriptor.pathProfileId             = route.remote ? L"local-win32-smb" : L"local-win32";
+    descriptor.rootId                    = Common::Strings::Utf16FromUtf8StrictOrEmpty(route.rootId);
     if (descriptor.rootId.empty())
     {
         return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
@@ -5042,48 +6467,46 @@ HRESULT FileSystem::BuildFileSystemRouteDescriptor(const wchar_t* path,
     // R0f-SMB: UNC and mapped-remote paths are bounded like fixed volumes. Every worker that
     // calls into this provider is registered with the synchronous-I/O cancel watch, so a call
     // wedged on a dead share returns with ERROR_OPERATION_ABORTED once the task is canceled.
-    descriptor.cancellationRoute = FILESYSTEM_CANCELLATION_BOUNDED;
-    descriptor.namespaceKind = FILESYSTEM_NAMESPACE_REAL_CONTAINER;
-    descriptor.componentComparison = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE;
-    descriptor.caseOnlyRename = FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED;
-    descriptor.proofFlags = FILESYSTEM_ROUTE_PROOF_HOST_READBACK | FILESYSTEM_ROUTE_PROOF_PROVIDER_BLAKE3;
-    descriptor.copyOperation = true;
-    descriptor.moveOperation = true;
-    descriptor.nativeMoveOperation = true;
-    descriptor.deleteOperation = true;
-    descriptor.renameOperation = true;
+    descriptor.cancellationRoute        = FILESYSTEM_CANCELLATION_BOUNDED;
+    descriptor.namespaceKind            = FILESYSTEM_NAMESPACE_REAL_CONTAINER;
+    descriptor.componentComparison      = FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE;
+    descriptor.caseOnlyRename           = FILESYSTEM_ROUTE_CASE_ONLY_SUPPORTED;
+    descriptor.proofFlags               = FILESYSTEM_ROUTE_PROOF_HOST_READBACK | FILESYSTEM_ROUTE_PROOF_PROVIDER_BLAKE3;
+    descriptor.copyOperation            = true;
+    descriptor.moveOperation            = true;
+    descriptor.nativeMoveOperation      = true;
+    descriptor.deleteOperation          = true;
+    descriptor.renameOperation          = true;
     descriptor.createDirectoryOperation = true;
-    descriptor.propertiesOperation = true;
-    descriptor.readOperation = true;
-    descriptor.writeOperation = true;
-    descriptor.recycleOperation = true;
-    descriptor.boundDelete = true;
-    descriptor.conditionalDelete = true;
-    descriptor.exclusiveStage = true;
-    descriptor.conditionalPublish = true;
-    descriptor.committedSize = true;
-    descriptor.preserveFileLink = true;
-    descriptor.preserveDirectoryLink = true;
-    descriptor.retargetInTree = false; // literal Preserve: the host never rewrites a link payload
-    descriptor.exactLinkRemoval = true;
-    descriptor.exportCopyAll = true;
-    descriptor.exportMoveAll = true;
-    descriptor.importCopyAll = true;
-    descriptor.importMoveAll = true;
-    descriptor.preferredSeparator = L'\\';
-    descriptor.acceptedSeparators = L"\\/";
-    descriptor.windowsChildNames = true;
+    descriptor.propertiesOperation      = true;
+    descriptor.readOperation            = true;
+    descriptor.writeOperation           = true;
+    descriptor.recycleOperation         = true;
+    descriptor.boundDelete              = true;
+    descriptor.conditionalDelete        = true;
+    descriptor.exclusiveStage           = true;
+    descriptor.conditionalPublish       = true;
+    descriptor.committedSize            = true;
+    descriptor.preserveFileLink         = true;
+    descriptor.preserveDirectoryLink    = true;
+    descriptor.retargetInTree           = false; // literal Preserve: the host never rewrites a link payload
+    descriptor.exactLinkRemoval         = true;
+    descriptor.exportCopyAll            = true;
+    descriptor.exportMoveAll            = true;
+    descriptor.importCopyAll            = true;
+    descriptor.importMoveAll            = true;
+    descriptor.preferredSeparator       = L'\\';
+    descriptor.acceptedSeparators       = L"\\/";
+    descriptor.windowsChildNames        = true;
 
     std::lock_guard lock(_stateMutex);
-    descriptor.copyMoveMaxConcurrency = std::clamp(_copyMoveMaxConcurrency, 1u, kMaxCopyMoveMaxConcurrency);
-    descriptor.deleteMaxConcurrency = std::clamp(_deleteMaxConcurrency, 1u, kMaxDeleteMaxConcurrency);
+    descriptor.copyMoveMaxConcurrency         = std::clamp(_copyMoveMaxConcurrency, 1u, kMaxCopyMoveMaxConcurrency);
+    descriptor.deleteMaxConcurrency           = std::clamp(_deleteMaxConcurrency, 1u, kMaxDeleteMaxConcurrency);
     descriptor.deleteRecycleBinMaxConcurrency = std::clamp(_deleteRecycleBinMaxConcurrency, 1u, kMaxDeleteRecycleBinMaxConcurrency);
     return S_OK;
 }
 
-HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path,
-                                                  FileSystemBindFlags flags,
-                                                  IFileSystemBoundObject** bound) noexcept
+HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path, FileSystemBindFlags flags, IFileSystemBoundObject** bound) noexcept
 {
     if (bound == nullptr)
     {
@@ -5095,15 +6518,15 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path,
         return E_INVALIDARG;
     }
 
-    constexpr uint32_t knownFlags = FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_READ_METADATA |
-                                    FILESYSTEM_BIND_DELETE | FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION;
+    constexpr uint32_t knownFlags = FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_DELETE |
+                                    FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION;
     const uint32_t requestedFlags = static_cast<uint32_t>(flags);
     if ((requestedFlags & ~knownFlags) != 0u || (requestedFlags & FILESYSTEM_BIND_NO_FOLLOW) == 0u)
     {
         return E_INVALIDARG;
     }
     const std::wstring extendedPath = FileSystemInternal::ToExtendedPath(path);
-    DWORD desiredAccess = FILE_READ_ATTRIBUTES;
+    DWORD desiredAccess             = FILE_READ_ATTRIBUTES;
     if ((requestedFlags & FILESYSTEM_BIND_READ_CONTENT) != 0u)
     {
         desiredAccess |= GENERIC_READ;
@@ -5119,24 +6542,48 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path,
         // that metadata write on the same no-follow handle.
         desiredAccess |= FILE_WRITE_ATTRIBUTES;
     }
-    const DWORD shareMode = (requestedFlags & FILESYSTEM_BIND_DELETE) != 0u
-        ? FILE_SHARE_READ
-        : FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
-    wil::unique_handle file(CreateFileW(extendedPath.c_str(),
-                                        desiredAccess,
-                                        shareMode,
-                                        nullptr,
-                                        OPEN_EXISTING,
-                                        FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
-                                        nullptr));
+    const DWORD shareMode = (requestedFlags & FILESYSTEM_BIND_DELETE) != 0u ? FILE_SHARE_READ : FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE;
+    wil::unique_handle file;
+#if defined(ENABLE_TESTS)
+    if (IsBindOpenNotSupportedForSelfTest(path))
+    {
+        Debug::Perf::EmitCounter(L"FileOps.Local.BindOpenNotSupportedInjected");
+        SetLastError(ERROR_NOT_SUPPORTED);
+    }
+    else
+#endif
+    {
+        file.reset(CreateFileW(
+            extendedPath.c_str(), desiredAccess, shareMode, nullptr, OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS, nullptr));
+    }
     if (! file)
     {
         const DWORD error = GetLastError();
+        if (error == ERROR_NOT_SUPPORTED)
+        {
+            // I35 R7.1: ERROR_NOT_SUPPORTED is this contract's answer for an object that opened but cannot
+            // be identified. An open the location refused with that code is a failed open: it is reported
+            // as one, so the host never treats the object as identity-less (never deleted by name, never
+            // handed to a by-name card).
+            Debug::Warning(L"FileSystem: the no-follow open of '{}' failed with ERROR_NOT_SUPPORTED; reported as ERROR_OPEN_FAILED.", path);
+            return HRESULT_FROM_WIN32(ERROR_OPEN_FAILED);
+        }
         return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_FILE_NOT_FOUND);
     }
 
     LocalObjectIdentityPayload identity{};
-    const HRESULT identityHr = QueryExactLocalObjectIdentity(file.get(), identity);
+    HRESULT identityHr = S_OK;
+#if defined(ENABLE_TESTS)
+    if (IsBindIdentityUnsupportedForSelfTest(path))
+    {
+        Debug::Perf::EmitCounter(L"FileOps.Local.BindIdentityUnsupportedInjected");
+        identityHr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+    else
+#endif
+    {
+        identityHr = QueryExactLocalObjectIdentity(file.get(), identity);
+    }
     if (FAILED(identityHr))
     {
         return identityHr;
@@ -5150,8 +6597,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path,
     }
 
     FileSystemBoundObjectKind kind = FILESYSTEM_BOUND_OTHER;
-    if ((attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u &&
-        IsReparseTagNameSurrogate(attributes.ReparseTag) != FALSE)
+    if ((attributes.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u && IsReparseTagNameSurrogate(attributes.ReparseTag) != FALSE)
     {
         kind = FILESYSTEM_BOUND_LINK;
     }
@@ -5180,8 +6626,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path,
         committedSizeBytes = static_cast<uint64_t>(standard.EndOfFile.QuadPart);
     }
 
-    auto* impl = new (std::nothrow) LocalBoundObject(
-        std::move(file), identity, kind, committedSizeBytes, flags, false, path);
+    auto* impl = new (std::nothrow) LocalBoundObject(std::move(file), identity, kind, committedSizeBytes, flags, false, path);
     if (impl == nullptr)
     {
         return E_OUTOFMEMORY;
@@ -5190,10 +6635,631 @@ HRESULT STDMETHODCALLTYPE FileSystem::BindObject(const wchar_t* path,
     return S_OK;
 }
 
+namespace
+{
+// I35 R7.3 (D-7.3): the attributes a delete by name compares, on the selected item and on every listed entry.
+constexpr DWORD kDeleteCorroborationAttributes =
+    FILE_ATTRIBUTE_READONLY | FILE_ATTRIBUTE_HIDDEN | FILE_ATTRIBUTE_SYSTEM | FILE_ATTRIBUTE_DIRECTORY | FILE_ATTRIBUTE_REPARSE_POINT;
+constexpr size_t kDeleteManifestListingBufferBytes = 64u * 1024u;
+
+[[nodiscard]] uint64_t DeleteCorroborationTicks(const FILETIME& time) noexcept
+{
+    return (static_cast<uint64_t>(time.dwHighDateTime) << 32u) | static_cast<uint64_t>(time.dwLowDateTime);
+}
+
+// 'l' a link or junction (a leaf, never entered), 'd' a folder, 'f' anything else.
+[[nodiscard]] wchar_t DeleteCorroborationKind(const DWORD attributes) noexcept
+{
+    if ((attributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+    {
+        return L'l';
+    }
+    return (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u ? L'd' : L'f';
+}
+
+// One manifest entry as hashed: fixed-width facts, then the relative path's UTF-16 code units.
+struct DeleteManifestDigestRecord final
+{
+    uint32_t pathUnits  = 0u;
+    uint32_t kind       = 0u;
+    uint32_t attributes = 0u;
+    uint32_t reserved   = 0u;
+    uint64_t sizeBytes  = 0u;
+    uint64_t lastWrite  = 0u;
+    uint64_t creation   = 0u;
+    uint64_t fileIndex  = 0u;
+};
+static_assert(sizeof(DeleteManifestDigestRecord) == 48u);
+
+// I35 R7.3: an open or listing a location refuses with ERROR_NOT_SUPPORTED is an open failure: that code is the
+// identity-delete contract's own answer for an object that has an exact identity.
+[[nodiscard]] HRESULT DeleteManifestListingFailure(const DWORD error) noexcept
+{
+    if (error == ERROR_NOT_SUPPORTED)
+    {
+        return HRESULT_FROM_WIN32(ERROR_OPEN_FAILED);
+    }
+    return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+}
+
+// A listed sub-folder that is gone, or is no longer a folder, when it is opened: the tree changed while it was listed.
+[[nodiscard]] HRESULT DeleteManifestOpenFailure(const DWORD error) noexcept
+{
+    if (error == ERROR_FILE_NOT_FOUND || error == ERROR_PATH_NOT_FOUND || error == ERROR_DIRECTORY)
+    {
+        return HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+    }
+    return DeleteManifestListingFailure(error != ERROR_SUCCESS ? error : ERROR_OPEN_FAILED);
+}
+} // namespace
+
+HRESULT FileSystemInternal::ListLocalDeleteManifest(HANDLE folder,
+                                                    const std::wstring& folderExtendedPath,
+                                                    const LocalDeleteManifestListing& listing,
+                                                    LocalDeleteManifest& manifest) noexcept
+{
+    manifest = LocalDeleteManifest{};
+    if (folder == nullptr || folder == INVALID_HANDLE_VALUE || folderExtendedPath.empty())
+    {
+        return E_INVALIDARG;
+    }
+    uint64_t entryBudget = kDeleteByNameManifestMaxEntries;
+    // A redirector that refuses id listings is listed through the full class, with no file index; the choice
+    // is made on the folder's first query, so every listing of one location takes the same shape.
+    bool idListing = true;
+#if defined(ENABLE_TESTS)
+    if (const uint32_t testBudget = ReadSelfTestMetadataMask(kDeleteByNameEntryBudgetEnvVar); testBudget != 0u)
+    {
+        entryBudget = testBudget;
+    }
+    if (ReadSelfTestMetadataMask(kDeleteByNameListWithoutIndexEnvVar) != 0u)
+    {
+        idListing = false;
+    }
+#endif
+    const auto startedAt = std::chrono::steady_clock::now();
+    const auto elapsedUs = [&startedAt]() noexcept
+    { return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - startedAt).count()); };
+
+    // Every folder of one depth is listed at the same time (up to listing.concurrency), each through its own
+    // no-follow handle; the bounds are shared, and the first failure stops the others.
+    enum class Bound : uint8_t
+    {
+        None,
+        Entries,
+        Names,
+        Depth,
+    };
+    std::atomic<uint64_t> listedEntries{0u};
+    std::atomic<uint64_t> listedNameBytes{0u};
+    std::atomic<Bound> exceeded{Bound::None};
+    std::atomic<HRESULT> firstFailure{S_OK};
+    std::atomic<bool> stop{false};
+    // The folders of the current level listed to the end (a scheduler that shut down may leave some unrun).
+    std::atomic<size_t> listedFolders{0u};
+    std::mutex reportMutex;
+    const auto fail = [&](const HRESULT hr) noexcept
+    {
+        HRESULT expected = S_OK;
+        static_cast<void>(firstFailure.compare_exchange_strong(expected, hr, std::memory_order_acq_rel));
+        stop.store(true, std::memory_order_release);
+    };
+    const auto overBound = [&](const Bound bound) noexcept
+    {
+        Bound expected = Bound::None;
+        static_cast<void>(exceeded.compare_exchange_strong(expected, bound, std::memory_order_acq_rel));
+        fail(HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA));
+    };
+
+    struct PendingFolder final
+    {
+        std::wstring relativePath;
+        uint64_t depth = 0u;
+    };
+    struct FolderListing final
+    {
+        std::vector<LocalDeleteManifestEntry> entries;
+        std::vector<PendingFolder> subfolders;
+    };
+    // Only std::bad_alloc can escape the container operations below, and it is fatal by policy (AGENTS.md).
+    const auto listOne = [&](const PendingFolder& current, HANDLE given, FolderListing& result) noexcept
+    {
+        if (stop.load(std::memory_order_acquire))
+        {
+            return;
+        }
+        if (const HRESULT controlHr = FileSystemCheckOperationControl(listing.options); FAILED(controlHr))
+        {
+            fail(controlHr);
+            return;
+        }
+        std::unique_ptr<std::byte[]> buffer(new (std::nothrow) std::byte[kDeleteManifestListingBufferBytes]);
+        if (! buffer)
+        {
+            fail(E_OUTOFMEMORY);
+            return;
+        }
+
+        wil::unique_handle owned;
+        HANDLE directory = given;
+        if (directory == nullptr)
+        {
+            const std::wstring currentPath = AppendPath(folderExtendedPath, current.relativePath);
+            DWORD openError                = ERROR_SUCCESS;
+#if defined(ENABLE_TESTS)
+            if (IsBindOpenNotSupportedForSelfTest(currentPath.c_str()))
+            {
+                openError = ERROR_NOT_SUPPORTED;
+            }
+#endif
+            if (openError == ERROR_SUCCESS)
+            {
+                owned.reset(::CreateFileW(currentPath.c_str(),
+                                          FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
+                                          FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                          nullptr,
+                                          OPEN_EXISTING,
+                                          FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                          nullptr));
+                if (! owned)
+                {
+                    openError = ::GetLastError();
+                    openError = openError != ERROR_SUCCESS ? openError : static_cast<DWORD>(ERROR_OPEN_FAILED);
+                }
+            }
+            if (openError != ERROR_SUCCESS)
+            {
+                fail(DeleteManifestOpenFailure(openError));
+                return;
+            }
+            FILE_BASIC_INFO basic{};
+            if (! ::GetFileInformationByHandleEx(owned.get(), FileBasicInfo, &basic, sizeof(basic)))
+            {
+                fail(DeleteManifestListingFailure(::GetLastError()));
+                return;
+            }
+            if ((basic.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0u || (basic.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT) != 0u)
+            {
+                fail(HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH));
+                return;
+            }
+            directory = owned.get();
+        }
+
+        uint64_t files       = 0u;
+        uint64_t directories = 0u;
+        uint64_t bytes       = 0u;
+        bool restart         = true;
+        for (;;)
+        {
+            if (stop.load(std::memory_order_acquire))
+            {
+                return;
+            }
+            const FILE_INFO_BY_HANDLE_CLASS informationClass = idListing ? (restart ? FileIdBothDirectoryRestartInfo : FileIdBothDirectoryInfo)
+                                                                         : (restart ? FileFullDirectoryRestartInfo : FileFullDirectoryInfo);
+            if (! ::GetFileInformationByHandleEx(directory, informationClass, buffer.get(), static_cast<DWORD>(kDeleteManifestListingBufferBytes)))
+            {
+                const DWORD error = ::GetLastError();
+                if (error == ERROR_NO_MORE_FILES)
+                {
+                    break;
+                }
+                // Only the selected folder's own first query, listed alone before any other, picks the class.
+                if (given != nullptr && restart && idListing &&
+                    (error == ERROR_INVALID_PARAMETER || error == ERROR_NOT_SUPPORTED || error == ERROR_INVALID_LEVEL))
+                {
+                    idListing = false;
+                    continue;
+                }
+                fail(DeleteManifestListingFailure(error));
+                return;
+            }
+            restart = false;
+
+            size_t offset = 0u;
+            for (;;)
+            {
+                LocalDeleteManifestEntry entry{};
+                size_t nextOffset = 0u;
+                std::wstring_view leaf;
+                const std::span<const std::byte> records(buffer.get(), kDeleteManifestListingBufferBytes);
+                if (idListing)
+                {
+                    Common::DirectoryRecords::RecordView<FILE_ID_BOTH_DIR_INFO> record{};
+                    if (FAILED(Common::DirectoryRecords::Read<FILE_ID_BOTH_DIR_INFO>(records, offset, record)))
+                    {
+                        fail(HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
+                        return;
+                    }
+                    const auto* info = record.information;
+                    leaf             = record.name;
+                    nextOffset       = record.nextOffset;
+                    entry.attributes = info->FileAttributes;
+                    entry.sizeBytes  = static_cast<uint64_t>(info->EndOfFile.QuadPart);
+                    entry.lastWrite  = static_cast<uint64_t>(info->LastWriteTime.QuadPart);
+                    entry.creation   = static_cast<uint64_t>(info->CreationTime.QuadPart);
+                    entry.fileIndex  = static_cast<uint64_t>(info->FileId.QuadPart);
+                }
+                else
+                {
+                    Common::DirectoryRecords::RecordView<FILE_FULL_DIR_INFO> record{};
+                    if (FAILED(Common::DirectoryRecords::Read<FILE_FULL_DIR_INFO>(records, offset, record)))
+                    {
+                        fail(HRESULT_FROM_WIN32(ERROR_INVALID_DATA));
+                        return;
+                    }
+                    const auto* info = record.information;
+                    leaf             = record.name;
+                    nextOffset       = record.nextOffset;
+                    entry.attributes = info->FileAttributes;
+                    entry.sizeBytes  = static_cast<uint64_t>(info->EndOfFile.QuadPart);
+                    entry.lastWrite  = static_cast<uint64_t>(info->LastWriteTime.QuadPart);
+                    entry.creation   = static_cast<uint64_t>(info->CreationTime.QuadPart);
+                }
+                if (! IsDotOrDotDot(leaf))
+                {
+                    if (listedEntries.fetch_add(1u, std::memory_order_acq_rel) + 1u > entryBudget)
+                    {
+                        overBound(Bound::Entries);
+                        return;
+                    }
+                    std::wstring relativePath = current.relativePath.empty() ? std::wstring(leaf) : current.relativePath + L'\\' + std::wstring(leaf);
+                    const uint64_t pathBytes  = static_cast<uint64_t>(relativePath.size()) * sizeof(wchar_t);
+                    if (listedNameBytes.fetch_add(pathBytes, std::memory_order_acq_rel) + pathBytes > kDeleteByNameManifestMaxNameBytes)
+                    {
+                        overBound(Bound::Names);
+                        return;
+                    }
+                    if ((entry.attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u)
+                    {
+                        ++directories;
+                    }
+                    else
+                    {
+                        ++files;
+                        bytes += entry.sizeBytes;
+                    }
+                    if (DeleteCorroborationKind(entry.attributes) == L'd')
+                    {
+                        const uint64_t depth = current.depth + 1u;
+                        if (depth > Common::FileOperations::kTraversalMaxDepth)
+                        {
+                            overBound(Bound::Depth);
+                            return;
+                        }
+                        // A folder's size is not compared, nor its last-write time: its parent's listing updates
+                        // that value lazily (it moved twice, 80 ms apart, for an unchanged tree on NTFS), and every
+                        // change it reflects is an entry of the tree itself.
+                        entry.sizeBytes = 0u;
+                        entry.lastWrite = 0u;
+                        result.subfolders.push_back(PendingFolder{relativePath, depth});
+                    }
+                    entry.relativePath = std::move(relativePath);
+                    result.entries.push_back(std::move(entry));
+                }
+                if (nextOffset == 0u)
+                    break;
+                offset = nextOffset;
+            }
+        }
+        if (listing.onFolderListed != nullptr && (files != 0u || directories != 0u))
+        {
+            std::scoped_lock lock(reportMutex);
+            listing.onFolderListed(listing.cookie, files, directories, bytes);
+        }
+        listedFolders.fetch_add(1u, std::memory_order_acq_rel);
+    };
+
+    std::vector<PendingFolder> level;
+    level.push_back(PendingFolder{});
+    bool selectedFolderLevel = true;
+    while (! level.empty())
+    {
+        std::vector<FolderListing> results(level.size());
+        listedFolders.store(0u, std::memory_order_release);
+        if (selectedFolderLevel)
+        {
+            listOne(level.front(), folder, results.front());
+        }
+        else
+        {
+            RunOnSharedFileOpsScheduler(
+                listing.options, listing.concurrency, level.size(), [&](const size_t index) noexcept { listOne(level[index], nullptr, results[index]); });
+        }
+        selectedFolderLevel = false;
+        if (SUCCEEDED(firstFailure.load(std::memory_order_acquire)) && listedFolders.load(std::memory_order_acquire) != level.size())
+        {
+            fail(HRESULT_FROM_WIN32(ERROR_OPERATION_ABORTED));
+        }
+        if (const HRESULT failure = firstFailure.load(std::memory_order_acquire); FAILED(failure))
+        {
+            if (failure == HRESULT_FROM_WIN32(ERROR_NOT_ENOUGH_QUOTA))
+            {
+                const Bound bound              = exceeded.load(std::memory_order_acquire);
+                const std::wstring_view bounds = bound == Bound::Names ? L"names" : (bound == Bound::Depth ? L"depth" : L"entries");
+                Debug::Warning(L"FileSystem: '{}' holds too many items to be deleted by name ({} bound: more than {} entries, {} bytes of names or {} "
+                               L"levels); the delete by name is refused and nothing is deleted.",
+                               folderExtendedPath,
+                               bounds,
+                               entryBudget,
+                               kDeleteByNameManifestMaxNameBytes,
+                               Common::FileOperations::kTraversalMaxDepth);
+                Debug::Perf::Emit(L"FileOps.Local.DeleteByNameManifest",
+                                  bounds,
+                                  elapsedUs(),
+                                  listedEntries.load(std::memory_order_acquire),
+                                  listedNameBytes.load(std::memory_order_acquire),
+                                  failure);
+            }
+            manifest = LocalDeleteManifest{};
+            return failure;
+        }
+        std::vector<PendingFolder> next;
+        for (FolderListing& result : results)
+        {
+            for (LocalDeleteManifestEntry& entry : result.entries)
+            {
+                const wchar_t kind = DeleteCorroborationKind(entry.attributes);
+                if (kind == L'd')
+                {
+                    ++manifest.directories;
+                }
+                else if (kind == L'l')
+                {
+                    ++manifest.links;
+                }
+                else
+                {
+                    ++manifest.files;
+                }
+                manifest.entries.push_back(std::move(entry));
+            }
+            for (PendingFolder& subfolder : result.subfolders)
+            {
+                manifest.maxDepth = (std::max)(manifest.maxDepth, subfolder.depth);
+                next.push_back(std::move(subfolder));
+            }
+        }
+        level = std::move(next);
+    }
+    manifest.nameBytes = listedNameBytes.load(std::memory_order_acquire);
+
+    std::ranges::sort(manifest.entries,
+                      [](const LocalDeleteManifestEntry& left, const LocalDeleteManifestEntry& right) noexcept
+    {
+        const int folded = ::CompareStringOrdinal(
+            left.relativePath.data(), static_cast<int>(left.relativePath.size()), right.relativePath.data(), static_cast<int>(right.relativePath.size()), TRUE);
+        if (folded != CSTR_EQUAL)
+        {
+            return folded == CSTR_LESS_THAN;
+        }
+        return ::CompareStringOrdinal(left.relativePath.data(),
+                                      static_cast<int>(left.relativePath.size()),
+                                      right.relativePath.data(),
+                                      static_cast<int>(right.relativePath.size()),
+                                      FALSE) == CSTR_LESS_THAN;
+    });
+
+    Common::Crypto::Blake3Hasher hasher;
+    constexpr std::string_view kManifestTag = "RedSalamander.DeleteByNameManifest.v1";
+    hasher.Update(std::as_bytes(std::span<const char>(kManifestTag.data(), kManifestTag.size())));
+    for (const LocalDeleteManifestEntry& entry : manifest.entries)
+    {
+        DeleteManifestDigestRecord record{};
+        record.pathUnits  = static_cast<uint32_t>(entry.relativePath.size());
+        record.kind       = static_cast<uint32_t>(DeleteCorroborationKind(entry.attributes));
+        record.attributes = entry.attributes & kDeleteCorroborationAttributes;
+        record.sizeBytes  = entry.sizeBytes;
+        record.lastWrite  = entry.lastWrite;
+        record.creation   = entry.creation;
+        record.fileIndex  = entry.fileIndex;
+        hasher.Update(std::as_bytes(std::span<const DeleteManifestDigestRecord>(&record, 1u)));
+        hasher.Update(std::as_bytes(std::span<const wchar_t>(entry.relativePath.data(), entry.relativePath.size())));
+    }
+    const Common::Crypto::Blake3Digest digest = hasher.Finalize();
+    static_assert(sizeof(manifest.digest) == sizeof(digest));
+    std::copy(digest.begin(), digest.end(), manifest.digest.begin());
+    Debug::Perf::Emit(L"FileOps.Local.DeleteByNameManifest",
+                      idListing ? L"id" : L"full",
+                      elapsedUs(),
+                      static_cast<uint64_t>(manifest.entries.size()),
+                      manifest.nameBytes,
+                      S_OK);
+    return S_OK;
+}
+
+bool FileSystemInternal::LocalDeleteManifestEntryMatches(const LocalDeleteManifestEntry& listed, const BY_HANDLE_FILE_INFORMATION& live) noexcept
+{
+    const wchar_t kind = DeleteCorroborationKind(listed.attributes);
+    if (kind != DeleteCorroborationKind(live.dwFileAttributes) ||
+        (listed.attributes & kDeleteCorroborationAttributes) != (live.dwFileAttributes & kDeleteCorroborationAttributes) ||
+        listed.creation != DeleteCorroborationTicks(live.ftCreationTime))
+    {
+        return false;
+    }
+    const uint64_t liveIndex = (static_cast<uint64_t>(live.nFileIndexHigh) << 32u) | static_cast<uint64_t>(live.nFileIndexLow);
+    if (listed.fileIndex != 0u && liveIndex != 0u && listed.fileIndex != liveIndex)
+    {
+        return false;
+    }
+    if (kind == L'd')
+    {
+        // Its removal proves what it holds: it fails while anything this listing never saw is inside.
+        return true;
+    }
+    const uint64_t liveSize = (static_cast<uint64_t>(live.nFileSizeHigh) << 32u) | static_cast<uint64_t>(live.nFileSizeLow);
+    return listed.sizeBytes == liveSize && listed.lastWrite == DeleteCorroborationTicks(live.ftLastWriteTime);
+}
+
+HRESULT FileSystemInternal::ResolveLocalDeleteCorroboration(HANDLE file,
+                                                            const wchar_t* path,
+                                                            FileSystemDeleteIdentity& identity,
+                                                            const LocalDeleteManifest* manifest) noexcept
+{
+    identity.isDirectory = FALSE;
+    identity.identity[0] = L'\0';
+    if (file == nullptr || file == INVALID_HANDLE_VALUE || path == nullptr || path[0] == L'\0')
+    {
+        return E_INVALIDARG;
+    }
+
+    // An object with an exact identity is bound and deleted through that identity, never by name.
+    HRESULT exactIdentityHr = S_OK;
+#if defined(ENABLE_TESTS)
+    if (IsBindIdentityUnsupportedForSelfTest(path))
+    {
+        exactIdentityHr = HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+    else
+#endif
+    {
+        LocalObjectIdentityPayload exactIdentity{};
+        exactIdentityHr = QueryExactLocalObjectIdentity(file, exactIdentity);
+    }
+    if (SUCCEEDED(exactIdentityHr))
+    {
+        return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
+    }
+    if (exactIdentityHr != HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED))
+    {
+        // A failed query is not proof that the location has no identities.
+        return exactIdentityHr;
+    }
+
+    BY_HANDLE_FILE_INFORMATION information{};
+    if (GetFileInformationByHandle(file, &information) == FALSE)
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+    }
+    const DWORD attributes = information.dwFileAttributes;
+    const wchar_t kind     = DeleteCorroborationKind(attributes);
+    const bool directory   = kind == L'd';
+    const uint64_t size    = (static_cast<uint64_t>(information.nFileSizeHigh) << 32u) | static_cast<uint64_t>(information.nFileSizeLow);
+    const uint64_t index   = (static_cast<uint64_t>(information.nFileIndexHigh) << 32u) | static_cast<uint64_t>(information.nFileIndexLow);
+
+    std::wstring text = std::format(L"lc1|k={}|a={:08X}", kind, attributes & kDeleteCorroborationAttributes);
+    if (! directory)
+    {
+        text += std::format(L"|s={:016X}", size);
+    }
+    // A folder compares its last-write time too: it changes when a child is added, removed or renamed.
+    text += std::format(L"|w={:016X}|c={:016X}", DeleteCorroborationTicks(information.ftLastWriteTime), DeleteCorroborationTicks(information.ftCreationTime));
+    if (index != 0u)
+    {
+        // Corroboration only: the probed NAS reports volume serial 0 and an inode number here.
+        text += std::format(L"|v={:08X}|i={:016X}", information.dwVolumeSerialNumber, index);
+    }
+    if (directory && manifest != nullptr)
+    {
+        // I35 R7.3 (pinned tree): everything below the folder, as the digest of its manifest and its counts
+        // (files, folders, links), so any entry added, removed, renamed or changed anywhere in the tree is a
+        // difference.
+        text += L"|m=";
+        for (const std::byte value : manifest->digest)
+        {
+            text += std::format(L"{:02X}", static_cast<unsigned int>(value));
+        }
+        text += std::format(L"|n={:X}.{:X}.{:X}", manifest->files, manifest->directories, manifest->links);
+    }
+    if (text.size() >= std::size(identity.identity))
+    {
+        return HRESULT_FROM_WIN32(ERROR_INSUFFICIENT_BUFFER);
+    }
+    std::copy(text.begin(), text.end(), std::begin(identity.identity));
+    identity.identity[text.size()] = L'\0';
+    identity.isDirectory           = directory ? TRUE : FALSE;
+    return S_OK;
+}
+
+HRESULT STDMETHODCALLTYPE FileSystem::ResolveDeleteIdentity(const wchar_t* path, const FileSystemOptions* options, FileSystemDeleteIdentity* identity) noexcept
+{
+    if (path == nullptr || identity == nullptr)
+    {
+        return E_POINTER;
+    }
+    if (path[0] == L'\0' || identity->sizeBytes != sizeof(FileSystemDeleteIdentity) || ! FileSystemOptionsHaveValidHeader(options))
+    {
+        return E_INVALIDARG;
+    }
+    identity->isDirectory   = FALSE;
+    identity->identity[0]   = L'\0';
+    const HRESULT controlHr = FileSystemCheckOperationControl(options);
+    if (FAILED(controlHr))
+    {
+        return controlHr;
+    }
+
+    // Read-only, no-follow and fully shared: resolving the facts never blocks another program.
+    const std::wstring extendedPath = FileSystemInternal::ToExtendedPath(path);
+    wil::unique_handle file(CreateFileW(extendedPath.c_str(),
+                                        FILE_READ_ATTRIBUTES,
+                                        FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                        nullptr,
+                                        OPEN_EXISTING,
+                                        FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                        nullptr));
+    // ERROR_NOT_SUPPORTED is this contract's answer for an object with an exact identity; a location that
+    // refuses the open itself reports an open failure.
+    const auto openFailure = []() noexcept
+    {
+        const DWORD error = GetLastError();
+        return HRESULT_FROM_WIN32(error == ERROR_NOT_SUPPORTED ? ERROR_OPEN_FAILED : (error != ERROR_SUCCESS ? error : ERROR_FILE_NOT_FOUND));
+    };
+    if (! file)
+    {
+        return openFailure();
+    }
+    HRESULT hr = FileSystemInternal::ResolveLocalDeleteCorroboration(file.get(), path, *identity);
+    if (SUCCEEDED(hr) && identity->isDirectory != FALSE)
+    {
+        // I35 R7.3 (pinned tree): a folder pins its whole subtree. It is listed through a no-follow listing
+        // handle of its own (still fully shared), and its facts are taken again on that handle, so the folder's
+        // facts and its manifest describe the one object that was listed.
+        wil::unique_handle listing(CreateFileW(extendedPath.c_str(),
+                                               FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
+                                               FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
+                                               nullptr,
+                                               OPEN_EXISTING,
+                                               FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_BACKUP_SEMANTICS,
+                                               nullptr));
+        FileSystemInternal::LocalDeleteManifest manifest;
+        FileSystemInternal::LocalDeleteManifestListing listingOptions{};
+        listingOptions.options = options;
+        {
+            std::lock_guard lock(_stateMutex);
+            listingOptions.concurrency = std::clamp(_deleteMaxConcurrency, 1u, 8u);
+        }
+        hr = listing ? FileSystemInternal::ListLocalDeleteManifest(listing.get(), extendedPath, listingOptions, manifest) : openFailure();
+        if (SUCCEEDED(hr))
+        {
+            FileSystemDeleteIdentity listed{};
+            listed.sizeBytes = sizeof(listed);
+            hr               = FileSystemInternal::ResolveLocalDeleteCorroboration(listing.get(), path, listed, &manifest);
+            if (SUCCEEDED(hr) && listed.isDirectory == FALSE)
+            {
+                hr = HRESULT_FROM_WIN32(ERROR_REVISION_MISMATCH);
+            }
+            if (SUCCEEDED(hr))
+            {
+                *identity = listed;
+            }
+        }
+        if (FAILED(hr))
+        {
+            identity->isDirectory = FALSE;
+            identity->identity[0] = L'\0';
+        }
+    }
+    Debug::Perf::Emit(L"FileOps.Local.ResolveDeleteIdentity", L"", 0u, identity->isDirectory != FALSE ? 1u : 0u, 0u, hr);
+    return hr;
+}
+
 HRESULT STDMETHODCALLTYPE FileSystem::CreateExclusiveWriter(const wchar_t* stagePath,
-                                                             const FileSystemOptions* options,
-                                                             IFileWriter** writer,
-                                                             IFileSystemBoundObject** ownedStage) noexcept
+                                                            const FileSystemOptions* options,
+                                                            IFileWriter** writer,
+                                                            IFileSystemBoundObject** ownedStage) noexcept
 {
     if (writer == nullptr || ownedStage == nullptr)
     {
@@ -5223,13 +7289,42 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateExclusiveWriter(const wchar_t* stage
         return retainedIdentityHr;
     }
 
+    // FILE_ATTRIBUTE_TEMPORARY keeps the object's dirty data in the cache until the commit flush. The
+    // host may ask for it to be written back during the copy instead (I35 R10.3 candidate (e)); the
+    // attribute never reaches a published object either way (publication sets the final attributes).
+    // On a network share the host may ask for every write to reach the server before it returns
+    // (WRITE_THROUGH_REMOTE): a cached writer there takes gigabytes at memory speed and is then held
+    // inside one write for as long as the cache needs to drain them, which reads as a dead transfer.
+    // Where the stage lies is looked up only when a candidate asks for it (a drive-type query, about
+    // 3 us per writer).
+    const uint32_t tuning = options != nullptr ? options->transferTuning : FILESYSTEM_TRANSFER_TUNING_NONE;
+    DWORD stageAttributes = FILE_ATTRIBUTE_TEMPORARY;
+    DWORD stageWriteFlags = 0u;
+    constexpr uint32_t kLocationTuning =
+        FILESYSTEM_TRANSFER_TUNING_NO_TEMPORARY_REMOTE | FILESYSTEM_TRANSFER_TUNING_NO_TEMPORARY_LOCAL | FILESYSTEM_TRANSFER_TUNING_WRITE_THROUGH_REMOTE;
+    if ((tuning & kLocationTuning) != 0u)
+    {
+        const bool remoteStage     = FileSystemInternal::IsRemoteStoragePath(stagePath);
+        const uint32_t noTemporary = remoteStage ? FILESYSTEM_TRANSFER_TUNING_NO_TEMPORARY_REMOTE : FILESYSTEM_TRANSFER_TUNING_NO_TEMPORARY_LOCAL;
+        if (remoteStage && (tuning & FILESYSTEM_TRANSFER_TUNING_WRITE_THROUGH_REMOTE) != 0u)
+        {
+            // Nothing stays in the cache to be held for the commit, so the hint has no purpose here.
+            stageAttributes = FILE_ATTRIBUTE_NORMAL;
+            stageWriteFlags = FILE_FLAG_WRITE_THROUGH;
+        }
+        else if ((tuning & noTemporary) != 0u)
+        {
+            stageAttributes = FILE_ATTRIBUTE_NORMAL;
+        }
+    }
+
     const std::wstring extendedStage = FileSystemInternal::ToExtendedPath(stagePath);
     wil::unique_handle file(CreateFileW(extendedStage.c_str(),
                                         GENERIC_READ | GENERIC_WRITE | DELETE | FILE_READ_ATTRIBUTES | FILE_WRITE_ATTRIBUTES,
                                         FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                         nullptr,
                                         CREATE_NEW,
-                                        FILE_ATTRIBUTE_TEMPORARY | FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN,
+                                        stageAttributes | stageWriteFlags | FILE_FLAG_OPEN_REPARSE_POINT | FILE_FLAG_SEQUENTIAL_SCAN,
                                         nullptr));
     if (! file)
     {
@@ -5245,38 +7340,33 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateExclusiveWriter(const wchar_t* stage
     }
 
     HANDLE duplicated = INVALID_HANDLE_VALUE;
-    if (DuplicateHandle(GetCurrentProcess(),
-                        file.get(),
-                        GetCurrentProcess(),
-                        &duplicated,
-                        0u,
-                        FALSE,
-                        DUPLICATE_SAME_ACCESS) == FALSE)
+    if (DuplicateHandle(GetCurrentProcess(), file.get(), GetCurrentProcess(), &duplicated, 0u, FALSE, DUPLICATE_SAME_ACCESS) == FALSE)
     {
         const DWORD error = GetLastError();
-        const HRESULT cleanupHr = DeleteExactHandle(file.get());
-        return FAILED(cleanupHr) ? HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE)
-                                 : HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
+        // I35 R7.4: removing the stage this call just created has the owned-stage cleanup budget.
+        const Common::SynchronousIoCancelWatch::CleanupWindow cleanupWindow(FreshOwnedStageCleanupDeadline());
+        HRESULT cleanupHr = DeleteExactHandle(file.get());
+        if (cleanupWindow.CanceledInsideWindow(cleanupHr))
+        {
+            cleanupHr = DeleteExactHandle(file.get());
+        }
+        return FAILED(cleanupHr) ? HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) : HRESULT_FROM_WIN32(error != ERROR_SUCCESS ? error : ERROR_GEN_FAILURE);
     }
     wil::unique_handle boundHandle(duplicated);
 
-    constexpr FileSystemBindFlags stageFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW |
-                                                                                FILESYSTEM_BIND_READ_CONTENT |
-                                                                                FILESYSTEM_BIND_READ_METADATA |
-                                                                                FILESYSTEM_BIND_DELETE |
-                                                                                FILESYSTEM_BIND_RENAME |
-                                                                                FILESYSTEM_BIND_PUBLICATION);
+    constexpr FileSystemBindFlags stageFlags =
+        static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_CONTENT | FILESYSTEM_BIND_READ_METADATA | FILESYSTEM_BIND_DELETE |
+                                         FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION);
     wil::com_ptr<IFileSystemBoundObject> stage;
-    stage.attach(new (std::nothrow) LocalBoundObject(std::move(boundHandle),
-                                                     identity,
-                                                     FILESYSTEM_BOUND_REGULAR_FILE,
-                                                     0u,
-                                                     stageFlags,
-                                                     true,
-                                                     stagePath));
+    stage.attach(new (std::nothrow) LocalBoundObject(std::move(boundHandle), identity, FILESYSTEM_BOUND_REGULAR_FILE, 0u, stageFlags, true, stagePath));
     if (! stage)
     {
-        const HRESULT cleanupHr = DeleteExactHandle(file.get());
+        const Common::SynchronousIoCancelWatch::CleanupWindow cleanupWindow(FreshOwnedStageCleanupDeadline());
+        HRESULT cleanupHr = DeleteExactHandle(file.get());
+        if (cleanupWindow.CanceledInsideWindow(cleanupHr))
+        {
+            cleanupHr = DeleteExactHandle(file.get());
+        }
         return FAILED(cleanupHr) ? HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE) : E_OUTOFMEMORY;
     }
 
@@ -5284,13 +7374,12 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateExclusiveWriter(const wchar_t* stage
     if (fileWriter == nullptr)
     {
         FileSystemConditionalMutationResult abortResult{};
-        abortResult.sizeBytes = sizeof(abortResult);
+        abortResult.sizeBytes                  = sizeof(abortResult);
         const FileSystemOptions cleanupOptions = MakeOwnedStageCleanupOptions(options);
         const HRESULT abortHr                  = stage->AbortOwnedObject(&cleanupOptions, &abortResult);
-        return abortResult.outcomeKnown == FALSE || FAILED(abortHr) || abortResult.mutationCommitted == FALSE ||
-                abortResult.originalStillPresent != FALSE
-            ? HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE)
-            : E_OUTOFMEMORY;
+        return abortResult.outcomeKnown == FALSE || FAILED(abortHr) || abortResult.mutationCommitted == FALSE || abortResult.originalStillPresent != FALSE
+                   ? HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE)
+                   : E_OUTOFMEMORY;
     }
 
     *writer     = fileWriter;
@@ -5299,8 +7388,8 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateExclusiveWriter(const wchar_t* stage
 }
 
 HRESULT STDMETHODCALLTYPE FileSystem::CreateExclusiveDirectory(const wchar_t* stagePath,
-                                                                 const FileSystemOptions* options,
-                                                                 IFileSystemBoundObject** ownedStage) noexcept
+                                                               const FileSystemOptions* options,
+                                                               IFileSystemBoundObject** ownedStage) noexcept
 {
     if (ownedStage == nullptr)
     {
@@ -5338,23 +7427,20 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateExclusiveDirectory(const wchar_t* st
         return hr;
     }
 
-    constexpr FileSystemBindFlags stageFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW |
-                                                                                 FILESYSTEM_BIND_READ_METADATA |
-                                                                                 FILESYSTEM_BIND_DELETE |
-                                                                                 FILESYSTEM_BIND_RENAME |
-                                                                                 FILESYSTEM_BIND_PUBLICATION);
-    auto* stage = new (std::nothrow) LocalBoundObject(std::move(directory),
-                                                      identity,
-                                                      FILESYSTEM_BOUND_DIRECTORY,
-                                                      std::numeric_limits<uint64_t>::max(),
-                                                      stageFlags,
-                                                      true,
-                                                      stagePath);
+    constexpr FileSystemBindFlags stageFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA |
+                                                                                FILESYSTEM_BIND_DELETE | FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION);
+    auto* stage                              = new (std::nothrow)
+        LocalBoundObject(std::move(directory), identity, FILESYSTEM_BOUND_DIRECTORY, std::numeric_limits<uint64_t>::max(), stageFlags, true, stagePath);
     if (stage == nullptr)
     {
         if (directory)
         {
-            const HRESULT cleanupHr = DeleteExactHandle(directory.get());
+            const Common::SynchronousIoCancelWatch::CleanupWindow cleanupWindow(FreshOwnedStageCleanupDeadline());
+            HRESULT cleanupHr = DeleteExactHandle(directory.get());
+            if (cleanupWindow.CanceledInsideWindow(cleanupHr))
+            {
+                cleanupHr = DeleteExactHandle(directory.get());
+            }
             if (FAILED(cleanupHr))
             {
                 return HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
@@ -5367,9 +7453,9 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateExclusiveDirectory(const wchar_t* st
 }
 
 HRESULT STDMETHODCALLTYPE FileSystem::ReadBoundLink(IFileSystemBoundObject* boundLink,
-                                                     const FileSystemLinkTransform* transform,
-                                                     const FileSystemOptions* options,
-                                                     FileSystemLinkInformation* information) noexcept
+                                                    const FileSystemLinkTransform* transform,
+                                                    const FileSystemOptions* options,
+                                                    FileSystemLinkInformation* information) noexcept
 {
     if (boundLink == nullptr || transform == nullptr || information == nullptr)
     {
@@ -5393,7 +7479,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::ReadBoundLink(IFileSystemBoundObject* boun
         return FAILED(queryHr) ? queryHr : HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED);
     }
 
-    HANDLE duplicated = INVALID_HANDLE_VALUE;
+    HANDLE duplicated         = INVALID_HANDLE_VALUE;
     const HRESULT duplicateHr = control->DuplicateExactHandle(&duplicated);
     if (FAILED(duplicateHr))
     {
@@ -5404,9 +7490,9 @@ HRESULT STDMETHODCALLTYPE FileSystem::ReadBoundLink(IFileSystemBoundObject* boun
 }
 
 HRESULT STDMETHODCALLTYPE FileSystem::CreateExclusiveLink(const wchar_t* stagePath,
-                                                           const FileSystemLinkInformation* information,
-                                                           const FileSystemOptions* options,
-                                                           IFileSystemBoundObject** ownedStage) noexcept
+                                                          const FileSystemLinkInformation* information,
+                                                          const FileSystemOptions* options,
+                                                          IFileSystemBoundObject** ownedStage) noexcept
 {
     if (ownedStage == nullptr)
     {
@@ -5448,24 +7534,21 @@ HRESULT STDMETHODCALLTYPE FileSystem::CreateExclusiveLink(const wchar_t* stagePa
         return identityHr;
     }
 
-    constexpr FileSystemBindFlags stageFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW |
-                                                                                FILESYSTEM_BIND_READ_METADATA |
-                                                                                FILESYSTEM_BIND_DELETE |
-                                                                                FILESYSTEM_BIND_RENAME |
-                                                                                FILESYSTEM_BIND_PUBLICATION);
+    constexpr FileSystemBindFlags stageFlags = static_cast<FileSystemBindFlags>(FILESYSTEM_BIND_NO_FOLLOW | FILESYSTEM_BIND_READ_METADATA |
+                                                                                FILESYSTEM_BIND_DELETE | FILESYSTEM_BIND_RENAME | FILESYSTEM_BIND_PUBLICATION);
     wil::com_ptr<IFileSystemBoundObject> stage;
-    stage.attach(new (std::nothrow) LocalBoundObject(std::move(linkHandle),
-                                                     identity,
-                                                     FILESYSTEM_BOUND_LINK,
-                                                     std::numeric_limits<uint64_t>::max(),
-                                                     stageFlags,
-                                                     true,
-                                                     stagePath));
+    stage.attach(new (std::nothrow) LocalBoundObject(
+        std::move(linkHandle), identity, FILESYSTEM_BOUND_LINK, std::numeric_limits<uint64_t>::max(), stageFlags, true, stagePath));
     if (! stage)
     {
         if (linkHandle)
         {
-            const HRESULT cleanupHr = DeleteExactHandle(linkHandle.get());
+            const Common::SynchronousIoCancelWatch::CleanupWindow cleanupWindow(FreshOwnedStageCleanupDeadline());
+            HRESULT cleanupHr = DeleteExactHandle(linkHandle.get());
+            if (cleanupWindow.CanceledInsideWindow(cleanupHr))
+            {
+                cleanupHr = DeleteExactHandle(linkHandle.get());
+            }
             if (FAILED(cleanupHr))
             {
                 return HRESULT_FROM_WIN32(ERROR_IO_INCOMPLETE);
@@ -5499,7 +7582,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetTransferHints(const wchar_t* path,
     const std::wstring driveRoot      = ExtractDriveRoot(path);
     const std::wstring volumeRoot     = ResolveLocalVolumeRootPath(path);
     const std::wstring& driveTypeRoot = ! volumeRoot.empty() ? volumeRoot : driveRoot;
-    const UINT driveType              = ! driveTypeRoot.empty() ? GetDriveTypeW(driveTypeRoot.c_str()) : DRIVE_UNKNOWN;
+    const UINT driveType              = ! driveTypeRoot.empty() ? GetDriveTypeForStorageProbe(driveTypeRoot.c_str()) : DRIVE_UNKNOWN;
     FillTransferHintsLocal(*hints, driveType == DRIVE_REMOTE || IsUncPath(path));
     hints->preferredBufferBytes = ClampPreferredBridgeBufferBytes(hints->preferredBufferBytes);
     return S_OK;
@@ -5522,12 +7605,12 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetStorageCharacteristics(const wchar_t* p
     characteristics->preferredCopyMoveConcurrency = 0;
     characteristics->preferredDeleteConcurrency   = 0;
 
-    const std::wstring driveRoot      = ExtractDriveRoot(path);
-    const std::wstring volumeRoot     = ResolveLocalVolumeRootPath(path);
-    const std::wstring& driveTypeRoot = ! volumeRoot.empty() ? volumeRoot : driveRoot;
-    const UINT driveType              = ! driveTypeRoot.empty() ? GetDriveTypeW(driveTypeRoot.c_str()) : DRIVE_UNKNOWN;
-    const bool highLatency            = driveType == DRIVE_REMOTE || IsUncPath(path);
-    const std::wstring cacheKey = std::format(L"{}\n{}\n{}\n{}", volumeRoot, driveRoot, driveType, highLatency ? 1u : 0u);
+    const std::wstring driveRoot        = ExtractDriveRoot(path);
+    const std::wstring volumeRoot       = ResolveLocalVolumeRootPath(path);
+    const std::wstring& driveTypeRoot   = ! volumeRoot.empty() ? volumeRoot : driveRoot;
+    const UINT driveType                = ! driveTypeRoot.empty() ? GetDriveTypeForStorageProbe(driveTypeRoot.c_str()) : DRIVE_UNKNOWN;
+    const bool highLatency              = driveType == DRIVE_REMOTE || IsUncPath(path);
+    const std::wstring cacheKey         = std::format(L"{}\n{}\n{}\n{}", volumeRoot, driveRoot, driveType, highLatency ? 1u : 0u);
     const unsigned long callerSizeBytes = characteristics->sizeBytes;
     {
         // Hold the per-instance lock through the first physical probe so concurrent operation-start
@@ -5535,7 +7618,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetStorageCharacteristics(const wchar_t* p
         std::scoped_lock lock(_storageCharacteristicsMutex);
         if (const auto cached = _storageCharacteristicsCache.find(cacheKey); cached != _storageCharacteristicsCache.end())
         {
-            *characteristics          = cached->second;
+            *characteristics           = cached->second;
             characteristics->sizeBytes = callerSizeBytes;
             Debug::Perf::Emit(L"FileOps.Storage.ProbeCache", L"hit", 0u, 1u, 0u, S_OK);
             return S_OK;
@@ -5543,7 +7626,7 @@ HRESULT STDMETHODCALLTYPE FileSystem::GetStorageCharacteristics(const wchar_t* p
 
         FillStorageCharacteristicsLocal(*characteristics, volumeRoot, driveRoot, driveType, highLatency);
         FileSystemStorageCharacteristics cached = *characteristics;
-        cached.sizeBytes = sizeof(FileSystemStorageCharacteristics);
+        cached.sizeBytes                        = sizeof(FileSystemStorageCharacteristics);
         _storageCharacteristicsCache.emplace(cacheKey, cached);
     }
     Debug::Perf::Emit(L"FileOps.Storage.ProbeCache", L"miss", 0u, 0u, 1u, S_OK);
@@ -5773,128 +7856,127 @@ HRESULT STDMETHODCALLTYPE FileSystem::SetConfiguration(const char* configuration
     if (configurationJsonUtf8 != nullptr && configurationJsonUtf8[0] != '\0')
     {
         sourceConfiguration = configurationJsonUtf8;
-        parsed = Common::Json::ParseObjectDocument(sourceConfiguration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
+        parsed              = Common::Json::ParseObjectDocument(sourceConfiguration, YYJSON_READ_JSON5 | YYJSON_READ_ALLOW_BOM);
         if (! parsed)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
-        yyjson_val* root = parsed.root;
-                yyjson_val* concurrencyModeVal = yyjson_obj_get(root, "concurrencyMode");
-                if (concurrencyModeVal && yyjson_is_str(concurrencyModeVal))
-                {
-                    const char* valueText = yyjson_get_str(concurrencyModeVal);
-                    if (valueText && valueText[0] != '\0')
-                    {
-                        concurrencyMode = ParseConcurrencyMode(valueText);
-                    }
-                }
+        yyjson_val* root               = parsed.root;
+        yyjson_val* concurrencyModeVal = yyjson_obj_get(root, "concurrencyMode");
+        if (concurrencyModeVal && yyjson_is_str(concurrencyModeVal))
+        {
+            const char* valueText = yyjson_get_str(concurrencyModeVal);
+            if (valueText && valueText[0] != '\0')
+            {
+                concurrencyMode = ParseConcurrencyMode(valueText);
+            }
+        }
 
-                yyjson_val* copyMoveVal = yyjson_obj_get(root, "copyMoveMaxConcurrency");
-                if (copyMoveVal && yyjson_is_int(copyMoveVal))
-                {
-                    const int64_t value = yyjson_get_int(copyMoveVal);
-                    if (value >= 1)
-                    {
-                        copyMoveMaxConcurrency = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxCopyMoveMaxConcurrency)));
-                    }
-                }
+        yyjson_val* copyMoveVal = yyjson_obj_get(root, "copyMoveMaxConcurrency");
+        if (copyMoveVal && yyjson_is_int(copyMoveVal))
+        {
+            const int64_t value = yyjson_get_int(copyMoveVal);
+            if (value >= 1)
+            {
+                copyMoveMaxConcurrency = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxCopyMoveMaxConcurrency)));
+            }
+        }
 
-                yyjson_val* deleteVal = yyjson_obj_get(root, "deleteMaxConcurrency");
-                if (deleteVal && yyjson_is_int(deleteVal))
-                {
-                    const int64_t value = yyjson_get_int(deleteVal);
-                    if (value >= 1)
-                    {
-                        deleteMaxConcurrency = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxDeleteMaxConcurrency)));
-                    }
-                }
+        yyjson_val* deleteVal = yyjson_obj_get(root, "deleteMaxConcurrency");
+        if (deleteVal && yyjson_is_int(deleteVal))
+        {
+            const int64_t value = yyjson_get_int(deleteVal);
+            if (value >= 1)
+            {
+                deleteMaxConcurrency = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxDeleteMaxConcurrency)));
+            }
+        }
 
-                yyjson_val* deleteRecycleVal = yyjson_obj_get(root, "deleteRecycleBinMaxConcurrency");
-                if (deleteRecycleVal && yyjson_is_int(deleteRecycleVal))
-                {
-                    const int64_t value = yyjson_get_int(deleteRecycleVal);
-                    if (value >= 1)
-                    {
-                        deleteRecycleBinMaxConcurrency =
-                            static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxDeleteRecycleBinMaxConcurrency)));
-                    }
-                }
+        yyjson_val* deleteRecycleVal = yyjson_obj_get(root, "deleteRecycleBinMaxConcurrency");
+        if (deleteRecycleVal && yyjson_is_int(deleteRecycleVal))
+        {
+            const int64_t value = yyjson_get_int(deleteRecycleVal);
+            if (value >= 1)
+            {
+                deleteRecycleBinMaxConcurrency = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxDeleteRecycleBinMaxConcurrency)));
+            }
+        }
 
-                yyjson_val* recycleBinBatchSizeVal = yyjson_obj_get(root, "recycleBinBatchSize");
-                if (recycleBinBatchSizeVal && yyjson_is_int(recycleBinBatchSizeVal))
-                {
-                    const int64_t value = yyjson_get_int(recycleBinBatchSizeVal);
-                    if (value >= 1)
-                    {
-                        recycleBinBatchSize = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxRecycleBinBatchSize)));
-                    }
-                }
+        yyjson_val* recycleBinBatchSizeVal = yyjson_obj_get(root, "recycleBinBatchSize");
+        if (recycleBinBatchSizeVal && yyjson_is_int(recycleBinBatchSizeVal))
+        {
+            const int64_t value = yyjson_get_int(recycleBinBatchSizeVal);
+            if (value >= 1)
+            {
+                recycleBinBatchSize = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxRecycleBinBatchSize)));
+            }
+        }
 
-                yyjson_val* softMaxVal = yyjson_obj_get(root, "enumerationSoftMaxBufferMiB");
-                if (softMaxVal && yyjson_is_int(softMaxVal))
-                {
-                    const int64_t value = yyjson_get_int(softMaxVal);
-                    if (value >= 1)
-                    {
-                        enumerationSoftMaxBufferMiB = static_cast<unsigned long>(std::min<int64_t>(value, static_cast<int64_t>(maxBufferMiB)));
-                    }
-                }
+        yyjson_val* softMaxVal = yyjson_obj_get(root, "enumerationSoftMaxBufferMiB");
+        if (softMaxVal && yyjson_is_int(softMaxVal))
+        {
+            const int64_t value = yyjson_get_int(softMaxVal);
+            if (value >= 1)
+            {
+                enumerationSoftMaxBufferMiB = static_cast<unsigned long>(std::min<int64_t>(value, static_cast<int64_t>(maxBufferMiB)));
+            }
+        }
 
-                yyjson_val* hardMaxVal = yyjson_obj_get(root, "enumerationHardMaxBufferMiB");
-                if (hardMaxVal && yyjson_is_int(hardMaxVal))
-                {
-                    const int64_t value = yyjson_get_int(hardMaxVal);
-                    if (value >= 1)
-                    {
-                        enumerationHardMaxBufferMiB = static_cast<unsigned long>(std::min<int64_t>(value, static_cast<int64_t>(maxBufferMiB)));
-                    }
-                }
+        yyjson_val* hardMaxVal = yyjson_obj_get(root, "enumerationHardMaxBufferMiB");
+        if (hardMaxVal && yyjson_is_int(hardMaxVal))
+        {
+            const int64_t value = yyjson_get_int(hardMaxVal);
+            if (value >= 1)
+            {
+                enumerationHardMaxBufferMiB = static_cast<unsigned long>(std::min<int64_t>(value, static_cast<int64_t>(maxBufferMiB)));
+            }
+        }
 
-                yyjson_val* reparsePolicyVal = yyjson_obj_get(root, "reparsePointPolicy");
-                if (reparsePolicyVal)
-                {
-                    if (! yyjson_is_str(reparsePolicyVal))
-                    {
-                        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-                    }
-                    const char* valueText = yyjson_get_str(reparsePolicyVal);
-                    if (! valueText || valueText[0] == '\0' || ! TryParseReparsePointPolicy(valueText, reparsePointPolicy))
-                    {
-                        return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
-                    }
-                }
+        yyjson_val* reparsePolicyVal = yyjson_obj_get(root, "reparsePointPolicy");
+        if (reparsePolicyVal)
+        {
+            if (! yyjson_is_str(reparsePolicyVal))
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+            const char* valueText = yyjson_get_str(reparsePolicyVal);
+            if (! valueText || valueText[0] == '\0' || ! TryParseReparsePointPolicy(valueText, reparsePointPolicy))
+            {
+                return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
+            }
+        }
 
-                yyjson_val* searchBackendVal = yyjson_obj_get(root, "searchBackendPreference");
-                if (searchBackendVal && yyjson_is_str(searchBackendVal))
-                {
-                    const char* valueText = yyjson_get_str(searchBackendVal);
-                    if (valueText && valueText[0] != '\0')
-                    {
-                        searchBackendPreference = ParseSearchBackendPreference(valueText);
-                    }
-                }
+        yyjson_val* searchBackendVal = yyjson_obj_get(root, "searchBackendPreference");
+        if (searchBackendVal && yyjson_is_str(searchBackendVal))
+        {
+            const char* valueText = yyjson_get_str(searchBackendVal);
+            if (valueText && valueText[0] != '\0')
+            {
+                searchBackendPreference = ParseSearchBackendPreference(valueText);
+            }
+        }
 
-                yyjson_val* searchWalkersVal = yyjson_obj_get(root, "searchMaxDirectoryWalkers");
-                if (searchWalkersVal && yyjson_is_int(searchWalkersVal))
-                {
-                    const int64_t value = yyjson_get_int(searchWalkersVal);
-                    if (value >= 1)
-                    {
-                        searchMaxDirectoryWalkers = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxSearchMaxDirectoryWalkers)));
-                    }
-                }
+        yyjson_val* searchWalkersVal = yyjson_obj_get(root, "searchMaxDirectoryWalkers");
+        if (searchWalkersVal && yyjson_is_int(searchWalkersVal))
+        {
+            const int64_t value = yyjson_get_int(searchWalkersVal);
+            if (value >= 1)
+            {
+                searchMaxDirectoryWalkers = static_cast<unsigned int>(std::min<int64_t>(value, static_cast<int64_t>(kMaxSearchMaxDirectoryWalkers)));
+            }
+        }
 
 #ifdef _DEBUG
-                yyjson_val* delayVal = yyjson_obj_get(root, "directorySizeDelayMs");
-                if (delayVal && yyjson_is_int(delayVal))
-                {
-                    const int64_t value = yyjson_get_int(delayVal);
-                    if (value >= 0)
-                    {
-                        directorySizeDelayMs = static_cast<unsigned int>(std::min<int64_t>(value, 50));
-                    }
-                }
+        yyjson_val* delayVal = yyjson_obj_get(root, "directorySizeDelayMs");
+        if (delayVal && yyjson_is_int(delayVal))
+        {
+            const int64_t value = yyjson_get_int(delayVal);
+            if (value >= 0)
+            {
+                directorySizeDelayMs = static_cast<unsigned int>(std::min<int64_t>(value, 50));
+            }
+        }
 #endif
     }
 

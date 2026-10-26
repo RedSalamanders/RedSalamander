@@ -1,0 +1,13 @@
+{
+  "source_snapshot_id": "dafd34c62c531f9661bdc3743f208f784b187bc51a378c2ac0c416c52fa1acc5",
+  "advisory_build": "full",
+  "noninteractive_planned_entries": 15,
+  "pending_interactive": [
+    "Commands",
+    "FileOperations",
+    "ViewerPETests.Interactive",
+    "ViewerSqliteTests.Interactive",
+    "RedSalamanderMonitorEtwLatency"
+  ],
+  "kind": "explanation only; no execution or Full verdict"
+}

@@ -1,0 +1,75 @@
+{
+  "source": "a4209ee8cd7aa8f548f18706ca4a08c3bd272479",
+  "scope": "failed focused replay; never Full qualification",
+  "nativePassed": 11,
+  "nativeFailed": 1,
+  "nativeSkipped": 0,
+  "files": [
+    {
+      "file": "focused-record.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\owned-residual-original-commands-a4209ee8c-asan.json",
+      "sha256": "A7818CC8CCEBC25DAACF47414951AC3910C7DB137F00C1B02CE970B72D237E94",
+      "bytes": 3494
+    },
+    {
+      "file": "commands-results.json",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T131427Z-91460-f66675d9146c475ca5ace55988e951b6\\artifacts\\selftest\\last_run\\commands\\results.json",
+      "sha256": "0280245C5783A03A98D64CA8B054433593A4D46F6186C7E35489C9206FFB5E72",
+      "bytes": 2907
+    },
+    {
+      "file": "commands-trace.txt",
+      "source": "E:\\RedSalamander.Perf\\runs\\20261026T131427Z-91460-f66675d9146c475ca5ace55988e951b6\\artifacts\\selftest\\last_run\\commands\\trace.txt",
+      "sha256": "EA0FC5868ECCCEF5ADC28D494635411B0E941ED03741A5B764A54E1D1FC6FF1F",
+      "bytes": 26950
+    },
+    {
+      "file": "qualification-state.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\scoped-a4209ee8c-qualification.json",
+      "sha256": "459BA227238247B07FF236B3F3B610BAD0F0BBE5C7083259658791F757E3FBFB",
+      "bytes": 3150
+    },
+    {
+      "file": "runtime-scope-waiver.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\runtime-scope-waiver-a4209ee8c.json",
+      "sha256": "852E9A7FC83FE031E29D0C68D6CA7117729AF2AE3F11B6AE6AF553F2280459FD",
+      "bytes": 3872
+    },
+    {
+      "file": "build-x64-Debug.json",
+      "source": ".build\\x64\\Debug\\build-receipt.json",
+      "sha256": "4001EF4D5646EFE1919EA4D16B4F7203F78C3DC7072A3FE66EAF514309C89F2B",
+      "bytes": 85236
+    },
+    {
+      "file": "build-x64-Release.json",
+      "source": ".build\\x64\\Release\\build-receipt.json",
+      "sha256": "C20CBD3B3AECA246214B8A5FD873CA9607AA13D2678866EB2289D7DAC40FA160",
+      "bytes": 86662
+    },
+    {
+      "file": "build-x64-ASan-Debug.json",
+      "source": ".build\\x64\\ASan Debug\\build-receipt.json",
+      "sha256": "D3AFCACA803A9CE2857F28F5D8EE1BD80B7C709D36ABF619965EE7A3CD9E185E",
+      "bytes": 90385
+    },
+    {
+      "file": "build-ARM64-Debug.json",
+      "source": ".build\\ARM64\\Debug\\build-receipt.json",
+      "sha256": "82B4AFDB783814E5D00AB131780F35D6E2909EBD105A1B9C9962499F3FA60F79",
+      "bytes": 86760
+    },
+    {
+      "file": "build-ARM64-Release.json",
+      "source": ".build\\ARM64\\Release\\build-receipt.json",
+      "sha256": "687FFFC51B2CB76EE54E5FB7AB255335F6409214F6D833A3C61C9167AB7584E4",
+      "bytes": 88174
+    },
+    {
+      "file": "build-ARM64-ASan-Debug.json",
+      "source": ".build\\ARM64\\ASan Debug\\build-receipt.json",
+      "sha256": "EEB51487AE4FA465FD4DAF3395F15D0DACA65912CECF42A4D446662F4C4DA653",
+      "bytes": 91957
+    }
+  ]
+}

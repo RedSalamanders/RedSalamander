@@ -1,0 +1,10 @@
+{
+  "prior": "C:/RedSalamander.Perf/evidence/i26-ui/exact-bound-results-candidate-v3-20260926",
+  "changed_inputs": [
+    "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp",
+    "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases10_13.cpp",
+    "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallerySurfaces.cpp",
+    "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.CommonPresentationPerf.cpp"
+  ],
+  "purpose": "Add real Recycle Skip result test; compile reviewed common P0 performance fixture; recapture corrected Delete/Rename synthetic paths. No performance acceptance from compilation."
+}

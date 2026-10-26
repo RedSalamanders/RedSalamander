@@ -1,0 +1,30 @@
+{
+  "tool": "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\Llvm\\x64\\bin\\clang-format.exe",
+  "version": "clang-format version 22.1.3 (https://github.com/llvm/llvm-project e9846648fd6183ee6d8cbdb4502213fcf902a211)",
+  "mode": "changed ranges; full new helper",
+  "passed": true,
+  "files": [
+    "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+    "RedSalamander/SelfTest/Commands/Commands.Tests.BatchRename.cpp",
+    "RedSalamander/FolderWindow.FileOperations.DecisionMirror.cpp",
+    "Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceListingValidation.cpp",
+    "RedSalamander/BatchRenameWindow.cpp",
+    "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.DecisionMirror.cpp",
+    "Plugins/ViewerSpace/ViewerSpace.Analysis.cpp",
+    "RedSalamander/SelfTest/Commands/Commands.Tests.Search.cpp",
+    "RedSalamander/FindFilesWindow.cpp",
+    "RedSalamander/FolderView.Enumeration.cpp",
+    "Plugins/ViewerSpace/ViewerSpace.cpp",
+    "RedSalamander/FolderView.h",
+    "RedSalamander/SelfTest/Commands/Commands.Tests.Navigation.cpp",
+    "Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp",
+    "RedSalamander/NavigationView.Menus.cpp",
+    "RedSalamander/NavigationView.Edit.cpp",
+    "RedSalamander/NavigationView.h",
+    "RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp",
+    "RedSalamander/NavigationViewInternal.h",
+    "Plugins/ViewerSpace/ViewerSpace.ListingValidation.h",
+    "RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp",
+    "Common/NaturalSort.h"
+  ]
+}

@@ -1,0 +1,158 @@
+[
+  {
+    "Path": "Z:\\src\\RedSalamander\\AGENTS.md",
+    "Hash": "FB9BC2FAF6D8ADF14C462175A2EF2D48A980B6AD3006B2F2771DC1B978FCBEBA"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\CommandPalette.md",
+    "Hash": "CA90FF9EDAFB5D1F3F92792B4B788B64FFFCD579149090E862ED8FA00EEAB1BB"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\Connections.md",
+    "Hash": "DB477686B104B1973F90E07C965DECEA8A32E15B3A6864B648046767E5EE66A6"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\dev\\FileOperationsEngine.md",
+    "Hash": "C4FE04FE161CE50BC64ACBA0071168FEC7B7C430F1FB5DEA16A101160553C2B4"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\dev\\FileSystemPlugins.md",
+    "Hash": "3601D259911BBA9ED91900BD61A5308CC0898F4A33775B1C88D235ED157BD475"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\dev\\TestingAndScreenshots.md",
+    "Hash": "3D37FE9801D748D5CEAC97457992DEFA89301548942EF7F1426C3E2FDE9B8717"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\DeveloperGuide.md",
+    "Hash": "1861A2371213FF472F4F7D19A767A815FBCD1AF45E2D51D57F7D604F8F866591"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\DocumentationMap.md",
+    "Hash": "D5820BE12DB3B3426F35BFB4AC9DE3748C3AFB201649B8C838200C9D03A69E31"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\FileOperations.md",
+    "Hash": "1C9FBF01E0EBE3D9AC8465444380C58F56C22971D4555F5794E774627AA6CFAA"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\FindFiles.md",
+    "Hash": "2F82228088EA3B90156EAF8A929DA35D338E1CA7E836F678E610EBA8752C026C"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\GettingStarted.md",
+    "Hash": "C04D35294278C2A7A185B4D707C243340C571BE8FC18B6367ECE963E84C7CB86"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\MainWindow.md",
+    "Hash": "FB48912250345EF42FA1E1D79AF1CFB5A9DDD990C15983EFB5FF8A4A49EFCD31"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\NavigationAndPaths.md",
+    "Hash": "8A6C5E742500C42BE5768FD6AE415914D24C97CDD2513C3ADD0BE86699F3DC69"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\Plugins.md",
+    "Hash": "7F7ACD1A8C65F6376D3C90E01944FFC16F306BAB2A2D801B21985E2422A7E8D5"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\PortableDevices.md",
+    "Hash": "2AE29F2E1A766E09238E7B8454B201C5C579341CA14C1C1ACB9B50B97AA0E546"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\Preferences.md",
+    "Hash": "E9E25E0805713179B6B73924FB4F049BE47F489456FEA4C53A06C5A9FB5A209D"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\README.md",
+    "Hash": "1AE995033AC7C4711B19E63A86D1CA295772777875242824A1441C41AB816AFF"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\release-note\\vLast.md",
+    "Hash": "6A32BAB0057C0BDA07A9DB536E8686B08A826FDC87CA1A3B8F1A382FC250B85D"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\res\\README.md",
+    "Hash": "BA70CB68F60221DA41DE11036CF220B177548EBBC1BEF97F5A89D098BE7C949E"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\res\\viewer-space-captures.provenance.json",
+    "Hash": "8146D7E61978CD4A92A07A7DED7E0A010276C84DE442680EC4D21FF62D8FB29E"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\SelectionsAndLists.md",
+    "Hash": "FC8348E6E3CC391EC0B24313B15B817CFB01BCA9E5A04B9E7FC3446A39C60E5F"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\SettingsFile.md",
+    "Hash": "64E814E905EC1AAD15756ADFFAEA9803C9377DE2BEB7A2182AC7CAB954FBA97F"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\Terminal.md",
+    "Hash": "6996057EE84E283B7089FF1EB8C2F59AFD6DEA854EAFB89B6E54542C97B097E5"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\Themes.md",
+    "Hash": "5F231C9690A2F08C5C089867D22429D89DDC022F525ED360FB97B61726EA954A"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\Troubleshooting.md",
+    "Hash": "75F3F7E660146EB3D2F530FB7025FAB44F0347598233481185E6CE506C18FD03"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\UserGuide.md",
+    "Hash": "4B5C8667F1831D4A4D801D8E5B0ACDA36D90CD3B255109AB4E1A9C52B710EB1B"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\docs\\Viewers.md",
+    "Hash": "34DD9BC4B1D9C7F098A620B673DF7D80E7D364755912EA8511078C4EB47F9D2C"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\README.md",
+    "Hash": "C418DA5B23015B502D77AF9C79B94FB697392B7C5BB261657347FA1175C5CD2F"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\RedSalamander\\SelfTest\\FileOperations\\FolderWindow.FileOperations.Tests.VisualGallery.cpp",
+    "Hash": "42E4C474AF795D7C0C3552E3AC6CC18D2794A03AB42B912271451039C1411F55"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\Specs\\NormativeConsistency.json",
+    "Hash": "97B1941A575E66112AC822A4E2C990113C50194E85D3179A252F92BABA3B600E"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\Specs\\Testing\\Testing_SelfTests.md",
+    "Hash": "A3763AEC57A13059AD0BC4BC5D528FF165ACFB45400F13243E5ABFD00FD83A46"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\Specs\\Testing\\Testing_ToolingGovernance.md",
+    "Hash": "D7E50BD417A81390ABB35826C1CAEED95CB1D4388B4838E4A7D5550D331B4D9F"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\Specs\\UI\\UI_FileOperationsPopup.md",
+    "Hash": "B679A6134CE3B414C5183D9D81FBACA79AA5B4BF90A875A84B91AD212E88FBAA"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\Tests\\README.md",
+    "Hash": "F81E20B2C240C72E41BA57E4D3903547F585E790B7A35E285A475E078249DBEC"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\Tools\\Modules\\Tooling\\SpecInformationArchitecture.psm1",
+    "Hash": "EBFAA741C8B1A5FB7DF283C7D34138A659E601A4DF16193EB35758FFF9806932"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\Tools\\README.md",
+    "Hash": "101F3AA0B90B231EC10C29B731447E57EA0621DC30F2B23A6C163ACFA77C9320"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\Tools\\Tests\\DocumentationDriftContracts.Tests.ps1",
+    "Hash": "220B16BE219B6EAC81C4D046CC065AE35C836BB80C4126DCB251F41DA0B02625"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\Tools\\Tests\\SpecInformationArchitecture.Tests.ps1",
+    "Hash": "8B4F4448AF44BCC2313B810656A75F22B191A55B937A40176682714F00D146D2"
+  },
+  {
+    "Path": "Z:\\src\\RedSalamander\\Tools\\tool-inventory.json",
+    "Hash": "AA464CEBCE5409070119BF1C9F3689D1964441E869F829FEE31DE7B9864F3D97"
+  }
+]

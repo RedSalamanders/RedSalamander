@@ -11,7 +11,6 @@ Each executable and plugin owns the English resources it uses, embedded directly
 | Owner module | Embedded `.rc` |
 | --- | --- |
 | RedSalamander (main app) | `RedSalamander/RedSalamander.rc` |
-| RedSalamanderMonitor | `RedSalamanderMonitor/RedSalamanderMonitor.rc` |
 | RedConfigure | `RedConfigure/RedConfigure.rc` |
 | Each plugin DLL | `Plugins/<PluginName>/<PluginName>.rc` |
 
@@ -47,7 +46,7 @@ Plugins/ViewerText/
 
 Naming and build conventions:
 
-- A satellite DLL is named `<OwnerStem>-<culture>.dll`, where `<OwnerStem>` matches the owning executable or plugin DLL stem, for example `RedSalamander-fr-FR.dll`, `RedSalamanderMonitor-fr-FR.dll`, or `ViewerText-fr-FR.dll`.
+- A satellite DLL is named `<OwnerStem>-<culture>.dll`, where `<OwnerStem>` matches the owning executable or plugin DLL stem, for example `RedSalamander-fr-FR.dll`, or `ViewerText-fr-FR.dll`.
 - Each culture folder holds a generated `.rc` plus a `.vcxproj`. The project is a resource-only `DynamicLibrary` with no executable entry point; it marks itself with the localization properties consumed by the build:
 
   ```xml
@@ -76,7 +75,7 @@ HRESULT RegisterResourceOwner(std::wstring_view ownerName, HINSTANCE embeddedIns
 void    UnregisterResourceOwner(HINSTANCE embeddedInstance) noexcept;
 ```
 
-- `RedSalamander` and `RedSalamanderMonitor` register during startup, after settings load and before UI resource lookup.
+- `RedSalamander` registers during startup, after settings load and before UI resource lookup.
 - Plugins register immediately after the DLL loads and unregister before the module unloads. Plugin code passes the plugin DLL handle (`g_hInstance`), never `nullptr`.
 
 ### Selecting the language
@@ -158,19 +157,19 @@ Detailed rules:
 IDs are defined in the owner's `Resource.h`. Two conventions are worth knowing for the main app:
 
 - **Command labels have two forms.** Full display names use `IDS_CMD_*` (menus, Preferences, shortcut lists). Short display names use `IDS_CMD_SHORT_BASE + IDS_CMD_*` for compact surfaces such as the function bar; every command must provide one.
-- **`IDS_CMD_SHORT_BASE` is 20000**, and resource IDs `20000..21999` are reserved for command short labels so the arithmetic mapping cannot collide with unrelated strings. Do not reuse those IDs for anything else.
+- **`IDS_CMD_SHORT_BASE` is 20000**, and resource IDs `20000..22999` are reserved for command short labels (every command display id is below 3000) so the arithmetic mapping cannot collide with unrelated strings. Do not reuse those IDs for anything else.
 
 ```c
 // RedSalamander/Resource.h
 #define IDS_CMD_SHORT_BASE 20000   // short labels = IDS_CMD_SHORT_BASE + IDS_CMD_* id
-// IDs 20000-21999 reserved for command short labels.
+// IDs 20000-22999 reserved for command short labels (display ids below 3000).
 ```
 
-The mapping is consumed in `RedSalamander/CommandRegistry.cpp` via `IDS_CMD_SHORT_BASE` and a `+ 1999` upper bound.
+The mapping is consumed in `RedSalamander/CommandRegistry.cpp` via `IDS_CMD_SHORT_BASE` and a `+ 2999` upper bound.
 
 ## Workflow: adding a string
 
-1. **Pick an ID** in the owner's `Resource.h` (do not reuse an existing value or step into the `20000..21999` short-label range unless you are adding a command short label).
+1. **Pick an ID** in the owner's `Resource.h` (do not reuse an existing value or step into the `20000..22999` short-label range unless you are adding a command short label).
 2. **Add the English text** to the owner's embedded `.rc` `STRINGTABLE`. Use positional placeholders for any variable text.
 3. **Add a command short label too** if the new string is a command full name: define `IDS_CMD_SHORT_<NAME>` as `IDS_CMD_SHORT_BASE + <full id>`.
 4. **Load it in code** with `LoadStringResource(id)` / `FormatStringResource(id, ...)` (or `MessageBoxResource`). For a stable non-translatable token, use `LoadEmbeddedStringResource`/`FormatEmbeddedStringResource` with the owning `HINSTANCE` and add the ID to the language-neutral inventory in `ResourceLocalizationContracts.Tests.ps1`.
@@ -224,3 +223,5 @@ Invoke-Pester -Path .\Tools\Tests\ResourceLocalizationContracts.Tests.ps1
 - `Specs/Core/Core_Localization.md` — normative specification
 - `.github/skills/localization/SKILL.md` — patterns and helper reference
 
+
+RedMonitor owns its resources and four legacy-named satellites in its independent repository/package. No monitor resource project is built or shipped by this solution.

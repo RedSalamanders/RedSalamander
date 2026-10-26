@@ -1,0 +1,68 @@
+[
+  {
+    "file": "before-commands-results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\viewertext-release-gate-before-3a43186a\\final-results\\commands\\results.json",
+    "bytes": 1935,
+    "sha256": "f4356bd5f15c655974600ebd97d9589bcaa21ee1f3ed6b936c4158e559456a8c"
+  },
+  {
+    "file": "viewertext-release-gate-before-3a43186a.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\viewertext-release-gate-before-3a43186a.log",
+    "bytes": 3612,
+    "sha256": "72bcf7d0e9d55ef69ef2d99921789a45a5b6d34ca83d1051bd1d0be68d366823"
+  },
+  {
+    "file": "viewertext-release-gate-before-3a43186a-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\viewertext-release-gate-before-3a43186a-summary.json",
+    "bytes": 659,
+    "sha256": "bcee013b351ff0614622c7dca2421a4c233e2e4b5e15b8699fd0ef17f6689d4c"
+  },
+  {
+    "file": "after-commands-results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\viewertext-release-gate-after-836f4f97\\final-results\\commands\\results.json",
+    "bytes": 1297,
+    "sha256": "95f04904aa8fb88a513a20b87f06798b4e1951a4383c73cba6fc45582e3337e8"
+  },
+  {
+    "file": "viewertext-release-gate-after-836f4f97.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\viewertext-release-gate-after-836f4f97.log",
+    "bytes": 1994,
+    "sha256": "8a2f2c3f538a379e1cf4bbb3ea7b4475a0ede4b9395f72b989b7f60c5d880c69"
+  },
+  {
+    "file": "viewertext-release-gate-after-836f4f97-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\viewertext-release-gate-after-836f4f97-summary.json",
+    "bytes": 658,
+    "sha256": "193363a5f65f151b4494ff9b0a67467ed8f8b348a9cdac4a9ec035fa34764d6a"
+  },
+  {
+    "file": "836f4f97-Release-build.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\836f4f97-Release-build.log",
+    "bytes": 35851,
+    "sha256": "9c35d85f234d15b009caf19d3fe11e707d77ef48c62fe3c4aba3ffe443cbc34c"
+  },
+  {
+    "file": "836f4f97-final-x64-Release-post-focused-module-identities.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\836f4f97-final-x64-Release-post-focused-module-identities.json",
+    "bytes": 7271,
+    "sha256": "08b1930dd21c505c2f626fa9d36f171d033e5147f110910a1d0b193bca850342"
+  },
+  {
+    "file": "viewertext-test-gate-format.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\viewertext-test-gate-format.json",
+    "bytes": 3126,
+    "sha256": "3d964793114b1bfbb46378b09d12a6813a54e72731b47f61cb27cdf3a21073f8"
+  },
+  {
+    "file": "836f4f97-spec-inventory.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\836f4f97-spec-inventory.log",
+    "bytes": 339,
+    "sha256": "982d79c39160c522e56a6f6e559389384d49d1c748823f3db2d80c6d2c9a3d4e"
+  },
+  {
+    "file": "viewertext-release-gate-comparison.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\viewertext-release-gate-comparison.json",
+    "bytes": 2628,
+    "sha256": "931ffd051478d90d74a334000df26dba1f1f6c8f0cd280185d63c42b1ab28884"
+  }
+]

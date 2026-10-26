@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-08-09T16:12:51.573Z",
+    "suite": "FileOperations",
+    "artifact_root": "C:\\Users\\eric\\.codex\\worktrees\\8cf0\\RedSalamander\\.build\\TestSandbox\\runs\\20260809T161250Z-10872-be416ca3ae23408c89c925bb213b65b1\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 1984,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1359,
+            "repeat_index": 1
+        },
+        {
+            "name": "Causeway_BridgeProviderOutputContracts",
+            "status": "passed",
+            "duration_ms": 516,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 109,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1
+}

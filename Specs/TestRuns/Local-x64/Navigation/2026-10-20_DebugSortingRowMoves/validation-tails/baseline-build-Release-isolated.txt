@@ -1,0 +1,28 @@
+  Common.Tests.Runner.cpp
+  Common.Tests.LatencyHooks.cpp
+  SplashScreen.cpp
+  ViewerPluginManager.cpp
+  WSLDistro.cpp
+  FolderWindow.FileSystem.Commands.cpp
+  FolderWindow.FileSystem.Navigation.cpp
+  FolderWindow.FileOperations.State.Runtime.cpp
+  FolderWindow.FileOperations.State.Diagnostics.cpp
+  FolderWindow.FileOperations.State.Queue.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 173141 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  RedSalamander.vcxproj -> Z:\src\RedSalamander-worktrees\debug-sort-row-moves-validation\.build\x64\Release\RedSalamander.exe
+Captured log: Z:\src\RedSalamander-worktrees\debug-sort-row-moves-validation\.build\logs\msbuild-20261020_123858_595-pid32608-c2d2c932.log
+Diagnostics: 0 warning(s), 0 error(s)
+Build artifacts attested: 3ee74cc23947bde2864030423f3b6713cb633d6ad486d2fb749557d83cf79db7
+
+========================================
+Build completed successfully!
+Configuration: Release | Platform: x64
+Build time: 10:57
+========================================
+Outputs (copy/paste any PowerShell command to run):
+& "Z:\src\RedSalamander-worktrees\debug-sort-row-moves-validation\.build\x64\Release\RedLauncher.exe" # 0.39 MiB
+& "Z:\src\RedSalamander-worktrees\debug-sort-row-moves-validation\.build\x64\Release\RedSalamander.exe" # 35.32 MiB
+& "Z:\src\RedSalamander-worktrees\debug-sort-row-moves-validation\.build\x64\Release\RedSalamanderMonitor.exe" # 1.60 MiB

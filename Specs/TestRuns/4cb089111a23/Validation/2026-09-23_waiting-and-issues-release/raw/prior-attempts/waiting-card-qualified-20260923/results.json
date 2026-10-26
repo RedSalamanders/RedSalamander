@@ -1,0 +1,35 @@
+{
+    "run_started_utc": "2026-09-23T14:38:53.744Z",
+    "duration_ms": 133080,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "FileOps_VisualGallery",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "E:\\RedSalamander.Perf\\runs\\20260923T143829Z-89640-22d5df683ed846a6bb02ef28c5c1f6c9\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 132359,
+            "passed": 0,
+            "failed": 1,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "FileOps_VisualGallery",
+            "failureMessage": "Waiting cards must use only visible body/action space and retain safe same-task phase transitions; see WaitingCardFit/Transition diagnostics.",
+            "cases": [
+                {
+                    "name": "FileOps_VisualGallery",
+                    "status": "failed",
+                    "duration_ms": 132328,
+                    "repeat_index": 1,
+                    "reason": "Waiting cards must use only visible body/action space and retain safe same-task phase transitions; see WaitingCardFit/Transition diagnostics."
+                }
+            ]
+        }
+    ],
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0
+}

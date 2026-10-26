@@ -1,0 +1,282 @@
+{
+  "profile": "x64 Release",
+  "identity": [
+    {
+      "sha256": "7569e8ae5a31f0b64d86b88540c4536ff9feccbc77c016e60da490c476d751f3",
+      "path": "Common/WindowMessages.h"
+    },
+    {
+      "sha256": "e6ea5139a735076b6d3c4723ee2dcd4accdd4011c13188c4e16c2a5b5fc7a1fc",
+      "path": "Plugins/ViewerSpace/Lang/cs-CZ/ViewerSpace-cs-CZ.rc"
+    },
+    {
+      "sha256": "f4b4d6f399a12295de33edb6720b02616f25cc6fa48fd7785bc09b7e14e8eac1",
+      "path": "Plugins/ViewerSpace/Lang/fr-FR/ViewerSpace-fr-FR.rc"
+    },
+    {
+      "sha256": "16fc4a66e36bd4e50f759c87983a035c0fb356abe4163606d0004152c04479db",
+      "path": "Plugins/ViewerSpace/Lang/ja-JP/ViewerSpace-ja-JP.rc"
+    },
+    {
+      "sha256": "cbc9f94124588046a5a6f515e5e772db75f1dcce4bca979fa8812376f09651e3",
+      "path": "Plugins/ViewerSpace/Lang/sk-SK/ViewerSpace-sk-SK.rc"
+    },
+    {
+      "sha256": "a33df0ae5f85428c797d15777e9747c3d0ee582efb111791c632cb095589e108",
+      "path": "Plugins/ViewerSpace/ViewerSpace.Analysis.cpp"
+    },
+    {
+      "sha256": "f8cf60a8bd69323c5f1eaa73722a46201afb3b07c56e3fbc93583452d9fe374f",
+      "path": "Plugins/ViewerSpace/ViewerSpace.AnalysisHost.cpp"
+    },
+    {
+      "sha256": "31d557d1b7f715fea949deaaedbc8171e2d7896a95c23e76092eefca8d92e9f9",
+      "path": "Plugins/ViewerSpace/ViewerSpace.AnalysisHost.h"
+    },
+    {
+      "sha256": "c65e9d094c24e91ea54631575681cc6ff2d1b2315423b488eae9019bed62218f",
+      "path": "Plugins/ViewerSpace/ViewerSpace.NavigationHost.cpp"
+    },
+    {
+      "sha256": "5dbca27e897f1ef1f4de82babc42280b40054cb5905216e4e25a2d1253cc2ab4",
+      "path": "Plugins/ViewerSpace/ViewerSpace.NavigationHost.h"
+    },
+    {
+      "sha256": "d7ca443653d136873d89ca442674e637c4e4d75a136b8318aecb512b09e5b3ff",
+      "path": "Plugins/ViewerSpace/ViewerSpace.cpp"
+    },
+    {
+      "sha256": "3421e1644767ca9bd2389848394c2414e281f81e614267a19e88201db43fba3a",
+      "path": "Plugins/ViewerSpace/ViewerSpace.h"
+    },
+    {
+      "sha256": "17b1185fc468ee0696c07aebd6b4de0258688388fc4304d428b7ce6b652b2253",
+      "path": "Plugins/ViewerSpace/ViewerSpaceResources.rc"
+    },
+    {
+      "sha256": "17fb96cc941412fa8cb387cf025e7ba11e28e014d579180b9e1a968d8625ea3d",
+      "path": "Plugins/ViewerSpace/resource.h"
+    },
+    {
+      "sha256": "c4d90e34b2e268d038a5a7ceafe51e2ab47163f72e2ccbb109bce095014ebee1",
+      "path": "Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp"
+    },
+    {
+      "sha256": "48e6d04bbe8866c9e819ce18c1aad5a953d2c5b7e9aca6245a6d2ef2c7526d73",
+      "path": "Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp"
+    },
+    {
+      "sha256": "ba361cf22ad2e2b19b24a9a747c2fe06146023c0accc8b644ae0166d96cbf6a0",
+      "path": ".build/x64/Release/ViewerPETests.exe"
+    },
+    {
+      "sha256": "96c1a0781e55d15afe8c90d745fb0d863c9848c26188b607109686fb33f5d85f",
+      "path": ".build/x64/Release/Plugins/ViewerSpace.dll"
+    },
+    {
+      "sha256": "65490384de736573cf41d5f81ce12a6b5dca02008b80f0c74bb8c204515ac00d",
+      "path": ".build/x64/Release/Common.dll"
+    }
+  ],
+  "cases": [
+    {
+      "exitCode": 0,
+      "name": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "status": "passed",
+      "elapsedMs": 1951
+    },
+    {
+      "exitCode": 0,
+      "name": "TestViewerSpaceLifecycleCaptures",
+      "status": "passed",
+      "elapsedMs": 4334
+    },
+    {
+      "exitCode": 0,
+      "name": "TestViewerSpaceScanPolicyHelpers",
+      "status": "passed",
+      "elapsedMs": 23
+    },
+    {
+      "exitCode": 0,
+      "name": "TestViewerSpaceListingValidation",
+      "status": "passed",
+      "elapsedMs": 23
+    },
+    {
+      "exitCode": 0,
+      "name": "TestViewerSpaceBoundedHostileProviderScanning",
+      "status": "passed",
+      "elapsedMs": 14046
+    },
+    {
+      "exitCode": 0,
+      "name": "TestViewerSpaceBlockedProviderCloseAndPostUpdateRace",
+      "status": "passed",
+      "elapsedMs": 691
+    },
+    {
+      "exitCode": 0,
+      "name": "TestViewerSpaceDirectorySummaryProtocol",
+      "status": "passed",
+      "elapsedMs": 19419
+    }
+  ],
+  "version": 1,
+  "machineHash": "4cb089111a23",
+  "scope": "ViewerSpace panels, breadcrumb siblings and top-right mode selector; focused x64 Release",
+  "status": "passed",
+  "commit": "6442f882da827be59f62f36759c5aff49c2091c8",
+  "sourceState": "dirty working tree; source and runtime SHA256 recorded in identity",
+  "dxuiCommit": "6c436c213ac0fac181b2faafd1daf6085bdedc23",
+  "qualification": {
+    "debugCurrentRevision": "not_evaluated",
+    "interactive": "passed",
+    "fullRepository": "NOT_EVALUATED - final Fresh Full is running"
+  },
+  "rawEvidenceRoot": "Z:\\RedSalamander.Perf\\evidence\\viewer-space-panels-20261011\\revised-release-03",
+  "captureSource": "Z:\\RedSalamander.Perf\\runs\\viewer-pe-86180-163260203\\artifacts\\viewer-pe\\viewer-space-lifecycle-163260203",
+  "performance": [
+    {
+      "retainedRows": 219,
+      "rawSha256": "d2cdf7a9d3fa718906368dc9f4b5c0e883ca72b7439c8dc357d0dcd65ed696cf",
+      "selection": "claim-bearing metric families retained in original order; timings not compared across build configurations",
+      "file": "perf_metrics.jsonl",
+      "rawBytes": 482264,
+      "rawRows": 1116
+    },
+    {
+      "retainedRows": 276,
+      "rawSha256": "82259214e850d218e25465d311625f0d8e4cbcf74079e34da1712ce791307c4f",
+      "selection": "claim-bearing metric families retained in original order; timings not compared across build configurations",
+      "file": "lifecycle_metrics.jsonl",
+      "rawBytes": 689183,
+      "rawRows": 1661
+    },
+    {
+      "retainedRows": 387,
+      "rawSha256": "9eae769af27ad8fce108be8444cf5204c3794ca2d416f396cb486d46aafa8f60",
+      "selection": "claim-bearing metric families retained in original order; timings not compared across build configurations",
+      "file": "interactive_metrics.jsonl",
+      "rawBytes": 928896,
+      "rawRows": 2182
+    }
+  ],
+  "statistics": [
+    {
+      "file": "perf_metrics.jsonl",
+      "metric": "dxui.accessibility.grid_snapshot_rebuild_us",
+      "count": 48,
+      "p50Us": 24,
+      "p95Us": 40,
+      "maxUs": 76
+    },
+    {
+      "file": "perf_metrics.jsonl",
+      "metric": "viewer.space.render.paint_us",
+      "count": 65,
+      "p50Us": 5145,
+      "p95Us": 8212,
+      "maxUs": 29191
+    },
+    {
+      "file": "perf_metrics.jsonl",
+      "metric": "viewer.space.render.present_us",
+      "count": 65,
+      "p50Us": 57,
+      "p95Us": 328,
+      "maxUs": 1626
+    },
+    {
+      "file": "perf_metrics.jsonl",
+      "metric": "viewer.space.workspace.layout_us",
+      "count": 41,
+      "p50Us": 509,
+      "p95Us": 1280,
+      "maxUs": 67250
+    },
+    {
+      "file": "lifecycle_metrics.jsonl",
+      "metric": "dxui.accessibility.grid_snapshot_rebuild_us",
+      "count": 72,
+      "p50Us": 1,
+      "p95Us": 16,
+      "maxUs": 28
+    },
+    {
+      "file": "lifecycle_metrics.jsonl",
+      "metric": "viewer.space.render.paint_us",
+      "count": 91,
+      "p50Us": 701,
+      "p95Us": 10973,
+      "maxUs": 28460
+    },
+    {
+      "file": "lifecycle_metrics.jsonl",
+      "metric": "viewer.space.render.present_us",
+      "count": 91,
+      "p50Us": 54,
+      "p95Us": 419,
+      "maxUs": 2784
+    },
+    {
+      "file": "lifecycle_metrics.jsonl",
+      "metric": "viewer.space.workspace.layout_us",
+      "count": 22,
+      "p50Us": 454,
+      "p95Us": 11807,
+      "maxUs": 58381
+    },
+    {
+      "file": "interactive_metrics.jsonl",
+      "metric": "dxui.accessibility.grid_snapshot_rebuild_us",
+      "count": 118,
+      "p50Us": 21,
+      "p95Us": 41,
+      "maxUs": 134
+    },
+    {
+      "file": "interactive_metrics.jsonl",
+      "metric": "viewer.space.navigation.choice_menu_us",
+      "count": 6,
+      "p50Us": 1,
+      "p95Us": 1,
+      "maxUs": 1
+    },
+    {
+      "file": "interactive_metrics.jsonl",
+      "metric": "viewer.space.navigation.folder_menu_us",
+      "count": 3,
+      "p50Us": 2,
+      "p95Us": 3,
+      "maxUs": 3
+    },
+    {
+      "file": "interactive_metrics.jsonl",
+      "metric": "viewer.space.render.paint_us",
+      "count": 93,
+      "p50Us": 420,
+      "p95Us": 1220,
+      "maxUs": 31692
+    },
+    {
+      "file": "interactive_metrics.jsonl",
+      "metric": "viewer.space.render.present_us",
+      "count": 93,
+      "p50Us": 41,
+      "p95Us": 399,
+      "maxUs": 2201
+    },
+    {
+      "file": "interactive_metrics.jsonl",
+      "metric": "viewer.space.workspace.layout_us",
+      "count": 74,
+      "p50Us": 224,
+      "p95Us": 1274,
+      "maxUs": 85209
+    }
+  ],
+  "sourceContractScope": "source-contracts-revised.json is the preceding UI revision; the final Fresh Full re-executes the current source contracts",
+  "statisticsMethod": "Nearest-rank p50/p95 over every retained row of each *_us metric, including zero durations and cold initialization; bounded scenario observations, no speedup or cross-configuration admission claim",
+  "captureDisposition": "The first final Release capture run was visually reviewed, then removed by governed stale-run cleanup before archival. Fresh Full will regenerate and archive captures with their own exact binary provenance."
+}

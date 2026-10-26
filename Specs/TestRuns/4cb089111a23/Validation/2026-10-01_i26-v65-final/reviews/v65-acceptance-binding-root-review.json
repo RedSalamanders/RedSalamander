@@ -1,0 +1,24 @@
+{
+  "schema": "i26-v65-acceptance-binding-root-review.v1",
+  "reviewer": "root",
+  "utc": "2026-10-01T13:48:55.2778844+00:00",
+  "bindingSha256": "d7535cb24e0c3e21088c000ba101e37a4721537a98009a18495b4972216ed857",
+  "manifestSha256": "3222ff1f2e90977a0bae368adb7a582fd54a938ca65b430fad5caaa0b9f121ce",
+  "sourceSnapshotId": "f2e0a18a04fbc8a95368adc0c946bafb5ebccdf68d81b4a476d0fefbd323593c",
+  "runId": "20261001T115346Z-104056-8e2cfb6a0b8049218c622dd915a2697e",
+  "rowCount": 16,
+  "witnessCount": 62,
+  "uniqueCaseCount": 39,
+  "casesReviewed": true,
+  "wholePlanComplete": false,
+  "reviewed": [
+    "Read exact complete Fresh Full v2 and matching v1: 2211/0/46, clean sandbox, all20 promoted.",
+    "Read all39 case IDs/statuses and result-source identities across62 witness associations; independently rehashed every referenced result.",
+    "43 Commands and10 FileOps witness rows bind current Full;7 visual rows retain original V55 gallery; common and integrated resource rows preserve distinct run provenance.",
+    "Original V55Debug197/0/20,V56cluster21/0/0,V64 protected companion and V65D/Rkeys retain individual provenance and separate carry review.",
+    "All46 skips are disclosed: optional connection/device profiles, Debug-only exports/search hooks, two7z cases covered by Compare, two opt-in ViewerSpace scenarios. None replaces the required mapped UI cases.",
+    "Independent paired-resource interpretation and final documentation/archive checks are required separately; this binding alone is not whole-plan acceptance.",
+    "Successor binding retains61 exact witness rows; only the IntegratedPresentation witness now binds actual final Embedded B19-1 run20261001T134424Z-99728-2992ef3411c94348a86259781bbfc870. Root read its native1/0/0 result and rehashed all62 referenced results.",
+    "This metadata binding is not the eight-run resource interpretation; final pair remains separately required."
+  ]
+}

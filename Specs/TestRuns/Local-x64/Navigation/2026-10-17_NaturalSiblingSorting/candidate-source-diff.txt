@@ -1,0 +1,264 @@
+diff --git a/RedSalamander/NavigationView.Menus.cpp b/RedSalamander/NavigationView.Menus.cpp
+index 99c0bf9c8..3a492f1c5 100644
+--- a/RedSalamander/NavigationView.Menus.cpp
++++ b/RedSalamander/NavigationView.Menus.cpp
+@@ -6,6 +6,7 @@
+ #include <windowsx.h>
+ 
+ #include <shellapi.h>
++#include <shlwapi.h>
+ 
+ #include "ConnectionSecrets.h"
+ #include "DirectoryInfoCache.h"
+@@ -2355,6 +2356,19 @@ void NavigationView::ShowDiskInfoDropdown(bool ignoreInitialLeftButtonUp, bool f
+     RestoreFolderViewFocusAfterDropdown();
+ }
+ 
++#ifdef ENABLE_TESTS
++bool NavigationView::DebugGetSiblingFoldersForSelfTest(IFileSystem* fileSystem,
++                                                       const std::filesystem::path& parentPath,
++                                                       const std::filesystem::path& preferredPath,
++                                                       std::vector<std::filesystem::path>& siblings,
++                                                       bool& truncated)
++{
++    NavigationView navigation;
++    navigation._fileSystemPlugin = fileSystem;
++    return navigation.TryGetSiblingFolders(parentPath, preferredPath, siblings, truncated);
++}
++#endif
++
+ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPath,
+                                           const std::filesystem::path& preferredPath,
+                                           std::vector<std::filesystem::path>& siblings,
+@@ -2386,20 +2400,22 @@ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPat
+ 
+     constexpr size_t kMaxSiblingItems = static_cast<size_t>(ID_SIBLING_SEARCH - ID_SIBLING_BASE);
+     const auto lessByName             = [](const std::filesystem::path& left, const std::filesystem::path& right)
+-    { return _wcsicmp(left.filename().c_str(), right.filename().c_str()) < 0; };
++    {
++        const auto leftName  = left.filename();
++        const auto rightName = right.filename();
++        const int natural    = StrCmpLogicalW(leftName.c_str(), rightName.c_str());
++        // Natural collation is presentation-only. Keep equivalent names in deterministic ordinal order.
++        return natural != 0 ? natural < 0 : leftName.native() < rightName.native();
++    };
+     const auto isPreferred = [&](const std::filesystem::path& candidate)
+     { return wil::compare_string_ordinal(candidate.native(), preferredPath.native(), true) == wistd::weak_ordering::equivalent; };
+-    size_t largestReplaceableIndex    = SIZE_MAX;
+-    const auto findLargestReplaceable = [&]()
++    // A bounded max-heap retains the earliest natural names in O(log(99)) per replacement. Ranking the
++    // current folder first here protects it from eviction; the final display sort uses only its name.
++    const auto lessForRetention = [&](const std::filesystem::path& left, const std::filesystem::path& right)
+     {
+-        largestReplaceableIndex = SIZE_MAX;
+-        for (size_t i = 0; i < siblings.size(); ++i)
+-        {
+-            if (! isPreferred(siblings[i]) && (largestReplaceableIndex == SIZE_MAX || lessByName(siblings[largestReplaceableIndex], siblings[i])))
+-            {
+-                largestReplaceableIndex = i;
+-            }
+-        }
++        const bool leftPreferred  = isPreferred(left);
++        const bool rightPreferred = isPreferred(right);
++        return leftPreferred != rightPreferred ? leftPreferred : lessByName(left, right);
+     };
+ 
+     while (entry != nullptr)
+@@ -2414,15 +2430,17 @@ bool NavigationView::TryGetSiblingFolders(const std::filesystem::path& parentPat
+                 if (siblings.size() < kMaxSiblingItems)
+                 {
+                     siblings.push_back(std::move(candidate));
+-                    findLargestReplaceable();
++                    if (siblings.size() == kMaxSiblingItems)
++                        std::make_heap(siblings.begin(), siblings.end(), lessForRetention);
+                 }
+                 else
+                 {
+                     truncated = true;
+-                    if (largestReplaceableIndex != SIZE_MAX && (isPreferred(candidate) || lessByName(candidate, siblings[largestReplaceableIndex])))
++                    if (lessForRetention(candidate, siblings.front()))
+                     {
+-                        siblings[largestReplaceableIndex] = std::move(candidate);
+-                        findLargestReplaceable();
++                        std::pop_heap(siblings.begin(), siblings.end(), lessForRetention);
++                        siblings.back() = std::move(candidate);
++                        std::push_heap(siblings.begin(), siblings.end(), lessForRetention);
+                     }
+                 }
+             }
+diff --git a/RedSalamander/NavigationView.h b/RedSalamander/NavigationView.h
+index 91cffe3b7..d57ac730e 100644
+--- a/RedSalamander/NavigationView.h
++++ b/RedSalamander/NavigationView.h
+@@ -233,6 +233,12 @@ public:
+     [[nodiscard]] bool DebugGetSnapshot(NavigationViewDebugSnapshot& out) const noexcept;
+     [[nodiscard]] bool DebugFocusRegion(FocusRegion region) noexcept;
+     [[nodiscard]] bool DebugPostCurrentEditSuggestResultForSelfTest();
++    // Exercise the shared cached sibling query without creating windows or changing provider menu callbacks.
++    [[nodiscard]] static bool DebugGetSiblingFoldersForSelfTest(IFileSystem* fileSystem,
++                                                                const std::filesystem::path& parentPath,
++                                                                const std::filesystem::path& preferredPath,
++                                                                std::vector<std::filesystem::path>& siblings,
++                                                                bool& truncated);
+     void DebugSetFullPathPopupDestroyProbe(std::function<void()> probe)
+     {
+         _debugFullPathPopupDestroyProbe = std::move(probe);
+diff --git a/RedSalamander/SelfTest/Commands/Commands.Tests.Navigation.cpp b/RedSalamander/SelfTest/Commands/Commands.Tests.Navigation.cpp
+index 42ae967af..dbd798124 100644
+--- a/RedSalamander/SelfTest/Commands/Commands.Tests.Navigation.cpp
++++ b/RedSalamander/SelfTest/Commands/Commands.Tests.Navigation.cpp
+@@ -10884,10 +10884,154 @@ struct OwnedMenuSessionEscapeResult
+     return state.failure.empty();
+ }
+ 
++[[nodiscard]] bool TestNavigationSiblingNaturalSorting(CaseState& state) noexcept
++{
++    const auto* plugin = FileSystemPluginManager::GetInstance().FindPluginById(L"builtin/file-system");
++    if (! state.Require(plugin != nullptr && plugin->fileSystem != nullptr, L"Local provider unavailable for breadcrumb sibling sorting."))
++        return false;
++    const wil::com_ptr<IFileSystem> fileSystem = plugin->fileSystem;
++    const auto suiteRoot                       = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
++    if (! state.Require(! suiteRoot.empty(), L"Sandbox root unavailable for breadcrumb sibling sorting."))
++        return false;
++    const auto root           = suiteRoot / L"breadcrumb-natural-sorting";
++    DirectoryInfoCache& cache = DirectoryInfoCache::GetInstance();
++    const auto cleanup        = wil::scope_exit([&]() noexcept
++    {
++        static_cast<void>(SelfTest::RemoveAll(root));
++        cache.NotifyPathDeleted(fileSystem.get(), root);
++    });
++    static_cast<void>(SelfTest::RemoveAll(root));
++    const auto mixedFolder   = root / L"small";
++    const auto boundedFolder = root / L"large";
++    const auto empty         = root / L"empty";
++    const auto boundary      = root / L"boundary";
++    state.Require(SelfTest::EnsureDirectory(empty), L"Failed to create the empty sibling fixture.");
++    for (size_t index = 1u; index <= 99u; ++index)
++        state.Require(SelfTest::EnsureDirectory(boundary / std::format(L"Folder{0}", index)), L"Failed to create the exact-limit sibling fixture.");
++    constexpr std::array<std::wstring_view, 12> names{{
++        L"Folder10",
++        L"folder2",
++        L"Folder1",
++        L"Folder02",
++        L"take2-part10",
++        L"take10-part1",
++        L"take2-part2",
++        L".hidden10",
++        L".hidden2",
++        L"\u00E9tude10",
++        L"\u00E9tude2",
++        L"\U0001F4C1 3",
++    }};
++    for (const auto name : names)
++        state.Require(SelfTest::EnsureDirectory(mixedFolder / name), L"Failed to create a mixed-name sibling folder.");
++    state.Require(SelfTest::WriteTextFile(mixedFolder / L"Folder3.txt", "not a folder"), L"Failed to create the sibling file filter witness.");
++    constexpr size_t kLargeFolderCount = 1000u;
++    for (size_t index = 1u; index <= kLargeFolderCount; ++index)
++        state.Require(SelfTest::EnsureDirectory(boundedFolder / std::format(L"Folder{0}", index)), L"Failed to create a bounded-list sibling folder.");
++    if (! state.failure.empty())
++        return false;
++    auto smallInfo    = cache.BorrowDirectoryInfo(fileSystem.get(), mixedFolder, DirectoryInfoCache::BorrowMode::AllowEnumerate);
++    auto largeInfo    = cache.BorrowDirectoryInfo(fileSystem.get(), boundedFolder, DirectoryInfoCache::BorrowMode::AllowEnumerate);
++    auto emptyInfo    = cache.BorrowDirectoryInfo(fileSystem.get(), empty, DirectoryInfoCache::BorrowMode::AllowEnumerate);
++    auto boundaryInfo = cache.BorrowDirectoryInfo(fileSystem.get(), boundary, DirectoryInfoCache::BorrowMode::AllowEnumerate);
++    if (! state.Require(smallInfo.Status() == S_OK && smallInfo.Get() != nullptr && largeInfo.Status() == S_OK && largeInfo.Get() != nullptr,
++                        L"Could not warm the real sibling directory cache."))
++        return false;
++    if (! state.Require(emptyInfo.Status() == S_OK && boundaryInfo.Status() == S_OK, L"Could not warm the empty and exact-limit sibling cache."))
++        return false;
++
++    std::vector<std::filesystem::path> smallSiblings;
++    std::vector<std::filesystem::path> largeSiblings;
++    bool smallTruncated = true;
++    bool largeTruncated = false;
++    const auto measure  = [&](const std::filesystem::path& parent,
++                              const std::filesystem::path& preferred,
++                              std::vector<std::filesystem::path>& siblings,
++                              bool& truncated,
++                              std::wstring_view label) noexcept
++    {
++        for (unsigned int sample = 0u; sample < 32u; ++sample)
++        {
++            const auto start     = std::chrono::steady_clock::now();
++            const bool collected = NavigationView::DebugGetSiblingFoldersForSelfTest(fileSystem.get(), parent, preferred, siblings, truncated);
++            const auto elapsed   = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::steady_clock::now() - start).count();
++            Trace(std::format(L"Navigation.SiblingSort fixture={0} sample={1} elapsed_ns={2} returned={3} truncated={4}",
++                              label,
++                              sample,
++                              elapsed,
++                              siblings.size(),
++                              truncated));
++            if (! state.Require(collected, L"The shared breadcrumb sibling query failed on its warmed cache."))
++                return false;
++        }
++        return true;
++    };
++    const auto enumerationsBefore = cache.GetStats().enumerations;
++    if (! measure(mixedFolder, mixedFolder / L"folder2", smallSiblings, smallTruncated, L"mixed-12") ||
++        ! measure(boundedFolder, boundedFolder / L"Folder1000", largeSiblings, largeTruncated, L"bounded-1000"))
++        return false;
++    state.Require(cache.GetStats().enumerations == enumerationsBefore,
++                  L"Sibling dropdown queries must use the warmed cache without enumerating on the UI thread.");
++    std::vector<std::filesystem::path> boundarySiblings;
++    bool boundaryTruncated = true;
++    state.Require(NavigationView::DebugGetSiblingFoldersForSelfTest(fileSystem.get(), empty, empty, boundarySiblings, boundaryTruncated) &&
++                      boundarySiblings.empty() && ! boundaryTruncated,
++                  L"An empty sibling menu must stay empty without overflow.");
++    state.Require(NavigationView::DebugGetSiblingFoldersForSelfTest(fileSystem.get(), boundary, boundary / L"Folder99", boundarySiblings, boundaryTruncated) &&
++                      boundarySiblings.size() == 99u && ! boundaryTruncated,
++                  L"Exactly 99 folders must fit without an overflow row.");
++    state.Require(! smallTruncated && smallSiblings.size() == names.size(), L"Small sibling menus must include every folder and exclude ordinary files.");
++    const auto position = [&](std::wstring_view name) noexcept
++    {
++        const auto found = std::ranges::find_if(smallSiblings, [&](const auto& path) noexcept { return path.filename().native() == name; });
++        return static_cast<size_t>(std::distance(smallSiblings.begin(), found));
++    };
++    state.Require(position(L"Folder1") < position(L"folder2") && position(L"folder2") < position(L"Folder10"),
++                  L"Sibling folders must use case-insensitive natural number order: Folder1, folder2, Folder10.");
++    state.Require(position(L"Folder1") < position(L"Folder02") && position(L"Folder02") < position(L"Folder10"),
++                  L"Leading zeros must preserve the number's natural position without dropping a distinct folder.");
++    state.Require(position(L"take2-part2") < position(L"take2-part10") && position(L"take2-part10") < position(L"take10-part1"),
++                  L"Natural sibling order must compare every digit run, not only the last number.");
++    state.Require(position(L".hidden2") < position(L".hidden10") && position(L"\u00E9tude2") < position(L"\u00E9tude10"),
++                  L"Natural sibling order must preserve punctuation and Unicode names.");
++    state.Require(largeTruncated && largeSiblings.size() == 99u, L"Large sibling menus must remain capped at 99 folders with overflow reported.");
++    if (largeSiblings.size() == 99u)
++    {
++        for (size_t index = 0u; index < 98u; ++index)
++            state.Require(largeSiblings[index].filename().native() == std::format(L"Folder{0}", index + 1u),
++                          L"Capped sibling selection must retain the earliest folders in natural order.");
++        state.Require(largeSiblings.back().filename().native() == L"Folder1000", L"Capped menus must retain the current folder in its natural position.");
++    }
++    if (boundarySiblings.size() == 99u)
++    {
++        for (size_t index = 0u; index < boundarySiblings.size(); ++index)
++            state.Require(boundarySiblings[index].filename().native() == std::format(L"Folder{0}", index + 1u),
++                          L"An exactly full sibling menu must still be displayed in natural order.");
++    }
++    for (const std::wstring_view preferredName : {L"Folder2", L"missing", L"folder1000"})
++    {
++        if (! state.Require(NavigationView::DebugGetSiblingFoldersForSelfTest(
++                                fileSystem.get(), boundedFolder, boundedFolder / preferredName, largeSiblings, largeTruncated) &&
++                                largeTruncated && largeSiblings.size() == 99u,
++                            L"Capped sibling query failed for an early, absent or differently cased current folder."))
++            return false;
++        const bool forceCurrent   = preferredName == L"folder1000";
++        const size_t naturalCount = forceCurrent ? 98u : 99u;
++        for (size_t index = 0u; index < naturalCount; ++index)
++            state.Require(largeSiblings[index].filename().native() == std::format(L"Folder{0}", index + 1u),
++                          L"Current-folder retention must not disturb the earliest natural siblings.");
++        if (forceCurrent)
++            state.Require(largeSiblings.back().filename().native() == L"Folder1000", L"Current-folder retention must preserve case-insensitive path matching.");
++    }
++    return state.failure.empty();
++}
++
+ } // namespace (tests)
+ 
+ void RunNavigationCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfTestOptions& options, SelfTest::SelfTestSuiteResult& suite) noexcept
+ {
++    SelfTest::RunCase(
++        options, suite, L"cmd_navigation_sibling_natural_sorting", [](CaseState& state) noexcept { return TestNavigationSiblingNaturalSorting(state); });
+     SelfTest::RunCase(options, suite, L"windows_command_line_argument_quoting_roundtrip", [](CaseState& state) noexcept {
+         return TestWindowsCommandLineArgumentQuoting(state);
+     });

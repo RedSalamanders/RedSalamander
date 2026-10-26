@@ -1,0 +1,27 @@
+{
+  "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\clipboard-read-retry-owned-20260921/perf/perf_metrics.jsonl",
+  "sourceSha256": "0763FD1DC2555B1B46F30CFD6B842EA625E5E1DE05262C850442731B36FA5E34",
+  "sourceBytes": 99222,
+  "sourceLines": 260,
+  "zeroBasedLineIndices": [
+    243,
+    244,
+    245,
+    246,
+    247,
+    248,
+    249,
+    250,
+    251,
+    252,
+    253,
+    254,
+    255,
+    256,
+    257,
+    258,
+    259
+  ],
+  "selectedSha256": "47A11761957BA2E319B0DB7A48A829D9B6577422B14CB88FFB691EF0163296F1",
+  "selection": "All FileOps.Clipboard and FileOps.Popup.Capture.PathFocusPixels rows, unchanged line contents, original order, UTF-8 no BOM with LF."
+}

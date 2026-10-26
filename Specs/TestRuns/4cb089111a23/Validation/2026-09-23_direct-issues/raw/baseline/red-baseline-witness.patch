@@ -1,0 +1,328 @@
+diff --git a/RedSalamander/FolderWindow.FileOperations.Popup.cpp b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+index 166624245..9e80c5b22 100644
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+@@ -5921,6 +5921,7 @@ std::wstring FileOperationsPopupInternal::FileOperationsPopupState::HostedContro
+             }
+             return ConflictActionText(static_cast<ConflictAction>(hit.data), bucket, operation);
+         }
++        case PopupHitTest::Kind::TaskIssues: return LoadStringResource(nullptr, IDS_FILEOPS_BTN_ISSUES);
+         case PopupHitTest::Kind::TaskDismiss: return LoadStringResource(nullptr, IDS_FILEOP_BTN_DISMISS);
+         case PopupHitTest::Kind::FooterOptions:
+             return _controlsHost.HasFluentIconFont() ? std::wstring(1u, FluentIcons::kMore) : std::wstring(1u, FluentIcons::kFallbackMore);
+@@ -12790,7 +12791,9 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
+         result.taskStatusTextSignalVisible  = ! statusChipText.empty() || ! StatusTextForTask(*taskIt, status, GetTickCount64()).empty();
+         result.taskStatusColorBlindSafeEncoding =
+             statusTone == PopupStatusVisualTone::None || result.taskStatusGlyphSignalVisible || result.taskStatusTextSignalVisible;
+-        result.completedFailedItemsActionVisible       = taskIt->finished && (taskIt->warningCount > 0 || taskIt->errorCount > 0);
++        // The old Failed items entry moved out of More. Do not infer menu membership
++        // from warning/error counters in this rendered-controls observer.
++        result.completedFailedItemsActionVisible       = false;
+         result.completedOpenDestinationActionVisible   = CompletedTaskCanUseDestinationActions(*taskIt);
+         result.completedRevealDestinationActionVisible = ResolveCompletedTaskRevealLocation(*taskIt).has_value();
+         result.taskHiddenByCompletedGroup              = completedGroupVisible && ! _completedGroupExpanded && IsCompletedGroupTask(*taskIt);
+@@ -12951,6 +12954,49 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
+                SUCCEEDED(_dwriteFactory->CreateTextLayout(text.data(), static_cast<UINT32>(text.size()), format, widthDip, 4096.0f, layout.put())) &&
+                SUCCEEDED(layout->GetMetrics(&metrics)) && metrics.widthIncludingTrailingWhitespace <= widthDip + 0.5f && metrics.height <= heightDip + 0.5f;
+     };
++    const auto completedActionFits = [&](size_t index, const PopupButton& button, bool& labelFits) noexcept
++    {
++        labelFits = false;
++        if (index >= _hostedButtons.size() || ! _hostedButtons[index] || ! rectHasArea(button.bounds))
++            return false;
++        const DxUi::Button& hosted = *_hostedButtons[index];
++        const bool more            = button.hit.kind == PopupHitTest::Kind::TaskCompletedMore;
++        const std::wstring label   = LoadStringResource(nullptr, button.hit.kind == PopupHitTest::Kind::TaskIssues ? IDS_FILEOPS_BTN_ISSUES
++                                                       : more ? IDS_FILEOPS_CONFLICT_BTN_MORE : IDS_FILEOP_BTN_DISMISS);
++        const std::wstring expectedText = more ? L"\u2026" : label;
++        const auto actualBounds         = hosted.GetBounds();
++        const auto near                 = [](float a, float b) noexcept { return std::abs(a - b) <= 0.5f; };
++        const bool hostedBoundsMatch = near(actualBounds.left, _controlsHost.PixelsToDip(button.bounds.left)) &&
++                                       near(actualBounds.top, _controlsHost.PixelsToDip(button.bounds.top)) &&
++                                       near(actualBounds.right, _controlsHost.PixelsToDip(button.bounds.right)) &&
++                                       near(actualBounds.bottom, _controlsHost.PixelsToDip(button.bounds.bottom));
++        const auto painted = _paintedTaskBodiesForSelfTest.find(button.hit.taskId);
++        const bool insideCard = painted != _paintedTaskBodiesForSelfTest.end() &&
++                                button.bounds.left >= painted->second.actions.left - 0.5f &&
++                                button.bounds.top >= painted->second.actions.top - 0.5f &&
++                                button.bounds.right <= painted->second.actions.right + 0.5f &&
++                                button.bounds.bottom <= painted->second.actions.bottom + 0.5f &&
++                                button.bounds.left >= painted->second.card.left - 0.5f &&
++                                button.bounds.right <= painted->second.card.right + 0.5f &&
++                                button.bounds.bottom <= painted->second.card.bottom + 0.5f;
++        if (more)
++        {
++            const auto chrome = DxUi::ComputeButtonChromeLayout(actualBounds, DxUi::ButtonVariant::DropDown);
++            const float width = MeasureTextWidth(_dwriteFactory.get(),
++                _controlsHost.GetTextFormat(DxUi::FontRole::Body, DWRITE_TEXT_ALIGNMENT_CENTER, DWRITE_PARAGRAPH_ALIGNMENT_CENTER, false),
++                hosted.GetText(), 4096.0f, 128.0f);
++            labelFits = width > 0.0f && width <= chrome.textRect.right - chrome.textRect.left + 0.5f;
++        }
++        else
++            labelFits = hostedLabelFits(hosted, button.bounds, false);
++        const std::wstring automationId = std::format(L"FileOperations.Action.{}.{}.{}",
++            static_cast<uint32_t>(button.hit.kind), button.hit.taskId, button.hit.data);
++        return ! label.empty() && hostedBoundsMatch && insideCard && hasActiveHitTarget(button) && labelFits &&
++               hosted.GetVariant() == (more ? DxUi::ButtonVariant::DropDown : DxUi::ButtonVariant::Standard) &&
++               hosted.GetText() == expectedText && hosted.GetAccessibleName() == label &&
++               hosted.GetAccessibleAutomationId() == automationId;
++    };
++    size_t completedActionOrdinal = 0u;
+     for (size_t i = 0; i < _buttons.size(); ++i)
+     {
+         const PopupButton& button = _buttons[i];
+@@ -13047,16 +13093,45 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
+             case PopupHitTest::Kind::TaskCompletedMore:
+                 if (result.found && button.hit.taskId == result.taskId)
+                 {
++                    result.completedActionRowFits = result.completedActionRowFits &&
++                        completedActionOrdinal == (result.completedIssuesVisible ? 2u : 1u);
++                    ++completedActionOrdinal;
+                     result.completedDiagnosticsMoreVisible           = true;
+                     result.completedDiagnosticsMoreButtonRectVisible = true;
+                     result.completedDiagnosticsMoreButtonRect        = button.bounds;
++                    bool labelFits = false;
++                    result.completedActionRowFits = result.completedActionRowFits && completedActionFits(i, button, labelFits);
++                    ++result.completedVisibleActionCount;
++                }
++                break;
++            case PopupHitTest::Kind::TaskIssues:
++                if (result.found && button.hit.taskId == result.taskId)
++                {
++                    result.completedActionRowFits = result.completedActionRowFits && completedActionOrdinal == 1u;
++                    ++completedActionOrdinal;
++                    result.completedIssuesVisible         = true;
++                    result.completedIssuesButtonRect      = button.bounds;
++                    result.completedIssuesHitTargetActive = hasActiveHitTarget(button);
++                    bool labelFits                        = false;
++                    const bool actionFits                 = completedActionFits(i, button, labelFits);
++                    result.completedIssuesLabelFits       = labelFits;
++                    result.completedActionRowFits         = result.completedActionRowFits && actionFits;
++                    if (i < _hostedButtons.size() && _hostedButtons[i])
++                    {
++                        result.completedIssuesHostedText = std::wstring(_hostedButtons[i]->GetText());
++                        result.completedIssuesHostedName = std::wstring(_hostedButtons[i]->GetAccessibleName());
++                    }
+                     ++result.completedVisibleActionCount;
+                 }
+                 break;
+             case PopupHitTest::Kind::TaskDismiss:
+                 if (result.found && button.hit.taskId == result.taskId)
+                 {
++                    result.completedActionRowFits = result.completedActionRowFits && completedActionOrdinal == 0u;
++                    ++completedActionOrdinal;
+                     result.completedDismissVisible = true;
++                    bool labelFits = false;
++                    result.completedActionRowFits = result.completedActionRowFits && completedActionFits(i, button, labelFits);
+                     ++result.completedVisibleActionCount;
+                 }
+                 break;
+@@ -13181,6 +13256,8 @@ LRESULT FileOperationsPopupInternal::FileOperationsPopupState::OnLayoutSnapshotR
+         }
+     }
+ 
++    result.completedActionRowFits = result.completedActionRowFits && ! result.taskHasVisibleButtonOverlap;
++
+     *snapshot = result;
+     return result.found ? 1 : 0;
+ }
+diff --git a/RedSalamander/FolderWindow.FileOperations.Popup.h b/RedSalamander/FolderWindow.FileOperations.Popup.h
+index d40dc70f4..7ad82625d 100644
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.h
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.h
+@@ -54,6 +54,7 @@ struct PopupHitTest
+         TaskToggleThroughput,
+         TaskConflictInspectSource,
+         TaskConflictInspectDestination,
++        TaskIssues,
+     };
+ 
+     Kind kind       = Kind::None;
+@@ -232,6 +233,7 @@ struct TaskSnapshot
+ 
+     bool finished              = false;
+     HRESULT resultHr           = S_OK;
++    bool hasProjectableIssues = false;
+     unsigned long warningCount = 0;
+     unsigned long errorCount   = 0;
+     std::wstring lastDiagnosticMessage;
+@@ -314,6 +316,13 @@ struct PopupLayoutDebugSnapshot
+     bool conflictMoreVisible                       = false;
+     bool completedDiagnosticsMoreVisible           = false;
+     bool completedDiagnosticsMoreButtonRectVisible = false;
++    bool completedIssuesVisible                    = false;
++    bool completedIssuesHitTargetActive            = false;
++    bool completedIssuesLabelFits                  = false;
++    bool completedActionRowFits                    = true;
++    D2D1_RECT_F completedIssuesButtonRect{};
++    std::wstring completedIssuesHostedText;
++    std::wstring completedIssuesHostedName;
+     bool completedShowLogVisible                   = false;
+     bool completedExportIssuesVisible              = false;
+     bool completedFailedItemsActionVisible         = false;
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
+index 6be8f9c1c..0b503f711 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
+@@ -666,6 +666,26 @@ struct FileOpsVisualScenario final
+     task.verificationUnavailableItemCount = 1u;
+     task.verificationCanceledItemCount    = 1u;
+     add(L"144-terminal-move-mixed-facts", task);
++    // Direct Issues follows retained projectable rows, independently of the
++    // warning/error counters. The two diagnostic cards keep destination recovery
++    // in More; the clean Delete has only Dismiss.
++    task                      = done;
++    task.warningCount         = 2u;
++    task.errorCount           = 1u;
++    task.resultHr             = HRESULT_FROM_WIN32(ERROR_PARTIAL_COPY);
++    task.resultSummary        = L"Trois problèmes nécessitent une vérification.";
++    task.hasProjectableIssues = true;
++    add(L"145-direct-issues-row", task);
++    task.hasProjectableIssues = false;
++    add(L"146-diagnostic-counters-no-issues-row", task);
++    task                        = done;
++    task.operation              = FILESYSTEM_DELETE;
++    task.currentDestinationPath.clear();
++    task.destinationFolder.clear();
++    task.destinationPluginId.clear();
++    task.destinationPluginShortId.clear();
++    task.resultSummary          = L"Suppression terminée.";
++    add(L"147-clean-no-issues", task);
+     return result;
+ }
+ 
+@@ -930,6 +950,10 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+     size_t terminalFactsWitnessCount    = 0u;
+     bool terminalFactsTransitionsFit    = true;
+     size_t terminalFactsTransitionCount = 0u;
++    bool directIssuesFit                = true;
++    size_t directIssuesWitnessCount     = 0u;
++    bool directIssuesTransitionsFit     = true;
++    size_t directIssuesTransitionCount  = 0u;
+     bool statusChipLabelsFit = true;
+     size_t statusChipWitnessCount     = 0u;
+     bool hostedProgressValuesMatch    = true;
+@@ -953,7 +977,8 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+             {
+                 // All semantics in the dark baseline; representative risk/progress/layouts in other themes.
+                 if (themeIndex != 0u && sceneIndex != 9u && sceneIndex != 30u && sceneIndex != 32u && sceneIndex != 54u &&
+-                    ! (themeIndex == 3u && scenarios[sceneIndex].name == L"144-terminal-move-mixed-facts"))
++                    ! (themeIndex == 3u && (scenarios[sceneIndex].name == L"144-terminal-move-mixed-facts" ||
++                                            scenarios[sceneIndex].name == L"145-direct-issues-row")))
+                     continue;
+                 const auto& scenario             = scenarios[sceneIndex];
+                 const bool waitingLayoutScenario = ! scenario.footerOnly && ! scenario.collapsed && ! scenario.compactDensity &&
+@@ -1259,6 +1284,33 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+                                               fits,
+                                               facts.taskTerminalFactsText));
+                     }
++                    if (scenario.name == L"145-direct-issues-row" || scenario.name == L"146-diagnostic-counters-no-issues-row" ||
++                        scenario.name == L"147-clean-no-issues")
++                    {
++                        ++directIssuesWitnessCount;
++                        PopupLayoutDebugSnapshot actions{};
++                        actions.taskId = scenario.tasks.front().taskId;
++                        const bool read = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), actions);
++                        const bool issuesExpected = scenario.name == L"145-direct-issues-row";
++                        const bool moreExpected   = scenario.name != L"147-clean-no-issues";
++                        const size_t countExpected = 1u + static_cast<size_t>(issuesExpected) + static_cast<size_t>(moreExpected);
++                        const std::wstring label  = LoadStringResource(nullptr, IDS_FILEOPS_BTN_ISSUES);
++                        const bool issuesMatch = actions.completedIssuesVisible == issuesExpected &&
++                                                 (issuesExpected ? actions.completedIssuesHitTargetActive && actions.completedIssuesLabelFits &&
++                                                                       actions.completedIssuesHostedText == label && actions.completedIssuesHostedName == label &&
++                                                                       actions.completedIssuesButtonRect.right > actions.completedIssuesButtonRect.left &&
++                                                                       actions.completedIssuesButtonRect.bottom > actions.completedIssuesButtonRect.top
++                                                                 : actions.completedIssuesHostedText.empty() && actions.completedIssuesHostedName.empty());
++                        const bool fits = read && ! label.empty() && issuesMatch && actions.completedDismissVisible &&
++                                          actions.completedDiagnosticsMoreVisible == moreExpected &&
++                                          actions.completedVisibleActionCount == countExpected && actions.completedActionRowFits &&
++                                          ! actions.taskHasVisibleButtonOverlap && ! actions.completedFailedItemsActionVisible;
++                        directIssuesFit = directIssuesFit && fits;
++                        AppendLog(std::format(L"DirectIssuesActionFit: {} dpi={} width={} theme={} issues={} more={} count={} rowFits={} fit={}",
++                                              scenario.name, dpi, widthDip, themeNames[themeIndex], actions.completedIssuesVisible,
++                                              actions.completedDiagnosticsMoreVisible, actions.completedVisibleActionCount,
++                                              actions.completedActionRowFits, fits));
++                    }
+                     if (scenario.name == L"31-completed-group-expanded" || scenario.name == L"32-completed-group-collapsed" ||
+                         scenario.name == L"69-all-items-skipped")
+                     {
+@@ -1615,6 +1667,57 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+                         current.publishedItemCount  = 9u;
+                         static_cast<void>(inspect(L"original-restored", true, originalText, false, false));
+                     }
++                    if (themeIndex == 0u && widthDip == 480 && scenario.name == L"145-direct-issues-row")
++                    {
++                        // Mutate one retained presentation snapshot on one HWND. The
++                        // counter-only stage must retain recovery More without an
++                        // Issues button; a zero-counter row must still show Issues.
++                        auto& current = popupState->debugVisualScenario.value().front();
++                        const std::wstring issuesLabel = LoadStringResource(nullptr, IDS_FILEOPS_BTN_ISSUES);
++                        const auto inspectActions = [&](std::wstring_view stage, bool issues, bool more, size_t count, bool collapsed, bool footerOnly)
++                        {
++                            for (unsigned frame = 0u; frame < 2u; ++frame)
++                                RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
++                            PopupLayoutDebugSnapshot observed{};
++                            observed.taskId = current.taskId;
++                            const bool read = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), observed);
++                            const bool issueContent = observed.completedIssuesVisible == issues &&
++                                (issues ? observed.completedIssuesHitTargetActive && observed.completedIssuesLabelFits &&
++                                          observed.completedIssuesHostedText == issuesLabel && observed.completedIssuesHostedName == issuesLabel
++                                        : observed.completedIssuesHostedText.empty() && observed.completedIssuesHostedName.empty());
++                            const bool fits = read && observed.taskCollapsed == collapsed && observed.footerOnly == footerOnly &&
++                                observed.completedDismissVisible == (count != 0u) && observed.completedDiagnosticsMoreVisible == more &&
++                                observed.completedVisibleActionCount == count && observed.completedActionRowFits &&
++                                ! observed.taskHasVisibleButtonOverlap && ! observed.completedFailedItemsActionVisible && issueContent;
++                            directIssuesTransitionsFit = directIssuesTransitionsFit && fits;
++                            ++directIssuesTransitionCount;
++                            AppendLog(std::format(L"DirectIssuesTransition: dpi={} width={} stage={} issues={} more={} count={} collapsed={} footerOnly={} fit={}",
++                                                  dpi, widthDip, stage, observed.completedIssuesVisible,
++                                                  observed.completedDiagnosticsMoreVisible, observed.completedVisibleActionCount,
++                                                  observed.taskCollapsed, observed.footerOnly, fits));
++                        };
++                        current.hasProjectableIssues = false;
++                        inspectActions(L"row-removed-counters-retained", false, true, 2u, false, false);
++                        current.hasProjectableIssues = true;
++                        inspectActions(L"row-arrived", true, true, 3u, false, false);
++                        current.warningCount = 0u;
++                        current.errorCount   = 0u;
++                        inspectActions(L"row-without-counters", true, true, 3u, false, false);
++                        static_cast<void>(DebugInvokeFileOperationsPopup(popup.get(), {PopupHitTest::Kind::TaskToggleCollapse, current.taskId, 0u}));
++                        inspectActions(L"collapsed", false, false, 0u, true, false);
++                        static_cast<void>(DebugInvokeFileOperationsPopup(popup.get(), {PopupHitTest::Kind::TaskToggleCollapse, current.taskId, 0u}));
++                        inspectActions(L"expanded", true, true, 3u, false, false);
++                        operations->SetPopupFooterOnly(true);
++                        inspectActions(L"footer-hidden", false, false, 0u, false, true);
++                        operations->SetPopupFooterOnly(false);
++                        inspectActions(L"footer-restored", true, true, 3u, false, false);
++                        current.hasProjectableIssues = false;
++                        inspectActions(L"row-removed-zero-counters", false, true, 2u, false, false);
++                        current.hasProjectableIssues = true;
++                        current.warningCount         = scenario.tasks.front().warningCount;
++                        current.errorCount           = scenario.tasks.front().errorCount;
++                        inspectActions(L"original-restored", true, true, 3u, false, false);
++                    }
+                     if (scenario.menu != PopupHitTest::Kind::None)
+                     {
+                         // Menu dispatch follows the window-procedure convention of returning zero;
+@@ -1796,6 +1899,12 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+     if (! terminalFactsTransitionsFit || terminalFactsTransitionCount != 12u * monitors.size())
+         Fail(L"Terminal facts must update and retire on one HWND across count, collapse, footer, settings-change, and empty-summary transitions; see "
+              L"TerminalFactsTransition diagnostics.");
++    if (! directIssuesFit || directIssuesWitnessCount != 8u * monitors.size())
++        Fail(L"Direct Issues must follow actual projectable rows, while counter-only diagnostics retain More and clean Delete retains Dismiss; all hosted "
++             L"terminal action labels, hit targets, and bounds must fit at both widths and tested themes.");
++    if (! directIssuesTransitionsFit || directIssuesTransitionCount != 9u * monitors.size())
++        Fail(L"Direct Issues must arrive and retire on one popup HWND independently of warning counters and hide for collapsed/footer-only views; see "
++             L"DirectIssuesTransition diagnostics.");
+     if (! terminalPresentationFits)
+         Fail(L"Completed-group actions and badges, and full expanded terminal results, must remain readable without clipping.");
+     if (! completedSemanticsFit || doneHeadingWitnessCount != 4u * monitors.size() || groupBadgeWitnessCount != 2u * monitors.size())
+@@ -1812,6 +1921,8 @@ void CALLBACK CaptureFileOpsGalleryPrompt(HWND, UINT, UINT_PTR timerId, DWORD) n
+            hostedProgressWitnessCount == 9u * monitors.size() && completedSemanticsFit && doneHeadingWitnessCount == 4u * monitors.size() &&
+            groupBadgeWitnessCount == 2u * monitors.size() && terminalPresentationFits && terminalFactsFit &&
+            terminalFactsWitnessCount == 4u * monitors.size() && terminalFactsTransitionsFit && terminalFactsTransitionCount == 12u * monitors.size() &&
++           directIssuesFit && directIssuesWitnessCount == 8u * monitors.size() && directIssuesTransitionsFit &&
++           directIssuesTransitionCount == 9u * monitors.size() &&
+            speedLimitLabelsFit && waitingCardsFit && waitingTransitionsFit && supplemental && manifest.good() && pathLabelsFit && deletionPresentationFits &&
+            footerSummariesFit && destinationMenusFit && abbreviatedPathsFit;
+ }

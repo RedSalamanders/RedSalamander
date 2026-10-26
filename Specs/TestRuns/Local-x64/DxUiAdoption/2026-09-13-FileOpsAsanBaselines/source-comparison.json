@@ -1,0 +1,79 @@
+{
+  "casePath": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp",
+  "cases": [
+    {
+      "case": "FileOps_ProviderCapabilityMatrix",
+      "sources": [
+        {
+          "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+          "caseSha256": "c8f4876eb59cb63c302887fdad95a68aa3c72facd8854eaebc5fb7069dfc01ca",
+          "whitespaceNormalizedCaseSha256": "c38596462e46166c1f467d5e5f05febaaa6bd2ea07db36a3ef4f74eaca37b42e",
+          "clangFormat22CaseSha256": "e569c0ecb83f5668adff5d39fcfe8e9cd1e469417624bd187bc418b837e444a1"
+        },
+        {
+          "source": "a20f6680dd5f82835a549f4c231e5666e4047eda",
+          "caseSha256": "365f36f7daf0a77a85f01629f0f77b3105c93c44ae92efbca32a64c4d537cd13",
+          "whitespaceNormalizedCaseSha256": "6907ab73fa0c303dae8706acc5e604eb70cd05528d5bc9b5608b0c657db6787e",
+          "clangFormat22CaseSha256": "e569c0ecb83f5668adff5d39fcfe8e9cd1e469417624bd187bc418b837e444a1"
+        }
+      ],
+      "sameAfterClangFormat22": true
+    },
+    {
+      "case": "R4A19_DiscoveryProviderControls",
+      "sources": [
+        {
+          "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+          "caseSha256": "3a1f4292fa5c906e8b40002f3429ed2cc2c4e9b025dcfbb96d8a655a364b17a2",
+          "whitespaceNormalizedCaseSha256": "53f63a14f61122f126e5bcb2020373d59b09b0935603269562859e4af70a52c7"
+        },
+        {
+          "source": "a20f6680dd5f82835a549f4c231e5666e4047eda",
+          "caseSha256": "ff15772b37872e48b9717047063db9f9d69cc3e71417a9b89f82ce5e269f7646",
+          "whitespaceNormalizedCaseSha256": "53f63a14f61122f126e5bcb2020373d59b09b0935603269562859e4af70a52c7"
+        }
+      ]
+    },
+    {
+      "case": "C0_CurlCopyTraversalTruth",
+      "sources": [
+        {
+          "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+          "caseSha256": "6597d185f2d37ccab4e977297b5b5e3a80e872dc7f473a0f247d8e958abdb407",
+          "whitespaceNormalizedCaseSha256": "06353138512c0e4dc5ce44beae24e6dd78a7a959e13e7e4cbbd15bfc9d134049"
+        },
+        {
+          "source": "a20f6680dd5f82835a549f4c231e5666e4047eda",
+          "caseSha256": "6597d185f2d37ccab4e977297b5b5e3a80e872dc7f473a0f247d8e958abdb407",
+          "whitespaceNormalizedCaseSha256": "06353138512c0e4dc5ce44beae24e6dd78a7a959e13e7e4cbbd15bfc9d134049"
+        }
+      ]
+    },
+    {
+      "case": "R4A02_DeleteOverCopySourceWarnsAndQueues",
+      "sources": [
+        {
+          "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+          "caseSha256": "cfcc8c6ddb6abfa4bec44305c10a69bb9f6242a5abb29b1fa88b78f274f431d5",
+          "whitespaceNormalizedCaseSha256": "c2ddbbc02b197d83c26666fbe6778ff06be9966a378613b78fe5c10762aeae18"
+        },
+        {
+          "source": "a20f6680dd5f82835a549f4c231e5666e4047eda",
+          "caseSha256": "cfcc8c6ddb6abfa4bec44305c10a69bb9f6242a5abb29b1fa88b78f274f431d5",
+          "whitespaceNormalizedCaseSha256": "c2ddbbc02b197d83c26666fbe6778ff06be9966a378613b78fe5c10762aeae18"
+        }
+      ]
+    }
+  ],
+  "curlPath": "Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp",
+  "curlSources": [
+    {
+      "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+      "fileSha256": "cc759f31c5ae052c60011e3ae4910c0ec7816f321b75f524ba10e1d446e952ad"
+    },
+    {
+      "source": "a20f6680dd5f82835a549f4c231e5666e4047eda",
+      "fileSha256": "cc759f31c5ae052c60011e3ae4910c0ec7816f321b75f524ba10e1d446e952ad"
+    }
+  ]
+}

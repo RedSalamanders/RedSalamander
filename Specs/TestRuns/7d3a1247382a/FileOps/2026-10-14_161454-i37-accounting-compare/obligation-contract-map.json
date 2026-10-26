@@ -1,0 +1,160 @@
+{
+  "schema": 1,
+  "kind": "derived-advisory-obligation-map",
+  "canonicalReuseAuthority": false,
+  "originRunId": "20261014T152945Z-38708-5b51627373364b24bf87799e4827dd51",
+  "originPlanFileSha256": "8395D4B82F32BFDDCC1BE2763041FC6976ED6A21DD575E4C7FAB933959FB458F",
+  "originPlanDigest": "35e0bfcf18799fb87f5673b83eccf5cb2526ce955d1dbc4270631f38ec899e6d",
+  "originCoverageDigest": "0745f19049032efee0a1bc62ed31b753280b21ad31cea2a7a0351cd96b1141d8",
+  "originReceipt": "abbd693d6b993271b352381c7c6f30c67c3a2a6ddc417c36b5e7b85f28224d0e",
+  "originSnapshot": "180bb20cdea4370b1c3376df556a6c1000e51c6a6e58386afeb63c4854d3a152",
+  "frozenSourceManifestSha256": "F74EEEB958AD7EF927066ABE495828FE17D8FD34FCA7B2D45F2A9803F92E94F6",
+  "originalEntryFingerprintsSha256": "49DD40B420F50B1D7F31D9BF219E5E3D1FF93CDEA89305FFFBD1238431226ABC",
+  "excludedWriter": {
+    "mustRemainFailed": true,
+    "id": "tooling.pester-build-toolchain",
+    "portableDigest": "8f58a83533e317875c5c0558d5d4f67210965f247d3c58b6a7978c2f9ce1e1c7",
+    "outcome": "failed/interrupted; no canonical promoted result"
+  },
+  "continuationContracts": [
+    {
+      "id": "standalone.product-ui",
+      "continuationSuite": "PR",
+      "expectedPortableDigest": "51f533803e95ee79c89a9d237e0404f7cc35ac45f7b3f46f71ac35a914cce97c",
+      "continuationPortableDigest": "51f533803e95ee79c89a9d237e0404f7cc35ac45f7b3f46f71ac35a914cce97c",
+      "exactlyEqual": true
+    },
+    {
+      "id": "standalone.filesystem-curl",
+      "continuationSuite": "PR",
+      "expectedPortableDigest": "1905fb73e2ec00eba93428599e44e0cd31bd4f3d9cca3ef5b1aeb9036fd560e5",
+      "continuationPortableDigest": "1905fb73e2ec00eba93428599e44e0cd31bd4f3d9cca3ef5b1aeb9036fd560e5",
+      "exactlyEqual": true
+    },
+    {
+      "id": "viewer-pe.noninteractive",
+      "continuationSuite": "PR",
+      "expectedPortableDigest": "950d7298a58475cd0286ef1d118626c066fdb2566e739d1b6657aebb6852b999",
+      "continuationPortableDigest": "950d7298a58475cd0286ef1d118626c066fdb2566e739d1b6657aebb6852b999",
+      "exactlyEqual": true
+    },
+    {
+      "id": "viewer-sqlite.noninteractive",
+      "continuationSuite": "PR",
+      "expectedPortableDigest": "f07b5b133a9028371b0444026f186bb1104560e165df167e8c24aea8fd97484c",
+      "continuationPortableDigest": "f07b5b133a9028371b0444026f186bb1104560e165df167e8c24aea8fd97484c",
+      "exactlyEqual": true
+    },
+    {
+      "id": "standalone.monitor",
+      "continuationSuite": "PR",
+      "expectedPortableDigest": "1942f9bcf37fd38a22e6f1fd96853dc3766b160a3d2666a938cadd242e6c6b5f",
+      "continuationPortableDigest": "1942f9bcf37fd38a22e6f1fd96853dc3766b160a3d2666a938cadd242e6c6b5f",
+      "exactlyEqual": true
+    },
+    {
+      "id": "standalone.localization",
+      "continuationSuite": "PR",
+      "expectedPortableDigest": "eb2b4a4e78125c240a67483f687e9946ac6efb1b7c351ed73007e5467f0bcead",
+      "continuationPortableDigest": "eb2b4a4e78125c240a67483f687e9946ac6efb1b7c351ed73007e5467f0bcead",
+      "exactlyEqual": true
+    },
+    {
+      "id": "standalone.red-configure",
+      "continuationSuite": "PR",
+      "expectedPortableDigest": "78e9aa5d859d9056a2c71fcd9051728df028f9eeaafd0b54657fdc01415d8601",
+      "continuationPortableDigest": "78e9aa5d859d9056a2c71fcd9051728df028f9eeaafd0b54657fdc01415d8601",
+      "exactlyEqual": true
+    },
+    {
+      "id": "standalone.plugin-contract",
+      "continuationSuite": "PR",
+      "expectedPortableDigest": "84e721c66c18f64177e2c83723acd1cbbb79201017e92156650d92f25e86f029",
+      "continuationPortableDigest": "84e721c66c18f64177e2c83723acd1cbbb79201017e92156650d92f25e86f029",
+      "exactlyEqual": true
+    },
+    {
+      "id": "standalone.settings-schema",
+      "continuationSuite": "PR",
+      "expectedPortableDigest": "d2be6784d28edd86b8e2746d3fd26cc38196c37d53bc39099a67dd5e30e730d1",
+      "continuationPortableDigest": "d2be6784d28edd86b8e2746d3fd26cc38196c37d53bc39099a67dd5e30e730d1",
+      "exactlyEqual": true
+    },
+    {
+      "id": "standalone.crash-handling",
+      "continuationSuite": "PR",
+      "expectedPortableDigest": "f02445a633b79fe8bd3212c362edf17860c8284bc7a4b3f8c5ab4569c73f161c",
+      "continuationPortableDigest": "f02445a633b79fe8bd3212c362edf17860c8284bc7a4b3f8c5ab4569c73f161c",
+      "exactlyEqual": true
+    },
+    {
+      "id": "perf.performance-tests2",
+      "continuationSuite": "PR",
+      "expectedPortableDigest": "e3cffa47b2d60e4b557716acce0748d067669a106a8a23c4296bf8ebd27f4fbf",
+      "continuationPortableDigest": "e3cffa47b2d60e4b557716acce0748d067669a106a8a23c4296bf8ebd27f4fbf",
+      "exactlyEqual": true
+    },
+    {
+      "id": "tooling.pester",
+      "continuationSuite": "PR",
+      "expectedPortableDigest": "42ce8e5ad3ae1034115f99c99cfbd75ae708bafc56723ad9d08505dd0ed43de8",
+      "continuationPortableDigest": "42ce8e5ad3ae1034115f99c99cfbd75ae708bafc56723ad9d08505dd0ed43de8",
+      "exactlyEqual": true
+    },
+    {
+      "id": "tooling.vcpkg-merge-synthetic",
+      "continuationSuite": "PR",
+      "expectedPortableDigest": "ce27731939450e180b54c7c075d96e0420b68583a810200c8f70a8615dc9ff49",
+      "continuationPortableDigest": "ce27731939450e180b54c7c075d96e0420b68583a810200c8f70a8615dc9ff49",
+      "exactlyEqual": true
+    },
+    {
+      "id": "selftest.compare-directories",
+      "continuationSuite": "Compare",
+      "expectedPortableDigest": "ed187e6c7d003bfd3ecf9c17915eebd4c2c29fb0ed6cabbf43ff824c1d10bd29",
+      "continuationPortableDigest": "ed187e6c7d003bfd3ecf9c17915eebd4c2c29fb0ed6cabbf43ff824c1d10bd29",
+      "exactlyEqual": true
+    }
+  ],
+  "continuationCampaigns": [
+    {
+      "suite": "PR",
+      "runId": "20261014T160135Z-20208-120c1673086c4b3abe4a4f732a7551a1",
+      "planDigest": "a4a25b0e64608c8a0d5ed92ffb9470ee5f87b771d77779793f6f1fbf796c6c37",
+      "reportPath": "D:\\RedSalamander.Perf\\evidence\\folder-copy-progress-final-accounting-20261014-01\\PR\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "reportSha256": "0D947C3206D25D5AEAB2034390D26C769D17B32503DB9090ACE593E50D7DC7AA",
+      "readerObligations": 13,
+      "passedObligations": 12,
+      "failedObligations": 1,
+      "exitCode": 1,
+      "caseCounts": {
+        "passed": 942,
+        "failed": 6,
+        "skipped": 1,
+        "total": 949
+      },
+      "promotionAuthority": "Only twelve original canonical PASSED promotions; failed Pester stays FAILED/incomplete. SOURCE_INPUT_CHANGED in aggregate is original planning reason, not source drift."
+    },
+    {
+      "suite": "Compare",
+      "runId": "20261014T161454Z-37216-7ca67aa53530419cbda50bcef20f4872",
+      "planDigest": "e80004ba1e046836c22965ec40f9eb9eedc33066be2816fce96916b326b15099",
+      "reportPath": "D:\\RedSalamander.Perf\\evidence\\folder-copy-progress-final-accounting-20261014-01\\Compare\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "reportSha256": "6A24472EA5F1F70B7FED41E03795EBEB3BA71BE731843A9784CBFD72391C21D3",
+      "readerObligations": 1,
+      "passedObligations": 1,
+      "failedObligations": 0,
+      "exitCode": 0,
+      "caseCounts": {
+        "passed": 245,
+        "failed": 0,
+        "skipped": 30,
+        "total": 275
+      },
+      "promotionAuthority": "Existing legacy SuiteCompare report and native results; no durable Compare promotion or Full Resume invented."
+    }
+  ],
+  "recoveryReceipt": "3fcbd99abe7790ab0419107520d85e5df8ea726c18ec89ac3e69323d65234add",
+  "limits": "Actual local Fresh coverage only; no Full Resume, CI delegation, cache reuse, promotion or repository-green authority.",
+  "accountingConclusion": "All fifteen mapped obligations addressed through original writer attempt and fourteen exact local reader contracts; thirteen reader obligations pass, tooling Pester fails, original writer remains failed/interrupted. The actual selected Fresh PR v2 repository_verdict is FAILED. Full repository coverage is unperformed/not evaluated; five foreground families and ARM64 qualification remain pending/unperformed. No Full green claim."
+}

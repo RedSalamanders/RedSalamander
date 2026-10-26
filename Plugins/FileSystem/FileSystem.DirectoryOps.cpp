@@ -1,3 +1,4 @@
+#include "DirectoryRecordCursor.h"
 #include "FileSystem.Internal.h"
 #include "PathUtils.h"
 
@@ -1666,48 +1667,15 @@ HRESULT FileSystem::PopulateBufferHandle(FilesInformation& info, unsigned long& 
         }
 
         const size_t sourceOffset = info._enumerationBufferOffset;
-        if ((sourceOffset % kFileInfoEntryAlignment) != 0u)
-        {
-            return HRESULT_FROM_WIN32(ERROR_BAD_LENGTH);
-        }
-        if (info._enumerationBufferBytesValid <= sourceOffset || info._enumerationBufferBytesValid - sourceOffset < offsetof(FILE_FULL_DIR_INFO, FileName))
-        {
-            return HRESULT_FROM_WIN32(ERROR_BAD_LENGTH);
-        }
-
-        const auto* source = reinterpret_cast<const FILE_FULL_DIR_INFO*>(info._enumerationBuffer.data() + sourceOffset);
-
-        size_t nextOffset = info._enumerationBufferBytesValid;
-        if (source->NextEntryOffset != 0)
-        {
-            if ((static_cast<size_t>(source->NextEntryOffset) % kFileInfoEntryAlignment) != 0u)
-            {
-                return HRESULT_FROM_WIN32(ERROR_BAD_LENGTH);
-            }
-
-            if (static_cast<size_t>(source->NextEntryOffset) > info._enumerationBufferBytesValid - sourceOffset)
-            {
-                return HRESULT_FROM_WIN32(ERROR_BAD_LENGTH);
-            }
-
-            nextOffset = sourceOffset + static_cast<size_t>(source->NextEntryOffset);
-        }
-
+        Common::DirectoryRecords::RecordView<FILE_FULL_DIR_INFO> record{};
+        const HRESULT parseHr = Common::DirectoryRecords::Read<FILE_FULL_DIR_INFO>(
+            std::span<const std::byte>(info._enumerationBuffer.data(), info._enumerationBufferBytesValid), sourceOffset, record);
+        if (FAILED(parseHr))
+            return parseHr;
+        const auto* source            = record.information;
+        const size_t nextOffset       = record.nextOffset != 0u ? record.nextOffset : info._enumerationBufferBytesValid;
         const unsigned long nameBytes = source->FileNameLength;
-        if ((nameBytes % static_cast<unsigned long>(sizeof(wchar_t))) != 0u)
-        {
-            info._enumerationBufferOffset = nextOffset;
-            continue;
-        }
-
-        const size_t nameChars  = static_cast<size_t>(nameBytes / sizeof(wchar_t));
-        const size_t nameOffset = offsetof(FILE_FULL_DIR_INFO, FileName);
-        if (nameOffset + static_cast<size_t>(nameBytes) > info._enumerationBufferBytesValid - sourceOffset)
-        {
-            return HRESULT_FROM_WIN32(ERROR_BAD_LENGTH);
-        }
-
-        const std::wstring_view name(source->FileName, nameChars);
+        const std::wstring_view name  = record.name;
         if (IsDotOrDotDot(name))
         {
             info._enumerationBufferOffset = nextOffset;
@@ -1740,7 +1708,7 @@ HRESULT FileSystem::PopulateBufferHandle(FilesInformation& info, unsigned long& 
         {
             std::memcpy(entry->FileName, source->FileName, static_cast<size_t>(nameBytes));
         }
-        entry->FileName[nameChars] = L'\0';
+        entry->FileName[name.size()] = L'\0';
 
         bytesWritten += static_cast<unsigned long>(requiredSize);
         ++entryCount;

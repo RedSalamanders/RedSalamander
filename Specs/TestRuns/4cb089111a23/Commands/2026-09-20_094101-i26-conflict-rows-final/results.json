@@ -1,0 +1,176 @@
+{
+    "run_started_utc": "2026-09-20T07:41:04.988Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\i26-conflict-rows-final\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 45196,
+    "passed": 27,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_progress_contracts",
+            "status": "passed",
+            "duration_ms": 2,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "passed",
+            "duration_ms": 5789,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_prompt_metadata_and_actions",
+            "status": "passed",
+            "duration_ms": 199,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 2057,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "passed",
+            "duration_ms": 197,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_failure_surface_on_host_attach_failure",
+            "status": "passed",
+            "duration_ms": 453,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_failure_surface_on_d2d_target_failure",
+            "status": "passed",
+            "duration_ms": 244,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_presentation_settings_and_taskbar",
+            "status": "passed",
+            "duration_ms": 2659,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1032,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_popup_progress_contracts",
+            "status": "passed",
+            "duration_ms": 1,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "passed",
+            "duration_ms": 5778,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_prompt_metadata_and_actions",
+            "status": "passed",
+            "duration_ms": 205,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 2079,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "passed",
+            "duration_ms": 223,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_popup_failure_surface_on_host_attach_failure",
+            "status": "passed",
+            "duration_ms": 464,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_popup_failure_surface_on_d2d_target_failure",
+            "status": "passed",
+            "duration_ms": 244,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_popup_presentation_settings_and_taskbar",
+            "status": "passed",
+            "duration_ms": 2641,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1023,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_popup_progress_contracts",
+            "status": "passed",
+            "duration_ms": 1,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "passed",
+            "duration_ms": 5772,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_prompt_metadata_and_actions",
+            "status": "passed",
+            "duration_ms": 210,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 2048,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "passed",
+            "duration_ms": 200,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_popup_failure_surface_on_host_attach_failure",
+            "status": "passed",
+            "duration_ms": 512,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_popup_failure_surface_on_d2d_target_failure",
+            "status": "passed",
+            "duration_ms": 261,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_popup_presentation_settings_and_taskbar",
+            "status": "passed",
+            "duration_ms": 2637,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 982,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

@@ -170,7 +170,7 @@ Host-level extra keys:
   profile's `extra`) sends unsigned requests for public buckets and the loopback fixture. S3 Table
   stays read-only and `uncontained` (no mutation is admitted, so no containment claim is needed).
   Witnesses: the S3 debug self-test `RunS3StalledRequestCancelSelfTests` against the in-tree fake
-  S3 endpoint (`FileSystemS3.SelfTest.FakeS3.cpp`, a loopback path-style HTTP/1.1 S3 with objects,
+  S3 endpoint (`FileSystemS3.Tests.FakeS3.cpp`, a loopback path-style HTTP/1.1 S3 with objects,
   `list-type=2`, server-side copy, multipart, conditional headers and ranges) proves that a
   canceled request whose listing body is still arriving returns `ERROR_CANCELLED` within a few
   body callbacks, that a request the server never answers returns within the declared bound, and
@@ -314,7 +314,8 @@ tests MUST inspect the SDK-produced header bytes for ordinary, space, `%`, `+`, 
 request-object getters alone are insufficient. The deterministic transfer graph must additionally prove reserved and
 versioned keys preserve bytes and select direct single-request and multipart routes with no relay.
 The manifest floor and exact override therefore remain `aws-sdk-cpp` 1.11.880
-until the next audit is performed. The 1.11.840 -> 1.11.880 move was audited against the generated
+until the next audit is performed; Dependabot ignores `aws-sdk-cpp` and `aws-crt-cpp`, and an offline pin contract
+keeps the floor at or below the override ([Build_Toolchain.md](../Build/Build_Toolchain.md)). The 1.11.840 -> 1.11.880 move was audited against the generated
 `aws-cpp-sdk-s3-crt` sources: `CopyObjectRequest` and `UploadPartCopyRequest` each still emit exactly one
 `x-amz-copy-source` header through `URI::URLEncodePath`, and that helper is byte-identical between the two
 releases, so provider-side ownership is unchanged. A floor alone is not a pin: a newer baseline may

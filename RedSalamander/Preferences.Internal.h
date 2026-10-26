@@ -61,10 +61,10 @@ struct PreferencesDialogState;
 struct PreferencesTypographyContext
 {
     UINT dpi = USER_DEFAULT_SCREEN_DPI;
-    DxUi::Typography::TypographySpec body;
-    DxUi::Typography::TypographySpec caption;
-    DxUi::Typography::TypographySpec title;
-    DxUi::Typography::TypographySpec strong;
+    DxUi::Typography::Spec body;
+    DxUi::Typography::Spec caption;
+    DxUi::Typography::Spec title;
+    DxUi::Typography::Spec strong;
 };
 
 [[nodiscard]] bool PrefsKeyboardCaptureWantsAllKeys(const PreferencesDialogState* state) noexcept;
@@ -262,6 +262,7 @@ struct PrefsPluginConfigFieldControls
     std::wstring retainedOptionValue;
     std::vector<std::wstring> retainedSelectionValues;
     DxUi::Label* dxLabelControl         = nullptr;
+    DxUi::Label* dxSectionControl       = nullptr;
     DxUi::Label* dxDescriptionControl   = nullptr;
     DxUi::TextField* dxEditControl      = nullptr;
     DxUi::Button* dxBrowseButtonControl = nullptr;
@@ -535,10 +536,10 @@ namespace PrefsUi
 using Win32Text::GetWindowTextString;
 [[nodiscard]] PreferencesTypographyContext MakeTypographyContext(HWND hwnd) noexcept;
 [[nodiscard]] int MeasureSingleLineTextWidthPx(const PreferencesTypographyContext& typography,
-                                               const DxUi::Typography::TypographySpec& spec,
+                                               const DxUi::Typography::Spec& spec,
                                                std::wstring_view text) noexcept;
 [[nodiscard]] int MeasureWrappedTextHeightPx(const PreferencesTypographyContext& typography,
-                                             const DxUi::Typography::TypographySpec& spec,
+                                             const DxUi::Typography::Spec& spec,
                                              int width,
                                              std::wstring_view text) noexcept;
 [[nodiscard]] std::wstring_view TrimWhitespace(std::wstring_view text) noexcept;

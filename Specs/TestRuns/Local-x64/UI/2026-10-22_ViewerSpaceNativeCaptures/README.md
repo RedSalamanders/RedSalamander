@@ -1,0 +1,3 @@
+# ViewerSpace published native captures
+
+Thirteen unchanged native PNGs produced by the registered no-activation lifecycle case in canonical run `20261022T164835Z-53288-f0a45ee600ba4b96b45c2a404f9a00ed`. The broader affected run failed; the ViewerPE noninteractive entry passed. The preserved receipt and native provenance identify the exact source/binary/fixture. These embedded client frames omit operating-system chrome and main menus. All displayed identifying data is invented; no image edits or redaction labels. All thirteen complete embedded client frames were visually reviewed before publication.

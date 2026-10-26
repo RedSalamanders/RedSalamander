@@ -28,11 +28,8 @@ struct FindFilesPaneContext
     std::filesystem::path rootPluginPath;
 };
 
-[[nodiscard]] bool ShowFindFilesWindow(HWND owner,
-                                       FolderWindow& applicationFolderWindow,
-                                       Common::Settings::Settings& settings,
-                                       const AppTheme& theme,
-                                       FindFilesPaneContext context) noexcept;
+[[nodiscard]] bool ShowFindFilesWindow(
+    HWND owner, FolderWindow& applicationFolderWindow, Common::Settings::Settings& settings, const AppTheme& theme, FindFilesPaneContext context) noexcept;
 
 void UpdateFindFilesWindowsTheme(const AppTheme& theme) noexcept;
 
@@ -40,6 +37,8 @@ void UpdateFindFilesWindowsTheme(const AppTheme& theme) noexcept;
 [[nodiscard]] bool IsFindFilesWindowHandle(HWND hwnd) noexcept;
 
 #ifdef ENABLE_TESTS
+// Presentation-only fixture; uses fixed invented paths and never starts provider I/O.
+[[nodiscard]] bool DebugSeedFindFilesDocumentationScenario(bool emptyResults) noexcept;
 [[nodiscard]] size_t DebugGetFindFilesWindowCount() noexcept;
 [[nodiscard]] std::wstring DebugMakeFindFilesResultKeyForTests(std::wstring_view pluginId,
                                                                std::wstring_view instanceContext,
@@ -50,8 +49,9 @@ struct FindFilesDebugSourceOutcome final
     size_t sourceIndex = 0;
     bool removed       = false;
 };
-[[nodiscard]] std::vector<size_t> DebugSelectKnownCompletedFindFilesSourceIndicesForTests(
-    size_t sourceCount, std::span<const FindFilesDebugSourceOutcome> outcomes, HRESULT overallStatus);
+[[nodiscard]] std::vector<size_t> DebugSelectKnownCompletedFindFilesSourceIndicesForTests(size_t sourceCount,
+                                                                                          std::span<const FindFilesDebugSourceOutcome> outcomes,
+                                                                                          HRESULT overallStatus);
 
 enum class FindFilesDebugOperation : uint8_t
 {
@@ -100,6 +100,9 @@ enum class FindFilesDebugOpenDisposition : uint8_t
 struct FindFilesDebugSnapshot
 {
     bool searchActive                                      = false;
+    bool uiSettled                                         = false;
+    bool resultsRefreshPending                             = false;
+    bool resultsRefreshTimerArmed                          = false;
     bool usesDxUiHost                                      = false;
     bool findButtonEnabled                                 = false;
     bool findButtonPressed                                 = false;

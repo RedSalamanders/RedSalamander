@@ -115,7 +115,7 @@ function Get-RSBuildArtifactRole {
     param([Parameter(Mandatory = $true)][IO.FileInfo]$File)
 
     $extension = $File.Extension.ToLowerInvariant()
-    if ($extension -eq '.exe' -and $File.BaseName -in @('RedLauncher', 'RedSalamander', 'RedSalamanderMonitor')) { return 'launchable' }
+    if ($extension -eq '.exe' -and $File.BaseName -in @('RedLauncher', 'RedSalamander')) { return 'launchable' }
     if ($extension -eq '.exe') { return 'test' }
     if ($extension -eq '.pdb') { return 'symbols' }
     if ($extension -in @('.msix', '.msi', '.zip')) { return 'package' }
@@ -525,7 +525,7 @@ function Get-RSBuildArtifactRecords {
         $extraByProject['RedLauncher'] += Resolve-RSDeclaredBuildOutputPath -BuildOutputDir $output `
             -LiteralPath (Join-Path $output 'red.exe') -Description 'RedLauncher command alias'
     }
-    foreach ($appProject in @('RedSalamander', 'RedSalamanderMonitor')) {
+    foreach ($appProject in @('RedSalamander')) {
         if (-not $extraByProject.ContainsKey($appProject)) { continue }
         $extraByProject[$appProject] += Resolve-RSDeclaredBuildOutputPath -BuildOutputDir $output `
             -LiteralPath (Join-Path $output 'SettingsStore.schema.json') -Description "$appProject settings schema"
@@ -747,13 +747,17 @@ function Get-RSBuildIdentityBundle {
     $runtimeFiles = @('RuntimeDependencies.props', 'Directory.Build.targets') + @($sourcePaths | Where-Object {
             $_.StartsWith('Specs/Themes/', [StringComparison]::OrdinalIgnoreCase)
         })
+    $vcpkgInputs = @('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-tool.json', 'vcpkg-install.ps1')
+    if ($Platform -eq 'ARM64') {
+        $vcpkgInputs += @($sourcePaths | Where-Object { $_.StartsWith('Build/vcpkg-ports/', [StringComparison]::OrdinalIgnoreCase) })
+    }
     [pscustomobject]@{
         RepoIdentity = Get-RSCanonicalJsonDigest -InputObject ([ordered]@{ physical_root = $root.ToLowerInvariant() })
         ToolchainIdentityRecord = $toolchain.Record
         ToolchainIdentityDigest = $toolchain.Digest
-        VcpkgIdentityDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath @('vcpkg.json', 'vcpkg-configuration.json', 'vcpkg-tool.json')
+        VcpkgIdentityDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath $vcpkgInputs
         GhosttyRuntimeIdentity = Get-RSGhosttyRuntimeIdentityDigest -RepoRoot $root
-        ProjectGraphDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath @($projectFiles + @('Dependencies/DxUi.lock.json','Tools/Modules/Build/DxUiDependency.psm1'))
+        ProjectGraphDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath @($projectFiles + @('Dependencies/DxUi.lock.json','Tools/Modules/Build/DxUiDependency.psm1','Dependencies/RedMonitor.lock.json','Tools/Verify-RedMonitorClient.ps1','ThirdParty/RedMonitor/include/RedMonitor/Client.h','ThirdParty/RedMonitor/LICENSE.txt'))
         RuntimeDependencyDigest = Get-RSFileSetDigest -RepoRoot $root -RelativePath $runtimeFiles
     }
 }

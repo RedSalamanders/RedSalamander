@@ -1,0 +1,44 @@
+[
+  {
+    "name": "results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-imap-attributes-broad-release-20260906\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "bytes": 3412,
+    "sha256": "30a9e8dd015c701b1df24a362e53cf64b08ff6e3e0f402f9cde14a9817f9a5b7",
+    "transform": "none"
+  },
+  {
+    "name": "trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-imap-attributes-broad-release-20260906\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "bytes": 8826,
+    "sha256": "2afc86cfabbd8bd8309f20563e2d6b5bffff2a191dfced76df103ccab720178c",
+    "transform": "none"
+  },
+  {
+    "name": "root-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-imap-attributes-broad-release-20260906\\artifacts\\selftest\\last_run\\results.json",
+    "bytes": 4619,
+    "sha256": "3a95c901d55bb511151a5c5d9a05e572376cea233e445ed87bdf856d9fe97b9e",
+    "transform": "none"
+  },
+  {
+    "name": "suite-trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-imap-attributes-broad-release-20260906\\artifacts\\selftest\\last_run\\trace.txt",
+    "bytes": 23366,
+    "sha256": "fdca22789b1fc0f32dde51758af49efc42e97b3db56cf6d47b9728924a49b453",
+    "transform": "none"
+  },
+  {
+    "name": "run-all-tests-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-imap-attributes-broad-release-20260906\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "bytes": 62245,
+    "sha256": "5a787b65407b89913d74594da5c9a6acc61362732b67946926b472a825dfabcc",
+    "transform": "none"
+  },
+  {
+    "name": "entry-fingerprints.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-imap-attributes-broad-release-20260906\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+    "bytes": 1694,
+    "sha256": "6ebba5e564e0610b6c76e9e914edf1ec3d10405f1d8107e61dc06eb7b1ada7a3",
+    "transform": "none"
+  }
+]

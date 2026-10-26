@@ -1,0 +1,53 @@
+Skipping build (verified receipt b6db01ca7e9a3c09bf55cce1b55df4ce3eeab8a2cb7a5340159631932237e709).
+Validation plan: 40ea6b430f1c75beaef85ea2eb6a35c0a51a628ada149669db4e7f7edb1cf2d2
+Entry fingerprints: b30094082af95f7f7af3d7d554c999821ec4c5ad22b4be75ddddbed1750ac6cc (92 ms)
+Shadow affected set: 1/1 entries; advisory-build=targeted. Fresh still executes all.
+
+======================================================================
+  Running: FileOperations
+======================================================================
+  Exe:  Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
+  Args: --fileops-selftest --selftest-no-activate --selftest-timeout-multiplier=3 --selftest-case=FileOpsFamily_Phase09_ConflictPrompt --selftest-repeat=3
+
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [PASS]
+FileOperations
+  (1m 25,5s)
+         Passed: 33
+  Failed: 0
+  Skipped: 0
+
+  -------------------------------------------------------
+
+  Overall:
+PASSED
+  Total: 33
+  Passed: 33
+  Failed: 0
+  Skipped: 0
+  Wall time: 1m 33,8s
+  Classifications:
+flaky=0
+regression=0
+isolation_suspect=0
+unclassified_failure=0
+  Quarantine:
+active=0
+invalid=0
+repair_attempts=0
+repair_reproduced=0
+
+--- ARTIFACTS ---
+  Test root: S:\RedSalamander.Perf
+  Run id:    i26-problem-conflict-regression-v1-20260921
+  Disk audit issues: 0
+  Last run: S:\RedSalamander.Perf\runs\i26-problem-conflict-regression-v1-20260921\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.file-operations.json
+    workspace-final.json
+    fileops\results.json

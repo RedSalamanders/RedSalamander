@@ -1,0 +1,1 @@
+{"schema":"red-salamander.i27-owned-run-interruption.v1","run_id":"20261002T000758Z-47308-6e366f8a23924adeb364a88d5b45d7d1","root_pid":47308,"reason":"Confirmed contradictory known noncommit receipt in bulk reducer; qualification cannot accept this candidate.","descendants":[],"utc":"2026-10-02T00:32:54.0430066Z","full_verdict":"INCOMPLETE; never accepted as passing Full"}

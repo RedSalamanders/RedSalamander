@@ -1,0 +1,23 @@
+{
+  "phase": "After",
+  "source": "db35652f2f57677d304f1e6fd74af799de48e20a",
+  "workingTreeChanges": [
+    "Specs/Testing/Testing_ValidationEvidence.md",
+    "Tools/Tests/ValidationImpact.Tests.ps1",
+    "Tools/tool-inventory.json",
+    "Tools/validation-impact.json"
+  ],
+  "passed": 0,
+  "failed": 1,
+  "skipped": 0,
+  "testSourceSha256": "D6D8C1DE941C767AEB01341C049D0166E38AA263F74522A69F103166E4CBF1D7",
+  "manifestSha256": "C31CBBE7CCCDB87EAAFE49C8E93D6657138FAE8DC0219D10CA3D4E5BB933E51F",
+  "failures": [
+    {
+      "Name": "Error occurred in Describe block",
+      "FailureMessage": "Validation record must use LF and end with exactly one LF: Z:\\RsI19Toolchain\\Tools\\validation-impact.json"
+    }
+  ],
+  "log": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\pending-product-ui-impact-After.log",
+  "completedUtc": "2026-09-13T07:23:37.5825094Z"
+}

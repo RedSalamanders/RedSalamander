@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-09-08T09:55:51.577Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260908T095536Z-78560-571c660c454449318deca63e8acb6aa9\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 1375,
+    "passed": 2,
+    "failed": 0,
+    "skipped": 1,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1250,
+            "repeat_index": 1
+        },
+        {
+            "name": "Beeline_CopySkipLinksKeepsPlaceholders",
+            "status": "skipped",
+            "duration_ms": 94,
+            "repeat_index": 1,
+            "skip_class": "declared-capability",
+            "reason": "wof-attribute-missing"
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

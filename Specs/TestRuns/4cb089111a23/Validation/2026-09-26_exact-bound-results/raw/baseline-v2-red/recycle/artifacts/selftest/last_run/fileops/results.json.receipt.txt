@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-09-23T20:44:06.481Z",
+    "suite": "FileOperations",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20260923T204348Z-68856-62dfeaef8b5d401bb053601eaab18209\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 1468,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Exact Recycle escalation needs separate accepted-choice and bound-delete result diagnostics.",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1187,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase10_DeferredConsentAndRecycleEscalation",
+            "status": "failed",
+            "duration_ms": 250,
+            "repeat_index": 1,
+            "reason": "Exact Recycle escalation needs separate accepted-choice and bound-delete result diagnostics."
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

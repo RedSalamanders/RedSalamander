@@ -6,6 +6,12 @@ All user-facing UI text must be localizable. Static UI structure (menus, context
 
 ## Requirements
 
+- Resource inputs containing UTF-8 non-ASCII text MUST explicitly select UTF-8
+  through `#pragma code_page(65001)` before resources/includes or a governed
+  equivalent compiler setting. Do not depend on the host's ANSI code page.
+  The PE resource owner declares its encoding; its compiled subtitle is covered
+  by a native assertion that its separators remain U+2022, rather than mojibake.
+
 - **No hardcoded user-facing strings in C++** (except dynamic data such as file paths, folder names, WSL distro names, etc.).
 - **Static menus and context menus must be declared in `.rc`** and referenced by resource IDs.
 - Runtime code may only extend **dynamic** menu parts:
@@ -24,7 +30,7 @@ All user-facing UI text must be localizable. Static UI structure (menus, context
 - Command labels have two localized forms:
   - Full display names (`IDS_CMD_*`) for menus, Preferences, and shortcut lists.
   - Short display names (`IDS_CMD_SHORT_BASE + IDS_CMD_*`) for compact surfaces such as the function bar; every command must provide one.
-  - Resource ids `20000..21999` are reserved for command short labels so the arithmetic mapping cannot collide with unrelated strings.
+  - Resource ids `20000..22999` are reserved for command short labels (every command display id is below 3000) so the arithmetic mapping cannot collide with unrelated strings.
 
 ## Language-neutral resources
 
@@ -35,13 +41,17 @@ All user-facing UI text must be localizable. Static UI structure (menus, context
 - Plugin code MUST pass the plugin DLL `HINSTANCE` (for example `g_hInstance`) when loading plugin-owned neutral resources. Passing `nullptr` loads from the main executable and is only correct for main-app resources.
 - The language-neutral inventory is owner-scoped and documented in `Tools/Tests/ResourceLocalizationContracts.Tests.ps1`; that test verifies each ID exists in the embedded owner resources, is absent from every satellite for that owner, and is the only allowed missing-string exception for satellite parity.
 - Language-neutral IDs are reserved for stable non-translatable tokens: language autonyms used in language pickers, product/protocol/brand names, file format identifiers, keyboard glyphs that are not localized by platform convention, sample technical paths, placeholder-only layout skeletons, and technical status skeletons such as hex/HRESULT formats.
+- File Operations owns the embedded-only `IDS_FMT_FILEOPS_TERMINAL_FACT_AXIS` and `IDS_FMT_FILEOPS_TERMINAL_FACT_JOIN` punctuation skeletons. Their axis labels and nine count clauses remain ordinary localized resources in all four satellites; the skeletons never contain user-facing words.
+- File Operations also owns the embedded-only `IDS_FMT_FILEOPS_CONFLICT_STATUS` message/HRESULT
+  skeleton. Its problem sentence remains localized; the skeleton contains only positional arguments,
+  punctuation and the hexadecimal code format, and is loaded through `FormatEmbeddedStringResource`.
 - Ordinary UI words, sentences, command labels, tooltips, and grammar-bearing formats MUST stay localized even when the current translations happen to match English.
 
 ## Satellite resource DLLs
 
 - English resources remain embedded in the owning executable or plugin DLL.
 - Optional translated resources live in per-owner, per-culture resource-only projects under `Lang\<culture>\`.
-- Satellite DLLs are named `<OwnerName>-<culture>.dll`, where `<OwnerName>` matches the owning executable or plugin DLL stem, for example `RedSalamander-fr-FR.dll`, `RedSalamanderMonitor-fr-FR.dll`, or `ViewerText-fr-FR.dll`.
+- Satellite DLLs are named `<OwnerName>-<culture>.dll`, where `<OwnerName>` matches the owning executable or plugin DLL stem, for example `RedSalamander-fr-FR.dll`, or `ViewerText-fr-FR.dll`.
 - Language resource projects output to `.build\<Platform>\<Configuration>\Lang\`. Normal executable and plugin binary output locations do not change.
 - Language resource projects must be resource-only DLLs and must not introduce executable entry points.
 
@@ -56,7 +66,7 @@ Resource forms that RedConfigure can parse but cannot safely rewrite yet must re
 ## Runtime resource lookup
 
 - Each resource owner registers its embedded `HINSTANCE` with the localization manager before localized resources are requested.
-- `RedSalamander` and `RedSalamanderMonitor` register their resource owners during startup after settings load and before UI resource lookup.
+- `RedSalamander` registers their resource owners during startup after settings load and before UI resource lookup.
 - Plugins register their resource owner immediately after the plugin DLL loads and unregister it before the module unloads.
 - Resource-owner registration is reference-counted per normalized `HINSTANCE`. Multi-plugin DLLs may therefore register once per loaded logical entry; unregistering a rejected, disabled, or unloaded sibling MUST keep satellite lookup active until the last registration for that module is released. Re-registering the same instance under a different owner name is rejected.
 - The persisted language setting selects either the Windows preferred UI language chain (`system`) or a concrete BCP-style culture tag such as `fr` or `fr-FR`.
@@ -72,9 +82,10 @@ Resource forms that RedConfigure can parse but cannot safely rewrite yet must re
 - Dialog template creation must use the resource-aware Win32 callback helpers so `DialogBoxIndirectParamW` and `CreateDialogIndirectParamW` receive the selected satellite template when one exists.
 - Resource-aware dialog helpers must copy template bytes from the selected satellite resource but create the dialog with the embedded owner module `HINSTANCE`, so custom child classes registered by the executable or plugin continue to resolve after switching languages.
 - Top-level menus must be loaded explicitly through the localization manager. Window classes must not rely on `lpszMenuName` for localizable menus because class-template loading bypasses the selected satellite.
-- Every localized `MENU`/`MENUEX` resource must keep the same command, popup, separator, conditional, and nesting structure as its embedded source resource. `Tools/Tests/ResourceLocalizationContracts.Tests.ps1` is the owner-wide structural gate for RedSalamander, RedSalamanderMonitor, RedConfigure, ViewerText, ViewerImgRaw, ViewerPE, ViewerSpace, and ViewerWeb.
+- Every localized `MENU`/`MENUEX` resource must keep the same command, popup, separator, conditional, and nesting structure as its embedded source resource. `Tools/Tests/ResourceLocalizationContracts.Tests.ps1` is the owner-wide structural gate for RedSalamander, RedConfigure, ViewerText, ViewerImgRaw, ViewerPE, ViewerSpace, and ViewerWeb.
 - Every actionable static menu sibling must have exactly one access key, unique within its separator-delimited sibling group in each locale. Disabled/zero-ID placeholders and genuinely dynamic rows are exempt. ViewerText's `IDR_VIEWERTEXT_ENCODING_CATALOG` is localized picker catalog data rather than an actionable menu surface, so its catalog labels are exempt from mnemonic assignment; the compact `IDR_VIEWERTEXT_MENU` remains fully checked.
 - Runtime language changes must re-apply the selected language, rebuild already-created top-level menu resources from the current owner, reset cached submenu handles, rebuild dynamic menu sections, and refresh the visible custom menu model. Existing modal dialogs may continue using the language they were opened with until reopened.
+- `Localization::GetLanguagePreferenceRevision()` exposes the synchronized cache-invalidation token for successful `ApplyLanguagePreference` calls, including reapplying the same preference because satellites reload. Rejected preferences leave it unchanged. Retained UI may use equality to skip translation work on unrelated theme notifications. It does not own resource handles, track owner registration, or make a sequence of resource reads atomic with a concurrent language change; UI owners still serialize applying a language and refreshing their controls.
 
 ## RedSalamander menus
 
@@ -87,9 +98,16 @@ Resource forms that RedConfigure can parse but cannot safely rewrite yet must re
   - Custom themes from settings (`user/*`) (separated from file themes when both sections exist).
 - FolderView item and background context menus are separate resource menus (`IDR_FOLDERVIEW_ITEM_CONTEXT` and `IDR_FOLDERVIEW_BACKGROUND_CONTEXT`) defined in `RedSalamander/RedSalamander.rc`.
 
-## RedSalamanderMonitor menus
+## ViewerSpace menus
 
-- Main menu resource lives in `RedSalamanderMonitor/RedSalamanderMonitor.rc`.
+ViewerSpace's source/satellite menu contract includes Refresh, explicit Rebuild, Exit,
+Back/Forward/Up, Explorer/Analyst, and Show analysis in their reviewed sibling order.
+The language-neutral unknown-share marker remains embedded-only and is loaded through
+the plugin's `HINSTANCE` by the table, inspector, and tooltip.
+
+## Independent RedMonitor resource ownership
+
+- RedMonitor owns its menu, localization source, four legacy-named satellites and their structural tests in its independent repository. This solution/package contains no monitor resource project. The retained menu/theme requirements below describe compatibility, not local source ownership.
 - The monitor main menu must be attached from `LoadMenuResource` during startup so the persisted language applies before the first window is shown.
 - `View → Theme` follows the same rules as RedSalamander: fixed built-ins in resources, dynamic file themes from `Themes\\*.theme.json5`, and dynamic settings themes from `theme.themes[]`.
 

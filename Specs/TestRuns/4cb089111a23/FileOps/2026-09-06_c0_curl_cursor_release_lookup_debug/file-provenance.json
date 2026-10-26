@@ -1,0 +1,44 @@
+[
+  {
+    "name": "results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-cursor-release-lookup-debug-20260906\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "bytes": 870,
+    "sha256": "2d5a46f5600933076ffa56993d7dba0bb64c7aecb268797c7093b40e80419dd1",
+    "transform": "none"
+  },
+  {
+    "name": "trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-cursor-release-lookup-debug-20260906\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "bytes": 5436,
+    "sha256": "8b3d6be053cab46596942816c7651cf35170c1f08d8ad84e879e98edcd959280",
+    "transform": "none"
+  },
+  {
+    "name": "root-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-cursor-release-lookup-debug-20260906\\artifacts\\selftest\\last_run\\results.json",
+    "bytes": 1395,
+    "sha256": "e3cc1fc94d333b302d75f96af2ede1a8b5d9dc349fd4f9b4a7bfc08a785492b5",
+    "transform": "none"
+  },
+  {
+    "name": "suite-trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-cursor-release-lookup-debug-20260906\\artifacts\\selftest\\last_run\\trace.txt",
+    "bytes": 19942,
+    "sha256": "8e6d6222415bbc1e62162f55d5cfad73e85ad81875817907cea67df3bcdbef69",
+    "transform": "none"
+  },
+  {
+    "name": "run-all-tests-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-cursor-release-lookup-debug-20260906\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "bytes": 45196,
+    "sha256": "d1a67f14a45dcc8ec8182246a8c59cd08f317f9d02083789e23483b20da57ddf",
+    "transform": "none"
+  },
+  {
+    "name": "entry-fingerprints.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-curl-cursor-release-lookup-debug-20260906\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+    "bytes": 1696,
+    "sha256": "596dbb7bd62a4ec6c6b0321f48f4294212b7d7d3f4f145500089fc5b0e6f8873",
+    "transform": "none"
+  }
+]

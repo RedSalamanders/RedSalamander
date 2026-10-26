@@ -1,0 +1,174 @@
+{
+  "schema": "i26-v65-acceptance-case-map-root-review.v1",
+  "reviewer": "root",
+  "status": "reviewed",
+  "utc": "2026-10-01T11:56:49.891360+00:00",
+  "mapSha256": "5cd10a1d5edc247c034fbbfb4b45ab012ff0b550ef0e38071d66ddcab46cc927",
+  "manifestSha256": "3222ff1f2e90977a0bae368adb7a582fd54a938ca65b430fad5caaa0b9f121ce",
+  "sourceSnapshotId": "f2e0a18a04fbc8a95368adc0c946bafb5ebccdf68d81b4a476d0fefbd323593c",
+  "rowCount": 16,
+  "witnessCount": 62,
+  "uniqueCaseCount": 39,
+  "exactCaseLiteralsVerified": true,
+  "caseBodiesAndPointersUnchangedFromV3": true,
+  "commandsRechecked": [
+    {
+      "caseId": "cmd_app_prompt_uses_alert_overlay_window",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.Dialogs.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_accepted_decision_records",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_completed_export_action_route",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_completed_group_and_navigation",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_completed_show_log_action_route",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_conflict_comparison_rows",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_conflict_hosted_decision_keys",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_conflict_pending_inspection_teardown",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_conflict_prompt_metadata_and_actions",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_conflict_remote_case_sensitive_nested_inspection",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_conflict_two_pending_task_identity",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_hosted_cancel_all_confirmation",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_issues_pane_complete_french_detail",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_issues_pane_result_retention",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_issues_pane_typed_decision_projection",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_popup_footer_menu_action_routes",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_popup_presentation_settings_and_taskbar",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_popup_progress_contracts",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_popup_resource_lifetime",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_popup_throughput_disclosure",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_popup_throughput_external_reload",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_popup_throughput_restart",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_retained_source_and_mixed_journeys",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_speedLimit_prompt_live_dx_interaction",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    },
+    {
+      "caseId": "cmd_pane_fileops_speedLimit_prompt_uses_dxui_surface",
+      "sources": [
+        "C:\\RsI26Adopt\\RedSalamander\\SelfTest\\Commands\\Commands.SelfTest.FileOps.cpp"
+      ]
+    }
+  ],
+  "scope": "Mapping only. Current Full/native receipt binding still required; original gallery and broad Debug provenance must remain unchanged.",
+  "wholePlanComplete": false
+}

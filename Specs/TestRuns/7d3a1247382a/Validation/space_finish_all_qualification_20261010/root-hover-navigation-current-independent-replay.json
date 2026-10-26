@@ -1,0 +1,12 @@
+{
+  "reviewer": "root",
+  "mismatches": 0,
+  "independentlyCheckedHoverAndZoomSamples": 600,
+  "exactPreservedFiles": 32,
+  "independentlyCheckedUiMetricFamilies": 7,
+  "exactRetainedRows": 4215,
+  "exactRetainedBytes": 1565407,
+  "sourceBytes": 13611377,
+  "sourceRows": 36732,
+  "scope": "Recomputed all600 sample statistics and all reported UI timing families from preserved artifacts; retained each source observation for the reported metric families byte-for-byte. Filtered v1 report plus frozen workspace/receipt, no broader verdict or baseline gain."
+}

@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-09-01T14:05:37.589Z",
+    "suite": "FileOperations",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\r1d-preparing-candidate-668acbd7-05\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 1562,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 937,
+            "repeat_index": 1
+        },
+        {
+            "name": "R1d_PreparingLifecycle",
+            "status": "passed",
+            "duration_ms": 438,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 187,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1
+}

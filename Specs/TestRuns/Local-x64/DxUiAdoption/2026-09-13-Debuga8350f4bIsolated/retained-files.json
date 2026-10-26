@@ -1,0 +1,80 @@
+[
+  {
+    "file": "a8350f4b-isolated-x64-Debug-build.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-isolated-x64-Debug-build.log",
+    "bytes": 28226,
+    "sha256": "9e0229f327868d05e93e13cdb087413c089d1614641b326a747795054bbabf51"
+  },
+  {
+    "file": "a8350f4b-isolated-x64-Debug-Full.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-isolated-x64-Debug-Full.log",
+    "bytes": 1057911,
+    "sha256": "cddd6a5e6f466f48ef0f78ebf4e15037ae18065c6416682935521fa10d74dbca"
+  },
+  {
+    "file": "a8350f4b-isolated-x64-Debug-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-isolated-x64-Debug-summary.json",
+    "bytes": 424,
+    "sha256": "16931305f5a6006bde3d0191e2d706beb2ccd1aebcd6b48c773c2c9033f05e30"
+  },
+  {
+    "file": "run-all-tests-results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-isolated-x64-Debug-Full\\final-results\\run-all-tests-results.json",
+    "bytes": 15314,
+    "sha256": "69ed2107457b103c7fe9b749d0cbe99882b3f8117b5baf5fda338fc8e8299ad4"
+  },
+  {
+    "file": "a8350f4b-isolated-x64-Debug-post-Full-module-identities.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-isolated-x64-Debug-post-Full-module-identities.json",
+    "bytes": 7266,
+    "sha256": "fd8dcef8cde7128aeebe4034149a4eb6cad5fd59aec44df87e9f2587f2557761"
+  },
+  {
+    "file": "compare_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-isolated-x64-Debug-Full\\archive\\4cb089111a23\\CompareDirectories\\2026-09-13_125824\\compare_results.json",
+    "bytes": 54598,
+    "sha256": "6341c352afd1f1b5d80a34440ebd3353e77da7b60d3160cb187c1f3b5f59be49"
+  },
+  {
+    "file": "commands_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-isolated-x64-Debug-Full\\archive\\4cb089111a23\\Commands\\2026-09-13_132024\\commands_results.json",
+    "bytes": 177250,
+    "sha256": "424bba25e665952e95a2be4d796e8a4598d7229a011e0548bc984d860a289030"
+  },
+  {
+    "file": "fileops_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-isolated-x64-Debug-Full\\archive\\4cb089111a23\\FileOps\\2026-09-13_134117\\fileops_results.json",
+    "bytes": 39352,
+    "sha256": "0338ffc65230683d90c484ece39f3186edf0ebbe221ecbf264193a8a4898f6bb"
+  },
+  {
+    "file": "validation-plan.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-isolated-x64-Debug-Full\\validation-evidence\\validation-plan.json",
+    "bytes": 22930,
+    "sha256": "c9803366183c29fbe75b4316fcc476f06999bebad912d8b36a0a08a708787fe1"
+  },
+  {
+    "file": "run-state.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-isolated-x64-Debug-Full\\validation-evidence\\run-state.json",
+    "bytes": 7567,
+    "sha256": "94d9a5251f7c46f3e3635b22be39c5930558047bae7c76896f8e0564679cee38"
+  },
+  {
+    "file": "af11df8bd3e474c7a968f1023732d5fb9cc5afc337a245eb5ff7fa322bcbb4bc.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-isolated-x64-Debug-Full\\validation-evidence\\decisions\\af11df8bd3e474c7a968f1023732d5fb9cc5afc337a245eb5ff7fa322bcbb4bc.json",
+    "bytes": 6694,
+    "sha256": "275aaebce9b04ad784459cfcd92b91b8cb07c7a7a82bb5976671d86c1ab87dc7"
+  },
+  {
+    "file": "76a00353f6d93f0667474d0422bba19152552a064a046279270f826181f42431.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-isolated-x64-Debug-Full\\validation-evidence\\entries\\selftest.commands\\terminal-results\\76a00353f6d93f0667474d0422bba19152552a064a046279270f826181f42431.json",
+    "bytes": 395,
+    "sha256": "81a91e2f50295a29cc30d0e161c086cafe84f457c03763b7553fa8fd2e28fdc3"
+  },
+  {
+    "file": "eca4e729e747221cdb491ca97deffc2324c7c173a305aa5322e654e12487e3ad.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-isolated-x64-Debug-Full\\validation-evidence\\entries\\selftest.commands\\evidence\\eca4e729e747221cdb491ca97deffc2324c7c173a305aa5322e654e12487e3ad.json",
+    "bytes": 22062,
+    "sha256": "6a19cc0a4d99dfa3364566d0e86e96c30912e427c470e430a5ffe868091c04da"
+  }
+]

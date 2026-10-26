@@ -1,0 +1,29 @@
+
+
+
+
+
+Describing Resource localization contracts
+ [+] requires every top-level RC resource root to be explicitly allowlisted 11.55s
+ [+] keeps resource format placeholders positional and translation-safe 5.65s
+ [+] keeps documented language-neutral string ids embedded-only in their owning resource module 462ms
+ [+] loads documented language-neutral string ids through embedded helpers only 1.36s
+ [+] keeps satellite string ids complete except documented embedded-only ids 1.22s
+ [+] keeps file-operations count summaries count-neutral and removes the retired combined format 422ms
+ [+] keeps base and satellite MENU structures identical 733ms
+ [+] keeps the reviewed context, viewer, and monitor command placement exact 144ms
+ [+] keeps actionable static sibling menu access keys present and unique 593ms
+Tests completed in 22.15s
+Passed: 9 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0
+
+TagFilter        : {}
+ExcludeTagFilter : {}
+TestNameFilter   : 
+TotalCount       : 9
+PassedCount      : 9
+FailedCount      : 0
+SkippedCount     : 0
+PendingCount     : 0
+Time             : 00:00:22.1480343
+TestResult       : {@{Describe=Resource localization contracts; Context=; Name=requires every top-level RC resource root to be explicitly allowlisted; Result=Passed; Passed=True; Time=00:00:11.5543586; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}, @{Describe=Resource localization contracts; Context=; Name=keeps resource format placeholders positional and translation-safe; Result=Passed; Passed=True; Time=00:00:05.6525612; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}, @{Describe=Resource localization contracts; Context=; Name=keeps documented language-neutral string ids embedded-only in their owning resource module; Result=Passed; Passed=True; Time=00:00:00.4628560; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}, @{Describe=Resource localization contracts; Context=; Name=loads documented language-neutral string ids through embedded helpers only; Result=Passed; Passed=True; Time=00:00:01.3609522; FailureMessage=; StackTrace=; ErrorRecord=; ParameterizedSuiteName=; Parameters=System.Collections.Specialized.OrderedDictionary}…}
+

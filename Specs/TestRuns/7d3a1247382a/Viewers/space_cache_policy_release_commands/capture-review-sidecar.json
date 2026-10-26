@@ -1,0 +1,1485 @@
+{
+  "schema": "red-salamander.viewer-space.capture-review-sidecar.v1",
+  "purpose": "honest capture linkage and review metadata; not a pass certificate",
+  "reviewStatus": "accepted-for-exact-144dpi-complete-frames",
+  "run": {
+    "runId": "20261009T105812Z-45252-f0afad3b7df24a939e082ae977fc6d21",
+    "buildReceiptId": "4a245de29d61893189be0ac558a0c15f6989b4f9daf95201b721b2a7e8c135fe",
+    "sourceWorkspaceSnapshotId": "f43deb78049356ccb5e5fff99ba0f9f90b355b24d62a985b7df124c77ce2aea9",
+    "overallResults": "results.json",
+    "caseResults": "commands/results.json",
+    "caseTrace": "commands/trace.txt",
+    "captureManifest": "captures/provenance.json",
+    "rawCaptureManifest": "D:\\RedSalamander.Perf\\runs\\20261009T105812Z-45252-f0afad3b7df24a939e082ae977fc6d21\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\provenance.json",
+    "caseName": "cmd_viewer_space_explorer_analyst_exact_nested_detail",
+    "caseStatus": "passed",
+    "caseDurationMs": 12926,
+    "traceReferences": []
+  },
+  "source": {
+    "scenarioFunction": "TestViewerSpaceExplorerAnalystExactDetail",
+    "scenarioFunctionSpan": {
+      "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+      "startLine": 20925,
+      "endLine": 21556,
+      "sha256": "d57dcad8634bb9c6d3bc76c6b8cf5272862ce031a13abb92fb44a1c6542f8b4e",
+      "algorithm": "SHA-256 over exact function bytes from name through closing brace"
+    },
+    "sourceFileSha256": "28ef40dafcf1c1324c6f02211da48ca6e56f101a1511b33d279282d85324fc36",
+    "sourceReferences": {
+      "scenarioFunction": {
+        "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+        "lines": [
+          20926
+        ],
+        "functionSpan": {
+          "startLine": 20925,
+          "endLine": 21556
+        }
+      },
+      "mainFrameProbeArray": {
+        "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+        "lines": [
+          21224
+        ]
+      },
+      "mainFrameCaptureCall": {
+        "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+        "lines": [
+          21266
+        ]
+      },
+      "boundaryFrameCaptureCall": {
+        "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+        "lines": [
+          21495
+        ]
+      },
+      "mainFrameViewportRequest": {
+        "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+        "lines": [
+          21125
+        ]
+      },
+      "fixturePayloadDefinition": {
+        "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+        "lines": [
+          20937
+        ]
+      }
+    }
+  },
+  "fixtureDefinition": {
+    "kind": "source-derived deterministic fixture recipe; not a filesystem-content digest",
+    "scenario": "cmd_viewer_space_explorer_analyst_exact_nested_detail",
+    "rootPath": "run-specific temp root; path varies and is not part of the digest",
+    "groups": [
+      "A",
+      "B"
+    ],
+    "perGroup": {
+      "directFiles": 16,
+      "directFilePattern": "F00.bin..F15.bin",
+      "nestedFolders": 4,
+      "nestedFolderPattern": "S0..S3",
+      "filesPerNestedFolder": 4,
+      "nestedFilePattern": "Q0.bin..Q3.bin",
+      "payloadBytesPerFile": 1048576,
+      "payloadByte": "0x64 (ASCII d)"
+    },
+    "expected": {
+      "folders": 10,
+      "files": 64,
+      "logicalBytes": 67108864
+    },
+    "sourceFunctionSha256": "d57dcad8634bb9c6d3bc76c6b8cf5272862ce031a13abb92fb44a1c6542f8b4e",
+    "sourceReference": {
+      "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+      "lines": [
+        20937
+      ]
+    },
+    "filesystemDigest": "not recorded and not claimed",
+    "definitionRecordSha256": "525ca8a7845dd4f90b0582fd5e85bf1df0edaa97266763070ee0529d6d483f6f",
+    "definitionRecordSha256Scope": "canonical JSON of recipe fields; not generated filesystem bytes"
+  },
+  "locale": {
+    "status": "unknown",
+    "value": "unknown",
+    "reason": "none of the archived JSON provenance/results records current UI locale"
+  },
+  "probeContract": {
+    "probeType": "RedSalamander::TestSupport::WindowScreenshotColorProbe",
+    "sourceReferences": {
+      "definitions": {
+        "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+        "lines": [
+          21224
+        ]
+      },
+      "mainCaptureCall": {
+        "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+        "lines": [
+          21266
+        ]
+      },
+      "boundaryCaptureCall": {
+        "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+        "lines": [
+          21495
+        ]
+      }
+    },
+    "assertionDescription": "source supplies background/text/analysis/navigation and child-edge probes; case result records aggregate case verdict",
+    "observedPixelPopulations": "unrecorded unless exact counts occur in preserved trace references for a frame",
+    "doNotInfer": [
+      "probe counts from PNG pixels",
+      "locale from resource translations",
+      "filesystem fixture digest from the recipe"
+    ]
+  },
+  "frames": [
+    {
+      "file": "analyst-dark.png",
+      "archivePath": "captures/analyst-dark.png",
+      "sha256": "657feda0c06c9d507c7842e93baae873a3fefec43b0463ec224ffc21a960a914",
+      "bytes": 430421,
+      "captureKind": "actual-application-harness",
+      "scenarioDerived": {
+        "viewMode": "analyst",
+        "theme": "dark",
+        "analysisPanelVisible": true,
+        "expectedPanelDock": "bottom",
+        "requestedViewport": {
+          "widthDip": 1200,
+          "heightDip": 720,
+          "basis": "scenario source call; requested viewer client DIP size"
+        },
+        "sourceReferences": {
+          "scenarioFunction": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20926
+            ],
+            "functionSpan": {
+              "startLine": 20925,
+              "endLine": 21556
+            }
+          },
+          "mainFrameProbeArray": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "mainFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21266
+            ]
+          },
+          "boundaryFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "mainFrameViewportRequest": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21125
+            ]
+          },
+          "fixturePayloadDefinition": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20937
+            ]
+          }
+        }
+      },
+      "observed": {
+        "actualClientViewport": {
+          "widthPx": 1800,
+          "heightPx": 1064,
+          "dpi": 144,
+          "basis": "raw capture provenance; widthPx/heightPx are client pixels",
+          "widthDip": 1200.0,
+          "heightDip": 709.3333
+        },
+        "windowRectPx": [
+          98,
+          8,
+          1920,
+          1128
+        ],
+        "workAreaPx": [
+          0,
+          0,
+          1920,
+          1128
+        ],
+        "layoutGeneration": 5,
+        "panelVisibility": "unrecorded",
+        "panelDock": "unrecorded",
+        "captureManifestFrame": {
+          "file": "analyst-dark.png",
+          "widthPx": 1800,
+          "heightPx": 1064,
+          "themeIndex": 1,
+          "layoutGeneration": 5,
+          "windowRectPx": [
+            98,
+            8,
+            1920,
+            1128
+          ],
+          "workAreaPx": [
+            0,
+            0,
+            1920,
+            1128
+          ],
+          "childEdgeProbes": 4,
+          "presentedLayoutGeneration": 5,
+          "layoutDirty": false,
+          "mapWidthDip": 1184.0,
+          "mapHeightDip": 201.11,
+          "archivePath": "analyst-dark.png"
+        }
+      },
+      "probeEvidence": {
+        "assertionReferences": {
+          "source": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "caseResult": "commands/results.json#/cases[name=cmd_viewer_space_explorer_analyst_exact_nested_detail]",
+          "caseTrace": "commands/trace.txt"
+        },
+        "observedPopulation": "unrecorded: successful probe populations are not serialized in raw/curated provenance",
+        "traceMatches": []
+      },
+      "wholeFrameReview": {
+        "status": "accepted-for-exact-144dpi-complete-frame",
+        "reviewer": "root",
+        "notes": "Whole original-resolution frame viewed. Placement, nested file/folder cues, linked selected file and clipping accepted for this exact scenario."
+      }
+    },
+    {
+      "file": "analyst-high-contrast.png",
+      "archivePath": "captures/analyst-high-contrast.png",
+      "sha256": "896a3424d2ba3699bbd0f7480f202f07f22c3a28b2d398fe14b6478fafa7558a",
+      "bytes": 163521,
+      "captureKind": "actual-application-harness",
+      "scenarioDerived": {
+        "viewMode": "analyst",
+        "theme": "high-contrast",
+        "analysisPanelVisible": true,
+        "expectedPanelDock": "bottom",
+        "requestedViewport": {
+          "widthDip": 1200,
+          "heightDip": 720,
+          "basis": "scenario source call; requested viewer client DIP size"
+        },
+        "sourceReferences": {
+          "scenarioFunction": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20926
+            ],
+            "functionSpan": {
+              "startLine": 20925,
+              "endLine": 21556
+            }
+          },
+          "mainFrameProbeArray": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "mainFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21266
+            ]
+          },
+          "boundaryFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "mainFrameViewportRequest": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21125
+            ]
+          },
+          "fixturePayloadDefinition": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20937
+            ]
+          }
+        }
+      },
+      "observed": {
+        "actualClientViewport": {
+          "widthPx": 1800,
+          "heightPx": 1064,
+          "dpi": 144,
+          "basis": "raw capture provenance; widthPx/heightPx are client pixels",
+          "widthDip": 1200.0,
+          "heightDip": 709.3333
+        },
+        "windowRectPx": [
+          98,
+          8,
+          1920,
+          1128
+        ],
+        "workAreaPx": [
+          0,
+          0,
+          1920,
+          1128
+        ],
+        "layoutGeneration": 7,
+        "panelVisibility": "unrecorded",
+        "panelDock": "unrecorded",
+        "captureManifestFrame": {
+          "file": "analyst-high-contrast.png",
+          "widthPx": 1800,
+          "heightPx": 1064,
+          "themeIndex": 3,
+          "layoutGeneration": 7,
+          "windowRectPx": [
+            98,
+            8,
+            1920,
+            1128
+          ],
+          "workAreaPx": [
+            0,
+            0,
+            1920,
+            1128
+          ],
+          "childEdgeProbes": 4,
+          "presentedLayoutGeneration": 7,
+          "layoutDirty": false,
+          "mapWidthDip": 1184.0,
+          "mapHeightDip": 201.11,
+          "archivePath": "analyst-high-contrast.png"
+        }
+      },
+      "probeEvidence": {
+        "assertionReferences": {
+          "source": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "caseResult": "commands/results.json#/cases[name=cmd_viewer_space_explorer_analyst_exact_nested_detail]",
+          "caseTrace": "commands/trace.txt"
+        },
+        "observedPopulation": "unrecorded: successful probe populations are not serialized in raw/curated provenance",
+        "traceMatches": []
+      },
+      "wholeFrameReview": {
+        "status": "accepted-for-exact-144dpi-complete-frame",
+        "reviewer": "root",
+        "notes": "Whole original-resolution frame viewed. Placement, nested file/folder cues, linked selected file and clipping accepted for this exact scenario."
+      }
+    },
+    {
+      "file": "analyst-rainbow.png",
+      "archivePath": "captures/analyst-rainbow.png",
+      "sha256": "da00c69836e83c42b1fadf10d110d4e00fdc46e198c64b5712f0277212a27b31",
+      "bytes": 382639,
+      "captureKind": "actual-application-harness",
+      "scenarioDerived": {
+        "viewMode": "analyst",
+        "theme": "rainbow-dark-base",
+        "analysisPanelVisible": true,
+        "expectedPanelDock": "bottom",
+        "requestedViewport": {
+          "widthDip": 1200,
+          "heightDip": 720,
+          "basis": "scenario source call; requested viewer client DIP size"
+        },
+        "sourceReferences": {
+          "scenarioFunction": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20926
+            ],
+            "functionSpan": {
+              "startLine": 20925,
+              "endLine": 21556
+            }
+          },
+          "mainFrameProbeArray": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "mainFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21266
+            ]
+          },
+          "boundaryFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "mainFrameViewportRequest": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21125
+            ]
+          },
+          "fixturePayloadDefinition": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20937
+            ]
+          }
+        }
+      },
+      "observed": {
+        "actualClientViewport": {
+          "widthPx": 1800,
+          "heightPx": 1064,
+          "dpi": 144,
+          "basis": "raw capture provenance; widthPx/heightPx are client pixels",
+          "widthDip": 1200.0,
+          "heightDip": 709.3333
+        },
+        "windowRectPx": [
+          98,
+          8,
+          1920,
+          1128
+        ],
+        "workAreaPx": [
+          0,
+          0,
+          1920,
+          1128
+        ],
+        "layoutGeneration": 6,
+        "panelVisibility": "unrecorded",
+        "panelDock": "unrecorded",
+        "captureManifestFrame": {
+          "file": "analyst-rainbow.png",
+          "widthPx": 1800,
+          "heightPx": 1064,
+          "themeIndex": 2,
+          "layoutGeneration": 6,
+          "windowRectPx": [
+            98,
+            8,
+            1920,
+            1128
+          ],
+          "workAreaPx": [
+            0,
+            0,
+            1920,
+            1128
+          ],
+          "childEdgeProbes": 4,
+          "presentedLayoutGeneration": 6,
+          "layoutDirty": false,
+          "mapWidthDip": 1184.0,
+          "mapHeightDip": 201.11,
+          "archivePath": "analyst-rainbow.png"
+        }
+      },
+      "probeEvidence": {
+        "assertionReferences": {
+          "source": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "caseResult": "commands/results.json#/cases[name=cmd_viewer_space_explorer_analyst_exact_nested_detail]",
+          "caseTrace": "commands/trace.txt"
+        },
+        "observedPopulation": "unrecorded: successful probe populations are not serialized in raw/curated provenance",
+        "traceMatches": []
+      },
+      "wholeFrameReview": {
+        "status": "accepted-for-exact-144dpi-complete-frame",
+        "reviewer": "root",
+        "notes": "Whole original-resolution frame viewed. Placement, nested file/folder cues, linked selected file and clipping accepted for this exact scenario."
+      }
+    },
+    {
+      "file": "boundary-body-455.png",
+      "archivePath": "../space_cache_policy_release_commands_boundary_captures/captures/boundary-body-455.png",
+      "sha256": "71242824aceca31e23e1c410b603c61f21f877a8b4722a5ff613fc65c9988aa3",
+      "bytes": 336640,
+      "captureKind": "actual-application-harness",
+      "scenarioDerived": {
+        "viewMode": "explorer",
+        "theme": "light",
+        "analysisPanelVisible": false,
+        "expectedPanelDock": "hidden",
+        "requestedViewport": {
+          "widthDip": 800,
+          "heightDip": 593
+        },
+        "sourceReferences": {
+          "scenarioFunction": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20926
+            ],
+            "functionSpan": {
+              "startLine": 20925,
+              "endLine": 21556
+            }
+          },
+          "mainFrameProbeArray": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "mainFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21266
+            ]
+          },
+          "boundaryFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "mainFrameViewportRequest": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21125
+            ]
+          },
+          "fixturePayloadDefinition": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20937
+            ]
+          }
+        }
+      },
+      "observed": {
+        "actualClientViewport": {
+          "widthPx": 1200,
+          "heightPx": 890,
+          "dpi": 144,
+          "basis": "raw capture provenance; widthPx/heightPx are client pixels",
+          "widthDip": 800.0,
+          "heightDip": 593.3333
+        },
+        "windowRectPx": "unrecorded",
+        "workAreaPx": "unrecorded",
+        "layoutGeneration": 14,
+        "panelVisibility": false,
+        "panelDock": "hidden",
+        "captureManifestFrame": {
+          "file": "boundary-body-455.png",
+          "widthPx": 1200,
+          "heightPx": 890,
+          "dpi": 144,
+          "requestedWidthDip": 800,
+          "requestedHeightDip": 593,
+          "actualWidthDip": 800.0,
+          "actualHeightDip": 593.33,
+          "headerBottomDip": 138.0,
+          "availableBodyDip": 455.33,
+          "analysisVisible": false,
+          "analysisPlacement": "hidden",
+          "layoutGeneration": 14,
+          "presentedLayoutGeneration": 14,
+          "layoutDirty": false,
+          "mapWidthDip": 784.0,
+          "mapHeightDip": 439.33,
+          "previousLayoutGeneration": 13,
+          "archivePath": "../../space_cache_policy_release_commands_boundary_captures/captures/boundary-body-455.png"
+        }
+      },
+      "probeEvidence": {
+        "assertionReferences": {
+          "source": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "caseResult": "commands/results.json#/cases[name=cmd_viewer_space_explorer_analyst_exact_nested_detail]",
+          "caseTrace": "commands/trace.txt"
+        },
+        "observedPopulation": "unrecorded: successful probe populations are not serialized in raw/curated provenance",
+        "traceMatches": []
+      },
+      "wholeFrameReview": {
+        "status": "accepted-for-exact-144dpi-complete-frame",
+        "reviewer": "root",
+        "notes": "Whole original-resolution frame viewed. Placement, nested file/folder cues, linked selected file and clipping accepted for this exact scenario."
+      }
+    },
+    {
+      "file": "boundary-body-456.png",
+      "archivePath": "../space_cache_policy_release_commands_boundary_captures/captures/boundary-body-456.png",
+      "sha256": "56ffb075c1e0ffdc2d85e9042ec4b8472294005c6e29579e621271bebd213b8f",
+      "bytes": 194397,
+      "captureKind": "actual-application-harness",
+      "scenarioDerived": {
+        "viewMode": "explorer",
+        "theme": "light",
+        "analysisPanelVisible": true,
+        "expectedPanelDock": "bottom",
+        "requestedViewport": {
+          "widthDip": 800,
+          "heightDip": 594
+        },
+        "sourceReferences": {
+          "scenarioFunction": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20926
+            ],
+            "functionSpan": {
+              "startLine": 20925,
+              "endLine": 21556
+            }
+          },
+          "mainFrameProbeArray": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "mainFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21266
+            ]
+          },
+          "boundaryFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "mainFrameViewportRequest": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21125
+            ]
+          },
+          "fixturePayloadDefinition": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20937
+            ]
+          }
+        }
+      },
+      "observed": {
+        "actualClientViewport": {
+          "widthPx": 1200,
+          "heightPx": 891,
+          "dpi": 144,
+          "basis": "raw capture provenance; widthPx/heightPx are client pixels",
+          "widthDip": 800.0,
+          "heightDip": 594.0
+        },
+        "windowRectPx": "unrecorded",
+        "workAreaPx": "unrecorded",
+        "layoutGeneration": 13,
+        "panelVisibility": true,
+        "panelDock": "bottom",
+        "captureManifestFrame": {
+          "file": "boundary-body-456.png",
+          "widthPx": 1200,
+          "heightPx": 891,
+          "dpi": 144,
+          "requestedWidthDip": 800,
+          "requestedHeightDip": 594,
+          "actualWidthDip": 800.0,
+          "actualHeightDip": 594.0,
+          "headerBottomDip": 138.0,
+          "availableBodyDip": 456.0,
+          "analysisVisible": true,
+          "analysisPlacement": "bottom",
+          "layoutGeneration": 13,
+          "presentedLayoutGeneration": 13,
+          "layoutDirty": false,
+          "mapWidthDip": 784.0,
+          "mapHeightDip": 120.0,
+          "previousLayoutGeneration": 12,
+          "archivePath": "../../space_cache_policy_release_commands_boundary_captures/captures/boundary-body-456.png"
+        }
+      },
+      "probeEvidence": {
+        "assertionReferences": {
+          "source": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "caseResult": "commands/results.json#/cases[name=cmd_viewer_space_explorer_analyst_exact_nested_detail]",
+          "caseTrace": "commands/trace.txt"
+        },
+        "observedPopulation": "unrecorded: successful probe populations are not serialized in raw/curated provenance",
+        "traceMatches": []
+      },
+      "wholeFrameReview": {
+        "status": "accepted-for-exact-144dpi-complete-frame",
+        "reviewer": "root",
+        "notes": "Whole original-resolution frame viewed. Placement, nested file/folder cues, linked selected file and clipping accepted for this exact scenario."
+      }
+    },
+    {
+      "file": "boundary-width-1099.png",
+      "archivePath": "../space_cache_policy_release_commands_boundary_captures/captures/boundary-width-1099.png",
+      "sha256": "6dbff157c44cbed03fa1c6d7930d81304e2f73572fedf9e945814b2cfd49c999",
+      "bytes": 401076,
+      "captureKind": "actual-application-harness",
+      "scenarioDerived": {
+        "viewMode": "explorer",
+        "theme": "light",
+        "analysisPanelVisible": true,
+        "expectedPanelDock": "bottom",
+        "requestedViewport": {
+          "widthDip": 1099,
+          "heightDip": 709
+        },
+        "sourceReferences": {
+          "scenarioFunction": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20926
+            ],
+            "functionSpan": {
+              "startLine": 20925,
+              "endLine": 21556
+            }
+          },
+          "mainFrameProbeArray": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "mainFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21266
+            ]
+          },
+          "boundaryFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "mainFrameViewportRequest": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21125
+            ]
+          },
+          "fixturePayloadDefinition": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20937
+            ]
+          }
+        }
+      },
+      "observed": {
+        "actualClientViewport": {
+          "widthPx": 1649,
+          "heightPx": 1064,
+          "dpi": 144,
+          "basis": "raw capture provenance; widthPx/heightPx are client pixels",
+          "widthDip": 1099.3333,
+          "heightDip": 709.3333
+        },
+        "windowRectPx": "unrecorded",
+        "workAreaPx": "unrecorded",
+        "layoutGeneration": 10,
+        "panelVisibility": true,
+        "panelDock": "bottom",
+        "captureManifestFrame": {
+          "file": "boundary-width-1099.png",
+          "widthPx": 1649,
+          "heightPx": 1064,
+          "dpi": 144,
+          "requestedWidthDip": 1099,
+          "requestedHeightDip": 709,
+          "actualWidthDip": 1099.33,
+          "actualHeightDip": 709.33,
+          "headerBottomDip": 138.0,
+          "availableBodyDip": 571.33,
+          "analysisVisible": true,
+          "analysisPlacement": "bottom",
+          "layoutGeneration": 10,
+          "presentedLayoutGeneration": 10,
+          "layoutDirty": false,
+          "mapWidthDip": 1083.33,
+          "mapHeightDip": 235.33,
+          "previousLayoutGeneration": 9,
+          "archivePath": "../../space_cache_policy_release_commands_boundary_captures/captures/boundary-width-1099.png"
+        }
+      },
+      "probeEvidence": {
+        "assertionReferences": {
+          "source": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "caseResult": "commands/results.json#/cases[name=cmd_viewer_space_explorer_analyst_exact_nested_detail]",
+          "caseTrace": "commands/trace.txt"
+        },
+        "observedPopulation": "unrecorded: successful probe populations are not serialized in raw/curated provenance",
+        "traceMatches": []
+      },
+      "wholeFrameReview": {
+        "status": "accepted-for-exact-144dpi-complete-frame",
+        "reviewer": "root",
+        "notes": "Whole original-resolution frame viewed. Placement, nested file/folder cues, linked selected file and clipping accepted for this exact scenario."
+      }
+    },
+    {
+      "file": "boundary-width-1100.png",
+      "archivePath": "../space_cache_policy_release_commands_boundary_captures/captures/boundary-width-1100.png",
+      "sha256": "3a5a5091995200b9895f110579149481d471622670b0fb80657b323dc1654e67",
+      "bytes": 520219,
+      "captureKind": "actual-application-harness",
+      "scenarioDerived": {
+        "viewMode": "explorer",
+        "theme": "light",
+        "analysisPanelVisible": true,
+        "expectedPanelDock": "right",
+        "requestedViewport": {
+          "widthDip": 1100,
+          "heightDip": 709
+        },
+        "sourceReferences": {
+          "scenarioFunction": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20926
+            ],
+            "functionSpan": {
+              "startLine": 20925,
+              "endLine": 21556
+            }
+          },
+          "mainFrameProbeArray": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "mainFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21266
+            ]
+          },
+          "boundaryFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "mainFrameViewportRequest": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21125
+            ]
+          },
+          "fixturePayloadDefinition": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20937
+            ]
+          }
+        }
+      },
+      "observed": {
+        "actualClientViewport": {
+          "widthPx": 1650,
+          "heightPx": 1064,
+          "dpi": 144,
+          "basis": "raw capture provenance; widthPx/heightPx are client pixels",
+          "widthDip": 1100.0,
+          "heightDip": 709.3333
+        },
+        "windowRectPx": "unrecorded",
+        "workAreaPx": "unrecorded",
+        "layoutGeneration": 9,
+        "panelVisibility": true,
+        "panelDock": "right",
+        "captureManifestFrame": {
+          "file": "boundary-width-1100.png",
+          "widthPx": 1650,
+          "heightPx": 1064,
+          "dpi": 144,
+          "requestedWidthDip": 1100,
+          "requestedHeightDip": 709,
+          "actualWidthDip": 1100.0,
+          "actualHeightDip": 709.33,
+          "headerBottomDip": 138.0,
+          "availableBodyDip": 571.33,
+          "analysisVisible": true,
+          "analysisPlacement": "right",
+          "layoutGeneration": 9,
+          "presentedLayoutGeneration": 9,
+          "layoutDirty": false,
+          "mapWidthDip": 721.0,
+          "mapHeightDip": 555.33,
+          "previousLayoutGeneration": 8,
+          "archivePath": "../../space_cache_policy_release_commands_boundary_captures/captures/boundary-width-1100.png"
+        }
+      },
+      "probeEvidence": {
+        "assertionReferences": {
+          "source": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "caseResult": "commands/results.json#/cases[name=cmd_viewer_space_explorer_analyst_exact_nested_detail]",
+          "caseTrace": "commands/trace.txt"
+        },
+        "observedPopulation": "unrecorded: successful probe populations are not serialized in raw/curated provenance",
+        "traceMatches": []
+      },
+      "wholeFrameReview": {
+        "status": "accepted-for-exact-144dpi-complete-frame",
+        "reviewer": "root",
+        "notes": "Whole original-resolution frame viewed. Placement, nested file/folder cues, linked selected file and clipping accepted for this exact scenario."
+      }
+    },
+    {
+      "file": "boundary-width-503.png",
+      "archivePath": "../space_cache_policy_release_commands_boundary_captures/captures/boundary-width-503.png",
+      "sha256": "932e84e8f01a2611c9cb04b564fa47968601a7b11fca577f99dfda4ed9af9f72",
+      "bytes": 341626,
+      "captureKind": "actual-application-harness",
+      "scenarioDerived": {
+        "viewMode": "explorer",
+        "theme": "light",
+        "analysisPanelVisible": false,
+        "expectedPanelDock": "hidden",
+        "requestedViewport": {
+          "widthDip": 503,
+          "heightDip": 709
+        },
+        "sourceReferences": {
+          "scenarioFunction": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20926
+            ],
+            "functionSpan": {
+              "startLine": 20925,
+              "endLine": 21556
+            }
+          },
+          "mainFrameProbeArray": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "mainFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21266
+            ]
+          },
+          "boundaryFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "mainFrameViewportRequest": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21125
+            ]
+          },
+          "fixturePayloadDefinition": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20937
+            ]
+          }
+        }
+      },
+      "observed": {
+        "actualClientViewport": {
+          "widthPx": 755,
+          "heightPx": 1064,
+          "dpi": 144,
+          "basis": "raw capture provenance; widthPx/heightPx are client pixels",
+          "widthDip": 503.3333,
+          "heightDip": 709.3333
+        },
+        "windowRectPx": "unrecorded",
+        "workAreaPx": "unrecorded",
+        "layoutGeneration": 12,
+        "panelVisibility": false,
+        "panelDock": "hidden",
+        "captureManifestFrame": {
+          "file": "boundary-width-503.png",
+          "widthPx": 755,
+          "heightPx": 1064,
+          "dpi": 144,
+          "requestedWidthDip": 503,
+          "requestedHeightDip": 709,
+          "actualWidthDip": 503.33,
+          "actualHeightDip": 709.33,
+          "headerBottomDip": 138.0,
+          "availableBodyDip": 571.33,
+          "analysisVisible": false,
+          "analysisPlacement": "hidden",
+          "layoutGeneration": 12,
+          "presentedLayoutGeneration": 12,
+          "layoutDirty": false,
+          "mapWidthDip": 487.33,
+          "mapHeightDip": 555.33,
+          "previousLayoutGeneration": 11,
+          "archivePath": "../../space_cache_policy_release_commands_boundary_captures/captures/boundary-width-503.png"
+        }
+      },
+      "probeEvidence": {
+        "assertionReferences": {
+          "source": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "caseResult": "commands/results.json#/cases[name=cmd_viewer_space_explorer_analyst_exact_nested_detail]",
+          "caseTrace": "commands/trace.txt"
+        },
+        "observedPopulation": "unrecorded: successful probe populations are not serialized in raw/curated provenance",
+        "traceMatches": []
+      },
+      "wholeFrameReview": {
+        "status": "accepted-for-exact-144dpi-complete-frame",
+        "reviewer": "root",
+        "notes": "Whole original-resolution frame viewed. Placement, nested file/folder cues, linked selected file and clipping accepted for this exact scenario."
+      }
+    },
+    {
+      "file": "boundary-width-504.png",
+      "archivePath": "../space_cache_policy_release_commands_boundary_captures/captures/boundary-width-504.png",
+      "sha256": "5cb7be586e571ec877a86b9849bbd6afc694fecf9b15b074d9e1c6fb0ef37aea",
+      "bytes": 203821,
+      "captureKind": "actual-application-harness",
+      "scenarioDerived": {
+        "viewMode": "explorer",
+        "theme": "light",
+        "analysisPanelVisible": true,
+        "expectedPanelDock": "bottom",
+        "requestedViewport": {
+          "widthDip": 504,
+          "heightDip": 709
+        },
+        "sourceReferences": {
+          "scenarioFunction": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20926
+            ],
+            "functionSpan": {
+              "startLine": 20925,
+              "endLine": 21556
+            }
+          },
+          "mainFrameProbeArray": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "mainFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21266
+            ]
+          },
+          "boundaryFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "mainFrameViewportRequest": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21125
+            ]
+          },
+          "fixturePayloadDefinition": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20937
+            ]
+          }
+        }
+      },
+      "observed": {
+        "actualClientViewport": {
+          "widthPx": 756,
+          "heightPx": 1064,
+          "dpi": 144,
+          "basis": "raw capture provenance; widthPx/heightPx are client pixels",
+          "widthDip": 504.0,
+          "heightDip": 709.3333
+        },
+        "windowRectPx": "unrecorded",
+        "workAreaPx": "unrecorded",
+        "layoutGeneration": 11,
+        "panelVisibility": true,
+        "panelDock": "bottom",
+        "captureManifestFrame": {
+          "file": "boundary-width-504.png",
+          "widthPx": 756,
+          "heightPx": 1064,
+          "dpi": 144,
+          "requestedWidthDip": 504,
+          "requestedHeightDip": 709,
+          "actualWidthDip": 504.0,
+          "actualHeightDip": 709.33,
+          "headerBottomDip": 138.0,
+          "availableBodyDip": 571.33,
+          "analysisVisible": true,
+          "analysisPlacement": "bottom",
+          "layoutGeneration": 11,
+          "presentedLayoutGeneration": 11,
+          "layoutDirty": false,
+          "mapWidthDip": 488.0,
+          "mapHeightDip": 235.33,
+          "previousLayoutGeneration": 10,
+          "archivePath": "../../space_cache_policy_release_commands_boundary_captures/captures/boundary-width-504.png"
+        }
+      },
+      "probeEvidence": {
+        "assertionReferences": {
+          "source": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "caseResult": "commands/results.json#/cases[name=cmd_viewer_space_explorer_analyst_exact_nested_detail]",
+          "caseTrace": "commands/trace.txt"
+        },
+        "observedPopulation": "unrecorded: successful probe populations are not serialized in raw/curated provenance",
+        "traceMatches": []
+      },
+      "wholeFrameReview": {
+        "status": "accepted-for-exact-144dpi-complete-frame",
+        "reviewer": "root",
+        "notes": "Whole original-resolution frame viewed. Placement, nested file/folder cues, linked selected file and clipping accepted for this exact scenario."
+      }
+    },
+    {
+      "file": "explorer-light.png",
+      "archivePath": "captures/explorer-light.png",
+      "sha256": "98ef201e0ce7e8b5949650bfc6df05c6167ac351c7fb4e9ded88d41ce0369c1a",
+      "bytes": 497459,
+      "captureKind": "actual-application-harness",
+      "scenarioDerived": {
+        "viewMode": "explorer",
+        "theme": "light",
+        "analysisPanelVisible": true,
+        "expectedPanelDock": "right",
+        "requestedViewport": {
+          "widthDip": 1200,
+          "heightDip": 720,
+          "basis": "scenario source call; requested viewer client DIP size"
+        },
+        "sourceReferences": {
+          "scenarioFunction": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20926
+            ],
+            "functionSpan": {
+              "startLine": 20925,
+              "endLine": 21556
+            }
+          },
+          "mainFrameProbeArray": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "mainFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21266
+            ]
+          },
+          "boundaryFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "mainFrameViewportRequest": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21125
+            ]
+          },
+          "fixturePayloadDefinition": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20937
+            ]
+          }
+        }
+      },
+      "observed": {
+        "actualClientViewport": {
+          "widthPx": 1800,
+          "heightPx": 1064,
+          "dpi": 144,
+          "basis": "raw capture provenance; widthPx/heightPx are client pixels",
+          "widthDip": 1200.0,
+          "heightDip": 709.3333
+        },
+        "windowRectPx": [
+          98,
+          8,
+          1920,
+          1128
+        ],
+        "workAreaPx": [
+          0,
+          0,
+          1920,
+          1128
+        ],
+        "layoutGeneration": 4,
+        "panelVisibility": "unrecorded",
+        "panelDock": "unrecorded",
+        "captureManifestFrame": {
+          "file": "explorer-light.png",
+          "widthPx": 1800,
+          "heightPx": 1064,
+          "themeIndex": 0,
+          "layoutGeneration": 4,
+          "windowRectPx": [
+            98,
+            8,
+            1920,
+            1128
+          ],
+          "workAreaPx": [
+            0,
+            0,
+            1920,
+            1128
+          ],
+          "childEdgeProbes": 4,
+          "presentedLayoutGeneration": 4,
+          "layoutDirty": false,
+          "mapWidthDip": 788.0,
+          "mapHeightDip": 555.33,
+          "archivePath": "explorer-light.png"
+        }
+      },
+      "probeEvidence": {
+        "assertionReferences": {
+          "source": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "caseResult": "commands/results.json#/cases[name=cmd_viewer_space_explorer_analyst_exact_nested_detail]",
+          "caseTrace": "commands/trace.txt"
+        },
+        "observedPopulation": "unrecorded: successful probe populations are not serialized in raw/curated provenance",
+        "traceMatches": []
+      },
+      "wholeFrameReview": {
+        "status": "accepted-for-exact-144dpi-complete-frame",
+        "reviewer": "root",
+        "notes": "Whole original-resolution frame viewed. Placement, nested file/folder cues, linked selected file and clipping accepted for this exact scenario."
+      }
+    },
+    {
+      "file": "explorer-narrow.png",
+      "archivePath": "captures/explorer-narrow.png",
+      "sha256": "d6b522974545ecffaba9cf2f58a99266bbe01a08a847d521a17164e30a3078d4",
+      "bytes": 195105,
+      "captureKind": "actual-application-harness",
+      "scenarioDerived": {
+        "viewMode": "explorer",
+        "theme": "light-narrow",
+        "analysisPanelVisible": true,
+        "expectedPanelDock": "bottom",
+        "requestedViewport": {
+          "widthDip": 520,
+          "heightDip": 720,
+          "basis": "scenario source call; requested viewer client DIP size"
+        },
+        "sourceReferences": {
+          "scenarioFunction": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20926
+            ],
+            "functionSpan": {
+              "startLine": 20925,
+              "endLine": 21556
+            }
+          },
+          "mainFrameProbeArray": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "mainFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21266
+            ]
+          },
+          "boundaryFrameCaptureCall": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21495
+            ]
+          },
+          "mainFrameViewportRequest": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21125
+            ]
+          },
+          "fixturePayloadDefinition": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              20937
+            ]
+          }
+        }
+      },
+      "observed": {
+        "actualClientViewport": {
+          "widthPx": 780,
+          "heightPx": 1064,
+          "dpi": 144,
+          "basis": "raw capture provenance; widthPx/heightPx are client pixels",
+          "widthDip": 520.0,
+          "heightDip": 709.3333
+        },
+        "windowRectPx": [
+          98,
+          8,
+          900,
+          1128
+        ],
+        "workAreaPx": [
+          0,
+          0,
+          1920,
+          1128
+        ],
+        "layoutGeneration": 8,
+        "panelVisibility": "unrecorded",
+        "panelDock": "unrecorded",
+        "captureManifestFrame": {
+          "file": "explorer-narrow.png",
+          "widthPx": 780,
+          "heightPx": 1064,
+          "themeIndex": 4,
+          "layoutGeneration": 8,
+          "windowRectPx": [
+            98,
+            8,
+            900,
+            1128
+          ],
+          "workAreaPx": [
+            0,
+            0,
+            1920,
+            1128
+          ],
+          "childEdgeProbes": 4,
+          "presentedLayoutGeneration": 8,
+          "layoutDirty": false,
+          "mapWidthDip": 504.0,
+          "mapHeightDip": 235.33,
+          "archivePath": "explorer-narrow.png"
+        }
+      },
+      "probeEvidence": {
+        "assertionReferences": {
+          "source": {
+            "file": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+            "lines": [
+              21224
+            ]
+          },
+          "caseResult": "commands/results.json#/cases[name=cmd_viewer_space_explorer_analyst_exact_nested_detail]",
+          "caseTrace": "commands/trace.txt"
+        },
+        "observedPopulation": "unrecorded: successful probe populations are not serialized in raw/curated provenance",
+        "traceMatches": []
+      },
+      "wholeFrameReview": {
+        "status": "accepted-for-exact-144dpi-complete-frame",
+        "reviewer": "root",
+        "notes": "Whole original-resolution frame viewed. Placement, nested file/folder cues, linked selected file and clipping accepted for this exact scenario."
+      }
+    }
+  ],
+  "wholeFrameReview": {
+    "status": "accepted-for-exact-144dpi-complete-frames",
+    "reviewer": "root",
+    "reviewedUtc": "2026-10-09T11:08:54.729486+00:00",
+    "notes": "Root viewed all 11 original-resolution complete frames. Six boundary frames have clean current presented generations newer than their predecessor, including full-height map at 503 DIP and 455-DIP body. Done frames do not qualify queued/scanning spinner behavior. No other DPI, locale, platform, provider or performance endpoint is established.",
+    "reviewScope": [
+      "full image bounds and clipping",
+      "Explorer/Analyst panel placement",
+      "folder header and file folded-corner cues",
+      "Rainbow color behavior without loss of shape cues",
+      "child-host composition"
+    ]
+  }
+}

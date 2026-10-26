@@ -1,0 +1,156 @@
+[PASS] VLC long-path fixture has a marked sandbox
+[PASS] VLC long-path fixture loads the viewer plugin
+[PASS] VLC long-path fixture creates its Unicode directory
+[PASS] VLC embedded regression owns a non-activating parent
+[PASS] VLC fixture writes the exact-length WAV
+[PASS] VLC regression creates a viewer
+[PASS] VLC regression obtains plugin configuration
+[PASS] VLC regression accepts fixture configuration
+[PASS] VLC regression opens its owned viewer
+[INFO] VLC path length=283 embedded=false Open_us=17025
+[PASS] VLC regression reaches a terminal load/playback observation
+[PASS] VLC failure reaches a visible terminal error without playback
+[PASS] VLC error heading matches the failure category
+[PASS] Only missing installations offer a VLC download
+[PASS] File and loader errors contain no install-VLC instructions
+[PASS] File error preserves the selected path
+[PASS] File error preserves the actual Win32 error instead of reporting every failure as file-not-found
+[INFO] VLC error: Unable to play this file. | Cannot access the file:
+
+C:\RedSalamander.Perf\runs\vlc-paths-20261016-102108-r2\scratch\viewer-pe\viewervlc_long_paths\m�dia % #\dddddddddddddddddddddddddddddddddddddddddddddddddd\wwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwwww.missing.wav
+
+Win32 error: 2.
+[PASS] VLC regression closes its viewer
+[PASS] VLC regression drains asynchronous close
+[PASS] VLC regression creates a viewer
+[PASS] VLC regression obtains plugin configuration
+[PASS] VLC regression accepts fixture configuration
+[PASS] VLC regression opens its owned viewer
+[INFO] VLC path length=26 embedded=true Open_us=4238
+[PASS] VLC regression reaches a terminal load/playback observation
+[PASS] VLC failure reaches a visible terminal error without playback
+[PASS] VLC error heading matches the failure category
+[PASS] Only missing installations offer a VLC download
+[PASS] File and loader errors contain no install-VLC instructions
+[PASS] File error preserves the selected path
+[PASS] File error preserves the actual Win32 error instead of reporting every failure as file-not-found
+[INFO] VLC error: Unable to play this file. | Cannot access the file:
+
+sftp:/not-a-local-file.wav
+
+Win32 error: 123.
+[PASS] VLC regression closes its viewer
+[PASS] VLC regression drains asynchronous close
+[PASS] VLC regression creates a viewer
+[PASS] VLC regression obtains plugin configuration
+[PASS] VLC regression accepts fixture configuration
+[PASS] VLC regression opens its owned viewer
+[INFO] VLC path length=155 embedded=true Open_us=4006
+[PASS] VLC regression reaches a terminal load/playback observation
+[PASS] VLC failure reaches a visible terminal error without playback
+[PASS] VLC error heading matches the failure category
+[PASS] Only missing installations offer a VLC download
+[PASS] File and loader errors contain no install-VLC instructions
+[PASS] File error preserves the selected path
+[INFO] VLC error: Unable to play this file. | The selected path is not a file:
+
+C:\RedSalamander.Perf\runs\vlc-paths-20261016-102108-r2\scratch\viewer-pe\viewervlc_long_paths\m�dia % #\dddddddddddddddddddddddddddddddddddddddddddddddddd
+[PASS] VLC regression closes its viewer
+[PASS] VLC regression drains asynchronous close
+[PASS] VLC regression creates a viewer
+[PASS] VLC regression obtains plugin configuration
+[PASS] VLC regression accepts fixture configuration
+[PASS] VLC regression opens its owned viewer
+[INFO] VLC path length=275 embedded=false Open_us=11897
+[PASS] VLC regression reaches a terminal load/playback observation
+[PASS] VLC failure reaches a visible terminal error without playback
+[PASS] VLC error heading matches the failure category
+[PASS] Only missing installations offer a VLC download
+[PASS] File and loader errors contain no install-VLC instructions
+[PASS] File error preserves the selected path
+[INFO] VLC error: VLC media player is required. | Install VLC media player or set the VLC installation folder in Preferences > Plugins > VLC Viewer.
+
+
+
+VLC installation not found.
+[PASS] VLC regression closes its viewer
+[PASS] VLC regression drains asynchronous close
+[PASS] VLC regression creates a viewer
+[PASS] VLC regression obtains plugin configuration
+[PASS] VLC regression accepts fixture configuration
+[PASS] VLC regression opens its owned viewer
+[INFO] VLC path length=275 embedded=false Open_us=16901
+[PASS] VLC regression reaches a terminal load/playback observation
+[PASS] VLC failure reaches a visible terminal error without playback
+[PASS] VLC error heading matches the failure category
+[PASS] Only missing installations offer a VLC download
+[PASS] File and loader errors contain no install-VLC instructions
+[PASS] File error preserves the selected path
+[INFO] VLC error: Unable to play this file. | Failed to load 'C:\RedSalamander.Perf\runs\vlc-paths-20261016-102108-r2\scratch\viewer-pe\viewervlc_long_paths\broken-vlc\libvlc.dll' (Win32: 193).
+[PASS] VLC regression closes its viewer
+[PASS] VLC regression drains asynchronous close
+[PASS] VLC fixture writes the exact-length WAV
+[PASS] VLC regression creates a viewer
+[PASS] VLC regression obtains plugin configuration
+[PASS] VLC regression accepts fixture configuration
+[PASS] VLC regression opens its owned viewer
+[INFO] VLC path length=259 embedded=false Open_us=13024
+[PASS] VLC regression reaches a terminal load/playback observation
+[PASS] VLC decodes the exact-duration WAV beyond the path boundary
+[PASS] Successful playback offers no VLC download
+[PASS] VLC regression closes its viewer
+[PASS] VLC regression drains asynchronous close
+[PASS] VLC fixture writes the exact-length WAV
+[PASS] VLC regression creates a viewer
+[PASS] VLC regression obtains plugin configuration
+[PASS] VLC regression accepts fixture configuration
+[PASS] VLC regression opens its owned viewer
+[INFO] VLC path length=260 embedded=false Open_us=21871
+[PASS] VLC regression reaches a terminal load/playback observation
+[PASS] VLC decodes the exact-duration WAV beyond the path boundary
+[PASS] Successful playback offers no VLC download
+[PASS] VLC regression closes its viewer
+[PASS] VLC regression drains asynchronous close
+[PASS] VLC fixture writes the exact-length WAV
+[PASS] VLC regression creates a viewer
+[PASS] VLC regression obtains plugin configuration
+[PASS] VLC regression accepts fixture configuration
+[PASS] VLC regression opens its owned viewer
+[INFO] VLC path length=275 embedded=false Open_us=16679
+[PASS] VLC regression reaches a terminal load/playback observation
+[PASS] VLC decodes the exact-duration WAV beyond the path boundary
+[PASS] Successful playback offers no VLC download
+[PASS] VLC regression closes its viewer
+[PASS] VLC regression drains asynchronous close
+[PASS] VLC regression creates a viewer
+[PASS] VLC regression obtains plugin configuration
+[PASS] VLC regression accepts fixture configuration
+[PASS] VLC regression opens its owned viewer
+[INFO] VLC path length=275 embedded=true Open_us=5649
+[PASS] VLC regression reaches a terminal load/playback observation
+[PASS] VLC decodes the exact-duration WAV beyond the path boundary
+[PASS] Successful playback offers no VLC download
+[PASS] VLC regression closes its viewer
+[PASS] VLC regression drains asynchronous close
+[PASS] VLC regression creates a viewer
+[PASS] VLC regression obtains plugin configuration
+[PASS] VLC regression accepts fixture configuration
+[PASS] VLC regression opens its owned viewer
+[INFO] VLC path length=279 embedded=false Open_us=27171
+[PASS] VLC regression reaches a terminal load/playback observation
+[PASS] VLC decodes the exact-duration WAV beyond the path boundary
+[PASS] Successful playback offers no VLC download
+[PASS] VLC regression closes its viewer
+[PASS] VLC regression drains asynchronous close
+[PASS] VLC regression creates a viewer
+[PASS] VLC regression obtains plugin configuration
+[PASS] VLC regression accepts fixture configuration
+[PASS] VLC regression opens its owned viewer
+[INFO] VLC path length=275 embedded=false Open_us=18183
+[PASS] VLC regression reaches a terminal load/playback observation
+[PASS] VLC decodes the exact-duration WAV beyond the path boundary
+[PASS] Successful playback offers no VLC download
+[PASS] VLC regression closes its viewer
+[PASS] VLC regression drains asynchronous close
+[PASS] VLC long-path fixture removes its exact sandbox subtree
+ViewerPETests passed.

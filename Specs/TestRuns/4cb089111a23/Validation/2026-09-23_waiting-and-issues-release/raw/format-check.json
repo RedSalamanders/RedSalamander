@@ -1,0 +1,145 @@
+[
+  {
+    "path": "RedSalamander/FolderWindow.FileOperations.IssuesPane.cpp",
+    "changed_ranges": [
+      [
+        601,
+        4
+      ],
+      [
+        675,
+        1
+      ]
+    ],
+    "exit": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "RedSalamander/FolderWindow.FileOperations.Popup.cpp",
+    "changed_ranges": [
+      [
+        3464,
+        10
+      ],
+      [
+        6680,
+        3
+      ],
+      [
+        6714,
+        1
+      ],
+      [
+        6732,
+        10
+      ],
+      [
+        6825,
+        1
+      ],
+      [
+        6931,
+        1
+      ],
+      [
+        8716,
+        5
+      ],
+      [
+        12165,
+        7
+      ],
+      [
+        12174,
+        1
+      ]
+    ],
+    "exit": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "RedSalamander/FolderWindow.FileOperations.Popup.h",
+    "changed_ranges": [
+      [
+        521,
+        12
+      ],
+      [
+        788,
+        6
+      ],
+      [
+        812,
+        1
+      ],
+      [
+        927,
+        7
+      ],
+      [
+        1022,
+        1
+      ]
+    ],
+    "exit": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp",
+    "changed_ranges": [
+      [
+        345,
+        1
+      ],
+      [
+        349,
+        8
+      ],
+      [
+        562,
+        25
+      ],
+      [
+        843,
+        2
+      ],
+      [
+        862,
+        9
+      ],
+      [
+        873,
+        5
+      ],
+      [
+        920,
+        36
+      ],
+      [
+        1093,
+        95
+      ],
+      [
+        1221,
+        2
+      ],
+      [
+        1227,
+        4
+      ]
+    ],
+    "exit": 0,
+    "diagnostics": ""
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallerySurfaces.cpp",
+    "changed_ranges": [
+      [
+        432,
+        305
+      ]
+    ],
+    "exit": 0,
+    "diagnostics": ""
+  }
+]

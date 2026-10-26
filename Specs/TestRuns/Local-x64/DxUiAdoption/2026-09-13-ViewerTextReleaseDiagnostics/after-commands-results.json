@@ -1,0 +1,44 @@
+{
+    "run_started_utc": "2026-09-13T03:14:12.781Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260913T031348Z-102328-e9c06f871d4f4c5d9ad94fdd22272d2a\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 4949,
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "pane_view_options_toggle_preview_pane_tabs_and_selection",
+            "status": "passed",
+            "duration_ms": 1171,
+            "repeat_index": 1
+        },
+        {
+            "name": "viewer_text_hex_byte_color_perf",
+            "status": "passed",
+            "duration_ms": 765,
+            "repeat_index": 1
+        },
+        {
+            "name": "viewer_text_diff_perf",
+            "status": "passed",
+            "duration_ms": 952,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_text_context_menu_uses_delivered_anchor",
+            "status": "passed",
+            "duration_ms": 285,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_text_hover_uses_delivered_point",
+            "status": "passed",
+            "duration_ms": 236,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

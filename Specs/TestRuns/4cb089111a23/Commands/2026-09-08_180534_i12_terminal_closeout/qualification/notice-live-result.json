@@ -1,0 +1,17 @@
+{
+  "startedUtc": "2026-09-08T18:01:03.1108948Z",
+  "kind": "live notice startup, styles and teardown",
+  "noInputSent": true,
+  "startupIncludingFirstCompilationMs": 392.4421,
+  "beforeForeground": 5440106,
+  "duringForeground": 5440106,
+  "noticeWindow": 177152518,
+  "noActivationAtShow": true,
+  "extendedStyle": "0x080900A0",
+  "requiredStylesPresent": true,
+  "visible": true,
+  "closeQuietPointMs": 13.2928,
+  "windowClosed": true,
+  "afterForeground": 5440106,
+  "completedUtc": "2026-09-08T18:01:38.5641018Z"
+}

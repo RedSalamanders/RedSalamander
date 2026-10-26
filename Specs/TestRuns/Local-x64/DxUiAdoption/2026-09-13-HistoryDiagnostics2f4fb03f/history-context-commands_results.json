@@ -1,0 +1,794 @@
+{
+    "run_started_utc": "2026-09-13T11:52:34.131Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260913T115212Z-89904-b5e179268b834f45a4f6e9d937b11e21\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 61831,
+    "passed": 130,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal",
+            "status": "passed",
+            "duration_ms": 312,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigationView_path_region_keyboard_activation_enters_edit_mode",
+            "status": "passed",
+            "duration_ms": 119,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigationView_path_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 73,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigationView_unfocused_pane_click_focuses_target_pane",
+            "status": "passed",
+            "duration_ms": 143,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_focus_follows_pointer_always_moves_focus_without_click",
+            "status": "passed",
+            "duration_ms": 71,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_edit_route",
+            "status": "passed",
+            "duration_ms": 311,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+            "status": "passed",
+            "duration_ms": 357,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_owned_window_activation",
+            "status": "passed",
+            "duration_ms": 296,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 395,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigationView_region_tab_traversal",
+            "status": "passed",
+            "duration_ms": 80,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigationView_menu_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 258,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigationView_disk_info_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 234,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigationView_history_dropdown_keyboard_navigation",
+            "status": "passed",
+            "duration_ms": 187,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal",
+            "status": "passed",
+            "duration_ms": 345,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigationView_path_region_keyboard_activation_enters_edit_mode",
+            "status": "passed",
+            "duration_ms": 134,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigationView_path_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 72,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigationView_unfocused_pane_click_focuses_target_pane",
+            "status": "passed",
+            "duration_ms": 159,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_focus_follows_pointer_always_moves_focus_without_click",
+            "status": "passed",
+            "duration_ms": 64,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_edit_route",
+            "status": "passed",
+            "duration_ms": 286,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+            "status": "passed",
+            "duration_ms": 358,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_owned_window_activation",
+            "status": "passed",
+            "duration_ms": 296,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 99,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigationView_region_tab_traversal",
+            "status": "passed",
+            "duration_ms": 80,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigationView_menu_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 248,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigationView_disk_info_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 218,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigationView_history_dropdown_keyboard_navigation",
+            "status": "passed",
+            "duration_ms": 182,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal",
+            "status": "passed",
+            "duration_ms": 310,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigationView_path_region_keyboard_activation_enters_edit_mode",
+            "status": "passed",
+            "duration_ms": 137,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigationView_path_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 76,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigationView_unfocused_pane_click_focuses_target_pane",
+            "status": "passed",
+            "duration_ms": 162,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_focus_follows_pointer_always_moves_focus_without_click",
+            "status": "passed",
+            "duration_ms": 59,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_edit_route",
+            "status": "passed",
+            "duration_ms": 290,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+            "status": "passed",
+            "duration_ms": 324,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_owned_window_activation",
+            "status": "passed",
+            "duration_ms": 327,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 96,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigationView_region_tab_traversal",
+            "status": "passed",
+            "duration_ms": 87,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigationView_menu_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 258,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigationView_disk_info_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 226,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigationView_history_dropdown_keyboard_navigation",
+            "status": "passed",
+            "duration_ms": 184,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal",
+            "status": "passed",
+            "duration_ms": 327,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_navigationView_path_region_keyboard_activation_enters_edit_mode",
+            "status": "passed",
+            "duration_ms": 131,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_navigationView_path_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 72,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_navigationView_unfocused_pane_click_focuses_target_pane",
+            "status": "passed",
+            "duration_ms": 179,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_focus_follows_pointer_always_moves_focus_without_click",
+            "status": "passed",
+            "duration_ms": 62,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_edit_route",
+            "status": "passed",
+            "duration_ms": 317,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+            "status": "passed",
+            "duration_ms": 343,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_owned_window_activation",
+            "status": "passed",
+            "duration_ms": 291,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 95,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_navigationView_region_tab_traversal",
+            "status": "passed",
+            "duration_ms": 87,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_navigationView_menu_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 257,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_navigationView_disk_info_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 234,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_navigationView_history_dropdown_keyboard_navigation",
+            "status": "passed",
+            "duration_ms": 201,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal",
+            "status": "passed",
+            "duration_ms": 315,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_navigationView_path_region_keyboard_activation_enters_edit_mode",
+            "status": "passed",
+            "duration_ms": 137,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_navigationView_path_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 76,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_navigationView_unfocused_pane_click_focuses_target_pane",
+            "status": "passed",
+            "duration_ms": 162,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_focus_follows_pointer_always_moves_focus_without_click",
+            "status": "passed",
+            "duration_ms": 63,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_edit_route",
+            "status": "passed",
+            "duration_ms": 282,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+            "status": "passed",
+            "duration_ms": 328,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_owned_window_activation",
+            "status": "passed",
+            "duration_ms": 286,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 97,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_navigationView_region_tab_traversal",
+            "status": "passed",
+            "duration_ms": 81,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_navigationView_menu_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 233,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_navigationView_disk_info_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 203,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_navigationView_history_dropdown_keyboard_navigation",
+            "status": "passed",
+            "duration_ms": 173,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal",
+            "status": "passed",
+            "duration_ms": 344,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_navigationView_path_region_keyboard_activation_enters_edit_mode",
+            "status": "passed",
+            "duration_ms": 145,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_navigationView_path_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 75,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_navigationView_unfocused_pane_click_focuses_target_pane",
+            "status": "passed",
+            "duration_ms": 159,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_focus_follows_pointer_always_moves_focus_without_click",
+            "status": "passed",
+            "duration_ms": 63,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_edit_route",
+            "status": "passed",
+            "duration_ms": 284,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+            "status": "passed",
+            "duration_ms": 353,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_owned_window_activation",
+            "status": "passed",
+            "duration_ms": 311,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 99,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_navigationView_region_tab_traversal",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_navigationView_menu_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 265,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_navigationView_disk_info_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 251,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_navigationView_history_dropdown_keyboard_navigation",
+            "status": "passed",
+            "duration_ms": 188,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal",
+            "status": "passed",
+            "duration_ms": 302,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_navigationView_path_region_keyboard_activation_enters_edit_mode",
+            "status": "passed",
+            "duration_ms": 134,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_navigationView_path_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_navigationView_unfocused_pane_click_focuses_target_pane",
+            "status": "passed",
+            "duration_ms": 165,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_focus_follows_pointer_always_moves_focus_without_click",
+            "status": "passed",
+            "duration_ms": 110,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_edit_route",
+            "status": "passed",
+            "duration_ms": 282,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+            "status": "passed",
+            "duration_ms": 355,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_owned_window_activation",
+            "status": "passed",
+            "duration_ms": 297,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 99,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_navigationView_region_tab_traversal",
+            "status": "passed",
+            "duration_ms": 83,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_navigationView_menu_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 233,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_navigationView_disk_info_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 225,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_navigationView_history_dropdown_keyboard_navigation",
+            "status": "passed",
+            "duration_ms": 177,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal",
+            "status": "passed",
+            "duration_ms": 310,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_navigationView_path_region_keyboard_activation_enters_edit_mode",
+            "status": "passed",
+            "duration_ms": 142,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_navigationView_path_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 77,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_navigationView_unfocused_pane_click_focuses_target_pane",
+            "status": "passed",
+            "duration_ms": 158,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_focus_follows_pointer_always_moves_focus_without_click",
+            "status": "passed",
+            "duration_ms": 62,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_edit_route",
+            "status": "passed",
+            "duration_ms": 280,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+            "status": "passed",
+            "duration_ms": 333,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_owned_window_activation",
+            "status": "passed",
+            "duration_ms": 289,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 94,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_navigationView_region_tab_traversal",
+            "status": "passed",
+            "duration_ms": 79,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_navigationView_menu_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 250,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_navigationView_disk_info_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 219,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_navigationView_history_dropdown_keyboard_navigation",
+            "status": "passed",
+            "duration_ms": 198,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal",
+            "status": "passed",
+            "duration_ms": 321,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_navigationView_path_region_keyboard_activation_enters_edit_mode",
+            "status": "passed",
+            "duration_ms": 136,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_navigationView_path_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 72,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_navigationView_unfocused_pane_click_focuses_target_pane",
+            "status": "passed",
+            "duration_ms": 165,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_focus_follows_pointer_always_moves_focus_without_click",
+            "status": "passed",
+            "duration_ms": 112,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_edit_route",
+            "status": "passed",
+            "duration_ms": 281,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+            "status": "passed",
+            "duration_ms": 342,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_owned_window_activation",
+            "status": "passed",
+            "duration_ms": 298,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 94,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_navigationView_region_tab_traversal",
+            "status": "passed",
+            "duration_ms": 81,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_navigationView_menu_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 232,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_navigationView_disk_info_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 226,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_navigationView_history_dropdown_keyboard_navigation",
+            "status": "passed",
+            "duration_ms": 171,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal",
+            "status": "passed",
+            "duration_ms": 330,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_pane_navigationView_path_region_keyboard_activation_enters_edit_mode",
+            "status": "passed",
+            "duration_ms": 122,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_pane_navigationView_path_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 75,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_pane_navigationView_unfocused_pane_click_focuses_target_pane",
+            "status": "passed",
+            "duration_ms": 163,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_pane_focus_follows_pointer_always_moves_focus_without_click",
+            "status": "passed",
+            "duration_ms": 60,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_edit_route",
+            "status": "passed",
+            "duration_ms": 305,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_reliability_navigation_popup_close_survives_reentrant_restore",
+            "status": "passed",
+            "duration_ms": 340,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_owned_window_activation",
+            "status": "passed",
+            "duration_ms": 305,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_pane_navigationView_full_path_popup_ancestor_click_navigates_to_ancestor",
+            "status": "passed",
+            "duration_ms": 96,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_pane_navigationView_region_tab_traversal",
+            "status": "passed",
+            "duration_ms": 99,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_pane_navigationView_menu_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 234,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_pane_navigationView_disk_info_region_keyboard_activation_opens_menu",
+            "status": "passed",
+            "duration_ms": 217,
+            "repeat_index": 10
+        },
+        {
+            "name": "cmd_pane_navigationView_history_dropdown_keyboard_navigation",
+            "status": "passed",
+            "duration_ms": 173,
+            "repeat_index": 10
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 10
+}

@@ -1,0 +1,11 @@
+{
+  "sourcePath": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\clipboard-reviewed-owned-20260921\\perf\\perf_metrics.jsonl",
+  "sourceSha256": "9CD5DC927E7031E23BB8E8969608BFCBEC1859F136CBF14FB14CA78E82D3FEA7",
+  "sourceBytes": 93273,
+  "sourceLines": 244,
+  "zeroBasedLineIndices": [
+    243
+  ],
+  "selectedSha256": "7292C06FB4697B600FB5284789972F226747579E1E8454EA167832BACE69B087",
+  "selectionPolicy": "All FileOps.Clipboard metrics in original order; unchanged line contents encoded UTF-8 without BOM with LF terminators."
+}

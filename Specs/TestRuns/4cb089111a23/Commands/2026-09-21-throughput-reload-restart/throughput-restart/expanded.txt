@@ -1,0 +1,5 @@
+mode=expanded
+processId=96364
+exitCode=0
+elapsedMs=4608
+completed=true

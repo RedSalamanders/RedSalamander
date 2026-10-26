@@ -1,0 +1,50 @@
+{
+    "run_started_utc": "2026-10-12T11:45:32.991Z",
+    "suite": "FileOperations",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261012T114456Z-85880-889ca7165d654f0bbc0681563fc99f73\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 104047,
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1313,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase5_DiscoverySingleTraversal",
+            "status": "passed",
+            "duration_ms": 1250,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase5_DiscoveryCancelLatencyLocal",
+            "status": "passed",
+            "duration_ms": 953,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase11_BridgeMultiFolderParallelCopyInFlightLines",
+            "status": "passed",
+            "duration_ms": 97953,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase7_CopyItemsSingleFolderRecursiveParallelism",
+            "status": "passed",
+            "duration_ms": 1937,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 641,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1
+}

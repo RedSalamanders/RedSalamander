@@ -1,0 +1,718 @@
+   ____          _ ____        _                                _
+  |  _ \ ___  __| / ___|  __ _| | __ _ _ __ ___   __ _ _ __   __| | ___ _ __
+  | |_) / _ \/ _` \___ \ / _` | |/ _` | '_ ` _ \ / _` | '_ \ / _` |/ _ \ '__|
+  |  _ <  __/ (_| |___) | (_| | | (_| | | | | | | (_| | | | | (_| |  __/ |
+  |_| \_\___|\__,_|____/ \__,_|_|\__,_|_| |_| |_|\__,_|_| |_|\__,_|\___|_|
+                     Build, package, and validate with confidence
+
+Locating MSBuild...
+  Found vswhere: C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe
+Found: Visual Studio Professional 2026 (18.11.12217.175)
+MSBuild: C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\amd64\MSBuild.exe
+Detection method: vswhere
+
+Build Configuration:
+  Solution:      C:\RsI27Safety\RedSalamander.sln
+  Target:        All Projects
+  Configuration: Release
+  Platform:      x64
+  Build workers: 2
+  Version:       7.0.1 beta Release (x64)
+  Build number:  1
+  Version state: C:\RsI27Safety\.build\version\current-version.json
+  Action:        Build
+  Package:       None
+  Monitor diag:  Runtime flag (--etw)
+
+Computing build evidence identity...
+Installing DxUi dependencies (x64-windows)
+Detecting compiler hash for triplet x64-windows...
+Compiler found: C:/Program Files/Microsoft Visual Studio/18/Insiders/VC/Tools/MSVC/14.51.36231/bin/Hostx64/x64/cl.exe
+The following packages are already installed:
+  * vcpkg-cmake:x64-windows@2024-04-23
+  * vcpkg-cmake-config:x64-windows@2026-07-21
+    wil:x64-windows@1.0.260126.7
+wil provides CMake targets:
+
+  # this is heuristically generated, and may not be correct
+  find_package(wil CONFIG REQUIRED)
+  target_link_libraries(main PRIVATE WIL::WIL)
+
+All requested installations completed successfully in: 461 us
+vcpkg dependencies are ready.
+DxUi pin and main diverge; review C:\RsI27Safety\Dependencies\DxUi.lock.json before any change. (Checked 2026-10-02 14:18:15Z)
+DxUi restored at 19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1 for x64; output identity 1043e9ccdb649d7aa6d09810ef3e66f09b2f4bfe2a22db1b782b895f98ad2e91.
+No compatible build receipt exists; first attestation requires Rebuild.
+Starting build...
+
+  Common.cpp
+  Blake3Digest.cpp
+  LocalizationManager.cpp
+  MinimumOsVersion.cpp
+  RegistryUtils.cpp
+  PerfJsonl.cpp
+  PluginConfiguration.cpp
+  SettingsStore.cpp
+  ThemeDefinitionIo.cpp
+  ThemeExpression.cpp
+  TraceProvider.cpp
+  WslDistributionCatalog.cpp
+  dllmain.cpp
+  RedSalamander-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\RedSalamander-fr-FR.dll
+  Terminal-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\Terminal-fr-FR.dll
+  Terminal-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\Terminal-ja-JP.dll
+  Terminal-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\Terminal-cs-CZ.dll
+  Terminal-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\Terminal-sk-SK.dll
+  ViewerText-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerText-fr-FR.dll
+  compilation header save succeeded; see C:\RsI27Safety\.build\dependencies\DxUi\1043e9ccdb649d7aa6d09810ef3e66f09b2f4bfe2a22db1b782b895f98ad2e91\Intermediate\x64\Release\DxUi\DxUiCompositeVS.h
+  compilation object save succeeded; see C:\RsI27Safety\.build\dependencies\DxUi\1043e9ccdb649d7aa6d09810ef3e66f09b2f4bfe2a22db1b782b895f98ad2e91\Intermediate\x64\Release\DxUi\DxUiCompositeVS.cso
+  compilation header save succeeded; see C:\RsI27Safety\.build\dependencies\DxUi\1043e9ccdb649d7aa6d09810ef3e66f09b2f4bfe2a22db1b782b895f98ad2e91\Intermediate\x64\Release\DxUi\DxUiCompositePS.h
+  compilation object save succeeded; see C:\RsI27Safety\.build\dependencies\DxUi\1043e9ccdb649d7aa6d09810ef3e66f09b2f4bfe2a22db1b782b895f98ad2e91\Intermediate\x64\Release\DxUi\DxUiCompositePS.cso
+  ControlCatalog.cpp
+  RedSalamanderMonitor-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\RedSalamanderMonitor-fr-FR.dll
+  RedSalamanderMonitor-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\RedSalamanderMonitor-ja-JP.dll
+  Main.cpp
+  NativeMenuInterop.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 1126 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  RedLauncher.vcxproj -> C:\RsI27Safety\.build\x64\Release\RedLauncher.exe
+  dllmain.cpp
+  Factory.cpp
+  Embedded.cpp
+     Creating library C:\RsI27Safety\.build\x64\Release\Common.lib and object C:\RsI27Safety\.build\x64\Release\Common.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  FileSystem7z.cpp
+  FrameRuntime.cpp
+  DxUi.Accessibility.cpp
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\FileSystem7z.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\FileSystem7z.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  DxUi.ComboBox.cpp
+  All 10232 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  All 3679 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  Common.vcxproj -> C:\RsI27Safety\.build\x64\Release\Common.dll
+  FileSystem7z.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\FileSystem7z.dll
+  LocalSearchIndexCore.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  Main.cpp
+  DxUi.Controls.cpp
+  SearchServiceBroker.cpp
+  SearchTextHelpers.cpp
+  DxUi.cpp
+  SqliteIndexStore.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 7775 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  RedSalamanderSearchService.vcxproj -> C:\RsI27Safety\.build\x64\Release\RedSalamanderSearchService.exe
+  dllmain.cpp
+  Factory.cpp
+  DxUi.Grid.cpp
+  dllmain.cpp
+  Factory.cpp
+  FileSystemCurl.CopyMove.cpp
+  DxUi.Menu.cpp
+  FileSystem.cpp
+  FileSystemCurl.DirectoryOps.cpp
+  DxUi.NativeTextInput.cpp
+  FileSystem.DirectoryOps.cpp
+  FileSystemCurl.Imap.cpp
+  DxUi.PointerInput.cpp
+  DxUi.Scrollbar.cpp
+  FileSystem.FileOps.cpp
+  FileSystemCurl.ImapHelpers.cpp
+  DxUi.SingleLineTextEditing.cpp
+  FileSystem.Menu.cpp
+  FileSystemCurl.Shared.cpp
+  DxUi.TextInput.cpp
+  FileSystem.Path.cpp
+  DxUi.TextStoreACP.cpp
+  FileSystemCurl.SelfTest.Ftp.cpp
+  FileSystem.Search.cpp
+  TextInputServices.cpp
+  TextClipboard.cpp
+  FileSystem.Watch.cpp
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemCurl.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemCurl.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  DxUi.Theme.cpp
+  All 10835 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  SearchTextHelpers.cpp
+  Finished generating code
+  FileSystemCurl.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemCurl.dll
+  dllmain.cpp
+  Factory.cpp
+  DxUi.Tree.cpp
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\FileSystem.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\FileSystem.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  FileSystemDummy.cpp
+  Generating Code...
+  All 11401 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystem.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\FileSystem.dll
+  ls4.cpp
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemDummy.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemDummy.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 3745 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  All 1319 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ls4.vcxproj -> C:\RsI27Safety\.build\x64\Release\ls4.exe
+  FileSystemDummy.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemDummy.dll
+  dllmain.cpp
+  dllmain.cpp
+  Factory.cpp
+  Factory.cpp
+  FilesInformationGoogleDrive.cpp
+  FilesInformationMicrosoftDrive.cpp
+  Compiling...
+  DxUi.Typeahead.cpp
+  FileSystemGoogleDrive.cpp
+  FileSystemMicrosoftDrive.cpp
+  DxUi.WindowHost.cpp
+  FileSystemGoogleDrive.SelfTest.FakeDrive.cpp
+  FileSystemMicrosoftDrive.SelfTest.FakeGraph.cpp
+  Generating Code...
+  DxUi.vcxproj -> C:\RsI27Safety\.build\dependencies\DxUi\1043e9ccdb649d7aa6d09810ef3e66f09b2f4bfe2a22db1b782b895f98ad2e91\x64\Release\DxUi.lib
+  DxUi pin verified: 19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1
+  dllmain.cpp
+  Factory.cpp
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemGoogleDrive.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemGoogleDrive.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemMicrosoftDrive.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemMicrosoftDrive.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 5985 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemGoogleDrive.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemGoogleDrive.dll
+  ViewerText.Encoding.cpp
+  DxUi pin verified: 19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1
+  dllmain.cpp
+  Factory.cpp
+  FilesInformationMtp.cpp
+  ViewerText.MenuTheme.cpp
+  All 6723 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemMicrosoftDrive.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemMicrosoftDrive.dll
+  FileSystemMtp.Core.cpp
+  ViewerText.cpp
+  Ghostty terminal runtime ready: mode=Product platform=x64 pairedRaw=cb84ae8fc116e2721d0e1b1d82396c8b898c5364ddb98faf47434ddc22048088 normalizedDiagnostic=a65a45989fb75954489538ff37a98e0722022c08798c5c0a0c2ab0d775dc2599
+  dllmain.cpp
+  Factory.cpp
+  FileSystemMtp.Device.cpp
+  Terminal.cpp
+  ViewerText.Text.cpp
+  FileSystemMtp.FakeBackend.cpp
+  ViewerText.Hex.cpp
+  TerminalAccessibility.cpp
+  FileSystemMtp.Shared.cpp
+  TerminalInternal.cpp
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\ViewerText.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\ViewerText.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemMtp.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemMtp.exp
+  Generating code
+  All 7819 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Previous IPDB not found, fall back to full compilation.
+  Finished generating code
+  ViewerText.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\ViewerText.dll
+  All 7054 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  dllmain.cpp
+  FileSystemMtp.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemMtp.dll
+  DxUi pin verified: 19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1
+  TerminalKittyImagePipeline.cpp
+  dllmain.cpp
+  Factory.cpp
+  Factory.cpp
+  ViewerImgRaw.Decode.cpp
+  TerminalCommandSurfaceModel.cpp
+  TerminalRuntimeLoader.cpp
+  ViewerImgRaw.Export.cpp
+  FilesInformationS3.cpp
+  TerminalSecurity.cpp
+  ViewerImgRaw.cpp
+  TerminalSession.cpp
+  FileSystemS3.Configuration.cpp
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\ViewerImgRaw.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\ViewerImgRaw.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  TerminalVt.cpp
+  All 5528 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemS3.Core.cpp
+  ViewerImgRaw.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\ViewerImgRaw.dll
+  DxUi pin verified: 19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1
+  ColorTextView.cpp
+  Configuration.cpp
+  Document.cpp
+  EtwListener.cpp
+  MonitorFileReader.cpp
+  MonitorFileExporter.cpp
+  RedSalamanderMonitor.cpp
+  TerminalVtUpgradeTests.cpp
+  FileSystemS3.Directory.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 9923 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  RedSalamanderMonitor.vcxproj -> C:\RsI27Safety\.build\x64\Release\RedSalamanderMonitor.exe
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\Terminal.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\Terminal.exp
+  Generating code
+  DxUi pin verified: 19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1
+  Previous IPDB not found, fall back to full compilation.
+  Factory.cpp
+  FileSystemS3.DirectoryOps.cpp
+  All 7379 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  Terminal.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\Terminal.dll
+  ViewerPE.cpp
+  DxUi pin verified: 19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1
+  dllmain.cpp
+  Factory.cpp
+  ViewerSpace.cpp
+  FileSystemS3.DriveInfo.cpp
+  dllmain.cpp
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\ViewerPE.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\ViewerPE.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 4465 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerPE.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\ViewerPE.dll
+  DxUi pin verified: 19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1
+  dllmain.cpp
+  Factory.cpp
+  FileSystemS3.IO.cpp
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\ViewerSpace.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\ViewerSpace.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  ViewerSqlite.Engine.cpp
+  All 7466 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerSpace.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\ViewerSpace.dll
+  DxUi pin verified: 19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1
+  dllmain.cpp
+  Factory.cpp
+  ViewerSqlite.cpp
+  FileSystemS3.Menu.cpp
+  ViewerVLC.cpp
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\ViewerSqlite.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\ViewerSqlite.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  FileSystemS3.S3.cpp
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\ViewerVLC.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\ViewerVLC.exp
+  Generating code
+  All 4555 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Previous IPDB not found, fall back to full compilation.
+  Finished generating code
+  ViewerSqlite.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\ViewerSqlite.dll
+  All 4212 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerVLC.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\ViewerVLC.dll
+  DxUi pin verified: 19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1
+  dllmain.cpp
+  Factory.cpp
+  FileSystem-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystem-fr-FR.dll
+  FileSystem7z-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystem7z-fr-FR.dll
+  FileSystemCurl-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemCurl-fr-FR.dll
+  FileSystemDummy-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemDummy-fr-FR.dll
+  FileSystemGoogleDrive-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemGoogleDrive-fr-FR.dll
+  FileSystemMicrosoftDrive-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemMicrosoftDrive-fr-FR.dll
+  ViewerWeb.cpp
+  FileSystemMtp-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemMtp-fr-FR.dll
+  FileSystemS3.S3Table.cpp
+  FileSystemS3-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemS3-fr-FR.dll
+  ViewerImgRaw-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerImgRaw-fr-FR.dll
+  ViewerPE-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerPE-fr-FR.dll
+  ViewerSpace-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerSpace-fr-FR.dll
+  ViewerSqlite-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerSqlite-fr-FR.dll
+  ViewerVLC-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerVLC-fr-FR.dll
+  ViewerWeb-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerWeb-fr-FR.dll
+  FileSystem7z-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystem7z-ja-JP.dll
+  FileSystem-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystem-ja-JP.dll
+  FileSystemCurl-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemCurl-ja-JP.dll
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\ViewerWeb.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\ViewerWeb.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  FileSystemS3.Shared.cpp
+  FileSystemDummy-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemDummy-ja-JP.dll
+  FileSystemGoogleDrive-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemGoogleDrive-ja-JP.dll
+  All 5101 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemMicrosoftDrive-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemMicrosoftDrive-ja-JP.dll
+  ViewerWeb.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\ViewerWeb.dll
+  FileSystemMtp-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemMtp-ja-JP.dll
+  FileSystemS3-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemS3-ja-JP.dll
+  ViewerImgRaw-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerImgRaw-ja-JP.dll
+  ViewerPE-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerPE-ja-JP.dll
+  ViewerSpace-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerSpace-ja-JP.dll
+  ViewerSqlite-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerSqlite-ja-JP.dll
+  ViewerText-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerText-ja-JP.dll
+  ViewerWeb-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerWeb-ja-JP.dll
+  ViewerVLC-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerVLC-ja-JP.dll
+  RedSalamander-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\RedSalamander-ja-JP.dll
+  FileSystemMtp-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemMtp-cs-CZ.dll
+  FileSystemMtp-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemMtp-sk-SK.dll
+  DxUi pin verified: 19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  RcWriter.cpp
+  Main.cpp
+  RedConfigureApp.cpp
+  RedConfigurePagePresenters.cpp
+  RedConfigureRoot.cpp
+  RedConfigureSession.cpp
+  RedConfigureWorkflow.cpp
+  RedConfigureSplashScreen.cpp
+  RedConfigureTraceProvider.cpp
+  RedConfigureUiHelpers.cpp
+  ThemeCatalog.cpp
+  ThemePreviewModel.cpp
+  WorkspaceDiscovery.cpp
+  RedConfigure-ja-JP.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\RedConfigure-ja-JP.dll
+  ls1.cpp
+  FileSystemS3.SelfTest.FakeS3.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 236 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ls1.vcxproj -> C:\RsI27Safety\.build\x64\Release\ls1.exe
+  ls2.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 234 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ls2.vcxproj -> C:\RsI27Safety\.build\x64\Release\ls2.exe
+  ls3.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 301 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ls3.vcxproj -> C:\RsI27Safety\.build\x64\Release\ls3.exe
+  FlipSequentialDiscard.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 10145 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  All 1219 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FlipSequentialDiscard.vcxproj -> C:\RsI27Safety\.build\x64\Release\FlipSequentialDiscard.exe
+  RedConfigure.vcxproj -> C:\RsI27Safety\.build\x64\Release\RedConfigure.exe
+  Document.cpp
+  ViewerSqlite.Engine.cpp
+     Creating library C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemS3.lib and object C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemS3.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 10182 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  EtwListener.cpp
+  Finished generating code
+  ViewerSqliteTests.cpp
+  FileSystemS3.vcxproj -> C:\RsI27Safety\.build\x64\Release\Plugins\FileSystemS3.dll
+  DxUi pin verified: 19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1
+  AppTheme.cpp
+  MonitorFileReader.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  MonitorFileExporter.cpp
+  UiMetrics.cpp
+  All 3779 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerSqliteTests.vcxproj -> C:\RsI27Safety\.build\x64\Release\ViewerSqliteTests.exe
+  MonitorTest.cpp
+  ProductUiTests.cpp
+  DxUi pin verified: 19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1
+  ViewerPETests.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 3499 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 5805 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  MonitorTest.vcxproj -> C:\RsI27Safety\.build\x64\Release\MonitorTest.exe
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  ViewerPETests.vcxproj -> C:\RsI27Safety\.build\x64\Release\ViewerPETests.exe
+  All 4420 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  LocalizationTests-fr-FR.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\LocalizationTests-fr-FR.dll
+  LocalizationTests.cpp
+  ProductUiTests.vcxproj -> C:\RsI27Safety\.build\x64\Release\ProductUiTests.exe
+  PluginContractTests.cpp
+  FileSystemPathIdentity.cpp
+  FileSystemRouteContract.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  AppDataPaths.cpp
+  AppTheme.cpp
+  CrashQuarantine.cpp
+  CrashHandler.cpp
+  D2DHdcPaint.cpp
+  ChangeCase.cpp
+  FileSystemRenameBatch.cpp
+  BatchRenameEngine.cpp
+  BatchRenameExecutionEngine.cpp
+  FileOperationArtifactRegistry.cpp
+  FileOperationMoveBreadcrumb.cpp
+  BatchRenameMenus.cpp
+  BatchRenameWindow.cpp
+  Commands.SelfTest.cpp
+  ConnectionProfileUtils.cpp
+  DirectoryInfoCache.cpp
+  FileSystemPluginManager.cpp
+  PluginModuleLifecycle.cpp
+  FunctionBar.cpp
+  FolderView.cpp
+  FolderView.DragDrop.cpp
+  FolderView.Enumeration.cpp
+  FolderView.ErrorOverlay.cpp
+  FileOperationConfirmation.cpp
+  FolderView.FileOps.cpp
+  FolderView.Icons.cpp
+  FolderView.Interaction.cpp
+  FolderView.Layout.cpp
+  FolderView.Menus.cpp
+  FolderView.Rendering.cpp
+  FolderView.Selection.cpp
+  FolderWindow.cpp
+  FolderWindow.FileOperations.cpp
+  FolderWindow.FileOperations.Dialog.cpp
+  FolderWindow.FileOperations.IssuesPane.cpp
+  FolderWindow.FileOperations.Popup.cpp
+  FolderWindow.FileOperations.Popup.PathDetail.cpp
+  FolderWindow.FileOperations.State.Conflict.cpp
+  FileOperationsConflictBroker.cpp
+  FolderWindow.FileOperations.IssuesProjection.cpp
+  FolderWindow.FileOperations.SelfTest.cpp
+  WindowScreenshot.cpp
+  FolderWindow.FileOperations.State.cpp
+  Generating code
+  FolderWindow.ItemProperties.cpp
+  Previous IPDB not found, fall back to full compilation.
+  FolderWindow.FileSystem.cpp
+  FolderWindow.Interaction.cpp
+  FolderWindow.Layout.cpp
+  FolderWindow.SelectionSize.cpp
+  FileSystemPathIdentity.cpp
+  All 2394 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FolderWindow.StatusBar.cpp
+  FolderWindow.Viewers.cpp
+  LocalizationTests.vcxproj -> C:\RsI27Safety\.build\x64\Release\LocalizationTests.exe
+  FileSystemRouteContract.cpp
+  FolderWatcher.cpp
+  FileActionLauncher.cpp
+  FileActionResolver.cpp
+  ConnectionSecrets.cpp
+  ConnectionManagerWindow.cpp
+  ConnectionCredentialPromptDialog.cpp
+  WindowsHello.cpp
+  HostServices.cpp
+  SettingsSchemaTests.cpp
+  IconCache.cpp
+  AlertOverlayWindow.cpp
+  ThemeCycleOverlayWindow.cpp
+  CommandRegistry.cpp
+  CommandVisuals.cpp
+  CommandPaletteWindow.cpp
+  Generating code
+  FloatingTerminalWindow.cpp
+  Previous IPDB not found, fall back to full compilation.
+  CompareDirectoriesEngine.SelfTest.cpp
+  CompareDirectoriesEngine.cpp
+  FindFilesWindow.cpp
+  SearchFallbackEngine.cpp
+  CompareDirectoriesWindow.cpp
+  CompareDirectoriesWindow.Menu.cpp
+  CompareDirectoriesWindow.Options.cpp
+  CompareDirectoriesWindow.Progress.cpp
+  ManagePluginsDialog.cpp
+  MaskSyntax.cpp
+  NavigationView.cpp
+  All 3846 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  SessionState.cpp
+  NavigationView.Breadcrumb.cpp
+  NavigationView.Edit.cpp
+  NavigationView.FullPathPopup.cpp
+  NavigationView.Interaction.cpp
+  NavigationView.Menus.cpp
+  NavigationView.Rendering.cpp
+  Preferences.cpp
+  PluginContractTests.vcxproj -> C:\RsI27Safety\.build\x64\Release\PluginContractTests.exe
+  Preferences.Dialog.cpp
+  Preferences.Internal.cpp
+  Preferences.Advanced.cpp
+  Preferences.Monitor.cpp
+  Preferences.CompareDirectories.cpp
+  Preferences.FileOperations.cpp
+  Preferences.FileActions.cpp
+  Preferences.HotPaths.cpp
+  Preferences.Editors.cpp
+  Preferences.UserMenu.cpp
+  Preferences.General.cpp
+  SettingsSchemaParser.cpp
+  CrashHandlingTests.cpp
+  Preferences.Mouse.cpp
+  Preferences.Panes.cpp
+  Preferences.Plugins.cpp
+  Preferences.Plugin.Configuration.cpp
+  Preferences.Keyboard.cpp
+  Preferences.Themes.cpp
+  Preferences.Viewers.cpp
+  StartupMetrics.cpp
+  SettingsSchemaParser.cpp
+  SettingsHotReload.cpp
+  SettingsFileLauncher.cpp
+  ShortcutsWindow.cpp
+  RedSalamander.cpp
+  SettingsSchemaExport.cpp
+  UiMetrics.cpp
+  ThemedInputFrames.cpp
+  ShortcutDefaults.cpp
+  ShortcutManager.cpp
+  ShortcutCommandCatalog.cpp
+  TerminalHostSupport.cpp
+  ShortcutText.cpp
+  CrashQuarantine.cpp
+  SelfTestCommon.cpp
+  SelfTestLatencyHooks.cpp
+  SplashScreen.cpp
+  ViewerPluginManager.cpp
+  WSLDistro.cpp
+  FolderWindow.FileSystem.Commands.cpp
+  FolderWindow.FileSystem.Navigation.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  FolderWindow.FileOperations.State.Runtime.cpp
+  FolderWindow.FileOperations.State.Diagnostics.cpp
+  FolderWindow.FileOperations.State.Queue.cpp
+  All 4279 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  SettingsSchemaTests.vcxproj -> C:\RsI27Safety\.build\x64\Release\SettingsSchemaTests.exe
+  DxUi pin verified: 19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1
+  CrashHandler.cpp
+  pch.cpp
+  TraceProvider.cpp
+  CrashQuarantine.TestStubs.cpp
+  SelfTestLatencyHooks.cpp
+  FileSystemPluginManager.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 2820 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  PluginModuleLifecycle.cpp
+  CrashHandlingTests.vcxproj -> C:\RsI27Safety\.build\x64\Release\CrashHandlingTests.exe
+  DxUi pin verified: 19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  ViewerPluginManager.cpp
+  RcWriter.cpp
+  RedConfigureApp.cpp
+  RedConfigurePagePresenters.cpp
+  FolderView.Enumeration.Access.cpp
+  RedConfigureRoot.cpp
+  IconCache.cpp
+  RedConfigureSession.cpp
+  FolderIconEnumerationDuplicatePathPerfTest.cpp
+  FolderIconEnumerationPerfTest.cpp
+  FolderViewColumnLayoutTests.cpp
+  RedConfigureWorkflow.cpp
+  FolderViewRefreshDuplicatePathPerfTest.cpp
+  PerformanceTests2.cpp
+  RedConfigureTraceProvider.cpp
+  PluginManager.TestStubs.cpp
+     Creating library C:\RsI27Safety\.build\x64\Release\PerformanceTests2.lib and object C:\RsI27Safety\.build\x64\Release\PerformanceTests2.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  RedConfigureUiHelpers.cpp
+  All 9968 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  PerformanceTests2.vcxproj -> C:\RsI27Safety\.build\x64\Release\PerformanceTests2.dll
+  FileSystemCurl.ImapHelpers.cpp
+  ThemeCatalog.cpp
+  FileSystemCurlTests.cpp
+  ThemePreviewModel.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 1379 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemCurlTests.vcxproj -> C:\RsI27Safety\.build\x64\Release\FileSystemCurlTests.exe
+  FileSystem-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystem-cs-CZ.dll
+  FileSystem-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystem-sk-SK.dll
+  FileSystem7z-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystem7z-cs-CZ.dll
+  FileSystem7z-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystem7z-sk-SK.dll
+  FileSystemCurl-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemCurl-cs-CZ.dll
+  FileSystemCurl-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemCurl-sk-SK.dll
+  WorkspaceDiscovery.cpp
+  FileSystemDummy-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemDummy-cs-CZ.dll
+  FileSystemDummy-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemDummy-sk-SK.dll
+  SearchTextHelpers.cpp
+  FileSystemGoogleDrive-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemGoogleDrive-cs-CZ.dll
+  FileSystemGoogleDrive-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemGoogleDrive-sk-SK.dll
+  FileSystemMicrosoftDrive-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemMicrosoftDrive-cs-CZ.dll
+  RedConfigureTests.cpp
+  FileSystemMicrosoftDrive-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemMicrosoftDrive-sk-SK.dll
+  FileSystemS3-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemS3-cs-CZ.dll
+  FileSystemS3-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\FileSystemS3-sk-SK.dll
+  ViewerImgRaw-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerImgRaw-cs-CZ.dll
+  ViewerImgRaw-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerImgRaw-sk-SK.dll
+  ViewerPE-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerPE-cs-CZ.dll
+  ViewerPE-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerPE-sk-SK.dll
+  ViewerSpace-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerSpace-cs-CZ.dll
+  ViewerSpace-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerSpace-sk-SK.dll
+  ViewerSqlite-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerSqlite-cs-CZ.dll
+  ViewerSqlite-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerSqlite-sk-SK.dll
+  ViewerText-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerText-cs-CZ.dll
+  ViewerText-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerText-sk-SK.dll
+  ViewerVLC-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerVLC-cs-CZ.dll
+  ViewerVLC-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerVLC-sk-SK.dll
+  ViewerWeb-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerWeb-cs-CZ.dll
+  ViewerWeb-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\ViewerWeb-sk-SK.dll
+  Generating code
+  RedSalamander-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\RedSalamander-cs-CZ.dll
+  RedSalamander-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\RedSalamander-sk-SK.dll
+  RedSalamanderMonitor-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\RedSalamanderMonitor-cs-CZ.dll
+  RedSalamanderMonitor-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\RedSalamanderMonitor-sk-SK.dll
+  LocalizationTests-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\LocalizationTests-cs-CZ.dll
+  LocalizationTests-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\LocalizationTests-sk-SK.dll
+  RedConfigure-cs-CZ.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\RedConfigure-cs-CZ.dll
+  RedConfigure-sk-SK.vcxproj -> C:\RsI27Safety\.build\x64\Release\Lang\RedConfigure-sk-SK.dll
+  Previous IPDB not found, fall back to full compilation.
+  All 149171 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  RedSalamander.vcxproj -> C:\RsI27Safety\.build\x64\Release\RedSalamander.exe
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 11811 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  RedConfigureTests.vcxproj -> C:\RsI27Safety\.build\x64\Release\RedConfigureTests.exe
+Captured log: C:\RsI27Safety\.build\logs\msbuild-20261002_161832_200-pid96264-916e4de7.log
+Diagnostics: 0 warning(s), 0 error(s)
+Build artifacts attested: 284d47cf32a3872c22c23e0cce74a17b6d36bd81c20cc52773cae19bab9dc2fc
+
+========================================
+Build completed successfully!
+Configuration: Release | Platform: x64
+Build time: 06:00
+========================================
+Outputs (copy/paste any PowerShell command to run):
+& "C:\RsI27Safety\.build\x64\Release\RedLauncher.exe" # 0.39 MiB
+& "C:\RsI27Safety\.build\x64\Release\RedSalamander.exe" # 30.16 MiB
+& "C:\RsI27Safety\.build\x64\Release\RedSalamanderMonitor.exe" # 1.37 MiB

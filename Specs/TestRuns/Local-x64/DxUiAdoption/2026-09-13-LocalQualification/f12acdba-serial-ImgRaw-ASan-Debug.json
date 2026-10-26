@@ -1,0 +1,79 @@
+{
+  "source": "f12acdbaf68fef0f4f9e86f3852e45c78e44f014",
+  "configuration": "ASan Debug",
+  "platform": "x64",
+  "exeSha256": "E66CF18F022DE0C04EFAA12CE4C3F4BD1B50C348521785105E02D03C173FDF14",
+  "pluginSha256": "EF4B81E482D4DE656867C5D5E75A133BF0D6DDA6BEECE16819F97242B0E7DF36",
+  "runs": [
+    {
+      "attempt": 1,
+      "startedUtc": "2026-09-12T22:25:17.6450395Z",
+      "elapsedMs": 2778.9707,
+      "exitCode": 0,
+      "log": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f12acdba-serial-ImgRaw-ASan-Debug-1.log"
+    },
+    {
+      "attempt": 2,
+      "startedUtc": "2026-09-12T22:25:20.4272671Z",
+      "elapsedMs": 1978.5268,
+      "exitCode": 0,
+      "log": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f12acdba-serial-ImgRaw-ASan-Debug-2.log"
+    },
+    {
+      "attempt": 3,
+      "startedUtc": "2026-09-12T22:25:22.4060480Z",
+      "elapsedMs": 2010.4622,
+      "exitCode": 0,
+      "log": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f12acdba-serial-ImgRaw-ASan-Debug-3.log"
+    },
+    {
+      "attempt": 4,
+      "startedUtc": "2026-09-12T22:25:24.4167416Z",
+      "elapsedMs": 1966.6107,
+      "exitCode": 0,
+      "log": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f12acdba-serial-ImgRaw-ASan-Debug-4.log"
+    },
+    {
+      "attempt": 5,
+      "startedUtc": "2026-09-12T22:25:26.3835821Z",
+      "elapsedMs": 1982.7886,
+      "exitCode": 0,
+      "log": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f12acdba-serial-ImgRaw-ASan-Debug-5.log"
+    },
+    {
+      "attempt": 6,
+      "startedUtc": "2026-09-12T22:25:28.3666571Z",
+      "elapsedMs": 1917.0029,
+      "exitCode": 0,
+      "log": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f12acdba-serial-ImgRaw-ASan-Debug-6.log"
+    },
+    {
+      "attempt": 7,
+      "startedUtc": "2026-09-12T22:25:30.2840602Z",
+      "elapsedMs": 2505.313,
+      "exitCode": 0,
+      "log": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f12acdba-serial-ImgRaw-ASan-Debug-7.log"
+    },
+    {
+      "attempt": 8,
+      "startedUtc": "2026-09-12T22:25:32.7895930Z",
+      "elapsedMs": 1934.9798,
+      "exitCode": 0,
+      "log": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f12acdba-serial-ImgRaw-ASan-Debug-8.log"
+    },
+    {
+      "attempt": 9,
+      "startedUtc": "2026-09-12T22:25:34.7248247Z",
+      "elapsedMs": 2403.4657,
+      "exitCode": 0,
+      "log": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f12acdba-serial-ImgRaw-ASan-Debug-9.log"
+    },
+    {
+      "attempt": 10,
+      "startedUtc": "2026-09-12T22:25:37.1285285Z",
+      "elapsedMs": 2194.0696,
+      "exitCode": 0,
+      "log": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\f12acdba-serial-ImgRaw-ASan-Debug-10.log"
+    }
+  ]
+}

@@ -1,0 +1,88 @@
+{
+    "run_started_utc": "2026-10-26T13:14:30.696Z",
+    "suite": "Commands",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20261026T131427Z-91460-f66675d9146c475ca5ace55988e951b6\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 119150,
+    "passed": 11,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Return after B completion must restore A's focused action, scope, default/cancel and context.",
+    "cases": [
+        {
+            "name": "theme_cycle_overlay_retention",
+            "status": "passed",
+            "duration_ms": 35092,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_fileops_move_breadcrumb_durable_lifecycle",
+            "status": "passed",
+            "duration_ms": 430,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_two_pending_task_identity",
+            "status": "failed",
+            "duration_ms": 5233,
+            "repeat_index": 1,
+            "reason": "Return after B completion must restore A's focused action, scope, default/cancel and context."
+        },
+        {
+            "name": "cmd_viewer_space_dense_files_exposes_more_than_legacy_topk",
+            "status": "passed",
+            "duration_ms": 2338,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_close_does_not_wait_for_retired_model_disposal",
+            "status": "passed",
+            "duration_ms": 8303,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_viewer_space_renderer_retirement_is_bounded",
+            "status": "passed",
+            "duration_ms": 1771,
+            "repeat_index": 1
+        },
+        {
+            "name": "theme_cycle_overlay_retention",
+            "status": "passed",
+            "duration_ms": 43143,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_fileops_move_breadcrumb_durable_lifecycle",
+            "status": "passed",
+            "duration_ms": 508,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_two_pending_task_identity",
+            "status": "passed",
+            "duration_ms": 4886,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_viewer_space_dense_files_exposes_more_than_legacy_topk",
+            "status": "passed",
+            "duration_ms": 2258,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_viewer_space_close_does_not_wait_for_retired_model_disposal",
+            "status": "passed",
+            "duration_ms": 8295,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_viewer_space_renderer_retirement_is_bounded",
+            "status": "passed",
+            "duration_ms": 1765,
+            "repeat_index": 2
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 2
+}

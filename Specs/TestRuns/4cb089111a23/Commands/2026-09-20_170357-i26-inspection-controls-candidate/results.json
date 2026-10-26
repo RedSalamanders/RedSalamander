@@ -1,0 +1,126 @@
+{
+    "run_started_utc": "2026-09-20T15:04:00.602Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\20260920T150039Z-81576-8b486acc6eb14747a2d662a37c04c4c2\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 26657,
+    "passed": 15,
+    "failed": 3,
+    "skipped": 0,
+    "failureMessage": "Background UIA inspection must select the exact role item without taking focus or deciding the conflict.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 4199,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "failed",
+            "duration_ms": 815,
+            "repeat_index": 1,
+            "reason": "Background UIA inspection must select the exact role item without taking focus or deciding the conflict."
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1039,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_selection_select_next_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 1012,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_selection_hide_show_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 168,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 4224,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "failed",
+            "duration_ms": 814,
+            "repeat_index": 2,
+            "reason": "Background UIA inspection must select the exact role item without taking focus or deciding the conflict."
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1140,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_selection_select_next_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 992,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_selection_hide_show_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 150,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_path_profiles",
+            "status": "passed",
+            "duration_ms": 0,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_comparison_rows",
+            "status": "passed",
+            "duration_ms": 4228,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+            "status": "failed",
+            "duration_ms": 806,
+            "repeat_index": 3,
+            "reason": "Background UIA inspection must select the exact role item without taking focus or deciding the conflict."
+        },
+        {
+            "name": "cmd_pane_fileops_completed_group_and_navigation",
+            "status": "passed",
+            "duration_ms": 1078,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_selection_select_next_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 996,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_selection_hide_show_names_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 157,
+            "repeat_index": 3
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

@@ -1,0 +1,125 @@
+[PASS] ViewerVLC HUD contract test executable path resolves
+[PASS] ViewerVLC.dll is present for HUD contract validation
+[PASS] ViewerVLC.dll loads successfully for HUD contract validation
+[PASS] ViewerVLC factory export is available for HUD contract validation
+[PASS] ViewerVLC factory creates an IViewer for HUD contract validation
+[PASS] ViewerVLC accepts a lifecycle callback for close-once validation
+[PASS] ViewerVLC exposes configuration for the synthetic HUD contract
+[PASS] ViewerVLC disables VLC autodetection for the synthetic HUD contract
+[PASS] ViewerVLC accepts a rainbow viewer theme for loading-overlay validation
+[PASS] ViewerVLC HUD fixture TestSandbox root is available
+[PASS] ViewerVLC HUD contract window open succeeds
+[PASS] ViewerVLC HUD contract window becomes visible
+[PASS] ViewerVLC debug snapshot is available
+[PASS] ViewerVLC HUD exposes a speaker mute button
+[PASS] ViewerVLC HUD exposes a horizontal volume slider
+[PASS] ViewerVLC snapshot uses the visible video surface size
+[PASS] ViewerVLC reaches a terminal state before async fault injection
+[PASS] ViewerVLC debug hook arms a deterministic loader-submit failure
+[PASS] ViewerVLC accepts an open whose loader submission is fault-injected
+[INFO] ViewerVLC loader-submit Open return_us=17622 budget_us=100000
+[PASS] ViewerVLC loader-submit failure never runs loader work synchronously on the UI thread
+[PASS] ViewerVLC posts a terminal UI error after loader-submit failure
+[PASS] Loader-submit failure uses a neutral error without installation advice
+[PASS] ViewerVLC debug hook arms a deterministic load-completion payload-post failure
+[PASS] ViewerVLC accepts an open whose completion payload post is fault-injected
+[PASS] ViewerVLC load-completion post failure reaches the identity-bound terminal UI fallback
+[PASS] ViewerVLC accepts rapid superseding delayed opens
+[PASS] ViewerVLC rejects a delayed stale load result by request and window identity
+[PASS] ViewerVLC never attaches or plays a stale delayed load result
+[PASS] ViewerVLC debug can force delayed loading overlay
+[PASS] ViewerVLC shows a loading overlay once VLC init exceeds the delay
+[PASS] ViewerVLC loading spinner uses a denser, easier-to-see dot ring
+[PASS] ViewerVLC loading spinner is larger than the old compact wheel
+[PASS] ViewerVLC loading spinner gives the active dot extra visual weight
+[PASS] ViewerVLC loading spinner honors rainbow viewer themes
+[PASS] ViewerVLC rainbow loading spinner uses multiple dot colors instead of one accent color
+[PASS] ViewerVLC debug playback state can seed wheel and volume checks
+[PASS] ViewerVLC mouse wheel seeks by the normal ten-second step
+[PASS] ViewerVLC Shift+wheel seeks by the small three-second step
+[PASS] ViewerVLC Ctrl+wheel seeks by the large one-minute step and clamps to the end
+[PASS] ViewerVLC speaker click mutes without forgetting the slider volume
+[PASS] ViewerVLC speaker click restores the previous volume
+[PASS] ViewerVLC debug hook arms delayed stop/release
+[PASS] ViewerVLC debug hook arms a deterministic close-completion payload-post failure
+[PASS] ViewerVLC HUD contract window close succeeds
+[PASS] ViewerVLC Close returns without waiting for delayed stop/release
+[PASS] ViewerVLC retains parent and video HWND identities while stop/release is outstanding
+[PASS] ViewerVLC hides retained parent and video surfaces during asynchronous close
+[PASS] ViewerVLC reports an identity-bound close pending state
+[PASS] ViewerVLC destroys retained HWNDs after asynchronous cleanup completion
+[PASS] ViewerVLC notifies close exactly once with the registered cookie
+[PASS] ViewerVLC rapidly reopens after asynchronous close
+[PASS] ViewerVLC rapid-reopen cycle creates a visible window
+[PASS] ViewerVLC close-completion post failure drained through the identity-bound UI fallback
+[PASS] ViewerVLC assigns a new identity to every reopened window even under HWND reuse pressure
+[PASS] ViewerVLC queues a delayed superseding load in a rapid-reopen cycle
+[PASS] ViewerVLC closes immediately after a delayed rapid-reopen load
+[PASS] ViewerVLC cleanup allocation/submit fault injection never blocks Close on stop/release
+[PASS] ViewerVLC retains and hides the rapid-reopen window until delayed work is drained
+[PASS] ViewerVLC rapid-reopen window closes after identity-bound completions drain
+[PASS] ViewerVLC emits one close notification per accepted rapid-reopen generation
+[PASS] ViewerVLC rapidly reopens after asynchronous close
+[PASS] ViewerVLC rapid-reopen cycle creates a visible window
+[PASS] ViewerVLC pre-created dispatcher drains cleanup after an injected allocation failure
+[PASS] ViewerVLC assigns a new identity to every reopened window even under HWND reuse pressure
+[PASS] ViewerVLC queues a delayed superseding load in a rapid-reopen cycle
+[PASS] ViewerVLC closes immediately after a delayed rapid-reopen load
+[PASS] ViewerVLC cleanup allocation/submit fault injection never blocks Close on stop/release
+[PASS] ViewerVLC retains and hides the rapid-reopen window until delayed work is drained
+[PASS] ViewerVLC rapid-reopen window closes after identity-bound completions drain
+[PASS] ViewerVLC emits one close notification per accepted rapid-reopen generation
+[PASS] ViewerVLC rapidly reopens after asynchronous close
+[PASS] ViewerVLC rapid-reopen cycle creates a visible window
+[PASS] ViewerVLC pre-created dispatcher drains cleanup after an injected submit failure
+[PASS] ViewerVLC assigns a new identity to every reopened window even under HWND reuse pressure
+[PASS] ViewerVLC queues a delayed superseding load in a rapid-reopen cycle
+[PASS] ViewerVLC closes immediately after a delayed rapid-reopen load
+[PASS] ViewerVLC cleanup allocation/submit fault injection never blocks Close on stop/release
+[PASS] ViewerVLC retains and hides the rapid-reopen window until delayed work is drained
+[PASS] ViewerVLC rapid-reopen window closes after identity-bound completions drain
+[PASS] ViewerVLC emits one close notification per accepted rapid-reopen generation
+[PASS] ViewerVLC rapidly reopens after asynchronous close
+[PASS] ViewerVLC rapid-reopen cycle creates a visible window
+[PASS] ViewerVLC assigns a new identity to every reopened window even under HWND reuse pressure
+[PASS] ViewerVLC queues a delayed superseding load in a rapid-reopen cycle
+[PASS] ViewerVLC closes immediately after a delayed rapid-reopen load
+[PASS] ViewerVLC cleanup allocation/submit fault injection never blocks Close on stop/release
+[PASS] ViewerVLC retains and hides the rapid-reopen window until delayed work is drained
+[PASS] ViewerVLC rapid-reopen window closes after identity-bound completions drain
+[PASS] ViewerVLC emits one close notification per accepted rapid-reopen generation
+[PASS] ViewerVLC rapidly reopens after asynchronous close
+[PASS] ViewerVLC rapid-reopen cycle creates a visible window
+[PASS] ViewerVLC assigns a new identity to every reopened window even under HWND reuse pressure
+[PASS] ViewerVLC queues a delayed superseding load in a rapid-reopen cycle
+[PASS] ViewerVLC closes immediately after a delayed rapid-reopen load
+[PASS] ViewerVLC cleanup allocation/submit fault injection never blocks Close on stop/release
+[PASS] ViewerVLC retains and hides the rapid-reopen window until delayed work is drained
+[PASS] ViewerVLC rapid-reopen window closes after identity-bound completions drain
+[PASS] ViewerVLC emits one close notification per accepted rapid-reopen generation
+[PASS] ViewerVLC rapidly reopens after asynchronous close
+[PASS] ViewerVLC rapid-reopen cycle creates a visible window
+[PASS] ViewerVLC assigns a new identity to every reopened window even under HWND reuse pressure
+[PASS] ViewerVLC queues a delayed superseding load in a rapid-reopen cycle
+[PASS] ViewerVLC closes immediately after a delayed rapid-reopen load
+[PASS] ViewerVLC cleanup allocation/submit fault injection never blocks Close on stop/release
+[PASS] ViewerVLC retains and hides the rapid-reopen window until delayed work is drained
+[PASS] ViewerVLC rapid-reopen window closes after identity-bound completions drain
+[PASS] ViewerVLC emits one close notification per accepted rapid-reopen generation
+[PASS] ViewerVLC forced-parent cleanup release gate is created
+[PASS] ViewerVLC forced-parent teardown host is created
+[PASS] ViewerVLC opens under the forced-destroy parent
+[PASS] ViewerVLC forced-parent child becomes visible
+[PASS] ViewerVLC forced-parent child drains synthetic loader work before teardown
+[INFO] ViewerVLC forced-parent precondition: loading=false pending_loads=0 deferred_cleanup=0 window_identity=8 player=false
+[PASS] ViewerVLC forced-parent cleanup accepts the owned release gate
+[PASS] ViewerVLC forced-parent cleanup allocation fault is armed
+[PASS] ViewerVLC detaches callbacks before forced parent teardown
+[INFO] ViewerVLC forced-parent return_us=41181 budget_us=250000 cleanup_release_signaled=false
+[PASS] ViewerVLC forced parent destruction does not wait for delayed cleanup
+[PASS] ViewerVLC child HWND is destroyed immediately with its forced parent
+[PASS] ViewerVLC forced-parent cleanup gate remains held after caller references are released
+[PASS] ViewerVLC dispatcher pin keeps the plugin mapped after forced parent destruction
+[PASS] ViewerVLC forced-parent cleanup gate releases owned worker cleanup
+[PASS] ViewerVLC unloads after the HWND-independent dispatcher completes stop/release
+ViewerPETests passed.

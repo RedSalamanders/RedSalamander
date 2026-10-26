@@ -1,0 +1,48 @@
+{
+  "reviewer": "root",
+  "scope": "Private curation state guards; not application behavior or a benchmark result",
+  "helperSha256": "aed6e2a518bbd5306ddf2f8d4496b66cd6b455231b48ae1cb8fedb91c021c7fa",
+  "cases": [
+    {
+      "case": "completed-prefix-without-terminal-campaign",
+      "accepted": false,
+      "reason": "refusing mutable/incomplete RetainedReference campaign without finished_utc or a terminal FAILED run"
+    },
+    {
+      "case": "terminal-passed-campaign",
+      "accepted": true,
+      "scope": "campaign-state-preserved"
+    },
+    {
+      "case": "reject-primary-STARTING",
+      "accepted": false,
+      "reason": "refusing campaign with unsupported or nonterminal primary run status at index 0"
+    },
+    {
+      "case": "reject-primary-CURATION_PENDING",
+      "accepted": false,
+      "reason": "refusing campaign with unsupported or nonterminal primary run status at index 0"
+    },
+    {
+      "case": "reject-primary-UNKNOWN",
+      "accepted": false,
+      "reason": "refusing campaign with unsupported or nonterminal primary run status at index 0"
+    },
+    {
+      "case": "passed-primary-with-pending-case",
+      "accepted": false,
+      "reason": "refusing run with pending ancillary state that is not a sealed FAILED record at index 0"
+    },
+    {
+      "case": "sealed-failure-with-unavailable-case",
+      "accepted": true,
+      "scope": "incomplete-retained-reference-history"
+    },
+    {
+      "case": "unsealed-failure-with-pending-case",
+      "accepted": false,
+      "reason": "refusing run with pending ancillary state that is not a sealed FAILED record at index 0"
+    }
+  ],
+  "failures": 0
+}

@@ -1,0 +1,55 @@
+{
+  "schema": "red-salamander.perf-compaction-summary.v1",
+  "case": "folderView_perf_focus_selection_state",
+  "machineHash": "4cb089111a23",
+  "build": "Release",
+  "testEnabled": true,
+  "runId": "20260821T083548Z-80844-ad2e6191887b4374ac9b22cde8951cd0",
+  "buildReceipt": "2e4baa0ad87984873b5116e8d7483df2cf0852f6fd6412a5668af62ee30e81b3",
+  "sourceSnapshot": "9b2ec2b86516ececf9b3ddbca8ea1aa3011cad161dfe011d487ab3ca47da3a8e",
+  "headCommit": "8313c1950e69f7ef1e5e057c5b0850381f410d33",
+  "repeatCount": 3,
+  "compaction": {
+    "originalRunBytes": 12150038,
+    "originalSourceBytes": 11691107,
+    "originalSourceSha256": "c7c00130ac88dbbc75098d1a8e05d95dc7a30ce31ca4f50131a9124d35a46478",
+    "originalRowCount": 31864,
+    "retainedSourceBytes": 641749,
+    "retainedSourceSha256": "b7e7545455dff0843f50197c15d19934fb783166792a73dda2e829274b403356",
+    "retainedRowCount": 1754,
+    "retainedRowsInOriginalOrder": true,
+    "retainedMetricPredicate": "metric starts with folder.focus., folder.focus_memory., folder.refresh., or folder.frame.; or metric equals FolderView.ApplyCurrentSort"
+  },
+  "behavioralResult": {
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+  },
+  "candidate": {
+    "displayedItemCount": 10000,
+    "acceptedModelChangeSamplesPerRepeat": 208,
+    "focusResolveMetricRowsInArchive": 634,
+    "focusResolveP95Us": 4328,
+    "refreshMetricRowsInArchive": 22,
+    "currentInvariantViolations": 0,
+    "focusMemoryCapViolations": 0,
+    "maximumFocusMemoryEntries": 512,
+    "maximumFocusMemoryPayloadBytes": 132096,
+    "finalCumulativeFocusMemoryEvictions": 1293,
+    "noCacheEvents": 0,
+    "archivedResolutionReasonCounts": {
+      "empty": 3,
+      "survivingCurrent": 616,
+      "genericSuccessor": 6,
+      "genericPredecessor": 3,
+      "firstItem": 6
+    }
+  },
+  "comparison": {
+    "baselineArchive": "2026-08-20_183441_folder_view_focus_selection_final_candidate_release",
+    "baselineFocusResolveP95Us": 4406,
+    "candidateFocusResolveP95Us": 4328,
+    "deltaPercent": -1.8,
+    "classification": "noise"
+  }
+}

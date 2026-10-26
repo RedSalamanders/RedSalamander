@@ -1,0 +1,28 @@
+{
+    "run_started_utc": "2026-04-26T13:24:54.838Z",
+    "suite": "FileOperations",
+    "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\fileops",
+    "duration_ms": 28079,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 22813
+        },
+        {
+            "name": "Phase7_CopyMoveConcurrency16Perf",
+            "status": "passed",
+            "duration_ms": 859
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 4407
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0
+}

@@ -1,0 +1,591 @@
+{
+  "profile": "Debug",
+  "bindings": [
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block1-04\\observation.json",
+      "archive": "baseline-debug-block1-04/observation.json",
+      "sha256": "DFE64C187166AB61D5195909F82576D48AC03D746FC14A8831122C6A1A1C8D61",
+      "bytes": 22257,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block1-04\\bindings.json",
+      "archive": "baseline-debug-block1-04/bindings.json",
+      "sha256": "9F2B2C7CD024345521AAA2ADC29085A802A79EE8AD3F9CB969C98F824586FAC8",
+      "bytes": 2879,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block1-04\\results.json",
+      "archive": "baseline-debug-block1-04/results.json",
+      "sha256": "911251D0BA9ED7955905892D17D38A9A13180057A329B315A6F4C04654F6AD12",
+      "bytes": 1914,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block1-04\\run-all-tests-results.json",
+      "archive": "baseline-debug-block1-04/run-all-tests-results.json",
+      "sha256": "00372F2B59C2493E74E6BEDF8D46A40B43C7C1E77BC07BCC920188238DC12FDA",
+      "bytes": 3070,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block1-04\\workspace-final.json",
+      "archive": "baseline-debug-block1-04/workspace-final.json",
+      "sha256": "AE3BE7E6D4DC29CC234B166AAA40D39E029B1C7A68CB7A918E1B933FD06C84D3",
+      "bytes": 8094,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block1-04\\commands\\results.json",
+      "archive": "baseline-debug-block1-04/commands/results.json",
+      "sha256": "B2E2EDDD7A63A55CDBDEB2E7186EC3C62C35E65A98E701533C48319A50A8C7CB",
+      "bytes": 1271,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block1-04\\commands\\trace.txt",
+      "archive": "baseline-debug-block1-04/commands/trace.txt",
+      "sha256": "AB899A9E003C196C11656FD191BF65A49184F828FCBDA5155281FCA4E694AB37",
+      "bytes": 2348,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block1-04\\build-process-samples.jsonl",
+      "archive": "baseline-debug-block1-04/build-process-samples.jsonl.gz",
+      "source_sha256": "52F98D3EDBC90E95E0070AACB05B82A546EC62D04E18A578407199EFC152A750",
+      "source_bytes": 67906,
+      "compressed_sha256": "66C5919D83B46E65DC059A8E03603E8A7FAE04D4AAA9A133C4AD0C3F92DA38EF",
+      "compressed_bytes": 8187,
+      "kind": "gzip-complete-original",
+      "retention": "Every original byte, including all gate and measurement observations, is retained losslessly."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block1-04\\perf\\folderView_perf_sort_toggle_stress_metrics.json",
+      "archive": "baseline-debug-block1-04/perf/folderView_perf_sort_toggle_stress_metrics.json",
+      "sha256": "E3D644C84796DAB7D2D8400852F7E3E5C02F3CC7EC1E51C7D2AA54401CBF50D2",
+      "bytes": 4458,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block1-04\\perf\\perf_metrics.jsonl",
+      "archive": "baseline-debug-block1-04/perf/perf-selected.jsonl",
+      "source_sha256": "A4E67CDF19B4B9296FF9E894482392A5E71272F1E6487D0EAE209BCF88A21AAF",
+      "source_bytes": 12995796,
+      "source_rows": 35295,
+      "selected_sha256": "7C328984328B420EC99CAF8F9C2458471084967D4E7D0EECC9FB962E91D389FC",
+      "selected_rows": 1218,
+      "metric_filter": "^(folder\\.sort_|FolderView\\.ApplyCurrentSort(?:\\.|$)|FolderView\\.ExecuteEnumeration\\.(SortMerge|NaturalSortRanks)|render\\.(layout_items_us|begin_to_enddraw_us|present_us)$|folder\\.layout\\.|dwrite\\.text_layout\\.frame_create)",
+      "kind": "complete-metric-families-original-order",
+      "omitted": "Full original includes per-item draw, all other frame and preparation families. It remains intact at source; analysis uses the complete original."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block1-04\\build-receipt.json",
+      "archive": "receipts/132aabce2ec14a1ba0e4931ad9c9ed0a86c4b77b77c61b145860b3899815f612.json",
+      "sha256": "526B2BBB07FA4EC46EC76E482D9997E9E1F12ACFE09D0AB00C75B6A945440DB8",
+      "bytes": 93728,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block1-01\\observation.json",
+      "archive": "candidate-debug-block1-01/observation.json",
+      "sha256": "BDD04DB4773032B1DD92BB9A3EDE977FB104F8B98ADC59324211A6B0CECE184B",
+      "bytes": 22256,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block1-01\\bindings.json",
+      "archive": "candidate-debug-block1-01/bindings.json",
+      "sha256": "AC7F70F01C1013522EE53C4D2679D91F06E9C7D6EB0FA3A0E4244CFEA061F71C",
+      "bytes": 2880,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block1-01\\results.json",
+      "archive": "candidate-debug-block1-01/results.json",
+      "sha256": "9625D1A72398A2FF351BF023846C51C2EE4FB778CEA7425273AD8A632099040C",
+      "bytes": 1914,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block1-01\\run-all-tests-results.json",
+      "archive": "candidate-debug-block1-01/run-all-tests-results.json",
+      "sha256": "67BC640F391AE495DA9B69F3700BF064E1E85F4219FDAC48AF1CCA25B28F93DD",
+      "bytes": 3071,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block1-01\\workspace-final.json",
+      "archive": "candidate-debug-block1-01/workspace-final.json",
+      "sha256": "A05506FE525B63DC129AE3DD62FD08C25083F3DC63CDF118D7573DD74390CCDB",
+      "bytes": 8094,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block1-01\\commands\\results.json",
+      "archive": "candidate-debug-block1-01/commands/results.json",
+      "sha256": "E5EA0FE6F2D0F39E29F9D691B92BF9CB3C50F419F79D93B49335A3676C8A6827",
+      "bytes": 1271,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block1-01\\commands\\trace.txt",
+      "archive": "candidate-debug-block1-01/commands/trace.txt",
+      "sha256": "48F4DB522595983ADFA492CA8C33470AF0A3CA960635AC2F443E5079FA02592A",
+      "bytes": 2350,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block1-01\\build-process-samples.jsonl",
+      "archive": "candidate-debug-block1-01/build-process-samples.jsonl.gz",
+      "source_sha256": "69C17B29E51A94067B82EDD26A75485803C0370ADEA768D0E45B5103CD458593",
+      "source_bytes": 67321,
+      "compressed_sha256": "587B0FE40B3C27C9BAB0C9B9A7D1B75D39DA7D356087AB7FD0CB21210C405711",
+      "compressed_bytes": 8105,
+      "kind": "gzip-complete-original",
+      "retention": "Every original byte, including all gate and measurement observations, is retained losslessly."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block1-01\\perf\\folderView_perf_sort_toggle_stress_metrics.json",
+      "archive": "candidate-debug-block1-01/perf/folderView_perf_sort_toggle_stress_metrics.json",
+      "sha256": "EA2DB47F3D148838D13D85E789E56536339BDC9A90677559323754C99854FE50",
+      "bytes": 4450,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block1-01\\perf\\perf_metrics.jsonl",
+      "archive": "candidate-debug-block1-01/perf/perf-selected.jsonl",
+      "source_sha256": "3248FE620EE975147B0BCD471ADC5E61A07299D26F261E3A9A79648A3A11688E",
+      "source_bytes": 12817095,
+      "source_rows": 34917,
+      "selected_sha256": "ED22A575CB2124B02D64200E63E9E2BBC42814D8D18792EBF78F911492195AA8",
+      "selected_rows": 1221,
+      "metric_filter": "^(folder\\.sort_|FolderView\\.ApplyCurrentSort(?:\\.|$)|FolderView\\.ExecuteEnumeration\\.(SortMerge|NaturalSortRanks)|render\\.(layout_items_us|begin_to_enddraw_us|present_us)$|folder\\.layout\\.|dwrite\\.text_layout\\.frame_create)",
+      "kind": "complete-metric-families-original-order",
+      "omitted": "Full original includes per-item draw, all other frame and preparation families. It remains intact at source; analysis uses the complete original."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block1-01\\build-receipt.json",
+      "archive": "receipts/c6963562258a28ed57e797d11423b84500da7368eb0c918cd8f3bf42ce7c7508.json",
+      "sha256": "B0E938BA2929790D11213F80944484EB380BAE09935B7BAC98B6C0E4784EE71A",
+      "bytes": 93920,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block2-01\\observation.json",
+      "archive": "candidate-debug-block2-01/observation.json",
+      "sha256": "4D12BD7F9484F51862C634FB62A7C1EE31C05B1271A000D8860B4DD4A793853A",
+      "bytes": 22258,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block2-01\\bindings.json",
+      "archive": "candidate-debug-block2-01/bindings.json",
+      "sha256": "941988181CBFA8CBE70F8815357818304154026FC827464423A4B3C8946151A6",
+      "bytes": 2880,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block2-01\\results.json",
+      "archive": "candidate-debug-block2-01/results.json",
+      "sha256": "06624A0EE465C07135E3DEBDF73B796E77BFE846380167ADD2A4742A08ED26E1",
+      "bytes": 1914,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block2-01\\run-all-tests-results.json",
+      "archive": "candidate-debug-block2-01/run-all-tests-results.json",
+      "sha256": "A4299AA1DE7C45F7F6AC74E8F14D62256133066421A446C4AE8D3482E90AF05B",
+      "bytes": 3071,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block2-01\\workspace-final.json",
+      "archive": "candidate-debug-block2-01/workspace-final.json",
+      "sha256": "1738BE33AA5DB876531E60010F10F1B45249EAB2E91EE8A8D398FBB0C97A531E",
+      "bytes": 8094,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block2-01\\commands\\results.json",
+      "archive": "candidate-debug-block2-01/commands/results.json",
+      "sha256": "4D1A9356F1E7314E663C921ABABA9B016279CC6585523B5FDF9D26B6E52682CA",
+      "bytes": 1271,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block2-01\\commands\\trace.txt",
+      "archive": "candidate-debug-block2-01/commands/trace.txt",
+      "sha256": "48F4DB522595983ADFA492CA8C33470AF0A3CA960635AC2F443E5079FA02592A",
+      "bytes": 2350,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block2-01\\build-process-samples.jsonl",
+      "archive": "candidate-debug-block2-01/build-process-samples.jsonl.gz",
+      "source_sha256": "EEB3C658C860B7A827F74B8A523BED11D75E511ACE51CB224B669CB0C02C5D41",
+      "source_bytes": 67228,
+      "compressed_sha256": "ABD647D5D8936389C940D0B38B5328C45BA8969F1E7BBC8AB7E8EA887D83449C",
+      "compressed_bytes": 8054,
+      "kind": "gzip-complete-original",
+      "retention": "Every original byte, including all gate and measurement observations, is retained losslessly."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block2-01\\perf\\folderView_perf_sort_toggle_stress_metrics.json",
+      "archive": "candidate-debug-block2-01/perf/folderView_perf_sort_toggle_stress_metrics.json",
+      "sha256": "219B68D672A4D9975741AB9ECD43D330CBF9CB7B522B8EE058B8E5EB2901E0DB",
+      "bytes": 4449,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\candidate-debug-block2-01\\perf\\perf_metrics.jsonl",
+      "archive": "candidate-debug-block2-01/perf/perf-selected.jsonl",
+      "source_sha256": "F351FE1FD7339303D3EB328F8CB493FE1BC7A58E5EB64778B38BF3CB6136C555",
+      "source_bytes": 12875384,
+      "source_rows": 35071,
+      "selected_sha256": "A1CB938F2E0D2457D4992A510C6AEF955F88679941FA896819E5D4689D51A37E",
+      "selected_rows": 1218,
+      "metric_filter": "^(folder\\.sort_|FolderView\\.ApplyCurrentSort(?:\\.|$)|FolderView\\.ExecuteEnumeration\\.(SortMerge|NaturalSortRanks)|render\\.(layout_items_us|begin_to_enddraw_us|present_us)$|folder\\.layout\\.|dwrite\\.text_layout\\.frame_create)",
+      "kind": "complete-metric-families-original-order",
+      "omitted": "Full original includes per-item draw, all other frame and preparation families. It remains intact at source; analysis uses the complete original."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block2-04\\observation.json",
+      "archive": "baseline-debug-block2-04/observation.json",
+      "sha256": "DBA1929334E16004EAE6A7CFBC77C7074429157708E5E6A8CFF4DE0EECB6DD5F",
+      "bytes": 22259,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block2-04\\bindings.json",
+      "archive": "baseline-debug-block2-04/bindings.json",
+      "sha256": "2913FBF5E619E3C183BA547B8ABE1BA8DEF33636E3EFE9C628A14725BE95E833",
+      "bytes": 2879,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block2-04\\results.json",
+      "archive": "baseline-debug-block2-04/results.json",
+      "sha256": "747B05502AEA645DE8C8C8D615B352634996C058549DAF4E0D1FAD3F2CECC5B4",
+      "bytes": 1914,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block2-04\\run-all-tests-results.json",
+      "archive": "baseline-debug-block2-04/run-all-tests-results.json",
+      "sha256": "BC214C7AEF917A3A32EEEC712CCB3D4D98ECAFD1EACA0FFB85BA5990681D147E",
+      "bytes": 3070,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block2-04\\workspace-final.json",
+      "archive": "baseline-debug-block2-04/workspace-final.json",
+      "sha256": "BD1D87558AB70ECE5384604757B0F63DCD34C3ED673344217F11947D120DBBC9",
+      "bytes": 8095,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block2-04\\commands\\results.json",
+      "archive": "baseline-debug-block2-04/commands/results.json",
+      "sha256": "EBFD2628199F3BA22127353C75AD46875040CAE6EB7216F6882D592C8C074853",
+      "bytes": 1271,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block2-04\\commands\\trace.txt",
+      "archive": "baseline-debug-block2-04/commands/trace.txt",
+      "sha256": "AB899A9E003C196C11656FD191BF65A49184F828FCBDA5155281FCA4E694AB37",
+      "bytes": 2348,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block2-04\\build-process-samples.jsonl",
+      "archive": "baseline-debug-block2-04/build-process-samples.jsonl.gz",
+      "source_sha256": "6FAA0D1085C51D6D988F532FF798ADD62F1B616B2C3C79A861B6F4E207935901",
+      "source_bytes": 4680868,
+      "compressed_sha256": "C8E0F2E3A9AB7065F994506B0342A6AA6D27E36E823B188E400B6D093543D539",
+      "compressed_bytes": 179853,
+      "kind": "gzip-complete-original",
+      "retention": "Every original byte, including all gate and measurement observations, is retained losslessly."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block2-04\\observed-build-processes.jsonl",
+      "archive": "baseline-debug-block2-04/observed-build-processes.jsonl",
+      "sha256": "9BE67E52D3F40DC64DAF383549D60D393B3CEA4529782F1F21C142C2334D5C71",
+      "bytes": 72253,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block2-04\\perf\\folderView_perf_sort_toggle_stress_metrics.json",
+      "archive": "baseline-debug-block2-04/perf/folderView_perf_sort_toggle_stress_metrics.json",
+      "sha256": "D81D0BE40BBF5FA05A3E08E9B0AC4946AE551228DC2E6032DFCE4A012364FEDD",
+      "bytes": 4458,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\baseline-debug-block2-04\\perf\\perf_metrics.jsonl",
+      "archive": "baseline-debug-block2-04/perf/perf-selected.jsonl",
+      "source_sha256": "B0B7B564628B9E72FFB32C6136C4F6D60C014EFA4A4F8E47179D21B75EC662D4",
+      "source_bytes": 12991853,
+      "source_rows": 35190,
+      "selected_sha256": "2E28C23C187A6E22C36B23ADBC5092A3EDFC7CB83CED532FDA646D313350C554",
+      "selected_rows": 1218,
+      "metric_filter": "^(folder\\.sort_|FolderView\\.ApplyCurrentSort(?:\\.|$)|FolderView\\.ExecuteEnumeration\\.(SortMerge|NaturalSortRanks)|render\\.(layout_items_us|begin_to_enddraw_us|present_us)$|folder\\.layout\\.|dwrite\\.text_layout\\.frame_create)",
+      "kind": "complete-metric-families-original-order",
+      "omitted": "Full original includes per-item draw, all other frame and preparation families. It remains intact at source; analysis uses the complete original."
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\functional-final-debug-01\\bindings.json",
+      "archive": "functional-final-debug-01/bindings.json",
+      "sha256": "CCC7EFF19777E293673CAFA62B587D6E6DDDE5D8E10E5A0C473A0647B56E743F",
+      "bytes": 2945,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\functional-final-debug-01\\results.json",
+      "archive": "functional-final-debug-01/results.json",
+      "sha256": "BB2A06E5D061B05E5EC6A19ECFD47144A13BC74DA732D5DB42D30C7ED6AD9357",
+      "bytes": 3877,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\functional-final-debug-01\\run-all-tests-results.json",
+      "archive": "functional-final-debug-01/run-all-tests-results.json",
+      "sha256": "543B5C0C6405209490CAF96CCD7ECD9D9FA9EF0D1C18520798E9688A73A2C82D",
+      "bytes": 4493,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\functional-final-debug-01\\workspace-final.json",
+      "archive": "functional-final-debug-01/workspace-final.json",
+      "sha256": "361BD7A0084D828641FDF75D71421B67927BF03D26A6EC33F27B4A6A07F4E31F",
+      "bytes": 8095,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\functional-final-debug-01\\commands\\results.json",
+      "archive": "functional-final-debug-01/commands/results.json",
+      "sha256": "A6806BCCDF999071E71A72BE0C9D90F5DBAD1834AA98ECEB8476D4D06A879A23",
+      "bytes": 2209,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\functional-final-debug-01\\commands\\trace.txt",
+      "archive": "functional-final-debug-01/commands/trace.txt",
+      "sha256": "81C264852F4DA7A1D1B4D1855D1DEF24623A79002D51889AF8F73C7FE5D7A626",
+      "bytes": 3870,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\source-preservation.json",
+      "archive": "source-preservation.json",
+      "sha256": "797D3C23ABD385C8B7ED46BF9C800CE905A2641CABA9B92DCF738AA2B19F3119",
+      "bytes": 3880,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\source-preservation-pre-measurement.json",
+      "archive": "source-preservation-pre-measurement.json",
+      "sha256": "B1188D48FD4ED2E23550893B7C0E9B90B9A49A15139E27CFE2C6915E5F1F7C5C",
+      "bytes": 3880,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\final-identities.json",
+      "archive": "final-identities.json",
+      "sha256": "5577824199C5C0C78BF440DB95F68CE0022FABA6B9009AE4D4DFD2A09FB02F1F",
+      "bytes": 141181,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\format-verification.json",
+      "archive": "format-verification.json",
+      "sha256": "8DCB930F344E30CD9625530313D5BA79C2D69079DFDE9979E06556A01CA3AA48",
+      "bytes": 1026,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\orchestration-parse.json",
+      "archive": "orchestration-parse.json",
+      "sha256": "DF1ECA0D82B829E3B1C8C4B13C0350FB3D164D40E53BEB892CBE2BD52F5264BE",
+      "bytes": 1354,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\metadata-verification.json",
+      "archive": "metadata-verification.json",
+      "sha256": "3ED9769CBFD856C186658F596D7AC93791194EC4C7F4C74F090A83F1A335D263",
+      "bytes": 943,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\tooling-main-closeout.json",
+      "archive": "tooling-main-closeout.json",
+      "sha256": "C671533E256E8A5FDE2DD1727DF369F16835957FB3F70CE0747BA127E59814E3",
+      "bytes": 93,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\tooling-main-closeout.xml",
+      "archive": "tooling-main-closeout.xml",
+      "sha256": "86B7773E9D1F1D5198B27C8DF380D7A6D3546F63B66901B408118D13426D94F3",
+      "bytes": 107127,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\attempt-ledger.json",
+      "archive": "attempt-ledger.json",
+      "sha256": "5CAC3EA32E3839D782AF72544A3586A99CAC18DDE53E3CDBEB4EC750157E90B8",
+      "bytes": 584497,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\observer-native-positive-context.json",
+      "archive": "observer-native-positive-context.json",
+      "sha256": "E6A34BD5DA05103DEEC9A7AD18D7A6427A05663F639ED912D66A12F0F32346A2",
+      "bytes": 366,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\observer-positive-context.json",
+      "archive": "observer-positive-context.json",
+      "sha256": "C151948CFA57B14B40F30B6DDD85B76B4C3507724B14AE026A773139BDFD3D22",
+      "bytes": 900,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\non-build-process-exclusion.json",
+      "archive": "non-build-process-exclusion.json",
+      "sha256": "59C94F1228535F86439EC1A2091DDB2EBDA9F5AABC9690DCE179399E892B7C93",
+      "bytes": 213,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\analyze-results.ps1",
+      "archive": "analyze-results.ps1",
+      "sha256": "7387EE48B2759926A3131ADD2D854F6CDC7FBA8F04CD137AC15DCB6834B4164E",
+      "bytes": 6888,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\verify-source.ps1",
+      "archive": "verify-source.ps1",
+      "sha256": "872BE26ABFB0DCAC7D1FB3E8F762290604E173EE1D2E13BFF2AFE53633AD92D9",
+      "bytes": 3638,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\run-matrix.ps1",
+      "archive": "run-matrix.ps1",
+      "sha256": "2129E42C57E21EC72AD0B1D13E6E2CBF3261966BC08C89ABB0CA47873D132DCD",
+      "bytes": 3411,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\run-matrix-before-resume.ps1",
+      "archive": "run-matrix-before-resume.ps1",
+      "sha256": "E2A70D40809CA35FF3999591F2ECB481C94B5F63164C47E242FDA5DEB20CEDEA",
+      "bytes": 2047,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\AcceptedPrefix.psm1",
+      "archive": "AcceptedPrefix.psm1",
+      "sha256": "93BF5D113D0C7BE33CD8A5EDA931CB6C575B67592C9FFCD94E4E61A150A4A2D4",
+      "bytes": 6749,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\AcceptedPrefix.Tests.ps1",
+      "archive": "AcceptedPrefix.Tests.ps1",
+      "sha256": "FCBE1E205E6B7AE139EDBB74A2A25027B79411B531619E8F6C353FC6BFC93F6F",
+      "bytes": 8629,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\resume-guard-tests.json",
+      "archive": "resume-guard-tests.json",
+      "sha256": "F9DBD30BC067F0FCC7992E05006B48C9936440A6B7D9B5FABB2AEFBB1D919DB8",
+      "bytes": 91,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\resume-guard-tests.xml",
+      "archive": "resume-guard-tests.xml",
+      "sha256": "D1D50266C4DF7E92B93E9CBC102E65A1FCA8282DFD71C3756CC1FD7FA23F4604",
+      "bytes": 5492,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\orchestrator-resumes.jsonl",
+      "archive": "orchestrator-resumes.jsonl",
+      "sha256": "5393B11D00E44B32D75A4F08E49BCF89CED8D55DDAE50AF2F381042F40C5E435",
+      "bytes": 58939,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\run-isolated-benchmark.ps1",
+      "archive": "run-isolated-benchmark.ps1",
+      "sha256": "6D2B4071643E5C3C506512CBB488C569079B810188A048C9AF921ADDFFC3D046",
+      "bytes": 13246,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\scan-processes.cs",
+      "archive": "scan-processes.cs",
+      "sha256": "ECA7852526ACE43386AE5AFBEDD30DE6846082D50110E8D1E3E05D678D569F46",
+      "bytes": 2058,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\run-functional.ps1",
+      "archive": "run-functional.ps1",
+      "sha256": "0DD0F5FC75E1EBD737B4E12C2496D0E4856D493D0E5A7FD82F627B5A2D5D01FC",
+      "bytes": 2873,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\curate-evidence.ps1",
+      "archive": "curate-evidence.ps1",
+      "sha256": "819201A7D25829C83A867C4752757E586DEF40B475BB15C00482CB16677C2453",
+      "bytes": 7233,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\verify-evidence.ps1",
+      "archive": "verify-evidence.ps1",
+      "sha256": "8E2D7077AABDC0ACBC9921A86E896E76AD50409420F70B486DF4BFEB08B14909",
+      "bytes": 8677,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\render-report.ps1",
+      "archive": "render-report.ps1",
+      "sha256": "5FB69A25BB86A158BBC6CA1C5AE3076C024F41FFC5E3FBB03ADB64FBDBAB08AE",
+      "bytes": 14430,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\write-attempt-ledger.ps1",
+      "archive": "write-attempt-ledger.ps1",
+      "sha256": "8F6E3F933B45F755281C4ADAD2FE204E537E7F5F90B514621D3075C60357D4AD",
+      "bytes": 6242,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\observer-native-positive-01\\probe-result.json",
+      "archive": "observer-native-positive-01/probe-result.json",
+      "sha256": "3E5ECBFB5C73D9C168516C16B5DF76C6FCC77BB6E5752A9ABEC6550AAF9BA859",
+      "bytes": 168,
+      "kind": "complete-original"
+    },
+    {
+      "source": "Z:\\RedSalamander.Perf\\evidence\\debug-sort-product-cost-2026-10-20\\observer-native-positive-01\\build-process-samples.jsonl",
+      "archive": "observer-native-positive-01/build-process-samples.jsonl",
+      "sha256": "AC6D40DC8BFD49167341D58DECCB1A5714667F1AA5DB0C29330CE30DE95AE8FF",
+      "bytes": 3210,
+      "kind": "complete-original"
+    }
+  ],
+  "retention": "All timing/request/counter samples are retained. Entire named metric families are selected without latency selection. Full originals and all failed/rejected attempts remain under the marked external evidence root."
+}

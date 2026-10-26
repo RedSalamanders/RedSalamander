@@ -1,0 +1,10 @@
+{
+  "raw_path": "Z:/RedSalamander.Perf/evidence/final-cancellation-release-2026-10-19/interrupted-controller/20261019T053144Z-45640-25dd39acc8204cff891dcc002d1a40da/artifacts/selftest/last_run/perf/perf_metrics.jsonl",
+  "raw_sha256": "178737d59ad0c2255a2eac0816c2a56cabcf4bb2e751bf26c827dbae4ed693f2",
+  "raw_bytes": 3389907,
+  "selected_path": "selected-metrics.jsonl",
+  "selected_sha256": "4d29f75004c5c67c541e7883704ad6d9531b783577461c100f114a6497b2f048",
+  "selected_line_count": 36,
+  "selection_regex": "fileops\\.local\\.mutation\\.rename_reconcile_unknown|FileOps\\.Local\\.(RenameReconcileUnknown|PublicationCanceledBeforeRename)|FileOps\\.Bridge\\.(FailurePhase|StageDisposition|StageRetainedCount|ActiveFilesMax)|FileOps\\.SelfTest\\.|FileOps\\.Discovery\\.SelectedFiles|FileOps\\.Popup\\.AutoCollapse|folder\\.sort_toggle_us|folder\\.enumerate\\.natural_name_rank_prepare_us",
+  "derivation": "Complete original matching JSONL lines in original order, unchanged. Full raw input retained in marked sandbox."
+}

@@ -1,0 +1,32 @@
+function Invoke-ImapHelperTests {
+ param([ValidateSet('Debug','Release')][string]$Configuration,[string]$RunId)
+ $ErrorActionPreference='Stop'
+ $testRepo=(Get-Location).Path
+ $env:REDSALAMANDER_TEST_ROOT='C:\RedSalamander.Perf'
+ $env:REDSALAMANDER_TEST_RUN_ID=$RunId
+ Import-Module .\Tools\Modules\Testing\TestSandbox.psm1
+ $testScratch=New-RSTestSandboxScratchDirectory -RepoRoot $testRepo -Harness native -Case imap-helpers
+ $env:TEMP=$testScratch
+ $env:TMP=$testScratch
+ Import-Module .\Tools\Modules\Build\ArtifactOperationLock.psm1
+ Import-Module .\Tools\Modules\Build\BuildEvidence.psm1
+ Import-Module .\Tools\Modules\Build\ProcessStreaming.psm1
+ $testOutput=Join-Path $testRepo ".build/x64/$Configuration"
+ $testLease=Enter-RSArtifactOperationLock -RepoRoot $testRepo -Operation 'IMAP helper qualification' -Scope @{configuration=$Configuration;platform='x64';suite='FileSystemCurlTests'}
+ try {
+  $testReceipt=Read-RSBuildReceipt -BuildOutputDir $testOutput -SchemaPath (Join-Path $testRepo 'Specs/Build/BuildReceipt.schema.json')
+  $testSnapshot=Get-RSBuildSourceSnapshot -RepoRoot $testRepo
+  $relativeExe=".build/x64/$Configuration/FileSystemCurlTests.exe"
+  if (-not (Test-RSBuildReceiptForArtifactUse -Receipt $testReceipt -SourceSnapshot $testSnapshot -Platform x64 -Configuration $Configuration -RepoRoot $testRepo -RequiredRelativePath @($relativeExe))) { throw 'IMAP helper artifact receipt is incompatible.' }
+  $testClock=[Diagnostics.Stopwatch]::StartNew()
+  $nativeExit=Invoke-RSStreamingProcess -FilePath (Join-Path $testOutput 'FileSystemCurlTests.exe') -Arguments @() -WorkingDirectory $testOutput -LogPath (Join-Path $testScratch 'trace.txt') -TimeoutMilliseconds 60000
+  $testClock.Stop()
+  $passedMarker=[IO.File]::ReadAllText((Join-Path $testScratch 'trace.txt')).Contains('FileSystemCurlTests passed.')
+  $result=[ordered]@{run_id=$RunId;configuration=$Configuration;receipt_id=$testReceipt.receipt_id;source_snapshot_id=$testSnapshot.SnapshotId;git_head=$testSnapshot.GitHead;artifacts_verified=@($testReceipt.outputs).Count;exit_code=$nativeExit;pass_marker=$passedMarker;test_functions=12;duration_ms=$testClock.Elapsed.TotalMilliseconds}
+  [IO.File]::WriteAllText((Join-Path $testScratch 'verification.json'),($result|ConvertTo-Json -Depth 4),[Text.UTF8Encoding]::new($false))
+  $result | ConvertTo-Json -Depth 4
+  if ($nativeExit -ne 0 -or -not $passedMarker) { throw 'IMAP helper qualification failed.' }
+ } finally { Exit-RSArtifactOperationLock -Lock $testLease }
+}
+
+Invoke-ImapHelperTests -Configuration Debug -RunId c0-imap-listing-helpers-debug-20260906

@@ -93,7 +93,7 @@ struct SharedFactoryState
     }
 
     wil::com_ptr<IDWriteTextFormat> format;
-    const DxUi::Typography::TypographySpec spec =
+    const DxUi::Typography::Spec spec =
         state.fluentIconAvailable ? DxUi::Typography::MakeUiIconSpec(normalizedSizePx) : DxUi::Typography::MakeUiTextSpec(normalizedSizePx);
     if (FAILED(DxUi::Typography::CreateTextFormat(state.dwriteFactory.get(), spec, format.put(), L"")) || ! format)
     {

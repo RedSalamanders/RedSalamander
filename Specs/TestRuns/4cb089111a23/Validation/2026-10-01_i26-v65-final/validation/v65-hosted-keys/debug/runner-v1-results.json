@@ -1,0 +1,85 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-10-01T11:32:34.7791633Z",
+  "run_ended_utc": "2026-10-01T11:33:06.1249753Z",
+  "duration_ms": 31346,
+  "suite": "Commands",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "C:\\RsI26Adopt\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "V:\\RedSalamander.Perf\\runs\\20261001T113214Z-63820-2c8d88dff6c54bda82569d94542cb2ec\\artifacts\\selftest\\last_run",
+  "test_root": "V:\\RedSalamander.Perf",
+  "run_id": "20261001T113214Z-63820-2c8d88dff6c54bda82569d94542cb2ec",
+  "fail_fast": false,
+  "timeout_scale": 3.0,
+  "case_filter": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot,cmd_pane_fileops_conflict_hosted_decision_keys",
+  "exit_code": 0,
+  "passed": 2,
+  "failed": 0,
+  "skipped": 0,
+  "total": 2,
+  "classifications": {
+    "passed": 1,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 0
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": true,
+    "issue_count": 0,
+    "test_root": "V:\\RedSalamander.Perf",
+    "run_id": "20261001T113214Z-63820-2c8d88dff6c54bda82569d94542cb2ec",
+    "allowed_run_ids": [
+      "20261001T113214Z-63820-2c8d88dff6c54bda82569d94542cb2ec"
+    ],
+    "issues": []
+  },
+  "suites": [
+    {
+      "suite": "Commands",
+      "kind": "SelfTest",
+      "exit_code": 0,
+      "duration_ms": 19312,
+      "classification": "PASSED",
+      "classification_reason": "Initial attempt passed.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 2,
+      "failed": 0,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 13167,
+          "attempt": 1
+        },
+        {
+          "name": "cmd_pane_fileops_conflict_hosted_decision_keys",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1260,
+          "attempt": 1
+        }
+      ],
+      "failures": []
+    }
+  ]
+}

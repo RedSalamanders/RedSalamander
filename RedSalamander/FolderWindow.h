@@ -1,4 +1,5 @@
 #pragma once
+struct HostViewerActionRequest;
 #include <array>
 #include <chrono>
 #include <condition_variable>
@@ -43,6 +44,17 @@ struct CrossFileSystemBridge;
 
 namespace FileOperations
 {
+// Immutable admission identity for a card. These counts describe selected roots,
+// never recursive discovery; retaining a subject does not retain a path list.
+struct TaskSelectionSummary final
+{
+    std::wstring singleName;
+    uint64_t itemCount   = 0u;
+    uint64_t fileCount   = 0u;
+    uint64_t folderCount = 0u;
+    bool kindsKnown      = false;
+};
+
 enum class PublicationState : uint8_t
 {
     NotAttempted,
@@ -66,6 +78,7 @@ enum class SourceDisposition : uint8_t
     Removed,
     Retained,
     Unknown,
+    Missing, // The source was positively absent at the host's pre-mutation guard; this operation did not remove it.
 };
 
 enum class ItemCompletion : uint8_t
@@ -170,6 +183,16 @@ struct MakeFileListOptionsPromptDebugSnapshot
                                                           bool includeDirectories) noexcept;
 [[nodiscard]] bool DebugConfirmMakeFileListOptionsPrompt() noexcept;
 [[nodiscard]] bool DebugCancelMakeFileListOptionsPrompt() noexcept;
+enum class DocumentationUtilityOptions : uint8_t
+{
+    FileList,
+    Pack,
+    Unpack,
+    CreateDirectory,
+    NewFile
+};
+// Actual option surfaces, UI thread only, with invented input and no provider/action admission.
+[[nodiscard]] bool DebugShowDocumentationUtilityOptions(HWND owner, const AppTheme& theme, DocumentationUtilityOptions kind) noexcept;
 
 struct ArchivePackPromptDebugSnapshot
 {
@@ -568,6 +591,7 @@ public:
                                                FileSystemFlags flags,
                                                bool requireConfirmation,
                                                uint64_t* taskIdOut = nullptr) noexcept;
+    HRESULT ExecuteViewerAction(const HostViewerActionRequest& request, uint64_t* taskId) noexcept;
     HRESULT StartFileOperationForResolvedItemsToOtherPane(std::wstring_view sourcePluginId,
                                                           std::wstring_view sourceInstanceContext,
                                                           FileSystemOperation operation,
@@ -598,11 +622,13 @@ public:
                                                    std::vector<std::filesystem::path> displayedFilePaths,
                                                    unsigned int commandId,
                                                    HWND ownerWindow) noexcept;
+    // anchorPane: the pane the request came from, when known (its guard prompt covers that pane, I35 R8.10).
     [[nodiscard]] HRESULT ConfirmExternalArtifactTouchForProvider(IFileSystem* fileSystem,
                                                                   std::wstring_view pluginId,
                                                                   std::wstring_view instanceContext,
                                                                   std::span<const std::filesystem::path> providerPaths,
-                                                                  FileOperationArtifacts::TouchGuardReceipt* receiptOut = nullptr) noexcept;
+                                                                  FileOperationArtifacts::TouchGuardReceipt* receiptOut = nullptr,
+                                                                  std::optional<Pane> anchorPane                        = std::nullopt) noexcept;
     void CommandCopyToOtherPane(Pane sourcePane, bool withOptions = false);
     void CommandMoveToOtherPane(Pane sourcePane, bool withOptions = false);
     void CommandShowFileOperations();
@@ -622,6 +648,8 @@ public:
     void CommandPack(Pane pane);
     void CommandUnpack(Pane pane);
     void CommandListOpenedFiles(Pane pane);
+    // I35 R7.5: Clean Up Leftovers of Interrupted Operations (FolderWindow.LeftoverCleanup.cpp).
+    void CommandCleanUpLeftovers(Pane pane);
     void CommandSharedDirectories(Pane pane);
     void CommandFilter(Pane pane);
     void CommandGoRootDirectory(Pane pane);
@@ -682,11 +710,36 @@ public:
     void PrepareForNetworkDriveDisconnect(Pane pane);
     void SwapPanes();
 
+    // Asks for the "Cancel all and exit" consent only while a task can still be canceled. A close
+    // attempt while an accepted exit is pending never prompts again: it brings the File Operations
+    // popup forward and keeps the pending exit. On the application FolderWindow the consent covers
+    // its own engine and the engine of every linked secondary FolderWindow (Compare Directories); on
+    // a secondary FolderWindow it covers only that window's engine and asks to close the window.
     bool ConfirmCancelAllFileOperations(HWND ownerWindow) noexcept;
-    // The non-prompt half of the exit path: cancels every File Operations task and reports whether
-    // the caller may close now. false means the close is deferred until every task has been reaped,
-    // when WM_CLOSE is posted to closeTarget.
+    // The non-prompt half of the exit path: cancels every File Operations task the close covers and
+    // reports whether the caller may close now. false means the close is deferred until every
+    // covered engine has reaped its tasks, when WM_CLOSE is posted to closeTarget.
     bool CancelAllFileOperationsThenClose(HWND closeTarget) noexcept;
+    // An admission refused because an accepted exit is pending returns this HRESULT.
+    static constexpr HRESULT kFileOperationRefusedForPendingExit = HRESULT_FROM_WIN32(ERROR_SHUTDOWN_IS_SCHEDULED);
+    // An admission refused by a prompt that already told the user it was not started (the
+    // operation-artifact touch guard's blocked warning) returns this HRESULT; no pane alert follows.
+    static constexpr HRESULT kFileOperationRefusedAlreadyReported = HRESULT_FROM_WIN32(ERROR_REQUEST_REFUSED);
+    // True from an accepted "Cancel all and exit" until the resumed close's WM_CLOSE has been handled.
+    // While it is pending every new file-operation admission is refused before any prompt or mutation. A
+    // secondary FolderWindow (Compare Directories) also reports the application window's pending exit,
+    // besides its own accepted window close.
+    [[nodiscard]] bool IsFileOperationsExitPending() const noexcept;
+    // While the exit is pending, names what holds back new work for a diagnostic: "this window's
+    // accepted close" when only a secondary window's own close is pending, else "the application exit".
+    [[nodiscard]] std::wstring_view FileOperationsExitPendingReason() const noexcept;
+    // Links a secondary FolderWindow to the application FolderWindow whose accepted exit it must
+    // honor, and adds its engine to the ones that application exit counts, cancels and waits for;
+    // nullptr unlinks it (Destroy does too). The application FolderWindow must outlive the link.
+    void SetApplicationExitFolderWindow(FolderWindow* applicationFolderWindow) noexcept;
+    // While the exit is pending, shows in the pane why the operation was not started and returns
+    // true; otherwise returns false and shows nothing.
+    bool RefuseFileOperationForPendingExit(Pane pane, FileSystemOperation operation) noexcept;
     void CloseAllViewers() noexcept;
 
     using ShowSortMenuCallback = std::function<void(Pane pane, POINT screenPoint)>;
@@ -737,6 +790,15 @@ public:
     using PanePathChangedCallback = std::function<void(Pane pane, const std::optional<std::filesystem::path>& pluginPath)>;
     void SetPanePathChangedCallback(PanePathChangedCallback callback);
     void SetPaneEnumerationCompletedCallback(Pane pane, FolderView::EnumerationCompletedCallback callback);
+#ifdef ENABLE_TESTS
+    // Self-test interposer: runs before a pending conflict inspection's settlement listener.
+    void SetPaneEnumerationSettledCallback(Pane pane, FolderView::EnumerationSettledCallback callback);
+    // Drives the navigation view's "path cleared" notification for the pane.
+    void DebugClearPanePathForSelfTest(Pane pane)
+    {
+        OnNavigationPathChanged(pane, std::nullopt);
+    }
+#endif
     void SetPaneDetailsTextProvider(Pane pane, FolderView::DetailsTextProvider provider);
     void SetPaneMetadataTextProvider(Pane pane, FolderView::MetadataTextProvider provider);
     void SetPaneEmptyStateMessage(Pane pane, std::wstring message);
@@ -910,6 +972,11 @@ public:
         std::wstring selectionText;
         std::wstring securityText;
         std::wstring sortText;
+        // I35 R8.9: the pending-decision segment, its painted part width and the window text UI
+        // Automation names the status bar with.
+        std::wstring decisionText;
+        int decisionPartWidthPx = 0;
+        std::wstring windowText;
     };
 
     struct FolderWindowFunctionBarDebugSnapshot
@@ -1090,6 +1157,36 @@ public:
         bool focusable = false;
     };
 
+    struct LeftoverCleanupDebugSnapshot
+    {
+        struct Row
+        {
+            std::filesystem::path path;
+            bool checked         = false;
+            bool mayHoldOriginal = false;
+        };
+        bool open              = false;
+        bool includeSubfolders = false;
+        bool scanning          = false;
+        bool deleteEnabled     = false;
+        bool deleteSupported   = false;
+        bool folderLimit       = false;
+        bool rowLimit          = false;
+        bool depthLimit        = false;
+        size_t hiddenInUse     = 0u;
+        std::wstring status;
+        std::vector<Row> rows;
+    };
+
+    struct LeftoverScanDebugResult
+    {
+        std::vector<std::filesystem::path> rows;
+        bool folderLimit = false;
+        bool rowLimit    = false;
+        bool depthLimit  = false;
+        bool canceled    = false;
+    };
+
     struct OpenedFilesDebugSnapshot
     {
         bool visible                          = false;
@@ -1115,6 +1212,7 @@ public:
 
     struct SharedDirectoriesDebugSnapshot
     {
+        HWND window                           = nullptr; // Non-owning, process-scoped capture target.
         bool visible                          = false;
         bool usesDxUiHost                     = false;
         size_t visibleChildWindowCount        = 0u;
@@ -1155,7 +1253,7 @@ public:
 
     // Debug/testing hook: access the file-operations state for automation/self-tests.
     // This will initialize file operations if they are not yet created.
-    FileOperationState* DebugGetFileOperationState() noexcept;
+    FileOperationState* DebugGetFileOperationState(bool initializeIfMissing = true) noexcept;
     [[nodiscard]] bool DebugWasFileOperationStateRetainedDuringNestedPromptShutdown() const noexcept;
     void DebugSetFileOperationRequestCallbackEnabled(Pane pane, bool enabled) noexcept;
 
@@ -1189,6 +1287,8 @@ public:
     [[nodiscard]] uint64_t DebugGetForceRefreshCount(Pane pane) const noexcept;
     [[nodiscard]] bool DebugGetPaneStatusBarSnapshot(Pane pane, FolderWindowPaneStatusBarDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugClickPaneStatusBarSort(Pane pane) noexcept;
+    // Posts a click on the pending-decision segment; false when the segment is not shown.
+    [[nodiscard]] bool DebugClickPaneStatusBarDecision(Pane pane) noexcept;
     [[nodiscard]] bool DebugGetFunctionBarSnapshot(FolderWindowFunctionBarDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugGetSplitterSnapshot(FolderWindowSplitterDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugHoverSplitterArrow(Pane pane) noexcept;
@@ -1199,6 +1299,11 @@ public:
         Pane pane, uint64_t pendingCount, uint64_t staleBatchMessageCount, uint64_t staleGenerationMessageCount, uint64_t unaccountedCurrentMessageCount);
     [[nodiscard]] bool DebugGetPreviewPaneSnapshot(PreviewPaneDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugGetTerminalPaneSnapshot(Pane hostPane, TerminalPaneDebugSnapshot& out) const noexcept;
+    // Opens the ordinary host route; documentation callers arm a shell-free plugin instance first.
+    [[nodiscard]] HRESULT DebugOpenTerminalPaneForTests(Pane sourcePane, const std::filesystem::path& path) noexcept
+    {
+        return OpenTerminalPane(sourcePane, path, true);
+    }
     [[nodiscard]] HRESULT DebugGetTerminalScreenText(Pane hostPane, std::wstring& text) const noexcept;
     [[nodiscard]] HRESULT DebugSetTerminalConfiguration(Pane hostPane, const char* configurationJsonUtf8) noexcept;
     [[nodiscard]] HRESULT DebugTerminateTerminalRootProcess(Pane hostPane, uint32_t exitCode) noexcept;
@@ -1213,6 +1318,27 @@ public:
     [[nodiscard]] bool DebugSelectOpenedFilesDialogRow(size_t rowIndex) noexcept;
     [[nodiscard]] bool DebugInvokeOpenedFilesDialogFocusItem() noexcept;
     void DebugCloseOpenedFilesDialogForTest() noexcept;
+    [[nodiscard]] bool DebugGetLeftoverCleanupSnapshot(LeftoverCleanupDebugSnapshot& out) const noexcept;
+    [[nodiscard]] bool DebugSetLeftoverCleanupIncludeSubfolders(bool include) noexcept;
+    // Runs the listing's subfolder walk on the calling thread with these bounds; `cancelBeforeStart`
+    // requests its stop before the first folder.
+    [[nodiscard]] static HRESULT DebugScanLeftoversForSelfTest(IFileSystem* fileSystem,
+                                                               const std::filesystem::path& folder,
+                                                               size_t maxFolders,
+                                                               size_t maxRows,
+                                                               size_t maxDepth,
+                                                               bool cancelBeforeStart,
+                                                               LeftoverScanDebugResult& out) noexcept;
+    // Posts the listing's Delete Selected (true) or Cancel (false), as its buttons do.
+    [[nodiscard]] bool DebugAnswerLeftoverCleanup(bool confirm) noexcept;
+    // Test runs delete the confirmed leftovers permanently (behind the card) instead of filling the Recycle Bin.
+    void DebugSetLeftoverCleanupPermanentForSelfTest(bool permanent) noexcept;
+    // The next listing treats its location as one that cannot delete (an MTP device's capabilities).
+    void DebugSetLeftoverCleanupDeleteUnsupportedForSelfTest(bool unsupported) noexcept;
+    [[nodiscard]] HWND DebugGetLeftoverCleanupWindowForSelfTest() const noexcept;
+    // Toggles a listed row's check box as a click on it does.
+    [[nodiscard]] bool DebugToggleLeftoverCleanupRow(const std::filesystem::path& path, bool checked) noexcept;
+    [[nodiscard]] uint64_t DebugGetLeftoverCleanupLastTaskId() const noexcept;
     void DebugAddOpenedExternalEditorForTest(const std::filesystem::path& path, std::wstring_view openedBy, Pane pane, bool closed) noexcept;
     void DebugClearOpenedExternalEditorsForTest() noexcept;
     [[nodiscard]] bool DebugGetSharedDirectoriesDialogSnapshot(SharedDirectoriesDebugSnapshot& out) const noexcept;
@@ -1392,7 +1518,7 @@ private:
     LRESULT OnFileOperationBatchRenameArtifactPrompt(WPARAM wp, LPARAM lp) noexcept;
     LRESULT OnFileOperationClipboardMoveReady(WPARAM wp, LPARAM lp) noexcept;
     void OnFileOperationPresentationChanged() noexcept;
-    void ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, unsigned long warningCount, unsigned long errorCount) noexcept;
+    void ApplyFileOperationCompletion(uint64_t taskId, HRESULT hr, unsigned long warningCount, unsigned long errorCount, bool partialOutcome = false) noexcept;
     LRESULT OnChangeCaseTaskUpdate(LPARAM lp) noexcept;
     LRESULT OnChangeCaseCompleted(LPARAM lp) noexcept;
     LRESULT OnChangeAttributesTaskUpdate(LPARAM lp) noexcept;
@@ -1403,9 +1529,28 @@ private:
     // File operations (internal implementation in FolderWindow.FileOperations.cpp)
     void EnsureFileOperations();
     HRESULT StartFileOperationFromFolderView(Pane pane, FolderView::FileOperationRequest request) noexcept;
+    // The pane already shows why an exit-pending request was refused, and a refusal the user was
+    // already told about needs no second message, so FolderView receives either as "not started"
+    // and does not add a generic failure.
+    [[nodiscard]] static HRESULT FolderViewFileOperationRequestResult(HRESULT hr) noexcept
+    {
+        return hr == kFileOperationRefusedForPendingExit || hr == kFileOperationRefusedAlreadyReported ? S_FALSE : hr;
+    }
     HRESULT ShowItemPropertiesFromFolderView(Pane pane, std::filesystem::path path) noexcept;
     void ShutdownFileOperations() noexcept;
+    // I35 R8.7/R8.9: a pane's location or view visibility changed (the decision mirror re-evaluates), and
+    // the pending-decision segment of both status bars.
+    void NotifyFileOperationsPaneChanged() noexcept;
+    void SetPaneStatusDecisionText(std::wstring_view text) noexcept;
+    // The engines a close of this FolderWindow covers: its own and, on the application FolderWindow,
+    // every linked secondary one.
+    [[nodiscard]] bool HasActiveFileOperationsForClose() noexcept;
+    [[nodiscard]] bool HasCancelableFileOperationsForClose() noexcept;
+    // Brings forward the File Operations popup of a covered engine that still has work.
+    void ShowFileOperationsPopupForClose() noexcept;
+    [[nodiscard]] bool IsSecondaryFileOperationsWindow() const noexcept;
     void ResumeDeferredCloseIfFileOperationsQuiet() noexcept;
+    void OnFileOperationsDeferredCloseSettled() noexcept;
     void ApplyFileOperationsTheme() noexcept;
 
     // Layout
@@ -1447,6 +1592,9 @@ private:
     void TrimNavigationHistory(PaneState& state);
     void OnFolderViewEnumerationCompleted(Pane pane, const std::filesystem::path& folder);
     void InstallFolderViewEnumerationCompletedCallback(Pane pane);
+    // The pane's enumeration was canceled without a settlement (path cleared, drive disconnect):
+    // end a pending conflict inspection of that pane as Stale instead of leaving it waiting.
+    void EndPaneConflictInspection(Pane pane) noexcept;
     void OnFolderViewDirectoryImpact(Pane pane, const DirectoryInfoCache::DirectoryImpact& impact) noexcept;
     void OnFolderViewNavigateUpFromRoot(Pane pane) noexcept;
     [[nodiscard]] std::optional<Pane> ResolveSourcePaneForResolvedPaths(std::wstring_view sourcePluginId,
@@ -1480,7 +1628,7 @@ private:
     }
     void SetPreviewPaneTab(Pane hostPane, bool previewTab) noexcept;
     void SetPaneContentTab(Pane hostPane, size_t tabIndex) noexcept;
-    HRESULT OpenTerminalPane(Pane sourcePane, const std::filesystem::path& workingDirectory) noexcept;
+    HRESULT OpenTerminalPane(Pane sourcePane, const std::filesystem::path& workingDirectory, bool documentationSource = false) noexcept;
     void PublishTerminalSourceLocation(Pane sourcePane, const std::optional<std::filesystem::path>& path) noexcept;
     void CloseTerminalPane(Pane hostPane) noexcept;
     void LayoutEmbeddedTerminal(Pane hostPane) noexcept;
@@ -1615,6 +1763,29 @@ private:
     [[nodiscard]] bool FocusOpenedFilesDialogSelection() noexcept;
     [[nodiscard]] bool FocusOpenedFileRow(const OpenedFileRow& row) noexcept;
 
+    struct LeftoverCleanupDialogState;
+    struct LeftoverCleanupDialogStateDeleter final
+    {
+        void operator()(LeftoverCleanupDialogState* state) const noexcept;
+    };
+    void ConfirmLeftoverCleanupDialog() noexcept;
+    // Submits the Delete to the provider the listing was opened on (captured with its plugin identity),
+    // whatever the pane shows now.
+    HRESULT StartLeftoverCleanupDelete(Pane pane,
+                                       wil::com_ptr<IFileSystem> fileSystem,
+                                       std::wstring pluginId,
+                                       std::wstring pluginShortId,
+                                       std::wstring instanceContext,
+                                       std::vector<std::filesystem::path> paths) noexcept;
+    // True while a live File Operations task of this window works in `folder` (on it, inside it, or on
+    // one of its ancestors): its leftovers may be a running operation's own temporary files.
+    [[nodiscard]] bool IsLeftoverFolderInUse(std::wstring_view pluginId, const std::filesystem::path& folder) noexcept;
+    void ApplyLeftoverCleanupDialogTheme() noexcept;
+    void RequestCloseLeftoverCleanupDialog() noexcept;
+    void CloseLeftoverCleanupDialog() noexcept;
+    // Frees closed listings whose subfolder walk has ended; `wait` waits for every walk (window teardown).
+    void SweepRetiredLeftoverCleanupDialogs(bool wait) noexcept;
+
     struct SharedDirectoryRow final
     {
         std::wstring name;
@@ -1623,10 +1794,10 @@ private:
         std::wstring remark;
         bool openable = false;
     };
-    struct SharedDirectoriesDialogState final : DxUi::IDxGridModel, DxUi::IDxGridDelegate
+    struct SharedDirectoriesDialogState final : DxUi::IGridModel, DxUi::IGridDelegate
     {
-        using DxUi::IDxGridDelegate::OnGridRowActivated;
-        using DxUi::IDxGridDelegate::OnGridSelectionChanged;
+        using DxUi::IGridDelegate::OnGridRowActivated;
+        using DxUi::IGridDelegate::OnGridSelectionChanged;
 
         SharedDirectoriesDialogState()                                               = default;
         SharedDirectoriesDialogState(const SharedDirectoriesDialogState&)            = delete;
@@ -1767,6 +1938,9 @@ private:
         wil::com_ptr<IFileSystem> selectionSizeWorkFileSystem;
         std::shared_ptr<std::stop_source> selectionSizeWorkStopSource;
         FolderView::EnumerationCompletedCallback enumerationCompletedCallback;
+#ifdef ENABLE_TESTS
+        FolderView::EnumerationSettledCallback enumerationSettledCallback;
+#endif
 
         struct PendingNavigationToPaintMetric final
         {
@@ -1794,6 +1968,8 @@ private:
         std::wstring statusSelectionText;
         std::wstring statusSortText;
         std::wstring statusSecurityText;
+        // I35 R8.9: "N decision(s) pending — click to open" while any File Operations decision waits.
+        std::wstring statusDecisionText;
         std::wstring filterBarText;
         bool filterBarSyncing          = false;
         uint32_t statusFocusHueDegrees = 0;
@@ -1815,6 +1991,16 @@ private:
 #pragma warning(pop)
 
     bool SanityCheckBothPanes(PaneState& src, PaneState& dest, FileSystemOperation operation);
+    // A pane Copy/Move/Delete whose admission failed shows why in the source pane instead of
+    // vanishing; a cancel (S_FALSE, ERROR_CANCELLED) or shutdown stays silent.
+    void ReportFileOperationAdmissionFailure(Pane pane, FileSystemOperation operation, HRESULT hr);
+    void ShowFileOperationRefusedForPendingExit(Pane pane, FileSystemOperation operation) noexcept;
+    // A resolved-path admission (Find Files, Compare Directories) refused while the exit is pending
+    // shows why in its source pane, or the focused pane when the source pane is not open.
+    bool RefuseResolvedFileOperationForPendingExit(std::wstring_view sourcePluginId,
+                                                   std::wstring_view sourceInstanceContext,
+                                                   const std::vector<std::filesystem::path>& sourcePaths,
+                                                   FileSystemOperation operation) noexcept;
 
     PaneState _leftPane;
     PaneState _rightPane;
@@ -1876,6 +2062,12 @@ private:
     size_t _fileOperationPromptDispatchDepth = 0u;
     bool _fileOperationResetDeferred         = false;
     HWND _fileOperationsDeferredCloseTarget  = nullptr;
+    // The deferred close's WM_CLOSE is posted; the exit stays pending until it has been handled.
+    bool _fileOperationsDeferredClosePosted = false;
+    // Set on a secondary FolderWindow (Compare Directories) so it refuses work during the application exit.
+    FolderWindow* _applicationExitFolderWindow = nullptr;
+    // On the application FolderWindow: the linked secondary FolderWindows whose engines its exit covers.
+    std::vector<FolderWindow*> _exitLinkedFolderWindows;
 #ifdef ENABLE_TESTS
     bool _debugFileOperationStateRetainedDuringNestedPromptShutdown = false;
     DebugShellActionCallback _debugShellActionCallback;
@@ -1912,7 +2104,14 @@ private:
     uint64_t _nextOpenedExternalFileId = 1;
     std::unique_ptr<OpenedFilesDialogState, OpenedFilesDialogStateDeleter> _openedFilesDialog;
     std::unique_ptr<SharedDirectoriesDialogState> _sharedDirectoriesDialog;
+    std::unique_ptr<LeftoverCleanupDialogState, LeftoverCleanupDialogStateDeleter> _leftoverCleanupDialog;
+    // Closed listings whose subfolder walk was still blocked in a canceled directory read when they
+    // closed: kept until the walk returns, so closing never waits on a dead share.
+    std::vector<std::unique_ptr<LeftoverCleanupDialogState, LeftoverCleanupDialogStateDeleter>> _retiredLeftoverCleanupDialogs;
 #ifdef ENABLE_TESTS
+    bool _debugLeftoverCleanupPermanentForSelfTest         = false;
+    bool _debugLeftoverCleanupDeleteUnsupportedForSelfTest = false;
+    uint64_t _debugLeftoverCleanupLastTaskId               = 0u;
     std::optional<SharedDirectoriesDebugProviderResult> _debugSharedDirectoriesProviderResult;
     std::optional<ArchiveCommandDebugOptions> _debugNextArchiveCommandOptions;
     std::optional<ArchiveCommandDebugResult> _debugLastArchiveCommandResult;

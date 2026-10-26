@@ -1,0 +1,28 @@
+import shutil
+from pathlib import Path
+root=Path(__file__).parent
+for name,config in [('release','Release'),('debug','Debug')]:
+    old=root/f'current-v7-pr-{name}-20260927'
+    new=root/f'current-v8-pr-{name}-20260927'
+    new.mkdir()
+    shutil.copyfile(old/'candidate-inputs.json',new/'candidate-inputs.json')
+    shutil.copytree(old/'source',new/'source')
+    driver=(old/'run.ps1').read_text(encoding='utf-8-sig').replace(old.as_posix(),new.as_posix())
+    # Freeze verification precedes build; rebuild attests the changed tooling closure.
+    marker='$cases = [ordered]@{ pr=\'\' }'
+    assert marker in driver
+    driver=driver.replace(marker,f'''& ./build.ps1 -Configuration '{config}' -Platform x64 -MaxCpuCount 4 *> "$evidence/build.log"
+$buildExit = $LASTEXITCODE
+Set-Content "$evidence/build-exit.txt" $buildExit
+Get-Content "$evidence/build.log" -Tail 20
+if ($buildExit -ne 0) {{ exit $buildExit }}
+Copy-Item -LiteralPath "$repo/.build/x64/{config}/build-receipt.json" -Destination "$evidence/build-receipt.json"
+{marker}''')
+    (new/'run.ps1').write_text(driver,encoding='utf-8')
+(root/'current-v8-pr-sequence-20260927.ps1').write_text('''$ErrorActionPreference = 'Stop'
+& "$PSScriptRoot/current-v8-pr-release-20260927/run.ps1"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& "$PSScriptRoot/current-v8-pr-debug-20260927/run.ps1"
+exit $LASTEXITCODE
+''',encoding='utf-8')
+print('Fresh Release and Debug builds required after tooling closure changed. V7 attestation failure retained.')

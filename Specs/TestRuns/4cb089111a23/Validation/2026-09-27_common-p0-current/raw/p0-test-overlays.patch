@@ -1,0 +1,97 @@
+diff --git a/RedSalamander/FolderWindow.FileOperations.Popup.h b/RedSalamander/FolderWindow.FileOperations.Popup.h
+index a9130997a..d396ad7c4 100644
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.h
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.h
+@@ -592,6 +592,10 @@ public:
+ #ifdef ENABLE_TESTS
+     // UI-thread-only documentation fixture; never starts workers or admits operations.
+     void DebugSetVisualScenario(std::vector<TaskSnapshot> tasks, bool collapsed, bool completedGroupExpanded);
++    [[nodiscard]] uint64_t DebugHostedRenderCount() const noexcept
++    {
++        return _controlsHost.DebugGetRenderCount();
++    }
+     std::optional<std::vector<TaskSnapshot>> debugVisualScenario;
+     std::vector<std::filesystem::path> debugVisualDestinationHistory;
+     [[nodiscard]] const std::vector<PopupButton>& DebugVisualButtons() const noexcept
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
+index b6b5a83bd..79a17980b 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp
+@@ -73,6 +73,7 @@
+ #include "FluentIcons.h"
+ #include "FolderView.h"
+ #include "FolderWindow.FileOperations.Popup.h"
++#include "FolderWindow.FileOperations.State.Private.h"
+ #include "FolderWindow.FileOperations.IssuesPane.h"
+ #include "LocalizationManager.h"
+ #include "Ui/AlertOverlayWindow.h"
+@@ -643,6 +644,7 @@ struct SelfTestState
+     {
+         Idle,
+         Setup,
++        FileOps_CommonPresentationPerf,
+         FileOps_VisualGallery,
+         FileOps_VisualGalleryInteraction,
+         FileOps_CopyMergeIntoExistingFolder,
+@@ -1142,6 +1144,7 @@ std::wstring_view StepToString(SelfTestState::Step step) noexcept
+     {
+         case SelfTestState::Step::Idle: return L"Idle";
+         case SelfTestState::Step::Setup: return L"Setup";
++        case SelfTestState::Step::FileOps_CommonPresentationPerf: return L"FileOps_CommonPresentationPerf";
+         case SelfTestState::Step::FileOps_VisualGallery: return L"FileOps_VisualGallery";
+         case SelfTestState::Step::FileOps_VisualGalleryInteraction: return L"FileOps_VisualGalleryInteraction";
+         case SelfTestState::Step::FileOps_CopyMergeIntoExistingFolder: return L"FileOps_CopyMergeIntoExistingFolder";
+@@ -2042,6 +2045,12 @@ struct RunSelection
+ [[nodiscard]] RunSelection ResolveRunSelection(std::wstring_view filter)
+ {
+     RunSelection selection{};
++    if (EqualsIgnoreCase(filter, L"FileOps_CommonPresentationPerf"))
++    {
++        selection.reportedPhases = {SelfTestState::Step::FileOps_CommonPresentationPerf};
++        selection.activePhases   = selection.reportedPhases;
++        return selection;
++    }
+     // Opt-in documentation fixture; not added to broad runtime/performance qualification.
+     if (EqualsIgnoreCase(filter, L"FileOps_VisualGallery") || EqualsIgnoreCase(filter, L"FileOps_VisualGalleryInteraction"))
+     {
+@@ -6777,6 +6786,8 @@ void FileOperationsSelfTest::Start(HWND mainWindow, const SelfTest::SelfTestOpti
+     state.step = EqualsIgnoreCase(options.caseFilter, L"FileOps_VisualGallery") ? SelfTestState::Step::FileOps_VisualGallery : SelfTestState::Step::Setup;
+     if (EqualsIgnoreCase(options.caseFilter, L"FileOps_VisualGalleryInteraction"))
+         state.step = SelfTestState::Step::FileOps_VisualGalleryInteraction;
++    if (EqualsIgnoreCase(options.caseFilter, L"FileOps_CommonPresentationPerf"))
++        state.step = SelfTestState::Step::FileOps_CommonPresentationPerf;
+     state.runStartTick        = GetTickCount64();
+     state.stepStartTick       = static_cast<ULONGLONG>(state.runStartTick);
+     state.markerTick          = 0;
+@@ -6792,6 +6803,7 @@ namespace
+ using TickResult = std::optional<bool>;
+ 
+ #include "FolderWindow.FileOperations.SelfTest.VisualGallery.cpp"
++#include "FolderWindow.FileOperations.SelfTest.CommonPresentationPerf.cpp"
+ 
+ #pragma warning(push)
+ #pragma warning(disable : 4061) // Each helper intentionally owns only its phase subset; unmatched steps return nullopt.
+@@ -7094,6 +7106,23 @@ bool FileOperationsSelfTest::Tick(HWND /*mainWindow*/) noexcept
+ 
+     switch (state.step)
+     {
++        case SelfTestState::Step::FileOps_CommonPresentationPerf:
++        {
++            static bool measurementInProgress = false;
++            if (measurementInProgress || ! TryGetFolderWindow(state.mainWindow))
++                return false;
++            measurementInProgress = true;
++            auto resetMeasurement = wil::scope_exit([] { measurementInProgress = false; });
++            const bool measured   = RunFileOpsCommonPresentationPerf(state);
++            RecordCurrentPhase(state,
++                               measured ? SelfTest::SelfTestCaseResult::Status::passed : SelfTest::SelfTestCaseResult::Status::failed,
++                               measured ? L"" : L"Common presentation measurement failed; see trace.");
++            state.failed.store(! measured, std::memory_order_release);
++            state.step = SelfTestState::Step::Done;
++            state.running.store(false, std::memory_order_release);
++            state.done.store(true, std::memory_order_release);
++            return true;
++        }
+         case SelfTestState::Step::FileOps_VisualGallery:
+         case SelfTestState::Step::FileOps_VisualGalleryInteraction:
+         {

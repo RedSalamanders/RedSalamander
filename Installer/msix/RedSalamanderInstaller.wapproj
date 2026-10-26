@@ -58,9 +58,6 @@
     <Content Include="..\..\.build\$(Platform)\$(Configuration)\RedSalamander.exe">
       <PackagePath>RedSalamander.exe</PackagePath>
     </Content>
-    <Content Include="..\..\.build\$(Platform)\$(Configuration)\RedSalamanderMonitor.exe">
-      <PackagePath>RedSalamanderMonitor.exe</PackagePath>
-    </Content>
     <Content Include="..\..\.build\$(Platform)\$(Configuration)\RedSalamanderSearchService.exe">
       <PackagePath>RedSalamanderSearchService.exe</PackagePath>
     </Content>
@@ -70,17 +67,13 @@
       <Project>{D2B87EB8-E4D3-43B4-9610-407E297F8916}</Project>
       <Name>RedSalamander</Name>
     </ProjectReference>
-    <ProjectReference Include="..\..\RedSalamanderMonitor\RedSalamanderMonitor.vcxproj">
-      <Project>{4AF38B46-6204-420D-A7FD-8C83DCB4DAFE}</Project>
-      <Name>RedSalamanderMonitor</Name>
-    </ProjectReference>
     <ProjectReference Include="..\..\RedSalamanderSearchService\RedSalamanderSearchService.vcxproj">
       <Project>{4C8F3E60-2F3B-4A4E-A9D7-69C3FE8C6D41}</Project>
       <Name>RedSalamanderSearchService</Name>
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="..\..\.build\$(Platform)\$(Configuration)\**\*" Exclude="..\..\.build\$(Platform)\$(Configuration)\Plugins\**\*;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*;..\..\.build\$(Platform)\$(Configuration)\Themes\**\*;..\..\.build\$(Platform)\$(Configuration)\**\*.pdb;..\..\.build\$(Platform)\$(Configuration)\**\*.lib;..\..\.build\$(Platform)\$(Configuration)\**\*.exp;..\..\.build\$(Platform)\$(Configuration)\**\*.ilk;..\..\.build\$(Platform)\$(Configuration)\**\*.iobj;..\..\.build\$(Platform)\$(Configuration)\**\*.ipdb;..\..\.build\$(Platform)\$(Configuration)\**\*.exe;..\..\.build\$(Platform)\$(Configuration)\**\asan.supp;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-dynamodb.dll;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-kinesis.dll;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-s3.dll;..\..\.build\$(Platform)\$(Configuration)\**\brotlienc.dll;..\..\.build\$(Platform)\$(Configuration)\**\*.WebView2\**\*">
+    <Content Include="..\..\.build\$(Platform)\$(Configuration)\**\*" Exclude="..\..\.build\$(Platform)\$(Configuration)\Plugins\**\*;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*;..\..\.build\$(Platform)\$(Configuration)\Themes\**\*;..\..\.build\$(Platform)\$(Configuration)\**\*.pdb;..\..\.build\$(Platform)\$(Configuration)\**\*.lib;..\..\.build\$(Platform)\$(Configuration)\**\*.exp;..\..\.build\$(Platform)\$(Configuration)\**\*.ilk;..\..\.build\$(Platform)\$(Configuration)\**\*.iobj;..\..\.build\$(Platform)\$(Configuration)\**\*.ipdb;..\..\.build\$(Platform)\$(Configuration)\**\*.exe;..\..\.build\$(Platform)\$(Configuration)\**\asan.supp;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-dynamodb.dll;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-kinesis.dll;..\..\.build\$(Platform)\$(Configuration)\**\aws-cpp-sdk-s3.dll;..\..\.build\$(Platform)\$(Configuration)\**\brotlienc.dll;..\..\.build\$(Platform)\$(Configuration)\**\*.WebView2\**\*;..\..\.build\$(Platform)\$(Configuration)\RedMonitor-wil-LICENSE.txt;..\..\.build\$(Platform)\$(Configuration)\RedMonitor-yyjson-LICENSE.txt">
       <PackagePath>%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
       <Link>%(RecursiveDir)%(Filename)%(Extension)</Link>
       <TargetPath>%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
@@ -90,7 +83,7 @@
       <Link>Plugins\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <TargetPath>Plugins\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>
     </Content>
-    <Content Include="..\..\.build\$(Platform)\$(Configuration)\Lang\**\*" Exclude="..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.pdb;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.lib;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.exp;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.ilk;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.iobj;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.ipdb">
+    <Content Include="..\..\.build\$(Platform)\$(Configuration)\Lang\**\*" Exclude="..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.pdb;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.lib;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.exp;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.ilk;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.iobj;..\..\.build\$(Platform)\$(Configuration)\Lang\**\*.ipdb;..\..\.build\$(Platform)\$(Configuration)\Lang\RedSalamanderMonitor-*">
       <PackagePath>Lang\%(RecursiveDir)%(Filename)%(Extension)</PackagePath>
       <Link>Lang\%(RecursiveDir)%(Filename)%(Extension)</Link>
       <TargetPath>Lang\%(RecursiveDir)%(Filename)%(Extension)</TargetPath>

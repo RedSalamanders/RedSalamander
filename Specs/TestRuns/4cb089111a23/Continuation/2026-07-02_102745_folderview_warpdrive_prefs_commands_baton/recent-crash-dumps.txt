@@ -1,0 +1,9 @@
+
+FullName                                                              Length LastWriteTime
+--------                                                              ------ -------------
+C:\Users\eric\AppData\Local\CrashDumps\RedSalamander.exe.73392.dmp 120579921 02/07/2026 08:10:41
+C:\Users\eric\AppData\Local\CrashDumps\RedSalamander.exe.82464.dmp 135204168 01/07/2026 22:39:58
+C:\Users\eric\AppData\Local\CrashDumps\RedSalamander.exe.44244.dmp 135440024 01/07/2026 21:27:30
+C:\Users\eric\AppData\Local\CrashDumps\RedSalamander.exe.89564.dmp  49853040 01/07/2026 19:32:06
+C:\Users\eric\AppData\Local\CrashDumps\RedSalamander.exe.80916.dmp 118422401 01/07/2026 18:52:55
+

@@ -1,0 +1,10 @@
+{
+  "receipt_id": "06203c1748576f7b6f57bc3bd52d50dec3e78b1131180b5eed9cddd187ecff1d",
+  "source_snapshot_id": "673426f0da99bcb2f72a90557ff98fa35f8d7574212dc5fbf31bbae243ac4530",
+  "git_head": "809daa66dfb6179b7ad83fb7ec38412f1689361f",
+  "target": "solution",
+  "tests_enabled": true,
+  "configuration": "Release",
+  "platform": "x64",
+  "exit_code": 0
+}

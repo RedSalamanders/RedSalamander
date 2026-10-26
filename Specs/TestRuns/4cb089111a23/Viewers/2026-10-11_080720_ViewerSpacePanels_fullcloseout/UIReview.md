@@ -1,0 +1,19 @@
+# ViewerSpace UI and UX review
+
+Reviewed actual harness captures from the final-source Fresh Full x64 Release run `20261011T053522Z-30852-a218b0a1e7c74f61a658ac29e58b2f37`. Source snapshot: `987c7d7419c3db4f57c39a7c38ad1c3a5a00397c3f8893059d67a782cbe5b5cd`. Build receipt: `521a2032717eb2e2f9f0bfc87cb30d0028e3c056d69b5cae7da7e84a32ac6440`.
+
+- **Whole-panel collapse:** the visible **Hide panel** button is at the top right beside the Explorer/Analyst selector. It collapses the entire right or bottom workspace; **Show panel** restores it. The duplicate Close analysis action has been removed. Selection retains its own disclosure and preferred size.
+- **Mode selection:** Explorer/Analyst is a noneditable ComboBox with an owned popup. Menu commands, Ctrl+1/Ctrl+2 and live settings synchronize its value. Switching mode preserves the selected item and does not restart scanning.
+- **Navigation:** text breadcrumb links and their folder chevrons replace duplicate Up controls. A parent breadcrumb's retained-folder menu reaches siblings. Back/Forward remain; Navigate Up and its shortcuts remain available. Popup cancellation and stale-generation rejection are tested.
+- **Separators:** workspace and Selection splitters use the subtle theme divider at rest, with the canonical grip, hover/drag accent and keyboard focus ring. High Contrast retains its original palette. Side, bottom and inspector resizing support commit, Escape/capture-loss cancellation and persisted preferred ratios.
+- **Responsive layout:** Explorer uses the right panel at 1100 DIP and the bottom panel below it. The boundary witnesses cover 1099, 504 and 503 DIP widths, and the 462-DIP body-height threshold plus the adjacent physical pixel below it. The 520-DIP frame keeps mode, collapse and inspector actions visible.
+
+The narrow table still requires horizontal scrolling to reach later columns. Analyst gives it more width. Dense map labels can be shortened, with full selection values exposed through the inspector and UIA. This review does not establish accessibility conformance or exhaustive DPI/translation coverage.
+
+The native composition case passed five theme/layout captures with all eight pixel witnesses, plus six geometry boundaries. The lifecycle case passed eleven scenes. Five native and four lifecycle PNGs are retained; the other frames retain their original provenance records. `native-capture-bindings.json` and `capture-bindings.json` bind original file bytes and paths. Captures use harness-owned WGC without activation; interactive tests separately use the governed desktop lease and warning.
+
+The Full run passed all seven noninteractive ViewerSpace cases and the interactive case, including repeated window churn and exact saved foreground/focus restoration. Commands records 32 passed ViewerSpace cases and six explicit opt-in skips. [Current Debug evidence](../2026-10-11_073459_ViewerSpacePanels_debugcloseout/qualification.json) also passed seven noninteractive cases and the interaction case. Instrumentation samples are retained in that Debug archive and the separately identified [Release capture cohort](../2026-10-11_072915_ViewerSpacePanels_capturecloseout/metric_statistics.json); no matched speedup is claimed.
+
+The complete repository gate remains **FAILED**: 17 of 20 entries promoted. See [failure analysis](FailureAnalysis.md) and the unmodified [Full dashboard](run-all-tests-dashboard.md). Focused UI passes do not override that verdict.
+
+Actual frames: [Explorer / right panel](explorer-light.png), [Analyst / dark](analyst-dark.png), [rainbow](analyst-rainbow.png), [High Contrast](analyst-high-contrast.png), [narrow Explorer](explorer-narrow.png), [bottom panel / Selection collapsed](viewer-space-10-bottom-panel-inspector-collapsed.png), and [whole workspace collapsed](viewer-space-11-analysis-collapsed.png).

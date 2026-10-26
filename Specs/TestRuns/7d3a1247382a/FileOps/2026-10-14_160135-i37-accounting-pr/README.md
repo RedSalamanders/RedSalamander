@@ -1,0 +1,11 @@
+# I37 final local PR-selection accounting
+
+This is actual local Fresh execution of the thirteen existing PR-selection reader contracts after the governed Release rebuild; it is not CI delegation. Run `20261014T160135Z-20208-120c1673086c4b3abe4a4f732a7551a1` exited 1: twelve obligations passed; tooling Pester failed (930 passed, 6 failed, 1 skipped). Overall selected totals are 949 / 942 passed / 6 failed / 1 skipped. The original deployment writer remains failed/interrupted in its separate archive.
+
+The five unchanged symbolic-link fixtures are explicitly diagnosed with their actual missing-privilege exceptions in a separate focused run (34 passed / 5 failed / 0 skipped). The sixth tooling failure is the unchanged loopback source regex. The pin-version-database test really skipped with no reason and is UNALLOWED_SKIP; the required fixture checkout is absent, while immutable qualified/recovered pin and tool identities match. Historical checkout availability is not attested. No failure or skip has been converted to a pass.
+
+Original canonical checkpoint, terminal results, evidence and twelve promotions are retained byte-for-byte. Failed Pester stays FAILED/incomplete: its normalized reasons include DECLARED_FAILURES, FAILURE_CLASSIFICATION, NONZERO_EXIT and UNALLOWED_SKIP. SOURCE_INPUT_CHANGED in the aggregate is copied initial planning rationale; all before/after/final workspace snapshots are identical, so it is not during-test source drift. The derived obligation map has no canonical reuse authority.
+
+Recovery receipt `3fcbd99abe7790ab0419107520d85e5df8ea726c18ec89ac3e69323d65234add` binds unchanged snapshot `180bb20cdea4370b1c3376df556a6c1000e51c6a6e58386afeb63c4854d3a152`; recovery took 11:47 with zero warnings/errors. Five foreground families, ARM64 and Full repository qualification are not passed. Three old sandbox audit directories remain untouched separate findings. Full raw retained evidence: `D:\RedSalamander.Perf\evidence\folder-copy-progress-final-accounting-20261014-01\PR`.
+
+The raw privilege-causal-focused-transcript.txt is stored losslessly as `privilege-causal-focused-transcript.txt.gz` (gzip mtime0). `raw-text-preservation.json` binds the original path/bytes/SHA and the stored bytes; decompression is byte-identical, including original trailing whitespace.

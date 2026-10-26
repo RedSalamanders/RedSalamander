@@ -1,0 +1,77 @@
+{
+  "captures": [
+    {
+      "file": "issues-complete-detail-repeat-1-technical-detail-end.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v2-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-1\\technical-detail-end.png",
+      "sha256": "d4b9ac9544506d7dc0b0c25a3dc79b7a13006dbf33fd59e2e46416c2f936df33",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-1-typed-conflicts.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v2-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-1\\typed-conflicts.png",
+      "sha256": "3b70a6a1e60c790b43733fc379987f685f005f18ddcc538979fcdf4149196736",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-2-technical-detail-end.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v2-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-2\\technical-detail-end.png",
+      "sha256": "d4b9ac9544506d7dc0b0c25a3dc79b7a13006dbf33fd59e2e46416c2f936df33",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-2-typed-conflicts.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v2-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-2\\typed-conflicts.png",
+      "sha256": "3b70a6a1e60c790b43733fc379987f685f005f18ddcc538979fcdf4149196736",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-3-technical-detail-end.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v2-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-3\\technical-detail-end.png",
+      "sha256": "d4b9ac9544506d7dc0b0c25a3dc79b7a13006dbf33fd59e2e46416c2f936df33",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-complete-detail-repeat-3-typed-conflicts.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v2-20260921\\artifacts\\selftest\\last_run\\commands\\issues-complete-detail\\repeat-3\\typed-conflicts.png",
+      "sha256": "3b70a6a1e60c790b43733fc379987f685f005f18ddcc538979fcdf4149196736",
+      "locale": "fr-FR"
+    },
+    {
+      "file": "issues-typed-projection-repeat-1-typed-conflicts.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v2-20260921\\artifacts\\selftest\\last_run\\commands\\issues-typed-projection\\repeat-1\\typed-conflicts.png",
+      "sha256": "82758ef0da17a6d60020d554a5cf6e79bf4e2cb49c905d4f50b2b2521629aa5e",
+      "locale": "restored app preference"
+    },
+    {
+      "file": "issues-typed-projection-repeat-2-typed-conflicts.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v2-20260921\\artifacts\\selftest\\last_run\\commands\\issues-typed-projection\\repeat-2\\typed-conflicts.png",
+      "sha256": "82758ef0da17a6d60020d554a5cf6e79bf4e2cb49c905d4f50b2b2521629aa5e",
+      "locale": "restored app preference"
+    },
+    {
+      "file": "issues-typed-projection-repeat-3-typed-conflicts.png",
+      "source": "S:\\RedSalamander.Perf\\evidence\\i26-detail-candidate-v2-20260921\\artifacts\\selftest\\last_run\\commands\\issues-typed-projection\\repeat-3\\typed-conflicts.png",
+      "sha256": "82758ef0da17a6d60020d554a5cf6e79bf4e2cb49c905d4f50b2b2521629aa5e",
+      "locale": "restored app preference"
+    }
+  ],
+  "caption_probes": [
+    {
+      "pixels": 0,
+      "dpi": 144,
+      "hr": 2147942487
+    },
+    {
+      "pixels": 0,
+      "dpi": 144,
+      "hr": 2147942487
+    },
+    {
+      "pixels": 0,
+      "dpi": 144,
+      "hr": 2147942487
+    }
+  ],
+  "source_snapshot": "8b32969d849a4154b30a3c832244ae43adf90019100487fc1c3269cdd0f14955",
+  "capture_method": "SaveWindowScreenshot; private HWND protected by ScopedWindowActivationBlocker"
+}

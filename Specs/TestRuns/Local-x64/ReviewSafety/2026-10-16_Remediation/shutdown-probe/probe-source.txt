@@ -1,0 +1,739 @@
+#define REDSAL_DEFINE_TRACE_PROVIDER
+#include <cstdio>
+#include "FileOperationTraversalPolicy.h"
+#include "FileSystem.Internal.h"
+#include "DirectoryRecordCursor.h"
+#include "FileSystemRouteContract.h"
+#include "PathUtils.h"
+#include "SynchronousIoCancelWatch.h"
+
+#if defined(ENABLE_TESTS)
+#include "ContentDigest.h"
+#endif
+
+#include <algorithm>
+#include <array>
+#include <atomic>
+#include <chrono>
+#include <condition_variable>
+#include <cstring>
+#include <cwchar>
+#include <deque>
+#include <filesystem>
+#include <functional>
+#include <limits>
+#include <memory>
+#include <mutex>
+#include <optional>
+#include <ranges>
+#include <span>
+#include <thread>
+#include <unordered_map>
+#include <utility>
+
+#include <shellapi.h>
+#include <shlobj.h>
+#include <shobjidl.h>
+#include <winioctl.h>
+
+#if defined(_DEBUG) || defined(ENABLE_TESTS)
+// The object-binding debug self-test keeps its links in the marked sandbox; test builds journal the
+// Recycle Bin items they create for originals inside one.
+#include "Common.Tests.SandboxPath.h"
+#endif
+
+using namespace FileSystemInternal;
+
+namespace FileSystemInternal
+{
+// Module anchor for AcquireModuleReferenceFromAddress — keeps the DLL loaded while worker threads are running.
+const int kFileSystemModuleAnchor = 0;
+std::atomic<uint64_t> g_copyTempPathCounter{0};
+
+// Result of one step of a dynamic (self-feeding) job. Dynamic jobs replace the old
+// long-lived `for(;;)` consumer loops: a worker processes ONE unit per dispatch and
+// returns to the pool between units, so concurrent jobs round-robin fairly instead of
+// one operation pinning every scheduler worker for its entire duration.
+enum class DynamicStep
+{
+    Processed, // Ran one unit; more work may remain. Scheduler re-dispatches promptly.
+    Idle,      // No unit ready right now, but the job is not finished. The job is parked until woken: by one of
+               // its own steps that ran a unit, or by NotifyDynamicWorkAvailable(job) after a change made outside
+               // its steps.
+    Finished,  // No more work will ever appear. Wind the job down.
+};
+
+// R0f: a scheduler worker blocked inside a synchronous Win32 call (typically a dead SMB share)
+// returns once the job's operation control reports cancel or deadline; see SynchronousIoCancelWatch.h.
+[[nodiscard]] bool OperationOptionsRequestCancel(void* context) noexcept
+{
+    return FAILED(FileSystemCheckOperationControl(static_cast<const FileSystemOptions*>(context)));
+}
+
+class SharedFileOpsJobScheduler final
+{
+public:
+    SharedFileOpsJobScheduler() = default;
+    ~SharedFileOpsJobScheduler() noexcept
+    {
+        ShutdownAndJoin();
+    }
+
+    SharedFileOpsJobScheduler(const SharedFileOpsJobScheduler&)            = delete;
+    SharedFileOpsJobScheduler(SharedFileOpsJobScheduler&&)                 = delete;
+    SharedFileOpsJobScheduler& operator=(const SharedFileOpsJobScheduler&) = delete;
+    SharedFileOpsJobScheduler& operator=(SharedFileOpsJobScheduler&&)      = delete;
+
+    struct Job final
+    {
+        Job() noexcept = default;
+
+        Job(const Job&)            = delete;
+        Job(Job&&)                 = delete;
+        Job& operator=(const Job&) = delete;
+        Job& operator=(Job&&)      = delete;
+
+        std::function<void(size_t, uint64_t)> processIndex;
+        size_t totalItems           = 0;
+        unsigned int maxConcurrency = 1;
+        // Operation control source for the cancel watch of every unit this job dispatches.
+        const FileSystemOptions* operationOptions = nullptr;
+
+        // Dynamic (self-feeding) jobs: when set, dispatch is gated by *readyCountPtr (a
+        // count of immediately-runnable units owned by the caller) instead of nextIndex/
+        // totalItems, and the job completes when dynamicFinished is set with no work in
+        // flight. processDynamic is invoked once per dispatch and returns a DynamicStep.
+        bool isDynamic                           = false;
+        const std::atomic<size_t>* readyCountPtr = nullptr;
+        std::function<DynamicStep(uint64_t)> processDynamic;
+        std::atomic<bool> dynamicFinished{false};
+
+        // Protected by the scheduler mutex.
+        size_t nextIndex      = 0;
+        unsigned int inFlight = 0;
+        // Dynamic jobs: every wake (one of the job's own steps that ran a unit, NotifyDynamicWorkAvailable(job))
+        // advances wakeGeneration; a step that found nothing to run, with no wake since its dispatch, parks the job
+        // until the next one.
+        uint64_t wakeGeneration   = 0;
+        bool parked               = false;
+        uint64_t parkedGeneration = 0;
+
+        std::atomic<bool> done{false};
+        std::mutex doneMutex;
+        std::condition_variable doneCv;
+    };
+
+    using JobPtr = std::shared_ptr<Job>;
+
+    JobPtr StartJob(unsigned int maxConcurrency, size_t totalItems, std::function<void(size_t, uint64_t)> processIndex)
+    {
+        return StartJob(nullptr, maxConcurrency, totalItems, std::move(processIndex));
+    }
+
+    JobPtr StartJob(const FileSystemOptions* operationOptions,
+                    unsigned int maxConcurrency,
+                    size_t totalItems,
+                    std::function<void(size_t, uint64_t)> processIndex)
+    {
+        auto job              = std::make_shared<Job>();
+        job->operationOptions = operationOptions;
+        job->totalItems       = totalItems;
+        job->processIndex     = std::move(processIndex);
+        job->maxConcurrency   = std::max(1u, maxConcurrency);
+        if (job->totalItems > 0)
+        {
+            job->maxConcurrency =
+                std::min<unsigned int>(job->maxConcurrency, static_cast<unsigned int>((std::min)(job->totalItems, static_cast<size_t>(UINT_MAX))));
+        }
+
+        ensureWorkers();
+
+        if (_workers.empty())
+        {
+            if (job->processIndex)
+            {
+                for (size_t i = 0; i < job->totalItems; ++i)
+                {
+                    job->processIndex(i, 0);
+                }
+            }
+
+            finishJob(*job);
+            return job;
+        }
+
+        {
+            std::scoped_lock lock(_mutex);
+            _jobs.push_back(job);
+        }
+
+        _cv.notify_all();
+        return job;
+    }
+
+    // Starts a dynamic, self-feeding parallel job. `readyCountPtr` points to a
+    // caller-owned atomic that reports how many units are immediately runnable (the
+    // caller increments it when it enqueues work and decrements it when a unit is
+    // taken). The scheduler dispatches `step` on up to `maxConcurrency` workers as
+    // SHORT work items — each worker returns to the pool after one unit, so other jobs
+    // stay fair. A worker is dispatched only while *readyCountPtr > 0; when a step
+    // returns DynamicStep::Finished the job winds down once nothing is in flight.
+    // A step that returns DynamicStep::Idle parks the job until it is woken. A step that
+    // ran a unit wakes it; any change the step depends on that is made outside the job's
+    // steps (a unit queued, a limit raised) must be followed by NotifyDynamicWorkAvailable(job).
+    JobPtr StartDynamicJob(unsigned int maxConcurrency, const std::atomic<size_t>* readyCountPtr, std::function<DynamicStep(uint64_t)> step)
+    {
+        return StartDynamicJob(nullptr, maxConcurrency, readyCountPtr, std::move(step));
+    }
+
+    JobPtr StartDynamicJob(const FileSystemOptions* operationOptions,
+                           unsigned int maxConcurrency,
+                           const std::atomic<size_t>* readyCountPtr,
+                           std::function<DynamicStep(uint64_t)> step)
+    {
+        auto job              = std::make_shared<Job>();
+        job->operationOptions = operationOptions;
+        job->isDynamic        = true;
+        job->maxConcurrency   = std::max(1u, maxConcurrency);
+        job->readyCountPtr    = readyCountPtr;
+        job->processDynamic   = std::move(step);
+
+        ensureWorkers();
+
+        if (_workers.empty())
+        {
+            // No worker pool: drain on the calling thread. The job is self-feeding, so
+            // a single drainer makes progress until the step reports Finished.
+            if (job->processDynamic)
+            {
+                for (;;)
+                {
+                    const DynamicStep result = job->processDynamic(0);
+                    if (result == DynamicStep::Finished)
+                    {
+                        break;
+                    }
+                    if (result == DynamicStep::Idle && (! readyCountPtr || readyCountPtr->load(std::memory_order_acquire) == 0))
+                    {
+                        break;
+                    }
+                }
+            }
+
+            finishJob(*job);
+            return job;
+        }
+
+        {
+            std::scoped_lock lock(_mutex);
+            _jobs.push_back(job);
+        }
+
+        _cv.notify_all();
+        return job;
+    }
+
+    void WaitJob(const JobPtr& job) noexcept
+    {
+        if (! job)
+        {
+            return;
+        }
+
+        if (IsWorkerThread())
+        {
+            // Avoid deadlocks when a file operation recursively starts parallel work from within a worker.
+            while (! job->done.load(std::memory_order_acquire))
+            {
+                JobPtr dequeued;
+                size_t index        = 0;
+                uint64_t generation = 0;
+                {
+                    std::unique_lock lock(_mutex);
+                    cleanupJobsLocked();
+                    if (job->done.load(std::memory_order_acquire))
+                    {
+                        break;
+                    }
+                    if (! hasSchedulableWorkLocked())
+                    {
+                        _cv.wait(lock);
+                        cleanupJobsLocked();
+                        if (job->done.load(std::memory_order_acquire))
+                        {
+                            break;
+                        }
+                    }
+
+                    if (! tryDequeueWorkLocked(dequeued, index, generation))
+                    {
+                        continue;
+                    }
+                }
+
+                static_cast<void>(executeWorkItem(std::move(dequeued), index, tls_workerStreamId, generation));
+            }
+
+            return;
+        }
+
+        std::unique_lock lock(job->doneMutex);
+        job->doneCv.wait(lock, [&]() noexcept { return job->done.load(std::memory_order_acquire); });
+    }
+
+    // Runs one step of a dynamic job on the calling scheduler worker when none of the job's steps is in
+    // flight and it has a runnable unit. A walk's producer that waits for queue room on a scheduler
+    // worker calls this: every worker of the pool can be such a producer (each root of a bulk CopyItems
+    // walks on one), and the steps that would make room then have no worker left. Only the job's own
+    // steps run here (one file or link each), never another job's units, so the producer's stack grows
+    // by one step at most. It does not wait for a wake: a parked job's step runs here too, and unparks it.
+    // Returns the step's result; Idle when the caller is not a scheduler worker, a step of the job is in
+    // flight, the job is finished or nothing is ready, or the step found no unit.
+    [[nodiscard]] DynamicStep TryRunUnservedDynamicStep(const JobPtr& job) noexcept
+    {
+        if (! job || ! job->isDynamic || ! IsWorkerThread())
+        {
+            return DynamicStep::Idle;
+        }
+
+        uint64_t generation = 0;
+        {
+            std::scoped_lock lock(_mutex);
+            if (job->dynamicFinished.load(std::memory_order_acquire) || job->inFlight != 0u || ! job->readyCountPtr ||
+                job->readyCountPtr->load(std::memory_order_acquire) == 0u)
+            {
+                return DynamicStep::Idle;
+            }
+            job->inFlight += 1u;
+            job->parked = false;
+            generation  = job->wakeGeneration;
+        }
+
+        return executeWorkItem(job, 0u, tls_workerStreamId, generation);
+    }
+
+    // Called after a change `job`'s step depends on that is made outside its steps (a unit queued, a walk's
+    // listing ended, a limit raised); a step that ran a unit wakes its job anyway, and may call this earlier so
+    // other workers start sooner. The job's wake generation advances under the scheduler lock, which a worker
+    // holds from its check to its wait, so no worker sleeps through the change (a job's ready count changes
+    // outside this lock), and the job is dispatchable again if it was parked. Other jobs stay parked.
+    void NotifyDynamicWorkAvailable(const JobPtr& job) noexcept
+    {
+        {
+            std::scoped_lock lock(_mutex);
+            if (job)
+            {
+                ++job->wakeGeneration;
+            }
+        }
+        _cv.notify_all();
+    }
+
+    void Shutdown() noexcept
+    {
+        ShutdownAndJoin();
+    }
+
+    void ShutdownAndJoin() noexcept
+    {
+        std::vector<std::jthread> workers;
+        {
+            std::scoped_lock lock(_initMutex);
+            if (_initialized)
+            {
+                {
+                    // Under the scheduler lock, which a worker holds from its stop check to its wait: no worker
+                    // sleeps through the stop.
+                    std::scoped_lock workLock(_mutex);
+                    for (std::jthread& worker : _workers)
+                    {
+                        worker.request_stop();
+                    }
+                }
+
+                workers      = std::move(_workers);
+                _initialized = false;
+            }
+        }
+
+        _cv.notify_all();
+
+        // Shutdown is called only after producers have stopped submitting jobs.
+        // Join workers first so stack-backed operation contexts cannot unwind while callbacks are still active.
+        workers.clear();
+
+        {
+            std::scoped_lock lock(_mutex);
+            for (const JobPtr& job : _jobs)
+            {
+                if (job)
+                {
+                    finishJob(*job);
+                }
+            }
+            _jobs.clear();
+            _rrCursor = 0;
+        }
+
+        _cv.notify_all();
+    }
+
+    [[nodiscard]] bool IsWorkerThread() const noexcept
+    {
+        return tls_scheduler == this;
+    }
+
+    [[nodiscard]] uint64_t CurrentWorkerStreamId() const noexcept
+    {
+        return IsWorkerThread() ? tls_workerStreamId : 0;
+    }
+
+    [[nodiscard]] bool EnsureWorkersAvailable()
+    {
+        ensureWorkers();
+        return ! _workers.empty();
+    }
+
+private:
+    static inline thread_local const SharedFileOpsJobScheduler* tls_scheduler = nullptr;
+    static inline thread_local uint64_t tls_workerStreamId                    = 0;
+
+    void ensureWorkers()
+    {
+        std::scoped_lock lock(_initMutex);
+        if (_initialized)
+        {
+            return;
+        }
+
+        unsigned int workerCount = std::thread::hardware_concurrency();
+        if (workerCount == 0)
+        {
+            workerCount = 4;
+        }
+
+        constexpr unsigned int kMaxWorkers = 16u;
+        workerCount                        = std::max(1u, std::min(workerCount, kMaxWorkers));
+
+        _workers.reserve(workerCount);
+        for (unsigned int i = 0; i < workerCount; ++i)
+        {
+            // Pin the module so the DLL cannot be unloaded while worker threads are running.
+            wil::unique_hmodule modulePin = AcquireModuleReferenceFromAddress(&kFileSystemModuleAnchor);
+            if (! modulePin)
+            {
+                Debug::Error(L"FileSystem: Failed to pin module for job scheduler worker thread {}", i);
+                break;
+            }
+
+            try
+            {
+                _workers.emplace_back([this, i, pin = std::move(modulePin)](std::stop_token stopToken) noexcept
+                {
+                    static_cast<void>(pin); // prevent [[maybe_unused]] — released on thread exit
+                    workerMain(stopToken, static_cast<uint64_t>(i));
+                });
+            }
+            catch (const std::system_error&)
+            {
+                // Module pin released via RAII if thread creation fails.
+                break;
+            }
+        }
+
+        _initialized = true;
+    }
+
+    void finishJob(Job& job) noexcept
+    {
+        {
+            std::scoped_lock lock(job.doneMutex);
+            job.done.store(true, std::memory_order_release);
+        }
+        job.doneCv.notify_all();
+    }
+
+    void cleanupJobsLocked() noexcept
+    {
+        size_t write = 0;
+        for (size_t read = 0; read < _jobs.size(); ++read)
+        {
+            const JobPtr& job = _jobs[read];
+            if (! job)
+            {
+                continue;
+            }
+
+            const bool finished = job->isDynamic ? job->dynamicFinished.load(std::memory_order_acquire) : (job->nextIndex >= job->totalItems);
+            if (finished && job->inFlight == 0)
+            {
+                finishJob(*job);
+                continue;
+            }
+
+            if (write != read)
+            {
+                _jobs[write] = job;
+            }
+            ++write;
+        }
+
+        if (write < _jobs.size())
+        {
+            _jobs.resize(write);
+        }
+
+        if (_rrCursor >= _jobs.size())
+        {
+            _rrCursor = 0;
+        }
+    }
+
+    [[nodiscard]] bool hasSchedulableWorkLocked() noexcept
+    {
+        for (const JobPtr& job : _jobs)
+        {
+            if (! job)
+            {
+                continue;
+            }
+
+            if (job->inFlight >= job->maxConcurrency)
+            {
+                continue;
+            }
+
+            if (job->isDynamic)
+            {
+                if (job->dynamicFinished.load(std::memory_order_acquire) || dynamicJobParkedLocked(*job))
+                {
+                    continue;
+                }
+                if (! job->readyCountPtr || job->readyCountPtr->load(std::memory_order_acquire) == 0)
+                {
+                    continue;
+                }
+                return true;
+            }
+
+            if (job->nextIndex >= job->totalItems)
+            {
+                continue;
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
+    // A parked dynamic job (its last step found nothing to run) waits for its next wake.
+    [[nodiscard]] bool dynamicJobParkedLocked(const Job& job) const noexcept
+    {
+        return job.parked && job.parkedGeneration == job.wakeGeneration;
+    }
+
+    // outGeneration: the job's wake generation this dispatch saw (a dynamic step that finds nothing parks its
+    // job only if no wake came since).
+    [[nodiscard]] bool tryDequeueWorkLocked(JobPtr& outJob, size_t& outIndex, uint64_t& outGeneration) noexcept
+    {
+        const size_t jobCount = _jobs.size();
+        if (jobCount == 0)
+        {
+            return false;
+        }
+
+        const size_t start = _rrCursor % jobCount;
+        for (size_t attempt = 0; attempt < jobCount; ++attempt)
+        {
+            const size_t idx = (start + attempt) % jobCount;
+            JobPtr& job      = _jobs[idx];
+            if (! job)
+            {
+                continue;
+            }
+
+            if (job->inFlight >= job->maxConcurrency)
+            {
+                continue;
+            }
+
+            if (job->isDynamic)
+            {
+                if (job->dynamicFinished.load(std::memory_order_acquire) || dynamicJobParkedLocked(*job))
+                {
+                    continue;
+                }
+                if (! job->readyCountPtr || job->readyCountPtr->load(std::memory_order_acquire) == 0)
+                {
+                    continue;
+                }
+
+                outJob        = job;
+                outIndex      = 0; // Dynamic steps pull their own unit; the index is unused.
+                outGeneration = job->wakeGeneration;
+                job->parked   = false;
+                job->inFlight += 1;
+
+                _rrCursor = (idx + 1u) % jobCount;
+                return true;
+            }
+
+            if (job->nextIndex >= job->totalItems)
+            {
+                continue;
+            }
+
+            outJob        = job;
+            outIndex      = job->nextIndex;
+            outGeneration = 0; // static units never park
+            job->nextIndex += 1;
+            job->inFlight += 1;
+
+            _rrCursor = (idx + 1u) % jobCount;
+            return true;
+        }
+
+        return false;
+    }
+
+    // Returns what a dynamic step reported (Processed for a static unit, Idle when no unit ran). A dynamic step
+    // that ran a unit wakes its job (the unit may have made others ready, as a Delete promoting a parent does);
+    // one that found nothing to run parks it when no wake came since the dispatch (`dispatchGeneration`), so
+    // the job is not dispatched again before something it depends on changes.
+    DynamicStep executeWorkItem(JobPtr job, size_t index, uint64_t streamId, uint64_t dispatchGeneration) noexcept
+    {
+        DynamicStep result = DynamicStep::Idle;
+        if (job)
+        {
+            const Common::SynchronousIoCancelWatch::Scope cancelWatch(job->operationOptions != nullptr ? &OperationOptionsRequestCancel : nullptr,
+                                                                      const_cast<FileSystemOptions*>(job->operationOptions));
+            if (job->isDynamic)
+            {
+                if (job->processDynamic)
+                {
+                    result = job->processDynamic(streamId);
+                }
+            }
+            else if (job->processIndex)
+            {
+                job->processIndex(index, streamId);
+                result = DynamicStep::Processed;
+            }
+        }
+
+        {
+            std::scoped_lock lock(_mutex);
+            if (job)
+            {
+                if (job->inFlight > 0)
+                {
+                    job->inFlight -= 1;
+                }
+                if (job->isDynamic && result == DynamicStep::Finished)
+                {
+                    job->dynamicFinished.store(true, std::memory_order_release);
+                }
+                else if (job->isDynamic && result == DynamicStep::Processed)
+                {
+                    ++job->wakeGeneration;
+                }
+                else if (job->isDynamic && result == DynamicStep::Idle && job->wakeGeneration == dispatchGeneration)
+                {
+                    job->parked           = true;
+                    job->parkedGeneration = dispatchGeneration;
+                }
+            }
+            cleanupJobsLocked();
+        }
+
+        _cv.notify_all();
+        return result;
+    }
+
+    void workerMain(std::stop_token stopToken, uint64_t streamId) noexcept
+    {
+        tls_scheduler      = this;
+        tls_workerStreamId = streamId;
+
+        [[maybe_unused]] auto coInit = wil::CoInitializeEx_failfast();
+
+        while (! stopToken.stop_requested())
+        {
+            JobPtr job;
+            size_t index        = 0;
+            uint64_t generation = 0;
+
+            {
+                std::unique_lock lock(_mutex);
+                cleanupJobsLocked();
+                if (! hasSchedulableWorkLocked() && ! stopToken.stop_requested())
+                {
+                    _cv.wait(lock);
+                    if (stopToken.stop_requested())
+                    {
+                        break;
+                    }
+                    cleanupJobsLocked();
+                }
+                if (stopToken.stop_requested())
+                {
+                    break;
+                }
+                if (! tryDequeueWorkLocked(job, index, generation))
+                {
+                    continue;
+                }
+            }
+
+            static_cast<void>(executeWorkItem(std::move(job), index, streamId, generation));
+        }
+
+        tls_scheduler      = nullptr;
+        tls_workerStreamId = 0;
+    }
+
+private:
+    std::mutex _mutex;
+    std::condition_variable _cv;
+    std::vector<JobPtr> _jobs;
+    size_t _rrCursor = 0;
+
+    std::mutex _initMutex;
+    bool _initialized = false;
+    std::vector<std::jthread> _workers;
+};
+
+
+} // namespace FileSystemInternal
+int main() {
+ SharedFileOpsJobScheduler scheduler;
+ if (!scheduler.EnsureWorkersAvailable()) return 2;
+ std::mutex mutex; std::condition_variable cv;
+ bool entered=false, closingStarted=false, parentReturned=false, shutdownReturned=false;
+ std::atomic<size_t> ready{0u};
+ SharedFileOpsJobScheduler::JobPtr child;
+ auto parent=scheduler.StartJob(1u,1u,[&](size_t,uint64_t) noexcept {
+  auto nested=scheduler.StartDynamicJob(1u,&ready,[](uint64_t) noexcept {return DynamicStep::Finished;});
+  {std::scoped_lock lock(mutex);child=nested;entered=true;}
+  cv.notify_all(); scheduler.WaitJob(nested);
+  {std::scoped_lock lock(mutex);parentReturned=true;} cv.notify_all();
+ });
+ {std::unique_lock lock(mutex); if(!cv.wait_for(lock,std::chrono::seconds(5),[&]{return entered;})) return 3;}
+ std::jthread closing([&]() noexcept {
+  {std::scoped_lock lock(mutex);closingStarted=true;} cv.notify_all();
+  scheduler.ShutdownAndJoin();
+  {std::scoped_lock lock(mutex);shutdownReturned=true;} cv.notify_all();
+ });
+ bool returnedWithoutChildRelease=false, observedClosing=false;
+ {std::unique_lock lock(mutex);
+  observedClosing=cv.wait_for(lock,std::chrono::seconds(5),[&]{return closingStarted;});
+  if(observedClosing) returnedWithoutChildRelease=cv.wait_for(lock,std::chrono::milliseconds(500),[&]{return shutdownReturned;});
+ }
+ // Always release the synthetic child so this diagnostic never strands a worker.
+ ready.store(1u,std::memory_order_release); scheduler.NotifyDynamicWorkAvailable(child);
+ closing.join(); scheduler.WaitJob(parent);
+ std::printf("closing_observed=%d shutdown_returned_before_child_release=%d parent_quiescent=%d shutdown_quiescent=%d\n",
+             observedClosing,returnedWithoutChildRelease,parentReturned,shutdownReturned);
+ return observedClosing && !returnedWithoutChildRelease && parentReturned && shutdownReturned ? 0 : 1;
+}

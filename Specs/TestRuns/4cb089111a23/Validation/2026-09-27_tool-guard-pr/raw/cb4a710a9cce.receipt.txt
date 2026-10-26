@@ -1,0 +1,37 @@
+import hashlib, json, shutil, subprocess
+from pathlib import Path
+
+root=Path(__file__).parent
+primary=Path('Z:/src/RedSalamander')
+target=Path('C:/RsI26Final')
+changed=['Tools/Modules/Testing/TestInventory.psm1','Tools/Tests/TestInventory.Tests.ps1',
+         'Tools/Tests/TestHarnessSourceContracts.Tests.ps1','Tools/tool-inventory.json',
+         'Specs/Testing/Testing_TestCoverage.md']
+inputs=json.loads((root/'current-v6-pr-release-20260927/candidate-inputs.json').read_text(encoding='utf-8-sig'))
+for row in inputs:
+    assert hashlib.sha256((target/row['path']).read_bytes()).hexdigest()==row['sha256'], row['path']
+for relative in changed:
+    old=subprocess.check_output(['git','show','HEAD:'+relative],cwd=primary)
+    assert (target/relative).read_bytes().replace(b'\r\n',b'\n')==old.replace(b'\r\n',b'\n'),relative
+for relative in changed:
+    shutil.copyfile(primary/relative,target/relative)
+    inputs.append(dict(path=relative,sha256=hashlib.sha256((target/relative).read_bytes()).hexdigest()))
+for config in ('release','debug'):
+    oldroot=root/f'current-v6-pr-{config}-20260927'
+    newroot=root/f'current-v7-pr-{config}-20260927'
+    newroot.mkdir()
+    (newroot/'candidate-inputs.json').write_text(json.dumps(inputs,indent=2)+'\n',encoding='utf-8')
+    driver=(oldroot/'run.ps1').read_text(encoding='utf-8-sig').replace(str(oldroot),str(newroot))
+    assert str(newroot) in driver
+    (newroot/'run.ps1').write_text(driver,encoding='utf-8')
+    for relative in changed:
+        snap=newroot/'source'/relative
+        snap.parent.mkdir(parents=True,exist_ok=True)
+        shutil.copyfile(target/relative,snap)
+(root/'current-v7-pr-sequence-20260927.ps1').write_text('''$ErrorActionPreference = 'Stop'
+& "$PSScriptRoot/current-v7-pr-release-20260927/run.ps1"
+if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
+& "$PSScriptRoot/current-v7-pr-debug-20260927/run.ps1"
+exit $LASTEXITCODE
+''',encoding='utf-8')
+print(f'Prepared {len(inputs)} frozen inputs; five reviewed tooling/spec overlays; native source unchanged.')

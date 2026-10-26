@@ -1,0 +1,8 @@
+{
+  "pester_console": {
+    "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\inspection-activation-guard-20260927\\baseline.log",
+    "sha256": "ab2e867514ce77803cd58198ecc6009df5214f30fe3d41b0e63a2f68340dd368",
+    "reason": "Failure text also retained in baseline.xml; console remains external."
+  },
+  "aggregate_traces": "Full suite traces are archived; redundant aggregate traces are bound by each archived runner-copy-hashes inventory."
+}

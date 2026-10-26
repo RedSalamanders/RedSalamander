@@ -1,0 +1,398 @@
+[
+  {
+    "kind": "blank",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\path-and-menu-20260923\\runner-artifacts\\fileops\\visual-gallery\\102-confirmation-0__dark__fr-FR__display1__144dpi.png",
+    "colorref": 12873472,
+    "rgb": [
+      0,
+      111,
+      196
+    ],
+    "bounds": [
+      1230,
+      195,
+      1263,
+      229
+    ],
+    "matches": {
+      "12": 0,
+      "20": 0,
+      "24": 0,
+      "64": 0
+    }
+  },
+  {
+    "kind": "blank",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\path-and-menu-20260923\\runner-artifacts\\fileops\\visual-gallery\\102-confirmation-0__dark__fr-FR__display1__144dpi.png",
+    "colorref": 5885183,
+    "rgb": [
+      255,
+      204,
+      89
+    ],
+    "bounds": [
+      1230,
+      195,
+      1263,
+      229
+    ],
+    "matches": {
+      "12": 0,
+      "20": 0,
+      "24": 0,
+      "64": 0
+    }
+  },
+  {
+    "kind": "blank",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\path-and-menu-20260923\\runner-artifacts\\fileops\\visual-gallery\\102-confirmation-0__dark__fr-FR__display1__144dpi.png",
+    "colorref": 10855935,
+    "rgb": [
+      255,
+      165,
+      165
+    ],
+    "bounds": [
+      1230,
+      195,
+      1263,
+      229
+    ],
+    "matches": {
+      "12": 0,
+      "20": 0,
+      "24": 0,
+      "64": 0
+    }
+  },
+  {
+    "kind": "composition",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\alert-composition-final-20260923\\runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-0__dark__fr-FR__display1__144dpi.png",
+    "colorref": 12873472,
+    "rgb": [
+      0,
+      111,
+      196
+    ],
+    "bounds": [
+      1230,
+      195,
+      1263,
+      229
+    ],
+    "matches": {
+      "12": 46,
+      "20": 46,
+      "24": 46,
+      "64": 78
+    }
+  },
+  {
+    "kind": "composition",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\alert-composition-final-20260923\\runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-1__dark__fr-FR__display1__144dpi.png",
+    "colorref": 12873472,
+    "rgb": [
+      0,
+      111,
+      196
+    ],
+    "bounds": [
+      1230,
+      195,
+      1263,
+      229
+    ],
+    "matches": {
+      "12": 46,
+      "20": 46,
+      "24": 46,
+      "64": 78
+    }
+  },
+  {
+    "kind": "composition",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\alert-composition-final-20260923\\runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-2__dark__fr-FR__display1__144dpi.png",
+    "colorref": 12873472,
+    "rgb": [
+      0,
+      111,
+      196
+    ],
+    "bounds": [
+      1230,
+      195,
+      1263,
+      229
+    ],
+    "matches": {
+      "12": 46,
+      "20": 46,
+      "24": 46,
+      "64": 78
+    }
+  },
+  {
+    "kind": "composition",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\alert-composition-final-20260923\\runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-3__dark__fr-FR__display1__144dpi.png",
+    "colorref": 12873472,
+    "rgb": [
+      0,
+      111,
+      196
+    ],
+    "bounds": [
+      1230,
+      195,
+      1263,
+      229
+    ],
+    "matches": {
+      "12": 46,
+      "20": 46,
+      "24": 46,
+      "64": 78
+    }
+  },
+  {
+    "kind": "composition",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\alert-composition-final-20260923\\runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-4__dark__fr-FR__display1__144dpi.png",
+    "colorref": 5885183,
+    "rgb": [
+      255,
+      204,
+      89
+    ],
+    "bounds": [
+      1230,
+      183,
+      1263,
+      217
+    ],
+    "matches": {
+      "12": 46,
+      "20": 46,
+      "24": 46,
+      "64": 74
+    }
+  },
+  {
+    "kind": "composition",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\alert-composition-final-20260923\\runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-5__dark__fr-FR__display1__144dpi.png",
+    "colorref": 5885183,
+    "rgb": [
+      255,
+      204,
+      89
+    ],
+    "bounds": [
+      1230,
+      183,
+      1263,
+      217
+    ],
+    "matches": {
+      "12": 46,
+      "20": 46,
+      "24": 46,
+      "64": 74
+    }
+  },
+  {
+    "kind": "composition",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\alert-composition-final-20260923\\runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-6__dark__fr-FR__display1__144dpi.png",
+    "colorref": 5885183,
+    "rgb": [
+      255,
+      204,
+      89
+    ],
+    "bounds": [
+      1230,
+      183,
+      1263,
+      217
+    ],
+    "matches": {
+      "12": 46,
+      "20": 46,
+      "24": 46,
+      "64": 74
+    }
+  },
+  {
+    "kind": "composition",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\alert-composition-final-20260923\\runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-7__dark__fr-FR__display1__144dpi.png",
+    "colorref": 5885183,
+    "rgb": [
+      255,
+      204,
+      89
+    ],
+    "bounds": [
+      1230,
+      183,
+      1263,
+      217
+    ],
+    "matches": {
+      "12": 46,
+      "20": 46,
+      "24": 46,
+      "64": 74
+    }
+  },
+  {
+    "kind": "composition",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\alert-composition-final-20260923\\runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-8__dark__fr-FR__display1__144dpi.png",
+    "colorref": 10855935,
+    "rgb": [
+      255,
+      165,
+      165
+    ],
+    "bounds": [
+      1230,
+      320,
+      1263,
+      354
+    ],
+    "matches": {
+      "12": 46,
+      "20": 46,
+      "24": 46,
+      "64": 74
+    }
+  },
+  {
+    "kind": "composition",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\alert-composition-final-20260923\\runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-9__dark__fr-FR__display1__144dpi.png",
+    "colorref": 10855935,
+    "rgb": [
+      255,
+      165,
+      165
+    ],
+    "bounds": [
+      1230,
+      320,
+      1263,
+      354
+    ],
+    "matches": {
+      "12": 46,
+      "20": 46,
+      "24": 46,
+      "64": 74
+    }
+  },
+  {
+    "kind": "composition",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\alert-composition-final-20260923\\runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-0__dark__fr-FR__display2__96dpi.png",
+    "colorref": 12873472,
+    "rgb": [
+      0,
+      111,
+      196
+    ],
+    "bounds": [
+      820,
+      120,
+      842,
+      143
+    ],
+    "matches": {
+      "12": 1,
+      "20": 21,
+      "24": 21,
+      "64": 21
+    }
+  },
+  {
+    "kind": "composition",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\alert-composition-final-20260923\\runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-1__dark__fr-FR__display2__96dpi.png",
+    "colorref": 12873472,
+    "rgb": [
+      0,
+      111,
+      196
+    ],
+    "bounds": [
+      820,
+      120,
+      842,
+      143
+    ],
+    "matches": {
+      "12": 1,
+      "20": 21,
+      "24": 21,
+      "64": 21
+    }
+  },
+  {
+    "kind": "composition",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\alert-composition-final-20260923\\runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-2__dark__fr-FR__display2__96dpi.png",
+    "colorref": 12873472,
+    "rgb": [
+      0,
+      111,
+      196
+    ],
+    "bounds": [
+      820,
+      120,
+      842,
+      143
+    ],
+    "matches": {
+      "12": 1,
+      "20": 21,
+      "24": 21,
+      "64": 21
+    }
+  },
+  {
+    "kind": "composition",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\alert-composition-final-20260923\\runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-3__dark__fr-FR__display2__96dpi.png",
+    "colorref": 12873472,
+    "rgb": [
+      0,
+      111,
+      196
+    ],
+    "bounds": [
+      820,
+      120,
+      842,
+      143
+    ],
+    "matches": {
+      "12": 1,
+      "20": 21,
+      "24": 21,
+      "64": 21
+    }
+  },
+  {
+    "kind": "composition",
+    "file": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\alert-composition-final-20260923\\runner-artifacts\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\102-confirmation-4__dark__fr-FR__display2__96dpi.png",
+    "colorref": 5885183,
+    "rgb": [
+      255,
+      204,
+      89
+    ],
+    "bounds": [
+      820,
+      113,
+      842,
+      136
+    ],
+    "matches": {
+      "12": 1,
+      "20": 1,
+      "24": 17,
+      "64": 21
+    }
+  }
+]

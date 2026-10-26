@@ -1,0 +1,10 @@
+Root whole-frame review — 2026-10-09
+
+Reviewer: root
+Review scope: all 11 ViewerSpace application and threshold-boundary frames from this Commands run, viewed at 144 DPI. The reviewer accepts framing, theme, nested shapes, and the boundary contract for the represented scenarios.
+
+Limits: AnalystBrowser tint is ambiguous between hover and focus. Source review confirmed that nested F00 selection clears grid selection, so these frames do not establish linked-selection state. This review does not claim broader UI Automation coverage or performance qualification. The image files and original capture-provenance bytes were not modified.
+
+Frames reviewed:
+- `explorer-light.png`, `explorer-narrow.png`, `analyst-dark.png`, `analyst-rainbow.png`, `analyst-high-contrast.png` in this archive's `captures/`.
+- `boundary-body-455.png`, `boundary-body-456.png`, `boundary-width-1099.png`, `boundary-width-1100.png`, `boundary-width-503.png`, `boundary-width-504.png` in sibling archive `space_final_worker_hook_debug_commands_boundary_captures/captures/`.

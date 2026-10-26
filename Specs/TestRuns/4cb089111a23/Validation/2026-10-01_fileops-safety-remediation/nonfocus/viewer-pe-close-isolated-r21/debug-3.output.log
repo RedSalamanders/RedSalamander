@@ -1,0 +1,47 @@
+[PASS] ViewerPE blocked-read test executable path resolves
+[PASS] ViewerPE blocked-read fixtures are present
+[PASS] ViewerPE.dll loads for blocked-read validation
+[PASS] ViewerPE factory resolves for blocked-read validation
+[PASS] ViewerPE instance is created for blocked-read validation
+[PASS] ViewerPE accepts an oversized-provider parse request
+[PASS] ViewerPE rejects the reported 256 MiB plus one byte source with a terminal error
+[PASS] ViewerPE queries the oversized source exactly once
+[PASS] ViewerPE rejects an oversized source before issuing any Read
+[PASS] ViewerPE exact-reader fixture has a bounded nonempty size
+[PASS] ViewerPE accepts the seek-position mismatch test request
+[PASS] ViewerPE rejects a provider that lies about the initial seek position
+[PASS] ViewerPE rejects the seek mismatch before reading bytes
+[PASS] ViewerPE accepts the premature-EOF test request
+[PASS] ViewerPE rejects premature EOF before the committed GetSize byte count
+[PASS] ViewerPE accepts the trailing-byte test request
+[PASS] ViewerPE rejects bytes beyond the committed GetSize byte count
+[PASS] ViewerPE accepts the impossible over-return test request
+[PASS] ViewerPE rejects Read counts larger than the requested buffer
+[PASS] ViewerPE first blocking-read events are created
+[PASS] ViewerPE starts the first blocked parse
+[PASS] ViewerPE first parse reaches the blocking Read while its window stays responsive
+[PASS] ViewerPE accepts a replaceable middle parse request
+[PASS] ViewerPE accepts the latest parse request
+[PASS] ViewerPE does not start the replaceable middle request while one Read is active
+[PASS] ViewerPE first blocking Read exits after release
+[PASS] ViewerPE runs the latest pending request after the blocked request exits
+[PASS] ViewerPE permanently drops the superseded middle request
+[PASS] ViewerPE caps each file-system Read request at one MiB
+[PASS] ViewerPE latest-wins request reaches a successful terminal parse
+[PASS] ViewerPE arms the result-allocation terminal-delivery fault
+[PASS] ViewerPE result-allocation failure leaves loading through the scheduler fallback
+[PASS] ViewerPE result-allocation terminal fallback preserves the current window
+[PASS] ViewerPE arms the payload-post terminal-delivery fault
+[PASS] ViewerPE payload-post failure leaves loading through the scheduler fallback
+[PASS] ViewerPE payload-post terminal fallback preserves the current window
+[PASS] ViewerPE close-path blocking-read events are created
+[PASS] ViewerPE starts the close-path blocked parse
+[PASS] ViewerPE close-path parse reaches the blocking Read
+[PASS] ViewerPE Close succeeds while Read remains blocked
+[PASS] ViewerPE Close returns within 500 ms instead of joining the blocked Read (elapsed=57 ms)
+[PASS] ViewerPE window is destroyed before the blocked Read is released
+[PASS] ViewerPE close-path Read request remains capped at one MiB
+[PASS] ViewerPE worker keeps its DLL module loaded after the window and caller references are released
+[PASS] ViewerPE cancelled worker exits after the provider releases Read
+[PASS] ViewerPE worker releases its module pin after cancelled work exits
+ViewerPETests passed.

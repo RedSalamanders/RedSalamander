@@ -1,0 +1,55 @@
+{
+  "schemaVersion": 1,
+  "compaction": {
+    "originalRelativePath": "perf/perf_metrics.jsonl",
+    "originalSourceBytes": 7009000,
+    "originalRunBytes": 7067986,
+    "originalSourceSha256": "6ce75a44c2d7cae22d1e5ab15fefb6aec334585e54856ce7ad33217bbcee446f",
+    "originalRowCount": 17190,
+    "originalMetricCount": 266,
+    "originalFileLimitBytes": 2097152,
+    "originalRunLimitBytes": 5242880,
+    "reason": "The raw high-frequency diagnostic stream exceeded both checked-in archive limits and was not load-bearing for a percentile, budget, or before/after claim."
+  },
+  "corpusIdentity": {
+    "firstTimestamp": "2026-07-20T18:54:23.467Z",
+    "lastTimestamp": "2026-07-20T18:55:50.057Z",
+    "machineHash": "7d3a1247382a",
+    "commit": "ff899c1c14d3d645157e0dcfd1b9b6821054b281",
+    "branch": "bridge-destination-getsize-fault",
+    "scenario": "SelfTest",
+    "build": "Debug",
+    "runIds": [
+      "2026-07-20_185423",
+      "2026-07-20_185424"
+    ]
+  },
+  "behavioralResult": {
+    "suite": "FileOperations",
+    "caseFilter": "FileOpsFamily_Fairstream",
+    "passed": 47,
+    "failed": 0,
+    "skipped": 0,
+    "durationMs": 85437,
+    "authority": "../fileops_results.json"
+  },
+  "claimCases": [
+    { "name": "Causeway_BridgeProviderOutputContracts", "status": "passed", "durationMs": 531 },
+    { "name": "Causeway_BridgeSchedulingAndResourceContracts", "status": "passed", "durationMs": 7078 },
+    { "name": "Floodgate_CrossFsCopyGetSizeFailureRefusesCommit", "status": "passed", "durationMs": 171 },
+    { "name": "Floodgate_CrossFsMoveGetSizeFailurePreservesSource", "status": "passed", "durationMs": 110 },
+    { "name": "Floodgate_CrossFsMoveDestinationGetSizeFailurePreservesSource", "status": "passed", "durationMs": 125 },
+    { "name": "Floodgate_CrossFsMoveGetSizeFailuresParallelPreserveSourceTree", "status": "passed", "durationMs": 1047 },
+    { "name": "Floodgate_CrossFsMoveCleanupDetectsDestinationCorruption", "status": "passed", "durationMs": 93 },
+    { "name": "Floodgate_CrossFsDirectoryMoveCleanupPreservesChangedSource", "status": "passed", "durationMs": 204 }
+  ],
+  "representativeMetrics": [
+    { "timestamp": "2026-07-20T18:55:47.160Z", "metric": "FileOps.SelfTest.FloodgateBridgeCopyGetSizeFailure", "detail": "", "durationUs": 1, "value0": 0, "value1": 0, "hr": 2147942699, "runId": "2026-07-20_185424" },
+    { "timestamp": "2026-07-20T18:55:47.269Z", "metric": "FileOps.SelfTest.FloodgateBridgeMoveGetSizeFailure", "detail": "", "durationUs": 1, "value0": 0, "value1": 0, "hr": 2147942699, "runId": "2026-07-20_185424" },
+    { "timestamp": "2026-07-20T18:55:47.398Z", "metric": "FileOps.SelfTest.FloodgateBridgeMoveDestinationGetSizeFailure", "detail": "serial", "durationUs": 1, "value0": 1, "value1": 72, "hr": 2147942699, "runId": "2026-07-20_185424" },
+    { "timestamp": "2026-07-20T18:55:48.441Z", "metric": "FileOps.SelfTest.FloodgateBridgeMoveGetSizeFailuresParallel", "detail": "concurrency=4", "durationUs": 2, "value0": 8, "value1": 7, "hr": 2147942699, "runId": "2026-07-20_185424" },
+    { "timestamp": "2026-07-20T18:55:48.538Z", "metric": "FileOps.SelfTest.FloodgateCrossFsFileMoveCleanupCorruption", "detail": "", "durationUs": 0, "value0": 18, "value1": 0, "hr": 2147942699, "runId": "2026-07-20_185424" },
+    { "timestamp": "2026-07-20T18:55:48.743Z", "metric": "FileOps.SelfTest.FloodgateCrossFsDirectoryMoveCleanup", "detail": "root-basic-info-mutated", "durationUs": 0, "value0": 3, "value1": 0, "hr": 2147942699, "runId": "2026-07-20_185424" }
+  ],
+  "claimBoundary": "The metrics and cases support the provider-neutral host bridge used by Microsoft Drive copy; they do not claim live Microsoft Graph or server-side Microsoft Drive move coverage."
+}

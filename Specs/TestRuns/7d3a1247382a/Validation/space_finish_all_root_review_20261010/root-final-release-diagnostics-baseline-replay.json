@@ -1,0 +1,38 @@
+{
+  "reviewer": "root",
+  "archives": [
+    {
+      "archive": "Validation/space_prepush_release_failure_reports_20261009T213050Z",
+      "pairs_verified": 40,
+      "surviving_original_matches": 4
+    },
+    {
+      "archive": "Validation/space_prepush_release_viewer_diagnostics_20261009T213050Z",
+      "pairs_verified": 10,
+      "surviving_original_matches": 1
+    },
+    {
+      "archive": "Build/space_baseline_release_matched_final_fb45_20261009T223611Z",
+      "pairs_verified": 5,
+      "surviving_original_matches": 0
+    }
+  ],
+  "native_noninteractive_cases": [
+    "TestViewerSpaceScanPolicyHelpers",
+    "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+    "TestViewerSpaceLifecycleCaptures",
+    "TestViewerSpaceListingValidation",
+    "TestViewerSpaceBoundedHostileProviderScanning",
+    "TestViewerSpaceBlockedProviderCloseAndPostUpdateRace",
+    "TestViewerSpaceDirectorySummaryProtocol"
+  ],
+  "release_interactive_space_witnesses": {
+    "fresh harness process reports an exit code": 4,
+    "fresh harness run passes": 4,
+    "owned job has no active processes before desktop restoration": 4,
+    "parent observes exact saved foreground and keyboard focus without restoration writes": 4
+  },
+  "later_broad_interactive_failures": 5,
+  "matched_dxui_archive_sha256": "FB45C1FE673BBCF48F3CA2B6E104C7220B03990CAB375B215022EF92026EFA13",
+  "limits": "Scoped ViewerSpace witnesses do not replace failed whole PE/PrePush verdicts; repeated churn successes are not independent samples."
+}

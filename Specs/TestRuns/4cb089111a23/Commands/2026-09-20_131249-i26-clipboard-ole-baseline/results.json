@@ -1,0 +1,36 @@
+{
+    "run_started_utc": "2026-09-20T11:12:52.735Z",
+    "suite": "Commands",
+    "artifact_root": "S:\\RedSalamander.Perf\\runs\\20260920T110925Z-74820-87d48be9f566435691da3d3a77254600\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 17675,
+    "passed": 0,
+    "failed": 3,
+    "skipped": 0,
+    "failureMessage": "Retained PNG must expose an independent stream after its original backing is invalidated.",
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "failed",
+            "duration_ms": 5652,
+            "repeat_index": 1,
+            "reason": "Retained PNG must expose an independent stream after its original backing is invalidated."
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "failed",
+            "duration_ms": 5515,
+            "repeat_index": 2,
+            "reason": "Retained PNG must expose an independent stream after its original backing is invalidated."
+        },
+        {
+            "name": "cmd_pane_fileops_popup_throughput_disclosure",
+            "status": "failed",
+            "duration_ms": 5516,
+            "repeat_index": 3,
+            "reason": "Retained PNG must expose an independent stream after its original backing is invalidated."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 3
+}

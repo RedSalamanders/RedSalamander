@@ -1,0 +1,53 @@
+{
+  "version": "V64",
+  "captureDestination": "external-only",
+  "coverageNote": "Same outer HWND native144-to96-to144 using FooterOptions focus; footer route excludes EnsureHostedFocusVisible, which is covered by the separate exact Commands GREEN case.",
+  "group": "ProtectedInteraction",
+  "name": "gallery-interaction-protected-x64-debug",
+  "filter": "FileOps_VisualGalleryInteraction",
+  "exitCode": 0,
+  "runId": "20261001T090259Z-87868-9a93d2a753794f9490d57400b1a022f9",
+  "result": {
+    "suite": "FileOps",
+    "configuration": "Debug",
+    "filter": "FileOps_VisualGalleryInteraction",
+    "runId": "20261001T090259Z-87868-9a93d2a753794f9490d57400b1a022f9",
+    "total": 1,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cleanSandbox": true
+  },
+  "startedUtc": "2026-10-01T09:02:58.6815207+00:00",
+  "completedUtc": "2026-10-01T09:03:49.0009488+00:00",
+  "candidateDxUiSha": "19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1",
+  "expectedManifestSha256": "55b1d53c4e12b631dd66609d9d4390bc2dcc0eed50949bd636739793c4063730",
+  "testRoot": "V:\\RedSalamander.Perf",
+  "alternateTestRoot": "C:\\RedSalamander.Perf",
+  "provenanceBefore": {
+    "head": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+    "receiptId": "d11e8a903b2b0c06974f135f03dceed862c5c9fbb483ff5769a1e7912886123f",
+    "receiptSha256": "a1aac8b0279afbcc8baa5c17cb7922c5853358abd66bdc3fa945a16be1a5121a",
+    "manifestSha256": "55b1d53c4e12b631dd66609d9d4390bc2dcc0eed50949bd636739793c4063730",
+    "manifestRows": 85,
+    "sourceSnapshotId": "3ce4faf02bd5be620b8087fb1483fbf1d80caa35c795308957463b7084398a5e"
+  },
+  "provenanceAfter": {
+    "head": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+    "receiptId": "d11e8a903b2b0c06974f135f03dceed862c5c9fbb483ff5769a1e7912886123f",
+    "receiptSha256": "a1aac8b0279afbcc8baa5c17cb7922c5853358abd66bdc3fa945a16be1a5121a",
+    "manifestSha256": "55b1d53c4e12b631dd66609d9d4390bc2dcc0eed50949bd636739793c4063730",
+    "manifestRows": 85,
+    "sourceSnapshotId": "3ce4faf02bd5be620b8087fb1483fbf1d80caa35c795308957463b7084398a5e"
+  },
+  "pathDetailScenario27Included": false,
+  "pathDetailDpiHop": [],
+  "archiveRevalidation": {
+    "performed": false,
+    "nativeRerun": false,
+    "postprocessorSha256": "a61a6ba6177a096e5579fc8c2ee637b521011643ef4f1c4b2f1ff31846227e75",
+    "originalDriverSha256": null,
+    "originalFailure": null,
+    "provenanceBoundary": "Normal run"
+  }
+}

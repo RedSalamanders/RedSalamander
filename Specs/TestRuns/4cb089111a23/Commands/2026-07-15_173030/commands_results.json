@@ -1,0 +1,74 @@
+{
+    "run_started_utc": "2026-07-15T15:30:27.795Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260715T153027Z-75500-e0a5d4a74ddd4541b5ba84e9929284b0\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 2381,
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_navigation_status_bar_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 408,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_pane_navigation_status_bar_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 203,
+            "repeat_index": 2
+        },
+        {
+            "name": "cmd_pane_navigation_status_bar_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 197,
+            "repeat_index": 3
+        },
+        {
+            "name": "cmd_pane_navigation_status_bar_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 206,
+            "repeat_index": 4
+        },
+        {
+            "name": "cmd_pane_navigation_status_bar_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 202,
+            "repeat_index": 5
+        },
+        {
+            "name": "cmd_pane_navigation_status_bar_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 198,
+            "repeat_index": 6
+        },
+        {
+            "name": "cmd_pane_navigation_status_bar_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 214,
+            "repeat_index": 7
+        },
+        {
+            "name": "cmd_pane_navigation_status_bar_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 197,
+            "repeat_index": 8
+        },
+        {
+            "name": "cmd_pane_navigation_status_bar_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 201,
+            "repeat_index": 9
+        },
+        {
+            "name": "cmd_pane_navigation_status_bar_keeps_navigation_shell_stable",
+            "status": "passed",
+            "duration_ms": 211,
+            "repeat_index": 10
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 4.0,
+    "repeat_count": 10
+}

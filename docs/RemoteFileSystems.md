@@ -88,3 +88,12 @@ For deep implementation details, see the specs:
 - `Specs/FileSystem/FileSystem_FtpSftpScp.md`
 - `Specs/FileSystem/FileSystem_Imap.md`
 
+## FTP browsing example
+
+This native workspace browses generated Workshop documents through the production
+FTP provider against its owned loopback fake server. The loopback address/port is
+created by the fixture, with an invented anonymous login; it exposes no host disk
+directory, external server or personal credentials. It demonstrates FTP browsing,
+separately from SFTP/SCP/IMAP transport qualification.
+
+![FTP provider browsing an owned loopback fixture](res/provider-ftp.png)

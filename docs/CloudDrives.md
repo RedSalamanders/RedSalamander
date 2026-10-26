@@ -163,3 +163,14 @@ See also:
 - [Connections](Connections.md)
 - [Navigation & Path Syntax](NavigationAndPaths.md)
 - [Settings File & Advanced Configuration](SettingsFile.md)
+
+## Provider browsing examples
+
+These native workspaces exercise the production Google Drive and OneDrive providers
+against private loopback fake APIs. Every folder and document is generated. No
+real account, OAuth login, credential store or public service is used by the
+capture fixture. Live-service behavior remains covered by its own qualification.
+
+![Google Drive provider browsing an invented Workshop library](res/provider-google-drive.png)
+
+![OneDrive provider browsing an invented Workshop library](res/provider-onedrive.png)

@@ -1,0 +1,54 @@
+{
+  "schema": "i26-v64-fileops-full-preflight.v1",
+  "suite": "FileOps",
+  "configuration": "Release",
+  "filter": "",
+  "repeatCount": 1,
+  "failFast": false,
+  "timeoutMultiplier": 3,
+  "candidate": {
+    "head": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+    "receiptId": "25acab62ae2fa24ab85b1171bc2cd6644f2a99cc72e468eb6a42a21ea31777a7",
+    "receiptSha256": "cbf0600857652a8c2d1822970f4021a1fce65410ec31b684122bb91ee729f134",
+    "manifestSha256": "55b1d53c4e12b631dd66609d9d4390bc2dcc0eed50949bd636739793c4063730",
+    "manifestRows": 85,
+    "sourceSnapshotId": "3ce4faf02bd5be620b8087fb1483fbf1d80caa35c795308957463b7084398a5e"
+  },
+  "executableSha256": "5b9d2c4eacaba32e795fbe2af659b619326e50a8bb4d5958628eb6f7930f3729",
+  "methods": [
+    {
+      "path": "Tools/Run-AllTests.ps1",
+      "sha256": "dc169f8fc069a85019dd90ea280522b88d6281469525e5743f6f6f5b89dd641e"
+    },
+    {
+      "path": "Tools/Modules/Testing/TestRunPlan.psm1",
+      "sha256": "20d0257c3c365646e5ede786f42b1501fdb5bb7b6deeeb66d3a947ad0cacb265"
+    },
+    {
+      "path": "Tools/Modules/Testing/TestSuitePlan.psm1",
+      "sha256": "b47dd05f3ca69a5f220c5838f79d2ab5124c2d1b255486d8d49cc3086a837c39"
+    },
+    {
+      "path": "Tools/Modules/Testing/TestInvocation.psm1",
+      "sha256": "5f7321db6817e8ce1fc048030cf3e87a3a3306218d2e3ec4e55b349ae8695fce"
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp",
+      "sha256": "8c5acc419da2ef8b4d763d522d80605d3772379f1441d681f5ee05904867c59c"
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp",
+      "sha256": "51eb14585536871816ba4571cb10976d7b3efb2d185eff7508b2c4e9d79c4bbe"
+    }
+  ],
+  "planArguments": [
+    "--fileops-selftest",
+    "--selftest-no-activate",
+    "--selftest-timeout-multiplier=3"
+  ],
+  "scriptSha256": "918168fb67201a02a0cb18e43f916ee6556f6dce34de44e88e1c307e5deecc30",
+  "testRoot": "V:\\RedSalamander.Perf",
+  "alternateTestRoot": "C:\\RedSalamander.Perf",
+  "coverage": "Complete normal FileOps suite; opt-in gallery is separate",
+  "acceptanceScope": "FileOps only; no repository Full or whole-plan claim"
+}

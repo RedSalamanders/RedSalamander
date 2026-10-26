@@ -1,0 +1,11 @@
+{
+  "schema": "red-salamander.focused-test-result.v1",
+  "runId": "r0b-baseline-04",
+  "commit": "cd9d5f05f0da2dda4045a0df2ecfad925c6c2853",
+  "configuration": "Release",
+  "testsEnabled": true,
+  "expectedExit": 1,
+  "exitCode": 1,
+  "startedUtc": "2026-08-31T14:19:24.0520265Z",
+  "endedUtc": "2026-08-31T14:19:24.1119524Z"
+}

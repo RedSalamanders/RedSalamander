@@ -1,0 +1,13 @@
+{
+  "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+  "run_id": "20261018T185404Z-106468-06c9a1aa76a742ddbea8b64eef4f46a6",
+  "exit_code": 0,
+  "configuration": "Debug",
+  "platform": "x64",
+  "activation": "native-no-activate",
+  "scope": "Three affected ViewerSpace cases only",
+  "receipt_id": "d26c1a3b04bb9469c36e907e5315730dc7793d4979bd07aa11ae78704e79ba66",
+  "source_snapshot_id": "aeae66efb25b50ba6b8bdaf4a1119b54fee400a5477bb4398f05b7f43c4cf443",
+  "source_stable": true,
+  "raw_archive": "Z:\\RedSalamander.Perf\\evidence\\affected-merged-master-2026-10-18\\viewers\\20261018T185404Z-106468-06c9a1aa76a742ddbea8b64eef4f46a6"
+}

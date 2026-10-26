@@ -1,0 +1,992 @@
+[
+  {
+    "filename": "50-decision-metadata-loss__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\50-decision-metadata-loss__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "cffeb8e739e1ceaef055e9f0026078cd7de707ed015653fe0fbcdc2544a8eb6d",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "50-decision-metadata-loss__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\50-decision-metadata-loss__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "f1006f5ec97182e4d77867cd393868e7ccff4948fdb53eb18564c3dd25520dbf",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "51-decision-network-offline__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\51-decision-network-offline__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "d40f9ed63733b790fd9b35e2fa47345f7569d72cf67fcb2a08dc3808cfffd55a",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "51-decision-network-offline__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\51-decision-network-offline__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "3c19320083dce208bb430d97ea0db5e76672957d8edeec72f2608bde18107b6c",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "52-decision-unsupported-reparse__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\52-decision-unsupported-reparse__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "10b16808de96fcfc562788664d454ceee15642e2aa440e5d8907b713f83a0619",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "52-decision-unsupported-reparse__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\52-decision-unsupported-reparse__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "ecad0f2080c901185331e00bc4ce5e67577acff597c1a77f843de2f4d665ab16",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "53-decision-same-host-overlap__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\53-decision-same-host-overlap__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "28574a695ad3bd4d679010c112f81fa57a79038b423a2790d1be5e4040c207a0",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "53-decision-same-host-overlap__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\53-decision-same-host-overlap__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "b8ab302ded8395b72d95f97102055a40204b0adec47157625ead9639507b67dc",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "54-decision-same-host-live-output__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\54-decision-same-host-live-output__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "605d6e268cb0c9e2169e4d24ac27578e76fd0cf2941a5a88e71c680c202d62f1",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "54-decision-same-host-live-output__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\54-decision-same-host-live-output__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "18075d93a51a9478870b6019dea9ba04399e54f3f745097e3f8d0cc762741296",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "55-decision-permanent-delete__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\55-decision-permanent-delete__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "36d01a31b16223b3e2e3fa86d0a929ac443e8ec652f1fac46be889a386c9d2e1",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "55-decision-permanent-delete__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\55-decision-permanent-delete__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "69a3637d46d09efa79c5248d3437fd57177d38a3acced621a3819902e6fb2efa",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "55-decision-permanent-delete__high-contrast__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\55-decision-permanent-delete__high-contrast__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "7c02f2befdba6c58a23614585533c6448d0e8de0f49819a3d1ccf8f5c70bd9a8",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "55-decision-permanent-delete__high-contrast__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\55-decision-permanent-delete__high-contrast__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "32ac13fc287d5c40d1c4c294d6b326fe5379c74f8220a552ff8632e63ff2face",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "55-decision-permanent-delete__light__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\55-decision-permanent-delete__light__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "958ea808f8884d0c9fd44cb27d15b89e6bbfa2dd77f7606c7f145d8d6af3e6a1",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "55-decision-permanent-delete__light__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\55-decision-permanent-delete__light__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "adfd85a0bd7de17186e9145645bb0c991b41f87e2db7f40ceb659b1ce0f2b79a",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "55-decision-permanent-delete__rainbow__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\55-decision-permanent-delete__rainbow__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "f2db99712ce86900339c980d3f1527a6167a01b31cb0c97c80302fe9633a824c",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "55-decision-permanent-delete__rainbow__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\55-decision-permanent-delete__rainbow__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "e56d890b858a1b2d228e7e98646864e3553b761bbfafb85ec369337e128f65be",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": "Minor copy issue: the destructive-action summary visibly contains stray punctuation around the source clause (\"irréversible. : de :\"). Text remains legible.",
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "56-decision-unknown-error__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\56-decision-unknown-error__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "7ed4cff784b8991d31de01f2cc9f0f5db40cb2ff5f3347970e2a89b7d78342d4",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "56-decision-unknown-error__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\56-decision-unknown-error__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "a8343fb3a34d5aae81d3657e93717766ba933a02c8609598d4687a1abb6ffa23",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "57-decision-metadata-loading__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\57-decision-metadata-loading__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "ea6839c211632dcc6d7c2ba91b7f191b8466c8656814f32a7df63ba4e7108212",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "57-decision-metadata-loading__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\57-decision-metadata-loading__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "0c5f4a4b5953441fd6dfb8628e3d99f518a3861d8b212efee9c02264119e1844",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "58-decision-replacement-withheld__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\58-decision-replacement-withheld__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "739458e6e928c54250b4360136c6e3e8f9693a90ae7c319812548c3d6c049c99",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "58-decision-replacement-withheld__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\58-decision-replacement-withheld__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "25c77fb84f80177e6914748f6700cbcefc90652ddc16e7beabfa17c2566ab228",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "59-decision-retry-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\59-decision-retry-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "0d09065f4bc22c8dc0746fd34f05444baee5498e6556b344afbea68a6d4fc59e",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "59-decision-retry-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\59-decision-retry-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "2baa420b24d7dc9139c56b1946f4a8813981e4bc8d38f0523957cf2e79001639",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "60-decision-apply-to-all-checked__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\60-decision-apply-to-all-checked__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "ee0d2fc75bcae867edde92e202e4daa58a6ad277f5dca94b4dac85a4a59a4a00",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "60-decision-apply-to-all-checked__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\60-decision-apply-to-all-checked__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "f7c9404ff8511a04347d3f57090ce0bf8dd0b6001c285745f7ec5bc111904d0b",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "61-compare-scanning__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\61-compare-scanning__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "ba1273879ea58757954d9da4032813271ac0d13922e9777c3a024ffce61f4935",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "61-compare-scanning__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\61-compare-scanning__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "f090e10ae667ab13d6345f6e579b97c02ddd75da27692e09cf628c64e0dd6e38",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "62-change-case-enumerating__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\62-change-case-enumerating__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "8362df24ffbb56220b9a5fbc924a670ec7575947280966811c4741360257f454",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Minor content issue: the analysis caption visibly renders \"Analyse : .\" with no path/value.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": "Minor content issue: the analysis caption visibly renders \"Analyse : .\" with no path/value.",
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "62-change-case-enumerating__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\62-change-case-enumerating__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "d4bd7b3ff6eefd7abdf4caf5bb283184ef4cc8f231a54ada8cf6dba653d6b915",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Minor content issue: the analysis caption visibly renders \"Analyse : .\" with no path/value.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": "Minor content issue: the analysis caption visibly renders \"Analyse : .\" with no path/value.",
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "63-change-attributes-applying__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\63-change-attributes-applying__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "382ad2ed132d632da1b235a0b67983e586e10765453c8a686010346ae1594263",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "63-change-attributes-applying__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\63-change-attributes-applying__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "b6c143b7e5989c7abada7e8b7ba64e89cee72037243b0fd4f21d44d2af780d48",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "64-file-list-rendering__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\64-file-list-rendering__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "342bd059181d8e5bc6f486751b121fb825a9a2ac3958e9b49c3c0623ed737572",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "64-file-list-rendering__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\64-file-list-rendering__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "6c2a3fe9d55e767f16e7f0cf65ba4b2bd67f894bc1a9c05788f2d1b22dc4768b",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "65-verification-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\65-verification-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "5f7d99c5f7b4e907070dd0bde1d37ebae1dcd638f9e64cdbfaf41fe385426bb6",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "65-verification-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\65-verification-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "f81fee18884e48b13e61bbe2ab993d5b1064ae9154b3be91a21f250b8b930290",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "65-verification-failed__dark__760dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\65-verification-failed__dark__760dip__fr-FR__display1__144dpi.png",
+    "sha256": "598205b9858f92ca878d154630628f2d78d532a9af3f25e0fd134c1dd56731cf",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "65-verification-failed__dark__760dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\65-verification-failed__dark__760dip__fr-FR__display2__96dpi.png",
+    "sha256": "7bd41ff891f069af6509d4513807dbd9164cceaee3002a7fb83ea7416aa0d5f2",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "68-zero-byte-items__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\68-zero-byte-items__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "54747d7f6c96a0862f66f1e68572f5d304a914736fd65865e3906342c036b1da",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "68-zero-byte-items__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\68-zero-byte-items__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "bf05e482df2f644aeb22279e929b129f21984a2a228009622f6446d6d89e2bfc",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "69-all-items-skipped__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\69-all-items-skipped__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "ee1516aa9a555eed1433569ac489e1e934dcea35ea06da8e3f6dc8c0982cacfd",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "69-all-items-skipped__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\69-all-items-skipped__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "a33947af46e9097b6fdeacb0f335f2165ce0f2ec9cf7eb3e411721f42a3e8038",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "69-all-items-skipped__dark__760dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\69-all-items-skipped__dark__760dip__fr-FR__display1__144dpi.png",
+    "sha256": "eca11435be6a8674957ea3d1385573b41369c9b8fcc7e0b967ebc872a4679101",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "69-all-items-skipped__dark__760dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\69-all-items-skipped__dark__760dip__fr-FR__display2__96dpi.png",
+    "sha256": "4bfa879370415f80fc667754afd229275c748623ceb18eb9606500ab3664ed4a",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "70-queue-paused__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\70-queue-paused__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "34ccf91a9031c856bee533be83dc18f0566d003482844e2ac14fa1b904a17d9d",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "70-queue-paused__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\70-queue-paused__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "52524eae4948b18bd32c0c8a5c142cea6c206586195e755a1f2fb78d701e9cec",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "70-queue-paused__dark__760dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\70-queue-paused__dark__760dip__fr-FR__display1__144dpi.png",
+    "sha256": "f8c0104b0066a461f6f2a7b77c857a71aa837e1f03292d44995abe06df40f822",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "70-queue-paused__dark__760dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\70-queue-paused__dark__760dip__fr-FR__display2__96dpi.png",
+    "sha256": "ea72eed2575f640966a6039add4a0d0339ce501df7f50c2403851f115ec70953",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "71-waiting-for-other-task__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\71-waiting-for-other-task__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "bbf89e87d67a411f3e694522cbd9f7ed2bbb9da9a96ebb8546a1da6631393a3c",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "71-waiting-for-other-task__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\71-waiting-for-other-task__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "1ec2b2f69928ac48161b8230e9ba9ae51d0d5c964fcd1d441e77db8f3cc3ca18",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "71-waiting-for-other-task__dark__760dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\71-waiting-for-other-task__dark__760dip__fr-FR__display1__144dpi.png",
+    "sha256": "e326366511392e221294fe7adc1202a00b1de95e3e6d3021e289396bbdf92839",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "71-waiting-for-other-task__dark__760dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\71-waiting-for-other-task__dark__760dip__fr-FR__display2__96dpi.png",
+    "sha256": "ab6b6e9372238775e9ed8187aaf1405248433c9ba93441c5a0bb8e779d04b787",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "72-automatic-concurrency__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\72-automatic-concurrency__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "ef7d250000c591599286bf4dd7ad8842e8cf43971826775487034c26548f661f",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "72-automatic-concurrency__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\72-automatic-concurrency__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "095066b03c2fd399ce794e13cb96649db8ee428b1e5948e0cd2fce3c3e65628d",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "74-sixteen-streams__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\74-sixteen-streams__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "c25cdd523f1a9bdd14ba97ee7caf8e3254ded18cc252b847f48b0b6ca87e54c7",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "74-sixteen-streams__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\74-sixteen-streams__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "b7e6176987c81cd886f326aa610b047db39204b9ccd55b81f9bd79a5433d93b7",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "75-compare-content__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\75-compare-content__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "12029d04e6a10020d4bfcbb84df5f5f6d2f36e9a0bcc1552c964fcad65a47aec",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "75-compare-content__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\75-compare-content__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "40b2fee5e54b38a7f235a4c66f7835b32ccbbb1dd23b84a3e7efc63c9aa8ef31",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "77-change-case-renaming__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\77-change-case-renaming__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "0c3cfa7bf85798d86a32058d2ef3dc0259b1a2356e7410f99d2b01ed41653bbc",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "77-change-case-renaming__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\77-change-case-renaming__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "b1327f234d42851b85c0293452684f49c67194733cc1568615848543756fd3f6",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "78-change-attributes-enumerating__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\78-change-attributes-enumerating__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "17447131cc00be0c5ca8defff812bb1c7a3827c5ea4d572da7e6f24f50133d3d",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "78-change-attributes-enumerating__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\78-change-attributes-enumerating__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "fc744d3c3e0912841ef3ce3f811f3670deda9a6e2f9b8990c7346043e08da62f",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "79-file-list-collecting__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\79-file-list-collecting__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "1aa65fde899fe3c2699b02d86b65dd68e7d903de0b48ea8de6b2d7f46a93c47c",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Minor content issue: the analysis caption visibly renders \"Analyse : .\" with no path/value.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": "Minor content issue: the analysis caption visibly renders \"Analyse : .\" with no path/value.",
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "79-file-list-collecting__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\79-file-list-collecting__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "dd09ef94c35c9bcc8f293ba28004487e83582b4cffb9bb07cf0ef67caca53a6e",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Minor content issue: the analysis caption visibly renders \"Analyse : .\" with no path/value.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": "Minor content issue: the analysis caption visibly renders \"Analyse : .\" with no path/value.",
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "81-compare-done__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\81-compare-done__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "70461f3a01374e060ab1237df878c7a0321230aca50d7ae23879f8deedf75661",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "81-compare-done__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\81-compare-done__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "85c1864b7a86313b91fe690fc4c4da35780a08ed20ea46895515c8772dcf495b",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "82-compare-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\82-compare-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "b36b3793a57e595078e2badae93fd08274389f8b41983d93eafd79f079249347",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "82-compare-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\82-compare-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "bc4d1b1a936f1bfbd57f43c14517c66bb9d80538222dc38a5e01e00074e46cb4",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "83-compare-canceled__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\83-compare-canceled__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "fb88c498076405b61108da6676f3f2e96e168adca889e3d2caf6b5d91a8a125c",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "83-compare-canceled__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\83-compare-canceled__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "db057cc5ee5ccc9b542d1302f89decf659319db1ee0bdea5c202b883a32bb96e",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "84-change-case-done__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\84-change-case-done__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "c630aad15e7bde90d0678208b2c71b00b84511e684df7b89bf3a5c34cad2eebc",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "84-change-case-done__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\84-change-case-done__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "c271e6ea2224afc7059fd9e23282baaab893f0cf612656e3422d5803bb9ce08f",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "85-change-case-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\85-change-case-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "4aae12ee681aec8ddc8c67de0435f4acf13a85c1a705f57f5659d8fa005a8727",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "85-change-case-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\85-change-case-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "946d286ce7ef8423a86bcd1e3ba73e001828f3b3a917a54ed7180eaf89eafe5f",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "86-change-case-canceled__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\86-change-case-canceled__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "67f0ff52f4bc5cc6f9930c903f425d902ab6ec027dccfc98a6f755194bb983f0",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "86-change-case-canceled__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\86-change-case-canceled__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "dfeab03d4c51d5a42e04ad174118364babb281d16362e039fc0729e94e2350b4",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "87-change-attributes-done__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\87-change-attributes-done__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "788b5d38a657191de9344111abd74741a09c7415c39c83d662b9cb9ac683bf6f",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "87-change-attributes-done__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\87-change-attributes-done__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "7723de8a3c17cf9f03bf02b97c0bc9d87da567b0730b259f8f0f665ce7adf1f1",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "88-change-attributes-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\88-change-attributes-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "49366d7018e56958aa2af52284eebecda21af22e0e00eb8313679aa6b51f3162",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "88-change-attributes-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\88-change-attributes-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "7253df128ad53f41fbc2f9be6733e7711c8ae799de2f4e260c8b7e054e1cb497",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "89-change-attributes-canceled__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\89-change-attributes-canceled__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "82b509403abf9ff8988d52611900108197fbbd59c4878cc4537500c255bd48d3",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "89-change-attributes-canceled__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\89-change-attributes-canceled__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "3434db41ca083761a94ff59207cd2cbe7ca61d621aa277551f2b5431ea3cecd4",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "90-file-list-done__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\90-file-list-done__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "130343cad9f0d8619ab177f41af80a3e72f3c143bc0db221208135e614396686",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "90-file-list-done__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\90-file-list-done__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "311024862ab8cbbb93b3e0a9bf030772711e1d0abd02a90b74c43ec9a708f486",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "91-file-list-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\91-file-list-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "16a0143a4bd6cde161062f4bebc3be0543ea6fad9a8c367ed2d5e9d304f69295",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "91-file-list-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\91-file-list-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "c23afb77363b5d8eaf11e8ea721167de53a821b94a92b69c8ac55a4c40cbfdd2",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "92-file-list-canceled__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\92-file-list-canceled__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "21a0e9b6871be63a80d94715e9fd6fd9b153d6725140638e78656f420a0f421c",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "92-file-list-canceled__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\92-file-list-canceled__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "d1de023fb04efe8663413b7f0d877b0da3aa264602c71c6d9ac06bb8f890ab08",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "93-menu-options__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\93-menu-options__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "sha256": "6d31c814c946ec587cd05aff7096872024228efb700f66e326a0cdb8cc08c16b",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "94-menu-queue__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\94-menu-queue__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "sha256": "98b29b6d79d1c1462e9721ae9570d6ddb06d4d1ea15b747d0adc1db5be56fa97",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "95-menu-completed-more__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\95-menu-completed-more__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "sha256": "d8d9dc0aa68d6bf9831a4d9c5eb62d67e0695a94fa575021dfd51f635357fc73",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "96-menu-speed__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\96-menu-speed__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "sha256": "7da22853ad76031d6fb7d5f38f1825d4407cedbe0a92faa52577383a5d07a5cd",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "96-menu-speed__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\96-menu-speed__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "sha256": "b767094d344c2a9868b3594b076b5aa45a2a61eb92600e39d93df14c3ad6edd6",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "98-renderer-failure__dark__480dip__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\98-renderer-failure__dark__480dip__fr-FR__display1__144dpi.png",
+    "sha256": "bd0a4a96fa1b4771b4e84e12bb8b89fdccb396375f7deb20e595ce205b6f67c1",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "98-renderer-failure__dark__480dip__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\98-renderer-failure__dark__480dip__fr-FR__display2__96dpi.png",
+    "sha256": "b7b4ec1ee42f1eabd9707300767f19c9020c595d41fbe142c8533ea51f9eb260",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "99-speed-custom__dark__fr-FR__display1__144dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\99-speed-custom__dark__fr-FR__display1__144dpi.png",
+    "sha256": "d09bf9afe08fcaf39b1d592bb7e551ee8f70a9ee2ddb6625578b983ff0f4a36c",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  },
+  {
+    "filename": "99-speed-custom__dark__fr-FR__display2__96dpi.png",
+    "relativePath": "gallery-static-x64-debug\\runner-run\\artifacts\\selftest\\last_run\\fileops\\visual-gallery\\99-speed-custom__dark__fr-FR__display2__96dpi.png",
+    "sha256": "86d4f7bde701e5f9eed3e73056217e6da0a57373460fc43978a627eda7233fcf",
+    "method": "Viewed original V24 harness PNG with view_image",
+    "finding": "Rendered UI is complete and legible at the captured size; status, controls, and French labels remain visually distinguishable. No clipping or missing rendered region observed.",
+    "focus": "Visual completeness, clipping, French-label readability, status/action distinction, and compact flyout rendering.",
+    "observedConcern": null,
+    "reviewBoundary": "Visual judgment only; runtime geometry and interaction assertions are established by the harness, not this review."
+  }
+]

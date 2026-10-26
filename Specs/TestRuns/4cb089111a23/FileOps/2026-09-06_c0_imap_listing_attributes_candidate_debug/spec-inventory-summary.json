@@ -1,0 +1,384 @@
+{
+  "RepositoryCommit": "f5858fbe0a56c99fd825958ae6434fda0e37e394",
+  "GeneratedAtUtc": "2026-09-06T02:57:53.6439306Z",
+  "Summary": {
+    "TrackedAndUntrackedPaths": 7497,
+    "TestRunPaths": 5646,
+    "Files": 347,
+    "InScopeFiles": 305,
+    "NormativeFiles": 62,
+    "DirectWipFiles": 20,
+    "WipIndexEntries": 20,
+    "Findings": 52,
+    "BlockingFindings": 0
+  },
+  "Findings": [
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/dev/CompareDirectories.md",
+      "Line": 114,
+      "Message": "Local link heading anchor does not exist: #cache-coherence-the-_version-model"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/dev/PluginHostModel.md",
+      "Line": 5,
+      "Message": "Local link heading anchor does not exist: ../DeveloperGuide.md#plugin-host-model--the-cross-file-system-bridge"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/DeveloperGuide.md",
+      "Line": 90,
+      "Message": "Local link heading anchor does not exist: #application-shell-startup--lifecycle"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/DeveloperGuide.md",
+      "Line": 92,
+      "Message": "Local link heading anchor does not exist: #folderview-file-list-model-rendering--interaction"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/DeveloperGuide.md",
+      "Line": 93,
+      "Message": "Local link heading anchor does not exist: #navigationview-address-bar-paths--history"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/DeveloperGuide.md",
+      "Line": 94,
+      "Message": "Local link heading anchor does not exist: #file-operations-engine-queue-scheduler--data-safety"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/DeveloperGuide.md",
+      "Line": 95,
+      "Message": "Local link heading anchor does not exist: #plugin-host-model--the-cross-file-system-bridge"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/DeveloperGuide.md",
+      "Line": 97,
+      "Message": "Local link heading anchor does not exist: #viewer-plugin-host--built-in-viewers"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/DeveloperGuide.md",
+      "Line": 99,
+      "Message": "Local link heading anchor does not exist: #settings--settingsstore-schema-hot-reload-migration"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/DeveloperGuide.md",
+      "Line": 100,
+      "Message": "Local link heading anchor does not exist: #find-files-search-backends--the-search-service"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/DeveloperGuide.md",
+      "Line": 101,
+      "Message": "Local link heading anchor does not exist: #compare-directories-engine--window"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/DeveloperGuide.md",
+      "Line": 102,
+      "Message": "Local link heading anchor does not exist: #batch-rename-change-case--rename-batching"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/DeveloperGuide.md",
+      "Line": 103,
+      "Message": "Local link heading anchor does not exist: #connection-manager-secrets--windows-hello"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/DeveloperGuide.md",
+      "Line": 104,
+      "Message": "Local link heading anchor does not exist: #theming-apptheme--the-preferences-dialog"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/DeveloperGuide.md",
+      "Line": 105,
+      "Message": "Local link heading anchor does not exist: #diagnostics-etwtracelogging-debug-logging--monitor"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/DeveloperGuide.md",
+      "Line": 106,
+      "Message": "Local link heading anchor does not exist: #localization-resources-build--test-infrastructure"
+    },
+    {
+      "Code": "LINK_MISSING_ANCHOR",
+      "Severity": "Information",
+      "Path": "docs/FileOperations.md",
+      "Line": 101,
+      "Message": "Local link heading anchor does not exist: #preflight--calculating"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Last3Days_IndependentFindings_2026-07-11.md",
+      "Line": 45,
+      "Message": "Local link target does not exist: ../../../RedSalamander/FolderWindow.FileOperations.State.Runtime.Part.cpp"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Last3Days_IndependentFindings_2026-07-11.md",
+      "Line": 56,
+      "Message": "Local link target does not exist: ../../../RedSalamander/FolderWindow.FileOperations.State.Runtime.Part.cpp"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Last3Days_IndependentFindings_2026-07-11.md",
+      "Line": 123,
+      "Message": "Local link target does not exist: ../../../RedSalamander/FolderWindow.FileOperations.State.Runtime.Part.cpp"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Last3Days_IndependentFindings_2026-07-11.md",
+      "Line": 198,
+      "Message": "Local link target does not exist: ../../../RedSalamander/FolderWindow.FileOperations.State.Runtime.Part.cpp"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Last3Days_IndependentFindings_2026-07-11.md",
+      "Line": 199,
+      "Message": "Local link target does not exist: ../../../RedSalamander/FolderWindow.FileOperations.State.Runtime.Part.cpp"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Last3Days_IndependentFindings_2026-07-11.md",
+      "Line": 234,
+      "Message": "Local link target does not exist: ../../../RedSalamander/FolderWindow.FileOperations.State.Diagnostics.Part.cpp"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Last3Days_IndependentFindings_2026-07-11.md",
+      "Line": 319,
+      "Message": "Local link target does not exist: ../../../RedSalamander/FolderWindow.FileOperations.State.Runtime.Part.cpp"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 70,
+      "Message": "Local link target does not exist: RedSalamander/FolderWindow.FileOperations.State.cpp:7160"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 76,
+      "Message": "Local link target does not exist: RedSalamander/FolderWindow.FileOperations.State.cpp:264"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 78,
+      "Message": "Local link target does not exist: RedSalamander/FolderWindow.FileOperations.State.cpp:8787"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 81,
+      "Message": "Local link target does not exist: Plugins/FileSystem/FileSystem.DirectoryOps.cpp:830"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 86,
+      "Message": "Local link target does not exist: Plugins/FileSystem/FileSystem.Path.cpp:428"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 93,
+      "Message": "Local link target does not exist: Plugins/FileSystem/FileSystem.Search.cpp:608"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 100,
+      "Message": "Local link target does not exist: RedSalamander/FolderWindow.FileOperations.State.cpp:7108"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 107,
+      "Message": "Local link target does not exist: RedSalamander/FolderWindow.FileOperations.State.cpp:7047"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 109,
+      "Message": "Local link target does not exist: Common/PlugInterfaces/FileSystem.h:534"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 109,
+      "Message": "Local link target does not exist: Plugins/FileSystemCurl/FileSystemCurl.DirectoryOps.cpp:537"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 114,
+      "Message": "Local link target does not exist: RedSalamander/FolderWindow.FileOperations.State.cpp:9015"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 121,
+      "Message": "Local link target does not exist: RedSalamander/FolderWindow.FileOperations.State.cpp:7321"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 128,
+      "Message": "Local link target does not exist: Plugins/FileSystem/FileSystem.Path.cpp:404"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 135,
+      "Message": "Local link target does not exist: Plugins/FileSystem/FileSystem.Path.cpp:425"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 142,
+      "Message": "Local link target does not exist: RedSalamander/FolderWindow.FileOperations.State.cpp:137"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 149,
+      "Message": "Local link target does not exist: Plugins/FileSystem/FileSystem.FileOps.cpp:3948"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 156,
+      "Message": "Local link target does not exist: Plugins/FileSystem/FileSystem.FileOps.cpp:2819"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 163,
+      "Message": "Local link target does not exist: Common/LocalSearchIndexCore.cpp:483"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 170,
+      "Message": "Local link target does not exist: Plugins/FileSystem/FileSystem.FileOps.cpp:3801"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 177,
+      "Message": "Local link target does not exist: RedSalamander/FolderWindow.FileOperations.State.cpp:7232"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/CodeReview_Master_DeltaReVerify_2026-06-27.md",
+      "Line": 184,
+      "Message": "Local link target does not exist: RedSalamander/FolderWindow.FileOperations.Popup.cpp:5269"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/Perf_FileSystemFileOperationsParallelismPlan.md",
+      "Line": 773,
+      "Message": "Local link target does not exist: ../../.github/skills/perf-validation/SKILL.md"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/ViewerText_DiffUxCleanupPlan.md",
+      "Line": 31,
+      "Message": "Local link target does not exist: ../../TestRuns/4cb089111a23/Commands/2026-04-05_112653/perf/viewer_text_diff_perf_metrics.json"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Plans/Done/ViewerText_DiffUxCleanupPlan.md",
+      "Line": 31,
+      "Message": "Local link target does not exist: ../../TestRuns/4cb089111a23/Commands/2026-04-04_152319/perf/viewer_text_diff_perf_metrics.json"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Reviews/ThreeDayDiff-2026-07-05-Findings.md",
+      "Line": 31,
+      "Message": "Local link target does not exist: const AccessibilityGridRowSnapshotRecord& row"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Reviews/ThreeDayDiff-2026-07-05-Findings.md",
+      "Line": 468,
+      "Message": "Local link target does not exist: IMtpBackend&"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Reviews/ThreeDayDiff-2026-07-05-Findings.md",
+      "Line": 537,
+      "Message": "Local link target does not exist: std::stop_token"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Information",
+      "Path": "Specs/Reviews/ThreeDayDiff-2026-07-05-Findings.md",
+      "Line": 539,
+      "Message": "Local link target does not exist: std::stop_token"
+    }
+  ],
+  "raw_report_sha256": "7b0f73a9fb00c292809ede6b13b20a5d222c587d54ef82b70745ecaaff1e58c5",
+  "raw_report_bytes": 2463845,
+  "raw_report_path": "C:\\RedSalamander.Perf\\runs\\c0-imap-attributes-spec-20260906\\scratch\\policy\\spec-inventory\\spec-inventory.json"
+}

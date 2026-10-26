@@ -1,0 +1,38 @@
+
+
+
+
+
+Describing Tools inventory contract
+ [+] classifies every tracked or non-ignored file in the current Tools tree 1.13s
+ [+] rejects an unclassified top-level file even when a broad rule would match it 46ms
+ [+] rejects an unclassified nested file outside reviewed directory rules 7ms
+ [+] fails when a derived module consumer is missing from usedBy 98ms
+ [+] rejects stale explicit paths 4ms
+ [+] ignores tracked files deleted from the working tree during an in-progress move 108ms
+ [+] requires an explicit naming policy for reviewed public non-Verb-Noun entrypoints 12ms
+ [+] requires explicit prerequisites metadata on entries and directory rules 6ms
+ [+] requires retention policy for compatibility records 10ms
+ [+] requires every non-null replacement to be an exact existing Tools path 8ms
+ [+] rejects historical entries without a reviewed manual entry point 4ms
+ [+] rejects unreviewed and missing historical manual entry-point paths 9ms
+ [+] rejects a reviewed manual root whose inventory entry is not a historical command 5ms
+ [+] allows reviewed manual roots to retain themselves and exposes the resolved closure 6ms
+ [+] uses a reviewed nested rule when exactly one rule matches 4ms
+ [+] renders a useful Markdown file inventory 939ms
+ [+] documents the command contract and supports Validate as an alias 972ms
+Describing Repository tooling governance
+ [+] keeps the checked-in inventory reconciled with the Tools tree 1.21s
+ [+] keeps active private implementation modules below Tools Modules 10ms
+ [+] limits internal root compatibility loaders to explicit module replacements 7ms
+ [+] documents every public command and compatibility loader completely 1.11s
+ [+] requires canonical replacements and explicit retention policy for compatibility surfaces 20ms
+ [+] keeps every historical file reachable from a reviewed manual command root 22ms
+ [+] keeps active executable tooling covered by at least one current test contract 19ms
+ [+] keeps the README top-level and module maps in exact filesystem parity 24ms
+ [+] keeps current Terminal helper export and consumer contracts live in the current profile 509ms
+ [+] keeps destructive support commands within their documented static safety boundaries 52ms
+ [+] uses psm1 modules with explicit reviewed exports 397ms
+ [+] records every reviewed public naming exception in the inventory 9ms
+Tests completed in 6.78s
+Passed: 29 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0

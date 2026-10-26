@@ -1,0 +1,13 @@
+{
+  "source": "d404fc90bcaf7793da4289ffcbd23debd6ee73b2",
+  "configuration": "Debug",
+  "platform": "x64",
+  "runId": "20260913T084638Z-87256-e7e8c2feb8684e0499072d7662b4167d",
+  "caseFilter": "content_pending_elided",
+  "repeatCount": 10,
+  "startedUtc": "2026-09-13T08:46:38.3386744Z",
+  "completedUtc": "2026-09-13T08:47:09.6090122Z",
+  "exitCode": 0,
+  "retained": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-pending-gate",
+  "noHostedCi": true
+}

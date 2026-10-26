@@ -1,0 +1,80 @@
+[CmdletBinding()]
+param(
+    [string]$Receipt = '7f2bb0d411e03846560bfab1ce96076fa6e82ebc7e1722a8b321f3e7ecca42b4',
+    [string]$Prefix = 'settled-candidate'
+)
+$ErrorActionPreference = 'Stop'
+$repo = 'C:\Users\eric\.codex\worktrees\review-safety-regressions\RedSalamander'
+$evidence = $PSScriptRoot
+Set-Location -LiteralPath $repo
+Import-Module ./Tools/Modules/Build/ArtifactOperationLock.psm1 -Force
+Import-Module ./Tools/Modules/Build/SanitizedEnvironment.psm1 -Force
+Import-Module ./Tools/Modules/Testing/TestSandbox.psm1 -Force
+$lease = Enter-RSArtifactOperationLock -RepoRoot $repo -Operation 'ViewerSpace desktop witness noninteractive qualification' -Scope @{configuration='Debug';platform='x64'}
+try {
+    $context = New-RSTestRunContext -RepoRoot $repo -TestRootOverride 'Z:\RedSalamander.Perf'
+    $tempRoot = Join-Path $context.RunRoot 'scratch\process-temp'
+    New-Item -ItemType Directory -Path $tempRoot -Force | Out-Null
+    $exe = Join-Path $repo '.build\x64\Debug\ViewerPETests.exe'
+    $build = Get-Content -LiteralPath (Join-Path $repo ".build\x64\Debug\receipts\$Receipt.json") -Raw | ConvertFrom-Json
+    $attestedExe = @($build.outputs | Where-Object relative_path -eq '.build/x64/Debug/ViewerPETests.exe')
+    if ($attestedExe.Count -ne 1 -or $attestedExe[0].sha256 -ine (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash) { throw 'Targeted receipt does not match the test executable.' }
+    $plugin = Join-Path $repo '.build\x64\Debug\Plugins\ViewerSpace.dll'
+    if (-not (Test-Path -LiteralPath $plugin)) { $plugin = Join-Path $repo '.build\x64\Debug\ViewerSpace.dll' }
+    $codePaths = @(
+        'Tests/TestSupport/TestSupport.Tests.DesktopObservation.h',
+        'Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.h',
+        'Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp',
+        'Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp',
+        'Tests/ViewerPETests/ViewerPETests.vcxproj'
+    )
+    $sourceHashes = @($codePaths | ForEach-Object { [ordered]@{path=$_;sha256=(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash} })
+    $identity = [ordered]@{
+        branch = (& git branch --show-current)
+        baseCommit = (& git rev-parse HEAD)
+        buildReceipt = $Receipt
+        profile = 'x64 Debug, tests enabled, Embedded compiler debug information'
+        command = 'ViewerPETests.exe --group=noninteractive'
+        sourceHashes = $sourceHashes
+        exeSha256 = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
+        pluginSha256 = (Get-FileHash -LiteralPath $plugin -Algorithm SHA256).Hash
+        runId = $context.RunId
+        testRoot = $context.TestRoot
+        nativeChildTimeoutSeconds = 120
+        outerProcessTimeoutSeconds = 600
+        result = 'RUNNING'
+    }
+    $resultPath = Join-Path $evidence "$Prefix-noninteractive-result.json"
+    $identity | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $resultPath -Encoding utf8
+    $psi = New-RSProcessStartInfo -FilePath $exe -Arguments @('--group=noninteractive') -WorkingDirectory (Split-Path -Parent $exe) -AdditionalEnvironment @{
+        REDSALAMANDER_TEST_ROOT=$context.TestRoot
+        REDSALAMANDER_TEST_RUN_ID=$context.RunId
+        TEMP=$tempRoot
+        TMP=$tempRoot
+    }
+    $psi.CreateNoWindow = $true
+    $psi.RedirectStandardOutput = $true
+    $psi.RedirectStandardError = $true
+    $process = Start-RSContainedProcess -ProcessStartInfo $psi
+    try {
+        $output = $process.StandardOutput.ReadToEndAsync()
+        $errors = $process.StandardError.ReadToEndAsync()
+        $timer = [Diagnostics.Stopwatch]::StartNew()
+        if (-not $process.WaitForExit(600000)) { throw 'Noninteractive group exceeded existing 600-second outer bound.' }
+        $timer.Stop()
+        $stdout = $output.GetAwaiter().GetResult()
+        $stderr = $errors.GetAwaiter().GetResult()
+        $stdout | Set-Content -LiteralPath (Join-Path $evidence "$Prefix-noninteractive.txt") -Encoding utf8
+        $stderr | Set-Content -LiteralPath (Join-Path $evidence "$Prefix-noninteractive.err.txt") -Encoding utf8
+        $identity['exitCode'] = $process.ExitCode
+        $identity['elapsedMs'] = $timer.ElapsedMilliseconds
+        $identity['result'] = if ($process.ExitCode -eq 0) {'PASSED'} else {'FAILED'}
+        $identity['desktopWitnesses'] = @($stdout -split '\r?\n' | Where-Object { $_ -match 'ViewerSpace.*desktop witness:' })
+        $identity['failures'] = @($stdout -split '\r?\n' | Where-Object { $_ -match '\[FAIL\]' })
+        $identity['sourceHashesAfter'] = @($codePaths | ForEach-Object { [ordered]@{path=$_;sha256=(Get-FileHash -LiteralPath $_ -Algorithm SHA256).Hash} })
+        $identity['exeSha256After'] = (Get-FileHash -LiteralPath $exe -Algorithm SHA256).Hash
+        $identity | ConvertTo-Json -Depth 10 | Set-Content -LiteralPath $resultPath -Encoding utf8
+        $identity | ConvertTo-Json -Depth 10
+        if ($process.ExitCode -ne 0) { throw "Native noninteractive group failed: $($process.ExitCode)." }
+    } finally { Close-RSContainedProcess -Process $process }
+} finally { Exit-RSArtifactOperationLock -Lock $lease }

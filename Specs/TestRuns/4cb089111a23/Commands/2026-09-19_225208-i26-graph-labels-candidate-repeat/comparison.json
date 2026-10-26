@@ -1,0 +1,139 @@
+{
+  "fixture": {
+    "resource_fixture_sha256": "d9fa8cabcc9040a898fbe0c2bd605c352f7218bb8980a239b236f8b6f9ae14b8",
+    "canonicalization": "UTF-8 body from TestFileOperationsPopupResourceLifetime through next fixture declaration, LF newlines",
+    "baseline_source": "resource-baseline-source/Commands.SelfTest.FileOps.cpp",
+    "candidate_matches": true
+  },
+  "runs": [
+    {
+      "variant": "resource-lifetime-measured",
+      "archive": "Specs/TestRuns/4cb089111a23/Commands/2026-09-19_220326-i26-resource-lifetime-measured",
+      "workspace": "94351f05838b0b8462874623c7bea4a94d879b718880c352409874afecd1588b",
+      "receipt": "7972d0993a489638ff8995606b32753cfef8048796f0926093173a99bbb6be14",
+      "rounds": [
+        {
+          "median_redraw32_us": 243928.0,
+          "p95_redraw32_us": 247453,
+          "private_growth_bytes": -851968,
+          "warm_private_bytes": 344985600,
+          "settled_private_bytes": 344133632,
+          "hidden_ui_cpu_us": 0
+        },
+        {
+          "median_redraw32_us": 244233.5,
+          "p95_redraw32_us": 247672,
+          "private_growth_bytes": -1781760,
+          "warm_private_bytes": 346812416,
+          "settled_private_bytes": 345030656,
+          "hidden_ui_cpu_us": 0
+        },
+        {
+          "median_redraw32_us": 243354.5,
+          "p95_redraw32_us": 247513,
+          "private_growth_bytes": -2088960,
+          "warm_private_bytes": 346804224,
+          "settled_private_bytes": 344715264,
+          "hidden_ui_cpu_us": 0
+        }
+      ]
+    },
+    {
+      "variant": "graph-labels-resource-paired",
+      "archive": "Specs/TestRuns/4cb089111a23/Commands/2026-09-19_223923-i26-graph-labels-resource-paired",
+      "workspace": "8d490be258745f83819ebae82bafe7d756a477c5d195433bae2dc69927347717",
+      "receipt": "2926154af1621e38dff691c142828a2714d41a2cc2a7735e34fa721b376e0f79",
+      "rounds": [
+        {
+          "median_redraw32_us": 255824.5,
+          "p95_redraw32_us": 263326,
+          "private_growth_bytes": -258048,
+          "warm_private_bytes": 344707072,
+          "settled_private_bytes": 344449024,
+          "hidden_ui_cpu_us": 0
+        },
+        {
+          "median_redraw32_us": 253749.0,
+          "p95_redraw32_us": 260888,
+          "private_growth_bytes": -1318912,
+          "warm_private_bytes": 345821184,
+          "settled_private_bytes": 344502272,
+          "hidden_ui_cpu_us": 31250
+        },
+        {
+          "median_redraw32_us": 253442.0,
+          "p95_redraw32_us": 262193,
+          "private_growth_bytes": -1351680,
+          "warm_private_bytes": 346009600,
+          "settled_private_bytes": 344657920,
+          "hidden_ui_cpu_us": 0
+        }
+      ]
+    },
+    {
+      "variant": "graph-labels-baseline-repeat",
+      "archive": "Specs/TestRuns/4cb089111a23/Commands/2026-09-19_224705-i26-graph-labels-baseline-repeat",
+      "workspace": "94351f05838b0b8462874623c7bea4a94d879b718880c352409874afecd1588b",
+      "receipt": "6c373e44a9d9b08084ca742dda9586adc507e8be3a0b261978e513e4fed22fd7",
+      "rounds": [
+        {
+          "median_redraw32_us": 242986.5,
+          "p95_redraw32_us": 246654,
+          "private_growth_bytes": 376832,
+          "warm_private_bytes": 345182208,
+          "settled_private_bytes": 345559040,
+          "hidden_ui_cpu_us": 0
+        },
+        {
+          "median_redraw32_us": 244851.5,
+          "p95_redraw32_us": 247751,
+          "private_growth_bytes": -1990656,
+          "warm_private_bytes": 347508736,
+          "settled_private_bytes": 345518080,
+          "hidden_ui_cpu_us": 31250
+        },
+        {
+          "median_redraw32_us": 243820.0,
+          "p95_redraw32_us": 249138,
+          "private_growth_bytes": -2035712,
+          "warm_private_bytes": 347090944,
+          "settled_private_bytes": 345055232,
+          "hidden_ui_cpu_us": 0
+        }
+      ]
+    },
+    {
+      "variant": "graph-labels-candidate-repeat",
+      "archive": "Specs/TestRuns/4cb089111a23/Commands/2026-09-19_225208-i26-graph-labels-candidate-repeat",
+      "workspace": "8d490be258745f83819ebae82bafe7d756a477c5d195433bae2dc69927347717",
+      "receipt": "a3700fca2b600e2bdad885729701305fb36547d030c920f7192bc484f4fa8e1f",
+      "rounds": [
+        {
+          "median_redraw32_us": 246061.0,
+          "p95_redraw32_us": 249635,
+          "private_growth_bytes": 258048,
+          "warm_private_bytes": 344506368,
+          "settled_private_bytes": 344764416,
+          "hidden_ui_cpu_us": 15625
+        },
+        {
+          "median_redraw32_us": 245517.5,
+          "p95_redraw32_us": 247878,
+          "private_growth_bytes": -909312,
+          "warm_private_bytes": 346087424,
+          "settled_private_bytes": 345178112,
+          "hidden_ui_cpu_us": 46875
+        },
+        {
+          "median_redraw32_us": 244920.5,
+          "p95_redraw32_us": 248530,
+          "private_growth_bytes": -1470464,
+          "warm_private_bytes": 346152960,
+          "settled_private_bytes": 344682496,
+          "hidden_ui_cpu_us": 0
+        }
+      ]
+    }
+  ],
+  "status": "Timing qualification remains open; no slowdown accepted or threshold changed. Synchronous redraw timing is not presented FPS."
+}

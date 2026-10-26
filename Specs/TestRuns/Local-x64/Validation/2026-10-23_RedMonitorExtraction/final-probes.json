@@ -1,0 +1,41 @@
+{
+  "scope": "Fresh actual ETW/absent-helper component probes and existing CI ASan canary; no Full repository pass",
+  "runId": "20261023T165339Z-72028-320fe88b68074e0cb795d2f4ed9c044f",
+  "clientCommit": "9ebea6577fe9a5ced7647283c918f51f67d666fd",
+  "producers": [
+    {
+      "configuration": "Debug",
+      "binary": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+      "sha256": "7578C41903F37BC511678F2E8CEE20C5BA4D1EE9E898461D4B62B93FA318F1A1",
+      "observerSha256": "585C7E7CFCC6073F90CFFD00F5FE422926066DD5E0C59C96962235D62B645981",
+      "roundtripExit": 0,
+      "absentInstalledHelperExit": 1,
+      "passed": true,
+      "buildReceiptId": "bf2e5a7d49c1e3c3a377bab4698f9d9826e4e0a352a9d1b9962b36299d57fed0",
+      "sourceSnapshotId": "e39bf0d1e3366ac83191b10d7675bfd2cbfc3873c66542d1bdd80fbeee7099df",
+      "scope": "Retained Debug artifact at its recorded source checkpoint; fresh runtime control"
+    },
+    {
+      "configuration": "ASan Debug",
+      "binary": "Z:\\src\\RedSalamander\\.build\\x64\\ASan Debug\\RedSalamander.exe",
+      "sha256": "74BFBDE0D19609DD0ABD289E7342D7981BC075FE276F942493C133542713F293",
+      "observerSha256": "585C7E7CFCC6073F90CFFD00F5FE422926066DD5E0C59C96962235D62B645981",
+      "roundtripExit": 0,
+      "absentInstalledHelperExit": 1,
+      "passed": true,
+      "buildReceiptId": "5c4a8755dab640bc99295cf3c36d886260f3363a5a923d3b352de08416077c49",
+      "sourceSnapshotId": "fd42f9daf38dc0aaf00d169c0f093a7272095dfbadcd5e19b935f109b7ece844",
+      "scope": "Final repaired ASan source/binary component control"
+    }
+  ],
+  "asanCanary": {
+    "binary": "Z:\\src\\RedSalamander\\.build\\x64\\ASan Debug\\PluginContractTests.exe",
+    "sha256": "9CE3251BF6BB28CB88E066D8C7330A77EE40BB41DB79A2C5F3BFEE44FB1D906F",
+    "exitCode": 1,
+    "heapBufferOverflowDetected": true,
+    "buildReceiptId": "5c4a8755dab640bc99295cf3c36d886260f3363a5a923d3b352de08416077c49",
+    "sourceSnapshotId": "fd42f9daf38dc0aaf00d169c0f093a7272095dfbadcd5e19b935f109b7ece844"
+  },
+  "passed": true,
+  "completedUtc": "2026-10-23T16:53:55.8983662Z"
+}

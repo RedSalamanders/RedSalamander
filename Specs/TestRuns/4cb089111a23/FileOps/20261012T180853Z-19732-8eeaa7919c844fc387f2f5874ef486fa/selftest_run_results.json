@@ -1,0 +1,45 @@
+{
+    "run_started_utc": "2026-10-12T18:09:28.470Z",
+    "duration_ms": 18381,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1,
+    "case_filter": "R4T9_BridgeManyDirectoriesCopy",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261012T180853Z-19732-8eeaa7919c844fc387f2f5874ef486fa\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 17328,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "repeat_count": 1,
+            "case_filter": "R4T9_BridgeManyDirectoriesCopy",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1547,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "R4T9_BridgeManyDirectoriesCopy",
+                    "status": "passed",
+                    "duration_ms": 15672,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 93,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

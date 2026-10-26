@@ -1,0 +1,67 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="8" errors="0" failures="7" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-09-06" time="02:50:36">
+  <environment platform="Microsoft Windows 11 Pro|C:\WINDOWS|\Device\Harddisk4\Partition3" clr-version="" os-version="10.0.26200" cwd="C:\Users\eric\.codex\worktrees\fd72\RedSalamander" machine-name="SINON" user="eric" nunit-version="2.5.8.0" user-domain="SINON" />
+  <culture-info current-culture="fr-GP" current-uiculture="en-US" />
+  <test-suite type="Powershell" name="Pester" executed="True" result="Failure" success="False" time="17.4919" asserts="0">
+    <results>
+      <test-suite type="TestFixture" name="Shared runtime DLL Clean ownership" executed="True" result="Failure" success="False" time="17.4919" asserts="0" description="Shared runtime DLL Clean ownership">
+        <results>
+          <test-case description="migrates old explicit Clean records without deleting another project dependency" name="Shared runtime DLL Clean ownership.migrates old explicit Clean records without deleting another project dependency" time="2.2987" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>Cannot find path 'C:\RedSalamander.Perf\runs\c6-runtime-clean-baseline-v2-20260906\scratch\build-runtime-clean\27fc05f45ffc47a6b4e58a4213ec7a3f\output\z.dll' because it does not exist.</message>
+              <stack-trace>at line: 94 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\BuildRuntimeClean.Tests.ps1</stack-trace>
+            </failure>
+          </test-case>
+          <test-case description="preserves DLLs used by an earlier rebuilt project even when deletion is denied" name="Shared runtime DLL Clean ownership.preserves DLLs used by an earlier rebuilt project even when deletion is denied" time="2.3442" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>Expected: 
+C:\Program Files\Microsoft Visual Studio\18\Insiders\MSBuild\Current\Bin\amd64\Microsoft.Common.CurrentVersion.targets(6031,5): warning MSB3061: Unable to delete file "C:\RedSalamander.Perf\runs\c6-runtime-clean-baseline-v2-20260906\scratch\build-runtime-clean\18531d86fe4044dea4b71df06541597e\output\z.dll". The process cannot access the file 'C:\RedSalamander.Perf\runs\c6-runtime-clean-baseline-v2-20260906\scratch\build-runtime-clean\18531d86fe4044dea4b71df06541597e\output\z.dll' because it is being used by another process. The file is locked by: "PowerShell 7 (42700)" [C:\RedSalamander.Perf\runs\c6-runtime-clean-baseline-v2-20260906\scratch\build-runtime-clean\18531d86fe4044dea4b71df06541597e\project\Consumer.vcxproj]
+ to not match the expression (?im)\bwarning\s*(?:[A-Z]+\d+\s*)?:</message>
+              <stack-trace>at line: 79 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\BuildRuntimeClean.Tests.ps1
+79:     (Get-Content -LiteralPath $log -Raw) | Should Not Match '(?im)\bwarning\s*(?:[A-Z]+\d+\s*)?:'</stack-trace>
+            </failure>
+          </test-case>
+          <test-case description="migrates orphaned shared entries before incremental deletion" name="Shared runtime DLL Clean ownership.migrates orphaned shared entries before incremental deletion" time="1.9084" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>Expected: {True}
+But was:  {False}</message>
+              <stack-trace>at line: 114 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\BuildRuntimeClean.Tests.ps1
+114:             Test-Path -LiteralPath $fixture.Files[$key] | Should Be $true</stack-trace>
+            </failure>
+          </test-case>
+          <test-case description="excludes link and link-skipped dependency writes from new cleanup ownership" name="Shared runtime DLL Clean ownership.excludes link and link-skipped dependency writes from new cleanup ownership" time="1.8373" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>Expected: {False}
+But was:  {True}</message>
+              <stack-trace>at line: 128 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\BuildRuntimeClean.Tests.ps1
+128:                 ($history -contains $fixture.Files.Shared) | Should Be $false</stack-trace>
+            </failure>
+          </test-case>
+          <test-case description="allows late consumer Clean after another project has staged a newer dependency" name="Shared runtime DLL Clean ownership.allows late consumer Clean after another project has staged a newer dependency" time="3.6285" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>Cannot find path 'C:\RedSalamander.Perf\runs\c6-runtime-clean-baseline-v2-20260906\scratch\build-runtime-clean\1c14acb5b5b8406191478b0397b2683d\output\z.dll' because it does not exist.</message>
+              <stack-trace>at line: 142 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\BuildRuntimeClean.Tests.ps1</stack-trace>
+            </failure>
+          </test-case>
+          <test-case description="normalizes path spelling while retaining exact target and private DLL ownership" name="Shared runtime DLL Clean ownership.normalizes path spelling while retaining exact target and private DLL ownership" time="1.8218" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>Expected: {True}
+But was:  {False}</message>
+              <stack-trace>at line: 151 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\BuildRuntimeClean.Tests.ps1
+151:         Test-Path -LiteralPath $fixture.Files.Shared | Should Be $true</stack-trace>
+            </failure>
+          </test-case>
+          <test-case description="protects shared runtimes when a prior test project becomes a production utility" name="Shared runtime DLL Clean ownership.protects shared runtimes when a prior test project becomes a production utility" time="1.7826" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>Expected: {True}
+But was:  {False}</message>
+              <stack-trace>at line: 159 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\BuildRuntimeClean.Tests.ps1
+159:         Test-Path -LiteralPath $fixture.Files.Shared | Should Be $true</stack-trace>
+            </failure>
+          </test-case>
+          <test-case description="does not change cleanup behavior for a non-first-party project" name="Shared runtime DLL Clean ownership.does not change cleanup behavior for a non-first-party project" time="1.8705" asserts="0" success="True" result="Success" executed="True" />
+        </results>
+      </test-suite>
+    </results>
+  </test-suite>
+</test-results>

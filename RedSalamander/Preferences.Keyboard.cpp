@@ -64,7 +64,7 @@ using DxUi::Grid;
 using DxUi::GridCellData;
 using DxUi::GridColumnDesc;
 using DxUi::GridSelectionMode;
-using DxUi::IDxGridModel;
+using DxUi::IGridModel;
 using DxUi::Label;
 using DxUi::Panel;
 using DxUi::TextField;
@@ -251,7 +251,7 @@ struct KeyboardGridRow
     bool hasConflict = false;
 };
 
-class KeyboardGridModel final : public IDxGridModel
+class KeyboardGridModel final : public IGridModel
 {
 public:
     KeyboardGridModel()
@@ -360,7 +360,7 @@ struct KeyboardDxPage
     Label* scopeLabel     = nullptr;
     ComboBox* scopeCombo  = nullptr;
     Grid* listControl     = nullptr;
-    std::unique_ptr<IDxGridModel> listModelStorage;
+    std::unique_ptr<IGridModel> listModelStorage;
     KeyboardGridModel* listModel = nullptr;
     Label* hint                  = nullptr;
     Button* assign               = nullptr;

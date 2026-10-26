@@ -1,0 +1,4837 @@
+{
+  "created_utc": "2026-10-20T13:44:23.4503565Z",
+  "baseline_commit": "d7dd952d629985b48d25b23b56d1726fbb2a1ec5",
+  "machine_hash": "4cb089111a23",
+  "fixture": "Unchanged folderView_perf_sort_toggle_stress, 5000 files, ten requests, five repetitions",
+  "phase_selection": "First eligible attempt by native verdict and observer predicates, never selected by latency",
+  "pairs": {
+    "Debug": {
+      "baseline": "paired-baseline-debug-02",
+      "candidate": "paired-candidate-debug-01",
+      "requests": [
+        {
+          "key": "Name",
+          "direction": "Ascending",
+          "baseline_median_us": 31235,
+          "candidate_median_us": 28199,
+          "change_percent": -9.72
+        },
+        {
+          "key": "Extension",
+          "direction": "Ascending",
+          "baseline_median_us": 87761,
+          "candidate_median_us": 60042,
+          "change_percent": -31.585
+        },
+        {
+          "key": "Time",
+          "direction": "Descending",
+          "baseline_median_us": 103194,
+          "candidate_median_us": 80083,
+          "change_percent": -22.396
+        },
+        {
+          "key": "Size",
+          "direction": "Descending",
+          "baseline_median_us": 95733,
+          "candidate_median_us": 69871,
+          "change_percent": -27.015
+        },
+        {
+          "key": "None",
+          "direction": "Ascending",
+          "baseline_median_us": 94617,
+          "candidate_median_us": 63588,
+          "change_percent": -32.794
+        },
+        {
+          "key": "Name",
+          "direction": "Descending",
+          "baseline_median_us": 68591,
+          "candidate_median_us": 62330,
+          "change_percent": -9.128
+        },
+        {
+          "key": "Extension",
+          "direction": "Descending",
+          "baseline_median_us": 66322,
+          "candidate_median_us": 36922,
+          "change_percent": -44.329
+        },
+        {
+          "key": "Time",
+          "direction": "Ascending",
+          "baseline_median_us": 81014,
+          "candidate_median_us": 60205,
+          "change_percent": -25.686
+        },
+        {
+          "key": "Size",
+          "direction": "Ascending",
+          "baseline_median_us": 81592,
+          "candidate_median_us": 55989,
+          "change_percent": -31.379
+        },
+        {
+          "key": "None",
+          "direction": "Ascending",
+          "baseline_median_us": 80049,
+          "candidate_median_us": 49601,
+          "change_percent": -38.037
+        }
+      ],
+      "ordering": {
+        "baseline": {
+          "count": 59,
+          "min_us": 6163,
+          "median_us": 33385,
+          "max_us": 38378
+        },
+        "candidate": {
+          "count": 59,
+          "min_us": 2485,
+          "median_us": 5899,
+          "max_us": 7840
+        }
+      },
+      "apply_current_sort": {
+        "baseline": {
+          "count": 59,
+          "min_us": 6354,
+          "median_us": 33758,
+          "max_us": 38624
+        },
+        "candidate": {
+          "count": 59,
+          "min_us": 2743,
+          "median_us": 6305,
+          "max_us": 8125
+        }
+      }
+    },
+    "Release": {
+      "baseline": "paired-baseline-release-01",
+      "candidate": "paired-candidate-release-01",
+      "requests": [
+        {
+          "key": "Name",
+          "direction": "Ascending",
+          "baseline_median_us": 9324,
+          "candidate_median_us": 6727,
+          "change_percent": -27.853
+        },
+        {
+          "key": "Extension",
+          "direction": "Ascending",
+          "baseline_median_us": 28266,
+          "candidate_median_us": 49861,
+          "change_percent": 76.399
+        },
+        {
+          "key": "Time",
+          "direction": "Descending",
+          "baseline_median_us": 66018,
+          "candidate_median_us": 64464,
+          "change_percent": -2.354
+        },
+        {
+          "key": "Size",
+          "direction": "Descending",
+          "baseline_median_us": 59487,
+          "candidate_median_us": 64438,
+          "change_percent": 8.323
+        },
+        {
+          "key": "None",
+          "direction": "Ascending",
+          "baseline_median_us": 66338,
+          "candidate_median_us": 58132,
+          "change_percent": -12.37
+        },
+        {
+          "key": "Name",
+          "direction": "Descending",
+          "baseline_median_us": 58129,
+          "candidate_median_us": 57510,
+          "change_percent": -1.065
+        },
+        {
+          "key": "Extension",
+          "direction": "Descending",
+          "baseline_median_us": 58906,
+          "candidate_median_us": 58081,
+          "change_percent": -1.401
+        },
+        {
+          "key": "Time",
+          "direction": "Ascending",
+          "baseline_median_us": 57703,
+          "candidate_median_us": 58430,
+          "change_percent": 1.26
+        },
+        {
+          "key": "Size",
+          "direction": "Ascending",
+          "baseline_median_us": 59043,
+          "candidate_median_us": 57371,
+          "change_percent": -2.832
+        },
+        {
+          "key": "None",
+          "direction": "Ascending",
+          "baseline_median_us": 65239,
+          "candidate_median_us": 66378,
+          "change_percent": 1.746
+        }
+      ],
+      "ordering": {
+        "baseline": {
+          "count": 59,
+          "min_us": 228,
+          "median_us": 971,
+          "max_us": 2413
+        },
+        "candidate": {
+          "count": 59,
+          "min_us": 141,
+          "median_us": 529,
+          "max_us": 970
+        }
+      },
+      "apply_current_sort": {
+        "baseline": {
+          "count": 59,
+          "min_us": 260,
+          "median_us": 1008,
+          "max_us": 2467
+        },
+        "candidate": {
+          "count": 59,
+          "min_us": 163,
+          "median_us": 559,
+          "max_us": 1037
+        }
+      }
+    }
+  },
+  "phases": {
+    "baseline-debug-03": {
+      "accepted": false,
+      "disposition": "rejected by observation predicates",
+      "configuration": "Debug",
+      "run_id": "20261020T111007Z-86020-3cc1f4ad7e174ee7984e6ce8b246c15f",
+      "receipt_id": "0f6e8df12b867f12bed1ed536845de49c2f1ed5be454ed5a3c847ace3736403c",
+      "cases_passed": 5,
+      "all_sort_samples": 50,
+      "samples": [
+        {
+          "repeat": 1,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 57073
+        },
+        {
+          "repeat": 1,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 89913
+        },
+        {
+          "repeat": 1,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 107696
+        },
+        {
+          "repeat": 1,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 101993
+        },
+        {
+          "repeat": 1,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 99021
+        },
+        {
+          "repeat": 1,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 72997
+        },
+        {
+          "repeat": 1,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 71001
+        },
+        {
+          "repeat": 1,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 86669
+        },
+        {
+          "repeat": 1,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 83533
+        },
+        {
+          "repeat": 1,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 78529
+        },
+        {
+          "repeat": 2,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 41458
+        },
+        {
+          "repeat": 2,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 97308
+        },
+        {
+          "repeat": 2,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 119632
+        },
+        {
+          "repeat": 2,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 110052
+        },
+        {
+          "repeat": 2,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 126355
+        },
+        {
+          "repeat": 2,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 85768
+        },
+        {
+          "repeat": 2,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 69342
+        },
+        {
+          "repeat": 2,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 90696
+        },
+        {
+          "repeat": 2,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 89259
+        },
+        {
+          "repeat": 2,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 91508
+        },
+        {
+          "repeat": 3,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 43141
+        },
+        {
+          "repeat": 3,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 91822
+        },
+        {
+          "repeat": 3,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 108184
+        },
+        {
+          "repeat": 3,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 97613
+        },
+        {
+          "repeat": 3,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 120788
+        },
+        {
+          "repeat": 3,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 72070
+        },
+        {
+          "repeat": 3,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 74297
+        },
+        {
+          "repeat": 3,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 88881
+        },
+        {
+          "repeat": 3,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 94923
+        },
+        {
+          "repeat": 3,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 86569
+        },
+        {
+          "repeat": 4,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 40603
+        },
+        {
+          "repeat": 4,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 87718
+        },
+        {
+          "repeat": 4,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 113682
+        },
+        {
+          "repeat": 4,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 103252
+        },
+        {
+          "repeat": 4,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 98556
+        },
+        {
+          "repeat": 4,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 70089
+        },
+        {
+          "repeat": 4,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 67950
+        },
+        {
+          "repeat": 4,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 82775
+        },
+        {
+          "repeat": 4,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 92574
+        },
+        {
+          "repeat": 4,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 87557
+        },
+        {
+          "repeat": 5,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 39257
+        },
+        {
+          "repeat": 5,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 103682
+        },
+        {
+          "repeat": 5,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 122018
+        },
+        {
+          "repeat": 5,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 102022
+        },
+        {
+          "repeat": 5,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 110113
+        },
+        {
+          "repeat": 5,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 71808
+        },
+        {
+          "repeat": 5,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 70307
+        },
+        {
+          "repeat": 5,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 83483
+        },
+        {
+          "repeat": 5,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 88491
+        },
+        {
+          "repeat": 5,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 83696
+        }
+      ],
+      "requests": [
+        {
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 39257,
+            "median_us": 41458,
+            "max_us": 57073
+          }
+        },
+        {
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 87718,
+            "median_us": 91822,
+            "max_us": 103682
+          }
+        },
+        {
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 107696,
+            "median_us": 113682,
+            "max_us": 122018
+          }
+        },
+        {
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 97613,
+            "median_us": 102022,
+            "max_us": 110052
+          }
+        },
+        {
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 98556,
+            "median_us": 110113,
+            "max_us": 126355
+          }
+        },
+        {
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 70089,
+            "median_us": 72070,
+            "max_us": 85768
+          }
+        },
+        {
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 67950,
+            "median_us": 70307,
+            "max_us": 74297
+          }
+        },
+        {
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 82775,
+            "median_us": 86669,
+            "max_us": 90696
+          }
+        },
+        {
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 83533,
+            "median_us": 89259,
+            "max_us": 94923
+          }
+        },
+        {
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 78529,
+            "median_us": 86569,
+            "max_us": 91508
+          }
+        }
+      ],
+      "stages": {
+        "FolderView.ApplyCurrentSort": {
+          "count": 59,
+          "min_us": 6829,
+          "median_us": 34822,
+          "max_us": 49659
+        },
+        "FolderView.ApplyCurrentSort.OrderItems": {
+          "count": 59,
+          "min_us": 6543,
+          "median_us": 34315,
+          "max_us": 49368
+        },
+        "FolderView.ExecuteEnumeration.BuildItems": {
+          "count": 10,
+          "min_us": 5140,
+          "median_us": 5797.5,
+          "max_us": 10256
+        },
+        "FolderView.ExecuteEnumeration.NaturalSortRanks": {
+          "count": 9,
+          "min_us": 4793,
+          "median_us": 5039,
+          "max_us": 5353
+        },
+        "FolderView.ExecuteEnumeration.SortMerge": {
+          "count": 10,
+          "min_us": 27300,
+          "median_us": 42650.0,
+          "max_us": 46301
+        }
+      },
+      "payload_move_records": 0,
+      "payload_moves_min": null,
+      "payload_moves_max": null,
+      "index_scratch_bytes_min": null,
+      "index_scratch_bytes_max": null,
+      "benchmark_snapshots": 397,
+      "contaminated_snapshots": 18,
+      "maximum_poll_gap_ms": 683.134
+    },
+    "baseline-debug-04": {
+      "accepted": false,
+      "disposition": "eligible supplemental run superseded by source-isolation decision",
+      "configuration": "Debug",
+      "run_id": "20261020T111335Z-63872-8eeea5ed4d9540208618b310460579c5",
+      "receipt_id": "0f6e8df12b867f12bed1ed536845de49c2f1ed5be454ed5a3c847ace3736403c",
+      "cases_passed": 5,
+      "all_sort_samples": 50,
+      "samples": [
+        {
+          "repeat": 1,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 37514
+        },
+        {
+          "repeat": 1,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 92191
+        },
+        {
+          "repeat": 1,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 122074
+        },
+        {
+          "repeat": 1,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 99610
+        },
+        {
+          "repeat": 1,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 100212
+        },
+        {
+          "repeat": 1,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 72966
+        },
+        {
+          "repeat": 1,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 69900
+        },
+        {
+          "repeat": 1,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 87921
+        },
+        {
+          "repeat": 1,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 94295
+        },
+        {
+          "repeat": 1,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 89660
+        },
+        {
+          "repeat": 2,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 41064
+        },
+        {
+          "repeat": 2,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 95890
+        },
+        {
+          "repeat": 2,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 112971
+        },
+        {
+          "repeat": 2,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 97147
+        },
+        {
+          "repeat": 2,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 104757
+        },
+        {
+          "repeat": 2,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 81205
+        },
+        {
+          "repeat": 2,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 71497
+        },
+        {
+          "repeat": 2,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 92899
+        },
+        {
+          "repeat": 2,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 89972
+        },
+        {
+          "repeat": 2,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 83459
+        },
+        {
+          "repeat": 3,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 39442
+        },
+        {
+          "repeat": 3,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 95100
+        },
+        {
+          "repeat": 3,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 105516
+        },
+        {
+          "repeat": 3,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 99150
+        },
+        {
+          "repeat": 3,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 101477
+        },
+        {
+          "repeat": 3,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 71673
+        },
+        {
+          "repeat": 3,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 72328
+        },
+        {
+          "repeat": 3,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 85424
+        },
+        {
+          "repeat": 3,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 90316
+        },
+        {
+          "repeat": 3,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 83131
+        },
+        {
+          "repeat": 4,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 29506
+        },
+        {
+          "repeat": 4,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 94392
+        },
+        {
+          "repeat": 4,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 112949
+        },
+        {
+          "repeat": 4,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 105205
+        },
+        {
+          "repeat": 4,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 98898
+        },
+        {
+          "repeat": 4,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 76731
+        },
+        {
+          "repeat": 4,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 72757
+        },
+        {
+          "repeat": 4,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 83086
+        },
+        {
+          "repeat": 4,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 93976
+        },
+        {
+          "repeat": 4,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 89715
+        },
+        {
+          "repeat": 5,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 40552
+        },
+        {
+          "repeat": 5,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 103008
+        },
+        {
+          "repeat": 5,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 126039
+        },
+        {
+          "repeat": 5,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 103925
+        },
+        {
+          "repeat": 5,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 100160
+        },
+        {
+          "repeat": 5,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 68919
+        },
+        {
+          "repeat": 5,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 73030
+        },
+        {
+          "repeat": 5,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 93050
+        },
+        {
+          "repeat": 5,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 92085
+        },
+        {
+          "repeat": 5,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 83704
+        }
+      ],
+      "requests": [
+        {
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 29506,
+            "median_us": 39442,
+            "max_us": 41064
+          }
+        },
+        {
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 92191,
+            "median_us": 95100,
+            "max_us": 103008
+          }
+        },
+        {
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 105516,
+            "median_us": 112971,
+            "max_us": 126039
+          }
+        },
+        {
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 97147,
+            "median_us": 99610,
+            "max_us": 105205
+          }
+        },
+        {
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 98898,
+            "median_us": 100212,
+            "max_us": 104757
+          }
+        },
+        {
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 68919,
+            "median_us": 72966,
+            "max_us": 81205
+          }
+        },
+        {
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 69900,
+            "median_us": 72328,
+            "max_us": 73030
+          }
+        },
+        {
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 83086,
+            "median_us": 87921,
+            "max_us": 93050
+          }
+        },
+        {
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 89972,
+            "median_us": 92085,
+            "max_us": 94295
+          }
+        },
+        {
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 83131,
+            "median_us": 83704,
+            "max_us": 89715
+          }
+        }
+      ],
+      "stages": {
+        "FolderView.ApplyCurrentSort": {
+          "count": 59,
+          "min_us": 6964,
+          "median_us": 35032,
+          "max_us": 39603
+        },
+        "FolderView.ApplyCurrentSort.OrderItems": {
+          "count": 59,
+          "min_us": 6815,
+          "median_us": 34548,
+          "max_us": 38748
+        },
+        "FolderView.ExecuteEnumeration.BuildItems": {
+          "count": 10,
+          "min_us": 5853,
+          "median_us": 6395.5,
+          "max_us": 9418
+        },
+        "FolderView.ExecuteEnumeration.NaturalSortRanks": {
+          "count": 9,
+          "min_us": 4808,
+          "median_us": 5302,
+          "max_us": 5826
+        },
+        "FolderView.ExecuteEnumeration.SortMerge": {
+          "count": 10,
+          "min_us": 28693,
+          "median_us": 44024.5,
+          "max_us": 47380
+        }
+      },
+      "payload_move_records": 0,
+      "payload_moves_min": null,
+      "payload_moves_max": null,
+      "index_scratch_bytes_min": null,
+      "index_scratch_bytes_max": null,
+      "benchmark_snapshots": 421,
+      "contaminated_snapshots": 0,
+      "maximum_poll_gap_ms": 836.998
+    },
+    "baseline-release-01": {
+      "accepted": false,
+      "disposition": "rejected by observation predicates",
+      "configuration": "Release",
+      "run_id": "20261020T111551Z-32256-d314c1850c474158b3732ed7d8b428e8",
+      "receipt_id": "0078b99e5ed48743870a6ecfbe2fbbd4d76b2b74fd950d67821d634ccd6490a6",
+      "cases_passed": 5,
+      "all_sort_samples": 50,
+      "samples": [
+        {
+          "repeat": 1,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 27616
+        },
+        {
+          "repeat": 1,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 56553
+        },
+        {
+          "repeat": 1,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 66064
+        },
+        {
+          "repeat": 1,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 66763
+        },
+        {
+          "repeat": 1,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 65603
+        },
+        {
+          "repeat": 1,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 66331
+        },
+        {
+          "repeat": 1,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 57936
+        },
+        {
+          "repeat": 1,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 65800
+        },
+        {
+          "repeat": 1,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 58998
+        },
+        {
+          "repeat": 1,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 65422
+        },
+        {
+          "repeat": 2,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 20633
+        },
+        {
+          "repeat": 2,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 34771
+        },
+        {
+          "repeat": 2,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 66974
+        },
+        {
+          "repeat": 2,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 65436
+        },
+        {
+          "repeat": 2,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 65401
+        },
+        {
+          "repeat": 2,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 66404
+        },
+        {
+          "repeat": 2,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 57750
+        },
+        {
+          "repeat": 2,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 49331
+        },
+        {
+          "repeat": 2,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 66275
+        },
+        {
+          "repeat": 2,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 56871
+        },
+        {
+          "repeat": 3,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 8327
+        },
+        {
+          "repeat": 3,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 25283
+        },
+        {
+          "repeat": 3,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 66585
+        },
+        {
+          "repeat": 3,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 57388
+        },
+        {
+          "repeat": 3,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 57937
+        },
+        {
+          "repeat": 3,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 58829
+        },
+        {
+          "repeat": 3,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 57451
+        },
+        {
+          "repeat": 3,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 66060
+        },
+        {
+          "repeat": 3,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 66397
+        },
+        {
+          "repeat": 3,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 59226
+        },
+        {
+          "repeat": 4,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 17404
+        },
+        {
+          "repeat": 4,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 50728
+        },
+        {
+          "repeat": 4,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 66937
+        },
+        {
+          "repeat": 4,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 65544
+        },
+        {
+          "repeat": 4,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 66549
+        },
+        {
+          "repeat": 4,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 57772
+        },
+        {
+          "repeat": 4,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 66545
+        },
+        {
+          "repeat": 4,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 66681
+        },
+        {
+          "repeat": 4,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 57560
+        },
+        {
+          "repeat": 4,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 57991
+        },
+        {
+          "repeat": 5,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 4341
+        },
+        {
+          "repeat": 5,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 27228
+        },
+        {
+          "repeat": 5,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 64457
+        },
+        {
+          "repeat": 5,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 67272
+        },
+        {
+          "repeat": 5,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 57091
+        },
+        {
+          "repeat": 5,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 66693
+        },
+        {
+          "repeat": 5,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 67374
+        },
+        {
+          "repeat": 5,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 65589
+        },
+        {
+          "repeat": 5,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 66482
+        },
+        {
+          "repeat": 5,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 65495
+        }
+      ],
+      "requests": [
+        {
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 4341,
+            "median_us": 17404,
+            "max_us": 27616
+          }
+        },
+        {
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 25283,
+            "median_us": 34771,
+            "max_us": 56553
+          }
+        },
+        {
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 64457,
+            "median_us": 66585,
+            "max_us": 66974
+          }
+        },
+        {
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 57388,
+            "median_us": 65544,
+            "max_us": 67272
+          }
+        },
+        {
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 57091,
+            "median_us": 65401,
+            "max_us": 66549
+          }
+        },
+        {
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 57772,
+            "median_us": 66331,
+            "max_us": 66693
+          }
+        },
+        {
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 57451,
+            "median_us": 57936,
+            "max_us": 67374
+          }
+        },
+        {
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 49331,
+            "median_us": 65800,
+            "max_us": 66681
+          }
+        },
+        {
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 57560,
+            "median_us": 66275,
+            "max_us": 66482
+          }
+        },
+        {
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 56871,
+            "median_us": 59226,
+            "max_us": 65495
+          }
+        }
+      ],
+      "stages": {
+        "FolderView.ApplyCurrentSort": {
+          "count": 59,
+          "min_us": 333,
+          "median_us": 1086,
+          "max_us": 2268
+        },
+        "FolderView.ApplyCurrentSort.OrderItems": {
+          "count": 59,
+          "min_us": 308,
+          "median_us": 1052,
+          "max_us": 2186
+        },
+        "FolderView.ExecuteEnumeration.BuildItems": {
+          "count": 10,
+          "min_us": 318,
+          "median_us": 520.5,
+          "max_us": 627
+        },
+        "FolderView.ExecuteEnumeration.NaturalSortRanks": {
+          "count": 10,
+          "min_us": 547,
+          "median_us": 659.0,
+          "max_us": 1060
+        },
+        "FolderView.ExecuteEnumeration.SortMerge": {
+          "count": 10,
+          "min_us": 2621,
+          "median_us": 3427.5,
+          "max_us": 6571
+        }
+      },
+      "payload_move_records": 0,
+      "payload_moves_min": null,
+      "payload_moves_max": null,
+      "index_scratch_bytes_min": null,
+      "index_scratch_bytes_max": null,
+      "benchmark_snapshots": 352,
+      "contaminated_snapshots": 258,
+      "maximum_poll_gap_ms": 946.142
+    },
+    "baseline-release-03": {
+      "accepted": false,
+      "disposition": "rejected by observation predicates",
+      "configuration": "Release",
+      "run_id": "20261020T112416Z-56700-00a7d595933444d493629bbdaade8acf",
+      "receipt_id": "0078b99e5ed48743870a6ecfbe2fbbd4d76b2b74fd950d67821d634ccd6490a6",
+      "cases_passed": 5,
+      "all_sort_samples": 50,
+      "samples": [
+        {
+          "repeat": 1,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 24648
+        },
+        {
+          "repeat": 1,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 54317
+        },
+        {
+          "repeat": 1,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 66167
+        },
+        {
+          "repeat": 1,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 67334
+        },
+        {
+          "repeat": 1,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 65215
+        },
+        {
+          "repeat": 1,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 66155
+        },
+        {
+          "repeat": 1,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 58210
+        },
+        {
+          "repeat": 1,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 66768
+        },
+        {
+          "repeat": 1,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 57230
+        },
+        {
+          "repeat": 1,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 66394
+        },
+        {
+          "repeat": 2,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 16226
+        },
+        {
+          "repeat": 2,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 29440
+        },
+        {
+          "repeat": 2,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 66503
+        },
+        {
+          "repeat": 2,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 56722
+        },
+        {
+          "repeat": 2,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 58042
+        },
+        {
+          "repeat": 2,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 57907
+        },
+        {
+          "repeat": 2,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 59372
+        },
+        {
+          "repeat": 2,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 65757
+        },
+        {
+          "repeat": 2,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 65607
+        },
+        {
+          "repeat": 2,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 58180
+        },
+        {
+          "repeat": 3,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 9549
+        },
+        {
+          "repeat": 3,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 50415
+        },
+        {
+          "repeat": 3,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 64729
+        },
+        {
+          "repeat": 3,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 59146
+        },
+        {
+          "repeat": 3,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 56885
+        },
+        {
+          "repeat": 3,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 58089
+        },
+        {
+          "repeat": 3,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 66409
+        },
+        {
+          "repeat": 3,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 66244
+        },
+        {
+          "repeat": 3,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 58002
+        },
+        {
+          "repeat": 3,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 57915
+        },
+        {
+          "repeat": 4,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 10938
+        },
+        {
+          "repeat": 4,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 48278
+        },
+        {
+          "repeat": 4,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 67279
+        },
+        {
+          "repeat": 4,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 64823
+        },
+        {
+          "repeat": 4,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 67497
+        },
+        {
+          "repeat": 4,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 65256
+        },
+        {
+          "repeat": 4,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 67742
+        },
+        {
+          "repeat": 4,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 57341
+        },
+        {
+          "repeat": 4,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 67305
+        },
+        {
+          "repeat": 4,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 55838
+        },
+        {
+          "repeat": 5,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 7961
+        },
+        {
+          "repeat": 5,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 26307
+        },
+        {
+          "repeat": 5,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 63989
+        },
+        {
+          "repeat": 5,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 66251
+        },
+        {
+          "repeat": 5,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 66302
+        },
+        {
+          "repeat": 5,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 66269
+        },
+        {
+          "repeat": 5,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 66319
+        },
+        {
+          "repeat": 5,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 58463
+        },
+        {
+          "repeat": 5,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 65913
+        },
+        {
+          "repeat": 5,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 58838
+        }
+      ],
+      "requests": [
+        {
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 7961,
+            "median_us": 10938,
+            "max_us": 24648
+          }
+        },
+        {
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 26307,
+            "median_us": 48278,
+            "max_us": 54317
+          }
+        },
+        {
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 63989,
+            "median_us": 66167,
+            "max_us": 67279
+          }
+        },
+        {
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 56722,
+            "median_us": 64823,
+            "max_us": 67334
+          }
+        },
+        {
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 56885,
+            "median_us": 65215,
+            "max_us": 67497
+          }
+        },
+        {
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 57907,
+            "median_us": 65256,
+            "max_us": 66269
+          }
+        },
+        {
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 58210,
+            "median_us": 66319,
+            "max_us": 67742
+          }
+        },
+        {
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 57341,
+            "median_us": 65757,
+            "max_us": 66768
+          }
+        },
+        {
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 57230,
+            "median_us": 65607,
+            "max_us": 67305
+          }
+        },
+        {
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 55838,
+            "median_us": 58180,
+            "max_us": 66394
+          }
+        }
+      ],
+      "stages": {
+        "FolderView.ApplyCurrentSort": {
+          "count": 59,
+          "min_us": 366,
+          "median_us": 1087,
+          "max_us": 2168
+        },
+        "FolderView.ApplyCurrentSort.OrderItems": {
+          "count": 59,
+          "min_us": 329,
+          "median_us": 1037,
+          "max_us": 2103
+        },
+        "FolderView.ExecuteEnumeration.BuildItems": {
+          "count": 10,
+          "min_us": 298,
+          "median_us": 410.0,
+          "max_us": 948
+        },
+        "FolderView.ExecuteEnumeration.NaturalSortRanks": {
+          "count": 10,
+          "min_us": 560,
+          "median_us": 831.0,
+          "max_us": 1120
+        },
+        "FolderView.ExecuteEnumeration.SortMerge": {
+          "count": 10,
+          "min_us": 2626,
+          "median_us": 3935.5,
+          "max_us": 7247
+        }
+      },
+      "payload_move_records": 0,
+      "payload_moves_min": null,
+      "payload_moves_max": null,
+      "index_scratch_bytes_min": null,
+      "index_scratch_bytes_max": null,
+      "benchmark_snapshots": 371,
+      "contaminated_snapshots": 340,
+      "maximum_poll_gap_ms": 868.494
+    },
+    "candidate-debug-02": {
+      "accepted": false,
+      "disposition": "rejected by observation predicates",
+      "configuration": "Debug",
+      "run_id": "20261020T120820Z-86480-535cfed2fdc349c8a6571e586a7cc1f0",
+      "receipt_id": "73ad760fdbff90ebae53f3ee25a8cc0adbfb46f4378477140e52f6a5d16bf6ee",
+      "cases_passed": 5,
+      "all_sort_samples": 50,
+      "samples": [
+        {
+          "repeat": 1,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 76038
+        },
+        {
+          "repeat": 1,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 109556
+        },
+        {
+          "repeat": 1,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 135039
+        },
+        {
+          "repeat": 1,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 129909
+        },
+        {
+          "repeat": 1,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 124201
+        },
+        {
+          "repeat": 1,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 118606
+        },
+        {
+          "repeat": 1,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 69202
+        },
+        {
+          "repeat": 1,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 99138
+        },
+        {
+          "repeat": 1,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 94902
+        },
+        {
+          "repeat": 1,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 101009
+        },
+        {
+          "repeat": 2,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 52382
+        },
+        {
+          "repeat": 2,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 110870
+        },
+        {
+          "repeat": 2,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 162566
+        },
+        {
+          "repeat": 2,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 123938
+        },
+        {
+          "repeat": 2,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 126236
+        },
+        {
+          "repeat": 2,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 116316
+        },
+        {
+          "repeat": 2,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 77024
+        },
+        {
+          "repeat": 2,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 116248
+        },
+        {
+          "repeat": 2,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 106713
+        },
+        {
+          "repeat": 2,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 97173
+        },
+        {
+          "repeat": 3,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 55834
+        },
+        {
+          "repeat": 3,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 107498
+        },
+        {
+          "repeat": 3,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 159608
+        },
+        {
+          "repeat": 3,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 113559
+        },
+        {
+          "repeat": 3,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 119135
+        },
+        {
+          "repeat": 3,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 130682
+        },
+        {
+          "repeat": 3,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 76102
+        },
+        {
+          "repeat": 3,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 104559
+        },
+        {
+          "repeat": 3,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 91318
+        },
+        {
+          "repeat": 3,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 89655
+        },
+        {
+          "repeat": 4,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 55496
+        },
+        {
+          "repeat": 4,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 99565
+        },
+        {
+          "repeat": 4,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 144928
+        },
+        {
+          "repeat": 4,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 120422
+        },
+        {
+          "repeat": 4,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 124802
+        },
+        {
+          "repeat": 4,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 116733
+        },
+        {
+          "repeat": 4,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 75111
+        },
+        {
+          "repeat": 4,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 112429
+        },
+        {
+          "repeat": 4,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 100745
+        },
+        {
+          "repeat": 4,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 97535
+        },
+        {
+          "repeat": 5,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 61178
+        },
+        {
+          "repeat": 5,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 107324
+        },
+        {
+          "repeat": 5,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 151988
+        },
+        {
+          "repeat": 5,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 115209
+        },
+        {
+          "repeat": 5,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 109628
+        },
+        {
+          "repeat": 5,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 107464
+        },
+        {
+          "repeat": 5,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 74740
+        },
+        {
+          "repeat": 5,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 107956
+        },
+        {
+          "repeat": 5,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 89887
+        },
+        {
+          "repeat": 5,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 86895
+        }
+      ],
+      "requests": [
+        {
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 52382,
+            "median_us": 55834,
+            "max_us": 76038
+          }
+        },
+        {
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 99565,
+            "median_us": 107498,
+            "max_us": 110870
+          }
+        },
+        {
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 135039,
+            "median_us": 151988,
+            "max_us": 162566
+          }
+        },
+        {
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 113559,
+            "median_us": 120422,
+            "max_us": 129909
+          }
+        },
+        {
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 109628,
+            "median_us": 124201,
+            "max_us": 126236
+          }
+        },
+        {
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 107464,
+            "median_us": 116733,
+            "max_us": 130682
+          }
+        },
+        {
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 69202,
+            "median_us": 75111,
+            "max_us": 77024
+          }
+        },
+        {
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 99138,
+            "median_us": 107956,
+            "max_us": 116248
+          }
+        },
+        {
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 89887,
+            "median_us": 94902,
+            "max_us": 106713
+          }
+        },
+        {
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 86895,
+            "median_us": 97173,
+            "max_us": 101009
+          }
+        }
+      ],
+      "stages": {
+        "FolderView.ApplyCurrentSort": {
+          "count": 59,
+          "min_us": 3119,
+          "median_us": 10174,
+          "max_us": 13414
+        },
+        "FolderView.ApplyCurrentSort.OrderItems": {
+          "count": 59,
+          "min_us": 2784,
+          "median_us": 9516,
+          "max_us": 12162
+        },
+        "FolderView.ExecuteEnumeration.BuildItems": {
+          "count": 10,
+          "min_us": 8886,
+          "median_us": 10068.5,
+          "max_us": 11260
+        },
+        "FolderView.ExecuteEnumeration.NaturalSortRanks": {
+          "count": 9,
+          "min_us": 7869,
+          "median_us": 9806,
+          "max_us": 11170
+        },
+        "FolderView.ExecuteEnumeration.SortMerge": {
+          "count": 10,
+          "min_us": 31418,
+          "median_us": 57856.5,
+          "max_us": 63307
+        }
+      },
+      "payload_move_records": 59,
+      "payload_moves_min": 0.0,
+      "payload_moves_max": 7500.0,
+      "index_scratch_bytes_min": 40000.0,
+      "index_scratch_bytes_max": 40000.0,
+      "benchmark_snapshots": 437,
+      "contaminated_snapshots": 381,
+      "maximum_poll_gap_ms": 1088.967
+    },
+    "paired-baseline-debug-02": {
+      "accepted": true,
+      "disposition": "selected stable-checkout pair",
+      "configuration": "Debug",
+      "run_id": "20261020T131103Z-82268-d50e71b411b94e76bd6174c5191b7bf9",
+      "receipt_id": "9c89f19e0611dbde847909eafc5149ed3969f8adc02060061185790807315c8d",
+      "cases_passed": 5,
+      "all_sort_samples": 50,
+      "samples": [
+        {
+          "repeat": 1,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 32332
+        },
+        {
+          "repeat": 1,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 89138
+        },
+        {
+          "repeat": 1,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 101136
+        },
+        {
+          "repeat": 1,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 98591
+        },
+        {
+          "repeat": 1,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 95631
+        },
+        {
+          "repeat": 1,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 69030
+        },
+        {
+          "repeat": 1,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 65904
+        },
+        {
+          "repeat": 1,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 83061
+        },
+        {
+          "repeat": 1,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 78064
+        },
+        {
+          "repeat": 1,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 75746
+        },
+        {
+          "repeat": 2,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 27525
+        },
+        {
+          "repeat": 2,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 88806
+        },
+        {
+          "repeat": 2,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 103194
+        },
+        {
+          "repeat": 2,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 91149
+        },
+        {
+          "repeat": 2,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 94479
+        },
+        {
+          "repeat": 2,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 70669
+        },
+        {
+          "repeat": 2,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 67739
+        },
+        {
+          "repeat": 2,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 89585
+        },
+        {
+          "repeat": 2,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 83218
+        },
+        {
+          "repeat": 2,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 80038
+        },
+        {
+          "repeat": 3,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 35504
+        },
+        {
+          "repeat": 3,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 87761
+        },
+        {
+          "repeat": 3,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 111352
+        },
+        {
+          "repeat": 3,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 91319
+        },
+        {
+          "repeat": 3,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 94602
+        },
+        {
+          "repeat": 3,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 64514
+        },
+        {
+          "repeat": 3,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 66322
+        },
+        {
+          "repeat": 3,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 81014
+        },
+        {
+          "repeat": 3,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 81592
+        },
+        {
+          "repeat": 3,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 82812
+        },
+        {
+          "repeat": 4,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 28024
+        },
+        {
+          "repeat": 4,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 85373
+        },
+        {
+          "repeat": 4,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 99369
+        },
+        {
+          "repeat": 4,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 96035
+        },
+        {
+          "repeat": 4,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 97884
+        },
+        {
+          "repeat": 4,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 68591
+        },
+        {
+          "repeat": 4,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 63651
+        },
+        {
+          "repeat": 4,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 76621
+        },
+        {
+          "repeat": 4,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 80990
+        },
+        {
+          "repeat": 4,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 80049
+        },
+        {
+          "repeat": 5,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 31235
+        },
+        {
+          "repeat": 5,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 86858
+        },
+        {
+          "repeat": 5,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 109278
+        },
+        {
+          "repeat": 5,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 95733
+        },
+        {
+          "repeat": 5,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 94617
+        },
+        {
+          "repeat": 5,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 67227
+        },
+        {
+          "repeat": 5,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 67026
+        },
+        {
+          "repeat": 5,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 79028
+        },
+        {
+          "repeat": 5,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 82240
+        },
+        {
+          "repeat": 5,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 82380
+        }
+      ],
+      "requests": [
+        {
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 27525,
+            "median_us": 31235,
+            "max_us": 35504
+          }
+        },
+        {
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 85373,
+            "median_us": 87761,
+            "max_us": 89138
+          }
+        },
+        {
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 99369,
+            "median_us": 103194,
+            "max_us": 111352
+          }
+        },
+        {
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 91149,
+            "median_us": 95733,
+            "max_us": 98591
+          }
+        },
+        {
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 94479,
+            "median_us": 94617,
+            "max_us": 97884
+          }
+        },
+        {
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 64514,
+            "median_us": 68591,
+            "max_us": 70669
+          }
+        },
+        {
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 63651,
+            "median_us": 66322,
+            "max_us": 67739
+          }
+        },
+        {
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 76621,
+            "median_us": 81014,
+            "max_us": 89585
+          }
+        },
+        {
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 78064,
+            "median_us": 81592,
+            "max_us": 83218
+          }
+        },
+        {
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 75746,
+            "median_us": 80049,
+            "max_us": 82812
+          }
+        }
+      ],
+      "stages": {
+        "FolderView.ApplyCurrentSort": {
+          "count": 59,
+          "min_us": 6354,
+          "median_us": 33758,
+          "max_us": 38624
+        },
+        "FolderView.ApplyCurrentSort.OrderItems": {
+          "count": 59,
+          "min_us": 6163,
+          "median_us": 33385,
+          "max_us": 38378
+        },
+        "FolderView.ExecuteEnumeration.BuildItems": {
+          "count": 10,
+          "min_us": 6,
+          "median_us": 5803.0,
+          "max_us": 7383
+        },
+        "FolderView.ExecuteEnumeration.NaturalSortRanks": {
+          "count": 9,
+          "min_us": 4635,
+          "median_us": 4928,
+          "max_us": 5363
+        },
+        "FolderView.ExecuteEnumeration.SortMerge": {
+          "count": 9,
+          "min_us": 37447,
+          "median_us": 39731,
+          "max_us": 45621
+        }
+      },
+      "payload_move_records": 0,
+      "payload_moves_min": null,
+      "payload_moves_max": null,
+      "index_scratch_bytes_min": null,
+      "index_scratch_bytes_max": null,
+      "benchmark_snapshots": 386,
+      "contaminated_snapshots": 0,
+      "maximum_poll_gap_ms": 770.411
+    },
+    "paired-baseline-release-01": {
+      "accepted": true,
+      "disposition": "selected stable-checkout pair",
+      "configuration": "Release",
+      "run_id": "20261020T131311Z-35412-cc68293073b34bdda808d8f875d88148",
+      "receipt_id": "3ee74cc23947bde2864030423f3b6713cb633d6ad486d2fb749557d83cf79db7",
+      "cases_passed": 5,
+      "all_sort_samples": 50,
+      "samples": [
+        {
+          "repeat": 1,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 17297
+        },
+        {
+          "repeat": 1,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 69504
+        },
+        {
+          "repeat": 1,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 65891
+        },
+        {
+          "repeat": 1,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 66375
+        },
+        {
+          "repeat": 1,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 67194
+        },
+        {
+          "repeat": 1,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 57239
+        },
+        {
+          "repeat": 1,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 58251
+        },
+        {
+          "repeat": 1,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 57703
+        },
+        {
+          "repeat": 1,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 58025
+        },
+        {
+          "repeat": 1,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 66571
+        },
+        {
+          "repeat": 2,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 5317
+        },
+        {
+          "repeat": 2,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 25134
+        },
+        {
+          "repeat": 2,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 66018
+        },
+        {
+          "repeat": 2,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 66376
+        },
+        {
+          "repeat": 2,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 67284
+        },
+        {
+          "repeat": 2,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 66523
+        },
+        {
+          "repeat": 2,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 66677
+        },
+        {
+          "repeat": 2,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 57316
+        },
+        {
+          "repeat": 2,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 59043
+        },
+        {
+          "repeat": 2,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 56421
+        },
+        {
+          "repeat": 3,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 5592
+        },
+        {
+          "repeat": 3,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 26831
+        },
+        {
+          "repeat": 3,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 64921
+        },
+        {
+          "repeat": 3,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 59487
+        },
+        {
+          "repeat": 3,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 56584
+        },
+        {
+          "repeat": 3,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 58129
+        },
+        {
+          "repeat": 3,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 66446
+        },
+        {
+          "repeat": 3,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 66139
+        },
+        {
+          "repeat": 3,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 66479
+        },
+        {
+          "repeat": 3,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 66250
+        },
+        {
+          "repeat": 4,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 9324
+        },
+        {
+          "repeat": 4,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 31558
+        },
+        {
+          "repeat": 4,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 66697
+        },
+        {
+          "repeat": 4,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 57484
+        },
+        {
+          "repeat": 4,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 66338
+        },
+        {
+          "repeat": 4,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 58000
+        },
+        {
+          "repeat": 4,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 58906
+        },
+        {
+          "repeat": 4,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 57027
+        },
+        {
+          "repeat": 4,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 58048
+        },
+        {
+          "repeat": 4,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 58180
+        },
+        {
+          "repeat": 5,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 9678
+        },
+        {
+          "repeat": 5,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 28266
+        },
+        {
+          "repeat": 5,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 67088
+        },
+        {
+          "repeat": 5,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 57150
+        },
+        {
+          "repeat": 5,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 58046
+        },
+        {
+          "repeat": 5,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 66276
+        },
+        {
+          "repeat": 5,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 58886
+        },
+        {
+          "repeat": 5,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 57854
+        },
+        {
+          "repeat": 5,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 66717
+        },
+        {
+          "repeat": 5,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 65239
+        }
+      ],
+      "requests": [
+        {
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 5317,
+            "median_us": 9324,
+            "max_us": 17297
+          }
+        },
+        {
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 25134,
+            "median_us": 28266,
+            "max_us": 69504
+          }
+        },
+        {
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 64921,
+            "median_us": 66018,
+            "max_us": 67088
+          }
+        },
+        {
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 57150,
+            "median_us": 59487,
+            "max_us": 66376
+          }
+        },
+        {
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 56584,
+            "median_us": 66338,
+            "max_us": 67284
+          }
+        },
+        {
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 57239,
+            "median_us": 58129,
+            "max_us": 66523
+          }
+        },
+        {
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 58251,
+            "median_us": 58906,
+            "max_us": 66677
+          }
+        },
+        {
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 57027,
+            "median_us": 57703,
+            "max_us": 66139
+          }
+        },
+        {
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 58025,
+            "median_us": 59043,
+            "max_us": 66717
+          }
+        },
+        {
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 56421,
+            "median_us": 65239,
+            "max_us": 66571
+          }
+        }
+      ],
+      "stages": {
+        "FolderView.ApplyCurrentSort": {
+          "count": 59,
+          "min_us": 260,
+          "median_us": 1008,
+          "max_us": 2467
+        },
+        "FolderView.ApplyCurrentSort.OrderItems": {
+          "count": 59,
+          "min_us": 228,
+          "median_us": 971,
+          "max_us": 2413
+        },
+        "FolderView.ExecuteEnumeration.BuildItems": {
+          "count": 10,
+          "min_us": 307,
+          "median_us": 447.5,
+          "max_us": 729
+        },
+        "FolderView.ExecuteEnumeration.NaturalSortRanks": {
+          "count": 10,
+          "min_us": 536,
+          "median_us": 578.5,
+          "max_us": 607
+        },
+        "FolderView.ExecuteEnumeration.SortMerge": {
+          "count": 10,
+          "min_us": 2471,
+          "median_us": 2678.0,
+          "max_us": 5554
+        }
+      },
+      "payload_move_records": 0,
+      "payload_moves_min": null,
+      "payload_moves_max": null,
+      "index_scratch_bytes_min": null,
+      "index_scratch_bytes_max": null,
+      "benchmark_snapshots": 359,
+      "contaminated_snapshots": 0,
+      "maximum_poll_gap_ms": 685.069
+    },
+    "paired-candidate-debug-01": {
+      "accepted": true,
+      "disposition": "selected stable-checkout pair",
+      "configuration": "Debug",
+      "run_id": "20261020T132924Z-100560-bea25b3391ac4b81a8c3ef08a932a0a8",
+      "receipt_id": "5a3f7b334066b6c7cd1f36c31aa7b5ec4cbbd4a3e9c89c0eab4a011bc3827003",
+      "cases_passed": 5,
+      "all_sort_samples": 50,
+      "samples": [
+        {
+          "repeat": 1,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 35463
+        },
+        {
+          "repeat": 1,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 60042
+        },
+        {
+          "repeat": 1,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 86480
+        },
+        {
+          "repeat": 1,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 64272
+        },
+        {
+          "repeat": 1,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 65994
+        },
+        {
+          "repeat": 1,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 62753
+        },
+        {
+          "repeat": 1,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 41476
+        },
+        {
+          "repeat": 1,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 68650
+        },
+        {
+          "repeat": 1,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 56390
+        },
+        {
+          "repeat": 1,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 51956
+        },
+        {
+          "repeat": 2,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 28199
+        },
+        {
+          "repeat": 2,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 58272
+        },
+        {
+          "repeat": 2,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 77268
+        },
+        {
+          "repeat": 2,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 69871
+        },
+        {
+          "repeat": 2,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 69697
+        },
+        {
+          "repeat": 2,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 64461
+        },
+        {
+          "repeat": 2,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 36213
+        },
+        {
+          "repeat": 2,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 60205
+        },
+        {
+          "repeat": 2,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 52326
+        },
+        {
+          "repeat": 2,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 49015
+        },
+        {
+          "repeat": 3,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 27675
+        },
+        {
+          "repeat": 3,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 57044
+        },
+        {
+          "repeat": 3,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 76330
+        },
+        {
+          "repeat": 3,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 70072
+        },
+        {
+          "repeat": 3,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 63588
+        },
+        {
+          "repeat": 3,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 62330
+        },
+        {
+          "repeat": 3,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 40367
+        },
+        {
+          "repeat": 3,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 61544
+        },
+        {
+          "repeat": 3,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 55989
+        },
+        {
+          "repeat": 3,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 46287
+        },
+        {
+          "repeat": 4,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 27659
+        },
+        {
+          "repeat": 4,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 64361
+        },
+        {
+          "repeat": 4,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 80083
+        },
+        {
+          "repeat": 4,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 70290
+        },
+        {
+          "repeat": 4,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 57173
+        },
+        {
+          "repeat": 4,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 60853
+        },
+        {
+          "repeat": 4,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 36922
+        },
+        {
+          "repeat": 4,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 54498
+        },
+        {
+          "repeat": 4,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 53680
+        },
+        {
+          "repeat": 4,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 49601
+        },
+        {
+          "repeat": 5,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 30594
+        },
+        {
+          "repeat": 5,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 60091
+        },
+        {
+          "repeat": 5,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 82695
+        },
+        {
+          "repeat": 5,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 64437
+        },
+        {
+          "repeat": 5,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 61502
+        },
+        {
+          "repeat": 5,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 58406
+        },
+        {
+          "repeat": 5,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 36837
+        },
+        {
+          "repeat": 5,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 53313
+        },
+        {
+          "repeat": 5,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 56405
+        },
+        {
+          "repeat": 5,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 51818
+        }
+      ],
+      "requests": [
+        {
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 27659,
+            "median_us": 28199,
+            "max_us": 35463
+          }
+        },
+        {
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 57044,
+            "median_us": 60042,
+            "max_us": 64361
+          }
+        },
+        {
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 76330,
+            "median_us": 80083,
+            "max_us": 86480
+          }
+        },
+        {
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 64272,
+            "median_us": 69871,
+            "max_us": 70290
+          }
+        },
+        {
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 57173,
+            "median_us": 63588,
+            "max_us": 69697
+          }
+        },
+        {
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 58406,
+            "median_us": 62330,
+            "max_us": 64461
+          }
+        },
+        {
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 36213,
+            "median_us": 36922,
+            "max_us": 41476
+          }
+        },
+        {
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 53313,
+            "median_us": 60205,
+            "max_us": 68650
+          }
+        },
+        {
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 52326,
+            "median_us": 55989,
+            "max_us": 56405
+          }
+        },
+        {
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 46287,
+            "median_us": 49601,
+            "max_us": 51956
+          }
+        }
+      ],
+      "stages": {
+        "FolderView.ApplyCurrentSort": {
+          "count": 59,
+          "min_us": 2743,
+          "median_us": 6305,
+          "max_us": 8125
+        },
+        "FolderView.ApplyCurrentSort.OrderItems": {
+          "count": 59,
+          "min_us": 2485,
+          "median_us": 5899,
+          "max_us": 7840
+        },
+        "FolderView.ExecuteEnumeration.BuildItems": {
+          "count": 10,
+          "min_us": 5209,
+          "median_us": 5899.0,
+          "max_us": 7986
+        },
+        "FolderView.ExecuteEnumeration.NaturalSortRanks": {
+          "count": 9,
+          "min_us": 4658,
+          "median_us": 4764,
+          "max_us": 5011
+        },
+        "FolderView.ExecuteEnumeration.SortMerge": {
+          "count": 10,
+          "min_us": 24881,
+          "median_us": 38577.5,
+          "max_us": 43059
+        }
+      },
+      "payload_move_records": 59,
+      "payload_moves_min": 0.0,
+      "payload_moves_max": 7500.0,
+      "index_scratch_bytes_min": 40000.0,
+      "index_scratch_bytes_max": 40000.0,
+      "benchmark_snapshots": 377,
+      "contaminated_snapshots": 0,
+      "maximum_poll_gap_ms": 682.788
+    },
+    "paired-candidate-release-01": {
+      "accepted": true,
+      "disposition": "selected stable-checkout pair",
+      "configuration": "Release",
+      "run_id": "20261020T133126Z-27124-3666245334074cc88107f6e3bb2887e2",
+      "receipt_id": "b990d166678ae25d12ab5d321530bcc16453cd775404431d84c7e3c4df03e57b",
+      "cases_passed": 5,
+      "all_sort_samples": 50,
+      "samples": [
+        {
+          "repeat": 1,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 17250
+        },
+        {
+          "repeat": 1,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 79084
+        },
+        {
+          "repeat": 1,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 64464
+        },
+        {
+          "repeat": 1,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 66373
+        },
+        {
+          "repeat": 1,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 67245
+        },
+        {
+          "repeat": 1,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 50244
+        },
+        {
+          "repeat": 1,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 56754
+        },
+        {
+          "repeat": 1,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 66838
+        },
+        {
+          "repeat": 1,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 57241
+        },
+        {
+          "repeat": 1,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 67155
+        },
+        {
+          "repeat": 2,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 4954
+        },
+        {
+          "repeat": 2,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 50815
+        },
+        {
+          "repeat": 2,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 64986
+        },
+        {
+          "repeat": 2,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 66408
+        },
+        {
+          "repeat": 2,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 58132
+        },
+        {
+          "repeat": 2,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 57334
+        },
+        {
+          "repeat": 2,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 58081
+        },
+        {
+          "repeat": 2,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 57894
+        },
+        {
+          "repeat": 2,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 65623
+        },
+        {
+          "repeat": 2,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 66378
+        },
+        {
+          "repeat": 3,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 5491
+        },
+        {
+          "repeat": 3,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 47696
+        },
+        {
+          "repeat": 3,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 65441
+        },
+        {
+          "repeat": 3,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 59475
+        },
+        {
+          "repeat": 3,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 56643
+        },
+        {
+          "repeat": 3,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 57842
+        },
+        {
+          "repeat": 3,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 59188
+        },
+        {
+          "repeat": 3,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 56981
+        },
+        {
+          "repeat": 3,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 58017
+        },
+        {
+          "repeat": 3,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 58852
+        },
+        {
+          "repeat": 4,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 6727
+        },
+        {
+          "repeat": 4,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 49701
+        },
+        {
+          "repeat": 4,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 59059
+        },
+        {
+          "repeat": 4,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 56795
+        },
+        {
+          "repeat": 4,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 58121
+        },
+        {
+          "repeat": 4,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 58837
+        },
+        {
+          "repeat": 4,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 57389
+        },
+        {
+          "repeat": 4,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 66896
+        },
+        {
+          "repeat": 4,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 57299
+        },
+        {
+          "repeat": 4,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 58808
+        },
+        {
+          "repeat": 5,
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "duration_us": 9497
+        },
+        {
+          "repeat": 5,
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "duration_us": 49861
+        },
+        {
+          "repeat": 5,
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "duration_us": 50210
+        },
+        {
+          "repeat": 5,
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "duration_us": 64438
+        },
+        {
+          "repeat": 5,
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 66924
+        },
+        {
+          "repeat": 5,
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "duration_us": 57510
+        },
+        {
+          "repeat": 5,
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "duration_us": 58215
+        },
+        {
+          "repeat": 5,
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "duration_us": 58430
+        },
+        {
+          "repeat": 5,
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "duration_us": 57371
+        },
+        {
+          "repeat": 5,
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "duration_us": 66514
+        }
+      ],
+      "requests": [
+        {
+          "request_index": 1,
+          "key": "Name",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 4954,
+            "median_us": 6727,
+            "max_us": 17250
+          }
+        },
+        {
+          "request_index": 2,
+          "key": "Extension",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 47696,
+            "median_us": 49861,
+            "max_us": 79084
+          }
+        },
+        {
+          "request_index": 3,
+          "key": "Time",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 50210,
+            "median_us": 64464,
+            "max_us": 65441
+          }
+        },
+        {
+          "request_index": 4,
+          "key": "Size",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 56795,
+            "median_us": 64438,
+            "max_us": 66408
+          }
+        },
+        {
+          "request_index": 5,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 56643,
+            "median_us": 58132,
+            "max_us": 67245
+          }
+        },
+        {
+          "request_index": 6,
+          "key": "Name",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 50244,
+            "median_us": 57510,
+            "max_us": 58837
+          }
+        },
+        {
+          "request_index": 7,
+          "key": "Extension",
+          "direction": "Descending",
+          "stats": {
+            "count": 5,
+            "min_us": 56754,
+            "median_us": 58081,
+            "max_us": 59188
+          }
+        },
+        {
+          "request_index": 8,
+          "key": "Time",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 56981,
+            "median_us": 58430,
+            "max_us": 66896
+          }
+        },
+        {
+          "request_index": 9,
+          "key": "Size",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 57241,
+            "median_us": 57371,
+            "max_us": 65623
+          }
+        },
+        {
+          "request_index": 10,
+          "key": "None",
+          "direction": "Ascending",
+          "stats": {
+            "count": 5,
+            "min_us": 58808,
+            "median_us": 66378,
+            "max_us": 67155
+          }
+        }
+      ],
+      "stages": {
+        "FolderView.ApplyCurrentSort": {
+          "count": 59,
+          "min_us": 163,
+          "median_us": 559,
+          "max_us": 1037
+        },
+        "FolderView.ApplyCurrentSort.OrderItems": {
+          "count": 59,
+          "min_us": 141,
+          "median_us": 529,
+          "max_us": 970
+        },
+        "FolderView.ExecuteEnumeration.BuildItems": {
+          "count": 10,
+          "min_us": 1,
+          "median_us": 435.5,
+          "max_us": 564
+        },
+        "FolderView.ExecuteEnumeration.NaturalSortRanks": {
+          "count": 9,
+          "min_us": 524,
+          "median_us": 546,
+          "max_us": 578
+        },
+        "FolderView.ExecuteEnumeration.SortMerge": {
+          "count": 9,
+          "min_us": 2717,
+          "median_us": 2809,
+          "max_us": 5112
+        }
+      },
+      "payload_move_records": 59,
+      "payload_moves_min": 0.0,
+      "payload_moves_max": 7500.0,
+      "index_scratch_bytes_min": 40000.0,
+      "index_scratch_bytes_max": 40000.0,
+      "benchmark_snapshots": 360,
+      "contaminated_snapshots": 0,
+      "maximum_poll_gap_ms": 666.264
+    }
+  },
+  "stage_scope": "Stage records include setup, accepted-listing application and fixture restoration. Enumeration records can include canceled work. Counts are not cold-open trial counts; separate stage medians are not additive."
+}

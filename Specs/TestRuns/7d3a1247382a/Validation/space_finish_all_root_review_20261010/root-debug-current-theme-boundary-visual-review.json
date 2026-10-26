@@ -1,0 +1,76 @@
+{
+  "scope": "Root original-resolution whole-frame review of eleven actual Commands captures; canonical archived suite location",
+  "run_id": "20261009T201507Z-45224-aa600fc03f9e4418b3b3e7152722bb0f",
+  "receipt_id": "f721d4c3644b36016e3b81900978cc335f1a530d9eadc094f585683bc7f3638b",
+  "source_snapshot_id": "9addaf53d4d88d618223a7f2d8554ac0b73f2472946c3a3e0875b1fd94ac9554",
+  "raw_provenance": "D:\\RedSalamander.Perf\\runs\\20261009T201507Z-45224-aa600fc03f9e4418b3b3e7152722bb0f\\artifacts\\archive\\7d3a1247382a\\Commands\\2026-10-09_232035\\perf\\viewer_space_captures\\provenance.json",
+  "raw_provenance_sha256": "71cde619680a36a1ebb4b1268e72becf7367ed5f49cf0a9af5d786703df6adc6",
+  "observed_binary_hashes": {
+    ".build/x64/Debug/RedSalamander.exe": "c3f18a4825b5f61730bedf00175e049827cef4ea48499225f6c77046f02c5ba0",
+    ".build/x64/Debug/Plugins/ViewerSpace.dll": "1629a1b789b22234a79a9be738332ceaaac1ebe7be5720d14ccf70bfda46f227"
+  },
+  "notes": [
+    "All eleven full frames inspected; Explorer light, Analyst dark, Rainbow, high contrast and narrow show nested folder headers and folded file corners.",
+    "Selected F00.bin remains visible across modes with exact 1 MiB inspector details when shown.",
+    "1100/1099 boundary moves analysis right to bottom; 504/503 and 456/455.33 body boundaries show analysis or hide it under the existing geometry contract.",
+    "No whole-frame blank child layer or clipped required controls was observed. Individual table icon contrast and human accessibility are not qualified.",
+    "Actual 144 DPI only; other DPI, languages and native platforms remain separate."
+  ],
+  "frames": [
+    {
+      "file": "D:\\RedSalamander.Perf\\runs\\20261009T201507Z-45224-aa600fc03f9e4418b3b3e7152722bb0f\\artifacts\\archive\\7d3a1247382a\\Commands\\2026-10-09_232035\\perf\\viewer_space_captures\\explorer-light.png",
+      "sha256": "661917c17c939f0071ba8d1721b5854d92d3162e1d7980f0cfd16381bb5bb607",
+      "layout_generation": 4
+    },
+    {
+      "file": "D:\\RedSalamander.Perf\\runs\\20261009T201507Z-45224-aa600fc03f9e4418b3b3e7152722bb0f\\artifacts\\archive\\7d3a1247382a\\Commands\\2026-10-09_232035\\perf\\viewer_space_captures\\analyst-dark.png",
+      "sha256": "beaf05cf1b8fb034f45718758917d10dbfb8bfab65722fadd9f8e6766460d318",
+      "layout_generation": 5
+    },
+    {
+      "file": "D:\\RedSalamander.Perf\\runs\\20261009T201507Z-45224-aa600fc03f9e4418b3b3e7152722bb0f\\artifacts\\archive\\7d3a1247382a\\Commands\\2026-10-09_232035\\perf\\viewer_space_captures\\analyst-rainbow.png",
+      "sha256": "9abc62408dc4fa62e93c11377d9fc0105386f9f3564e671da2087387a128bd1a",
+      "layout_generation": 6
+    },
+    {
+      "file": "D:\\RedSalamander.Perf\\runs\\20261009T201507Z-45224-aa600fc03f9e4418b3b3e7152722bb0f\\artifacts\\archive\\7d3a1247382a\\Commands\\2026-10-09_232035\\perf\\viewer_space_captures\\analyst-high-contrast.png",
+      "sha256": "e8b9c04bc100a7973b14ebb2ef59099198e39ec100767f5449e4d80d37491944",
+      "layout_generation": 7
+    },
+    {
+      "file": "D:\\RedSalamander.Perf\\runs\\20261009T201507Z-45224-aa600fc03f9e4418b3b3e7152722bb0f\\artifacts\\archive\\7d3a1247382a\\Commands\\2026-10-09_232035\\perf\\viewer_space_captures\\explorer-narrow.png",
+      "sha256": "4af4fb6ba6a70c1fb1c0b10150214e68d5d394be0420b2fffb2b5e9edd2fe68b",
+      "layout_generation": 8
+    },
+    {
+      "file": "D:\\RedSalamander.Perf\\runs\\20261009T201507Z-45224-aa600fc03f9e4418b3b3e7152722bb0f\\artifacts\\archive\\7d3a1247382a\\Commands\\2026-10-09_232035\\perf\\viewer_space_captures\\boundary-width-1100.png",
+      "sha256": "985a86b8adaec1122db06275f1afb48fe37b97dfbfa496777a3e68c00cc359a1",
+      "layout_generation": 9
+    },
+    {
+      "file": "D:\\RedSalamander.Perf\\runs\\20261009T201507Z-45224-aa600fc03f9e4418b3b3e7152722bb0f\\artifacts\\archive\\7d3a1247382a\\Commands\\2026-10-09_232035\\perf\\viewer_space_captures\\boundary-width-1099.png",
+      "sha256": "cda064e9b7174c97e52902d7dc1c6b54fadb17613b25a02b9eb9ed1c7200acc5",
+      "layout_generation": 10
+    },
+    {
+      "file": "D:\\RedSalamander.Perf\\runs\\20261009T201507Z-45224-aa600fc03f9e4418b3b3e7152722bb0f\\artifacts\\archive\\7d3a1247382a\\Commands\\2026-10-09_232035\\perf\\viewer_space_captures\\boundary-width-504.png",
+      "sha256": "fddfce60df44fbdd16729aff54ffee809a8cf054bda0cfddf609c2049c72112e",
+      "layout_generation": 11
+    },
+    {
+      "file": "D:\\RedSalamander.Perf\\runs\\20261009T201507Z-45224-aa600fc03f9e4418b3b3e7152722bb0f\\artifacts\\archive\\7d3a1247382a\\Commands\\2026-10-09_232035\\perf\\viewer_space_captures\\boundary-width-503.png",
+      "sha256": "bc2c3b27a14faa00313f2dedb825c2f7ce513ca5ba95eb6f426721644f73623f",
+      "layout_generation": 12
+    },
+    {
+      "file": "D:\\RedSalamander.Perf\\runs\\20261009T201507Z-45224-aa600fc03f9e4418b3b3e7152722bb0f\\artifacts\\archive\\7d3a1247382a\\Commands\\2026-10-09_232035\\perf\\viewer_space_captures\\boundary-body-456.png",
+      "sha256": "b8dff0f25846d69e0886e7f767caa0db9a34a998127a8e11eaf98b14ad90bcad",
+      "layout_generation": 13
+    },
+    {
+      "file": "D:\\RedSalamander.Perf\\runs\\20261009T201507Z-45224-aa600fc03f9e4418b3b3e7152722bb0f\\artifacts\\archive\\7d3a1247382a\\Commands\\2026-10-09_232035\\perf\\viewer_space_captures\\boundary-body-455.png",
+      "sha256": "263f0a0f2ba322b5e6d97147c8a94a09b6a961eb91b063e84dbc5f4f3c355a9f",
+      "layout_generation": 14
+    }
+  ]
+}

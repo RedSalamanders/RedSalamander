@@ -160,7 +160,8 @@ function Test-RSPortablePackage {
             'RedLauncher.exe',
             'red.exe',
             'RedSalamander.exe',
-            'RedSalamanderMonitor.exe',
+            'SettingsStore.schema.json',
+            'RedMonitor-LICENSE.txt',
             'Plugins\FileSystem.dll',
             'Plugins\FileSystem7z.dll',
             'Plugins\FileSystemCurl.dll',
@@ -177,6 +178,15 @@ function Test-RSPortablePackage {
             'Plugins\ViewerWeb.dll',
             'Plugins\Terminal.dll'
         )
+        $legacyViewerFiles = @(
+            (Join-Path $extractRoot 'RedSalamanderMonitor.exe'),
+            (Join-Path $extractRoot 'RedMonitor-wil-LICENSE.txt'),
+            (Join-Path $extractRoot 'RedMonitor-yyjson-LICENSE.txt')
+        ) | Where-Object { Test-Path -LiteralPath $_ }
+        $legacySatellites = @(Get-ChildItem -LiteralPath (Join-Path $extractRoot 'Lang') -Filter 'RedSalamanderMonitor-*' -ErrorAction SilentlyContinue)
+        if (@($legacyViewerFiles).Count -or $legacySatellites.Count) {
+            throw 'Portable application package contains obsolete viewer payload; install RedMonitor separately.'
+        }
         $missingPackageFiles = @($requiredPackageFiles |
             ForEach-Object { Join-Path $extractRoot $_ } |
             Where-Object { -not (Test-Path -LiteralPath $_ -PathType Leaf) })

@@ -1,14 +1,17 @@
 # RedSalamander User Guide
 
-This guide is the complete user-facing tour of RedSalamander: the dual-pane file manager, file operations, search, compare, connections, themes, monitor, and all built-in plugin families.
+This guide tours RedSalamander's panes, file operations, search, compare,
+connections, portable devices, Terminal, viewers, themes and diagnostics. Use
+the [documentation map](DocumentationMap.md) for the maintained topic index.
 
-Screenshots in this guide were captured from the running application and cropped to the UI area being explained. Theme examples intentionally use Light, Dark, Rainbow, and High Contrast App.
+Current File Operations illustrations come from deterministic native harness
+fixtures with invented data and complete-frame provenance. Older images exposing
+workspace paths or real filenames have been retired. See the
+[screenshot inventory](res/README.md) for retained illustrations and capture gaps.
 
 ## Product Overview
 
 RedSalamander is a Windows dual-pane file manager built for fast keyboard-driven work, remote file-system access, rich file viewers, and themeable DirectX-rendered UI.
-
-![RedSalamander main window](res/main-window.png)
 
 The application is organized around two independent folder panes. Most commands use the focused pane as the source and the other pane as the destination.
 
@@ -21,7 +24,7 @@ Core capabilities:
 - Open files with viewer plugins for text, hex, images, RAW files, SQLite databases, PE files, web content, media, and folder space usage.
 - Store reusable remote/cloud profiles in the Connections Manager.
 - Customize themes, keyboard shortcuts, viewers, plugins, file operations, hot paths, and advanced settings.
-- Watch application diagnostics with RedSalamanderMonitor.
+- Watch application diagnostics with the independently installed RedMonitor helper.
 
 ## Quick Start
 
@@ -94,8 +97,6 @@ An actual empty folder shows a separate **Go to parent** action. It is not a fil
 
 The right side of each navigation bar can show disk information for local `file:` locations: capacity text and a usage bar.
 
-![Navigation bar with disk information](res/navigation-view.png)
-
 Use the drive/menu dropdown to reach:
 
 - Known folders such as Desktop, Documents, Downloads, Pictures, Music, Videos, and OneDrive.
@@ -109,12 +110,6 @@ Use the drive/menu dropdown to reach:
 Folder views can be switched between **Brief**, **Detailed**, **Extra Detailed**, and **Thumbnails** layouts. Sorting is available by name, extension, time, size, attributes, or no sort.
 
 Use the **Left** and **Right** menus to toggle per-pane display and chrome options. **Show -> File Extensions** changes only displayed labels in the named pane; file operations still use real names and paths. **Thumbnails** uses larger item visuals and background thumbnail loading with shell/WIC thumbnail fallback to icons. The sort indicator at the bottom right of each pane opens a sort popup that also includes a per-pane thumbnail-size slider. **Preview Pane** opens a Folder/Preview tabbed host in the opposite pane, follows the named pane's focused item, and shows scrollable Properties cards when no specific embedded preview is available. **Filter Bar** shows the current persistent folder filter below the named pane. **Navigation Bar** targets the named pane, and address-bar focus commands show the bar first when needed. Persistent options are saved per pane.
-
-![Brief and Detailed folder views](res/folder-view-brief-detailed.png)
-
-![Extra Detailed and Thumbnails folder views](res/folder-view-extra-thumbnails.png)
-
-![Preview Pane with text content](res/preview-pane-text.png)
 
 Default shortcuts:
 
@@ -155,8 +150,6 @@ See [Main Window & Panes](MainWindow.md) for the full menu-by-menu map, and [Key
 ## Navigation
 
 The navigation bar accepts local paths, UNC paths, file URIs, plugin-prefixed paths, mounted archive paths, and saved connection aliases.
-
-![Drive/menu dropdown](res/drive-menu.png)
 
 ### Common Navigation Commands
 
@@ -220,7 +213,7 @@ Use **Files** and **Edit** menu commands, the context menu, or the function keys
 
 - **Open/Execute**: runs the focused file or opens a folder.
 - **View** (`F3`): opens the viewer action associated with the focused file.
-- **View Width**: opens the viewer using width-oriented behavior where supported.
+- **View Width**: adjusts the width of the view.
 - **Properties**: shows item properties exposed by the active file system.
 - **Context Menu**: opens the item shell/context menu when available.
 - **Context Menu (Current Directory)**: opens the Windows shell menu for the active pane's current local folder.
@@ -256,8 +249,17 @@ Long operations run in the background. The File Operations popup shows:
 
 - Current operation, source, destination, progress, and remaining time.
 - Pause, resume, cancel, and dismiss controls.
-- Wait vs Parallel execution mode.
+- Queue / Parallel execution mode.
 - Per-task speed limit for copy/move tasks.
+- Transfer amounts with percentage, then folder/file counts and remaining time.
+  Open discovery shows provisional found counts instead of a growing fraction.
+- Speed at the right of the Throughput heading and the effective automatic
+  transfer budget below the buttons.
+- Complete wrapped Last note text on an expanded finished card.
+
+See [File Operations](FileOperations.md) for counting, verification, source-retention
+results, note visibility and the actual Issues pane. Use [Selections and File
+Lists](SelectionsAndLists.md) to prepare a selection or report before an operation.
 - Conflict prompts for overwrite, retry, skip, and cancel decisions.
 - Issue export and diagnostic log access.
 
@@ -307,11 +309,18 @@ The file and command menus include several everyday workflow helpers:
 
 ### Folder Size and Space Usage
 
-Use **Calculate Occupied Space** (`Alt+F10`) to open ViewerSpace, a treemap-style folder usage viewer.
+Use **Calculate Occupied Space** (`Alt+F10`) to open ViewerSpace, a treemap with linked analysis for the current folder or exactly one selected folder. Explorer emphasizes the map; Analyst gives the table and inspector more room. They use the same retained scan data. Folder headers and the folded corner on file tiles remain distinct even with Rainbow colors.
 
-Pressing `Space` on a folder toggles its selection, updates occupied-size calculation from the post-toggle selected set, and moves current to the next item without wrapping. Deselecting a folder with `Space` cancels its size work.
+The table is initially ranked by logical bytes and links each row to the map and inspector. Selecting a table row does not navigate. Its filter searches retained names in the folder being shown; it does not change map areas or totals. Exact scan-time **Other** totals remain visible because their folded names cannot be filtered. While scanning, counts and sizes show only measured results so far; ViewerSpace does not show an overall percentage or ETA.
+
+Press `F5` to force a fresh scan; this bypasses the cache. During a refresh of a settled view, the displayed data stays available until replacement results are ready. Use **File -> Rebuild** to discard the current model before rescanning when a retained refresh cannot fit. Clicking a file tile selects it; clicking a folder tile drills into it. The second click of a double-click is ignored if the first click already changed the view.
+
+Pressing `Space` on a folder in the file pane toggles its selection, updates occupied-size calculation from the post-toggle selected set, and moves current to the next item without wrapping. Deselecting a folder with `Space` cancels its size work.
 
 ## Terminal Workflows
+
+For shell selection, WSL locations, path insertion, history, paste policy and
+configuration, see the dedicated [Terminal guide](Terminal.md).
 
 RedSalamander can keep one embedded Terminal session in each physical pane and
 one independent floating Terminal window with any number of tabs. Use
@@ -385,7 +394,7 @@ More detail: [Compare Directories](CompareDirectories.md)
 
 The Connections Manager (opened from **Commands -> Connections Manager...**) stores reusable profiles for remote, cloud, and object-storage file systems.
 
-![Connections Manager with sanitized example profiles](res/connections-manager.png)
+![Connections Manager with invented example profiles](res/connections.png)
 
 Open it from:
 
@@ -409,7 +418,7 @@ More detail: [Connections](Connections.md)
 
 Open Preferences with **View -> Preferences...**.
 
-![Preferences dialog](res/preferences.png)
+![Preferences dialog](res/preferences-general.png)
 
 Preferences pages cover:
 
@@ -421,7 +430,7 @@ Preferences pages cover:
 - **Keyboard**: Application, Function Bar, Folder View, and Terminal shortcut bindings, including explicit Terminal pass-through and no-action choices.
 - **Themes**: built-in, file-based, and user themes.
 - **Plugins**: plugin enablement, diagnostics, and plugin configuration.
-- **File Operations**: pre-calculation, speed, bridge buffer, and task defaults.
+- **File Operations**: verification, speed, bridge buffer, notes, pane questions and task defaults. Counting is automatic.
 - **Compare Directories**: default comparison options.
 - **Hot Paths**: ten bookmark slots.
 - **Advanced**: lower-level diagnostics and storage settings.
@@ -440,14 +449,6 @@ Built-in choices:
 - Rainbow
 - High Contrast App
 
-![Light theme](res/theme-light.png)
-
-![Dark theme](res/theme-dark.png)
-
-![Rainbow theme](res/theme-rainbow.png)
-
-![High Contrast App theme](res/theme-high-contrast-app.png)
-
 Theme features:
 
 - Panes, navigation bars, status bars, file operations UI, dialogs, and viewers follow the active theme.
@@ -463,8 +464,6 @@ More detail: [Themes](Themes.md)
 
 Plugins provide virtual file systems and file viewers. Open **Plugins -> Plugin Manager...** or **View -> Preferences... -> Plugins** to inspect, enable, disable, test, and configure plugins.
 
-![Plugin configuration](res/preferences-plugins.png)
-
 ### Built-In File-System Plugins
 
 | Prefix | Plugin | Main use | User-visible capabilities |
@@ -476,6 +475,7 @@ Plugins provide virtual file systems and file viewers. Open **Plugins -> Plugin 
 | `scp:` | SCP | SSH copy access | Browse and transfer through the shared curl-based plugin; directory operations depend on server SFTP support. |
 | `imap:` | IMAP | Mailbox browsing | Browse mailboxes and messages exposed as `.eml` files; deleting an `.eml` deletes the message when allowed. |
 | `gdrive:` | Google Drive | Google Drive metadata browsing | Browse folders and inspect drive metadata; the current user-facing milestone is read-only metadata and requires an existing OAuth refresh token. |
+| `mtp:` | MTP/PTP | Phones, cameras and media players | Device/storage pickers, read-only profiles by default, and device-dependent writable operations. See [Portable Devices](PortableDevices.md). |
 | `onedrivep:` | OneDrive Personal | Microsoft Graph personal drive | Browser sign-in, browse, read, write, rename, move, delete, and calculate directory size. |
 | `onedriveb:` | OneDrive Business | Microsoft Graph work drive | Browser sign-in, browse, read, write, rename, move, delete, and calculate directory size. |
 | `sharepoint:` | SharePoint | Microsoft Graph SharePoint sites/libraries | Browser sign-in, browse document libraries, read, write, rename, move, delete, and calculate directory size. |
@@ -502,7 +502,7 @@ Viewer actions and associations are configured in **Preferences -> Viewers**. Pr
 |--------|-----------|---------------|---------------------------|
 | Text / Hex Viewer | `builtin/viewer-text` | Text, logs, config, CSV, XML, unknown files | Text and hex modes, find, next/previous match, encoding selection, line numbers, wrap, byte color options, diff viewing modes, and other-files navigation. |
 | Image / RAW Viewer | `builtin/viewer-imgraw` | Common image formats and camera RAW files | Fit/actual size, zoom, pan, rotate, flip, reset orientation, export, brightness/contrast/gamma/grayscale/negative adjustments, thumbnail vs RAW source, Exif overlay, and other-files navigation. |
-| Space Viewer | `builtin/viewer-space` | Folders | Treemap-style occupied-space visualization, scan current or selected folder, navigate up, refresh, and exit. |
+| Space Viewer | `builtin/viewer-space` | Folders | Treemap with a linked ranked table/compact inspector, session exclusions, reviewed cleanup, current-view export and right/bottom/map-only layouts. |
 | PE Viewer | `builtin/viewer-pe` | `.exe`, `.dll`, `.sys`, and other PE files | Parsed Portable Executable metadata, top/bottom navigation, refresh, other-files navigation, and export to text or Markdown. |
 | SQLite Viewer | `builtin/viewer-sqlite` | SQLite databases | Table selector, paged table preview, read-only custom SQL queries, row caps, sortable preview grids, and status strip. |
 | VLC Viewer | `builtin/viewer-vlc` | Audio and video files | Media playback through VLC/libVLC, configurable VLC path, plugin path, caching, hardware acceleration, output, visualizer, and extra arguments. |
@@ -533,19 +533,25 @@ Common actions:
 
 ### Images and RAW Files
 
-![Image/RAW viewer](res/viewer-imgraw.png)
-
 Use the Image/RAW viewer for inspection, zooming, orientation corrections, and lightweight visual adjustments.
 
 ### Folder Space Usage
 
-![Space viewer](res/viewer-space.png)
+![Space with a compact linked inspector](res/viewer-space-explorer.png)
 
-Use **Commands -> Calculate Occupied Space** or the folder context menu to open a treemap of folder size distribution.
+Open **Commands → Calculate Occupied Space** (Alt+F10), or a folder's **View Space** context action. One selected folder is scanned; otherwise the current pane folder is used. **Discovered** stays scan-wide while **This folder / Shown** follows exploration and exclusions.
+
+Use the icon-only **Layout** menu for a right or bottom panel, or Map only. The table links to a compact inspector with one name/location and useful size/date facts. Click folder tiles to explore, file tiles to select, and use Back/Forward or structural Up. Current-folder name/type/age filters and optional color modes help exploration without reweighting the map.
+
+**Copy path** uses Alt+Insert. Click a row icon or use **Exclude from view** to remove an item from displayed calculations while retaining a dimmed, restorable row and original totals. Exclusions last for this viewer session and survive navigation/refresh.
+
+Cleanup checkboxes are independent: mark items, open **Review cleanup**, inspect full paths and whole-folder consequences, then use the normal confirmed Recycle/Delete workflow. **Open folder in other pane** has an explicit action and no extra shortcut. Problems and CSV/JSON Export are available for the retained current view.
+
+Settings are in global **Preferences → Plugins → Space**, with technical choices under Advanced. F5 performs a cache-bypassing refresh; Rebuild discards the retained view before rescanning. Esc handles a popup/review/filter first, otherwise cancels a running scan or closes an idle viewer.
+
+See [Space Viewer](Viewers.md#space-viewer-builtinviewer-space) for the complete workflow, shortcuts and synthetic native examples.
 
 ### PE, Web, Media, and SQLite Files
-
-![PE viewer](res/viewer-pe.png)
 
 The PE viewer parses Windows executables and libraries, then lets you export the report as text or Markdown.
 
@@ -565,15 +571,16 @@ The JSON viewer formats structured JSON, supports tree-style inspection, and can
 
 The Markdown viewer renders headings, lists, emphasis, and code blocks, with a source toggle for inspection.
 
-![VLC viewer](res/viewer-vlc.png)
-
 VLC playback requires VLC to be installed or configured in plugin settings. Web, JSON, Markdown, and PDF rendering require Microsoft Edge WebView2 Runtime.
 
-## RedSalamanderMonitor
+## RedMonitor
 
-RedSalamanderMonitor is a companion ETW/log viewer for RedSalamander diagnostics.
+RedMonitor is an independently installed optional ETW/log viewer for all four Red applications. Install its standalone Release ZIP; the application remains usable without it. See the Monitor guide for standard locations and Debug startup behavior.
 
-![RedSalamanderMonitor](res/monitor.png)
+![Historical bundled monitor capture](res/monitor.png)
+
+This historical capture shows the former bundled viewer. Current RedMonitor builds and usage are
+documented in the independent project linked from the Monitor guide.
 
 It supports:
 
@@ -585,9 +592,9 @@ It supports:
 - Find with next/previous navigation.
 - Copying selected log lines.
 - Always-on-top behavior.
-- The same theme system as the main app.
+- Theme presets owned by the standalone helper.
 
-More detail: [RedSalamanderMonitor](Monitor.md)
+More detail: [RedMonitor](Monitor.md)
 
 ## Settings and Advanced Configuration
 

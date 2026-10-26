@@ -1,0 +1,33 @@
+{
+    "run_started_utc": "2026-08-04T18:58:06.899Z",
+    "duration_ms": 3680,
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 1,
+    "case_filter": "cmd_pane_embedded_terminal_plugin_lifecycle",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "C:\\Users\\PVB\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands",
+            "duration_ms": 2404,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 3.0,
+            "repeat_count": 1,
+            "case_filter": "cmd_pane_embedded_terminal_plugin_lifecycle",
+            "cases": [
+                {
+                    "name": "cmd_pane_embedded_terminal_plugin_lifecycle",
+                    "status": "passed",
+                    "duration_ms": 2380,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

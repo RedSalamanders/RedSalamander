@@ -1,5 +1,16 @@
 # ViewerVLC Plugin Specification
 
+Published playback examples MUST use generated media in a marked test sandbox,
+the native no-activation capture helper and an identified real VLC runtime. The
+fixture proves decoded positive duration/time, a video child and actual pause
+stability; a debug-injected clock or setup-error frame is insufficient. Media and
+runtime hashes, observation rows and complete frames accompany the build receipt.
+The deterministic fixture records software decoding and `wingdi` output, a generated
+12-second/5-fps clip, an MTA capture worker and continued owner-UI pumping. Pixel
+population witnesses must prove the video is present. These images do not qualify
+all GPU output modes; positive decoder time alone cannot qualify a black frame.
+See [the screenshot scenario contract](../Testing/Testing_SelfTests.md#product-documentation-gallery).
+
 ## Overview
 
 `ViewerVLC.dll` exposes `builtin/viewer-vlc`, the optional libVLC-backed audio/video viewer. The plugin owns the RedSalamander window, loading, HUD, focus, configuration, diagnostics, and teardown contracts; libVLC supplies media decode and playback.
@@ -36,7 +47,40 @@ The test-only debug snapshot exposes the outstanding asynchronous load-work coun
 
 Every load has a monotonically increasing request ID and captures a nonzero per-window identity. Every result owns its `VlcState` until the UI accepts it. Acceptance requires the same viewer, current window identity, and current request ID. A stale result is stopped/released without attaching a drawable or starting playback. The parent window remains alive while a close is waiting for already-accepted work, so posted results can be drained through the identity check rather than targeting a recycled HWND.
 
-When the worker resolves the same normalized install and instance-argument key as the live reusable instance, it returns a reuse decision without constructing another libVLC instance. The UI revalidates that a live instance still exists before switching media; if the instance was retired while the result was in flight, the viewer starts a new full asynchronous load instead of treating the missing reuse target as success.
+The UI transfers sole VlcState ownership to the module-pinned worker while probing and preparing a replacement. No UI timer, input handler or diagnostic may query that player while it is worker-owned. The worker preserves a compatible instance/player, creates the new media and performs libvlc_media_player_set_media there: that API can synchronously stop its old input. A new player is also constructed on the worker without attaching a drawable or playing. Only a current request/window completion installs the prepared state, attaches the persistent child and starts playback on the UI thread. A superseded result never attaches or plays. One worker may own the published state, with one latest pending path/configuration; another selection replaces that slot and cancels obsolete preparation rather than adding a worker. Stop, close and forced destruction cancel the slot. All results, including post/submission failures, retain module/state ownership through asynchronous cleanup and clear pending accounting.
+
+## Media Paths and Error Messages
+
+Local Windows media paths must work beyond `MAX_PATH`, including when the Windows
+`LongPathsEnabled` policy is disabled. This applies to standalone F3 and embedded
+preview, Unicode names, and names containing spaces, `%`, and `#`. Keep the selected
+path unchanged for navigation, request identity, and diagnostics. On the existing
+loader worker, normalize separators/dot segments and use
+`Common::Paths::ToExtendedWin32Path` for the file attribute probe. Preserve the actual
+Win32 failure code and selected path in file-access diagnostics; a directory is a
+separate non-file error. Do not collapse these failures into `ERROR_FILE_NOT_FOUND`
+or a claim that the source is remote.
+The probe follows symbolic links, preserving the existing regular-file semantics:
+a link to a regular media file remains playable, while a broken link is a file
+access error before install discovery. Use `status(path, error_code)` directly;
+`exists(path, error_code)` clears native errors for known not-found results.
+
+For long or already extended Windows media paths, pass libVLC a `file:///` location
+whose complete UTF-8 extended Windows path is percent-encoded using the shared URI
+encoder. This preserves drive/UNC prefixes, Unicode, and literal URI delimiters
+through libVLC 3's URI decoding. Do not pass a raw extended path to
+`libvlc_media_new_path`: its path-to-URI conversion treats the prefix as a UNC host.
+Ordinary short paths continue through `libvlc_media_new_path`. Never truncate paths,
+copy media to a short temporary path, or change system policy to make playback work.
+
+The installation-required heading, installation instructions, and VLC download link
+appear only when install discovery/validation finds no usable install directory.
+File access/type errors, loader submission/delivery errors, DLL/export/init errors,
+and playback errors use the localized neutral heading "Unable to play this file."
+and their specific detail, without installation advice or a download link. Error
+category is carried in the identity-checked worker result, rather than inferred from
+localized text. Each open clears the preceding overlay state. The Debug snapshot
+exposes the actual rendered heading/body and download-link availability for tests.
 
 ## DLL Search and Module Lifetime
 
@@ -67,6 +111,8 @@ ViewerVLC emits:
 
 - `viewer.vlc.queue` for accepted, rejected, stale, and cleanup queue outcomes;
 - `viewer.vlc.load_us` for worker-side probe/load duration;
+- `viewer.vlc.apply_load_ui_us`, `viewer.vlc.start_playback_ui_us` and `viewer.vlc.play_ui_us` separate owner-UI acceptance, drawable setup and play;
+- `viewer.vlc.prepare_media_worker_us` and `viewer.vlc.set_media_worker_us` record media preparation and replacement on the sole-owner worker;
 - `viewer.vlc.close_ui_us` for the synchronous UI portion of `Close()`;
 - `viewer.vlc.cleanup_us` for worker stop/release duration.
 
@@ -86,5 +132,12 @@ The close contract is responsiveness-sensitive: injected slow stop/release must 
 - safe option-token acceptance, native-domain unsigned numeric clamping, and separator/control/option/module-loading/logfile/pidfile rejection;
 - source-contract proof that discovery uses the registered VideoLAN install and Program Files known folders, never `SearchPathW`, the current directory, process `PATH`, or environment-derived search roots;
 - real dependency loading, instance/player creation, WAV playback, unchanged process DLL directory, and clean close when VLC is installed.
+- `TestViewerVlcLongPathsAndErrorMessages`: exact 259-, 260-, and 275-character Unicode/URI-delimiter WAV paths; standalone and embedded playback; already extended and forward-slash spellings; positive decoded duration; missing long files, non-local paths, directories, and missing installations with category-correct headings/details/download links. Guarded same-sandbox links cover a valid long-path target and a broken target; only missing OS symbolic-link privilege may skip these conditional link cases. Use a marked sandbox and the governed no-activation mode; never exercise the user's media as a fixture or change `LongPathsEnabled`.
 
 The source contract additionally bans a null drawable, process-global DLL-directory APIs, `SearchPathW`, UI-thread install probing, synchronous loader fallback, inline `VlcAsyncLoadResult` player stop/release, and callback-body module-pin destruction. Any performance or closeout claim must cite a fresh archived run containing the focused `ViewerPETests` result and the corresponding `viewer.vlc.*` JSONL rows; an unavailable historical archive is not normative proof.
+
+The configured-preview Commands fixture holds the media worker on a duplicated manual-reset event. It retains the 900 ms source-focus/publication bounds while the worker is held, checks one worker plus one coalesced path and no UI-owned player, then releases it and proves the original instance/player is reused for the latest audio request. Decoder settlement remains a separate bounded predicate. Cancellation, close and injected submission/delivery failures must neither strand pending media state nor play obsolete content.
+
+The real-player embedded long-path regression additionally injects media submission and completion-post failures, a failed post with a superseding coalesced request, keyboard Stop while media work is held, and Close while media work is held. Each observes actual branch counters and terminal ownership; Open/Stop/Close retain the 100 ms UI-return budget. Stop remains visibly available while a media load is pending. Close retains the hidden parent/video HWND chain until the held worker and cleanup drain. No activation or user media is required.
+
+During replacement of a worker-owned player, the HUD remains shown and has a nonempty layout even after the loading overlay delay expires. Stop stays enabled, and the HUD is above the loading panel so Stop remains reachable in small viewports. Initial loading without a published player retains its existing overlay behavior. The held real-player controls force the delayed-overlay path and verify actual WS_VISIBLE, layout height and sibling Z order before keyboard Stop or Close.

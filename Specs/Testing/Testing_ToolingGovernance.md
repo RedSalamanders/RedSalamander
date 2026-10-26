@@ -18,7 +18,7 @@ summarize the manifest but must not maintain a competing file list.
 
 ## Directory contract
 
-Native focus-taking test suites share `Tests/TestSupport/DirectedSelfTestInputWarning.h`
+Native focus-taking test suites share `Tests/TestSupport/TestSupport.Tests.DirectedSelfTestInputWarning.h`
 within the unified runner's interactive desktop lease. Keep the existing native
 warning implementation and its audit exceptions centralized; do not add a second
 PowerShell or test-family warning surface. Its lifetime and activation policy
@@ -156,6 +156,10 @@ its inventory/prose references; do not preserve it merely because it once
 existed or appears in an old completed plan. Completed plans may retain the
 former path and digest as immutable evidence without keeping the file live.
 
+Plan closeout follows the exact additional-path admission contract in
+[`Specs/README.md`](../README.md); admitting a new Done path does not certify
+that separate implementation, test, or qualification gates have passed.
+
 Default CI and Full suites execute
 `Tools/TerminalEngine/CurrentToolingProfile.Tests.ps1`. That wrapper discovers
 the current `Tools/Tests/*.Tests.ps1` set while excluding every test recorded in
@@ -180,6 +184,13 @@ and its reviewed source shape is frozen. Neither workflow is retrofitted to
 consume the later archival launcher or manifest; the manifest and integrity
 test describe the supported repository-side reproduction boundary without
 rewriting historical evidence.
+
+Dependabot's GitHub Actions configuration excludes only the exact Gate0 workflow path
+through `exclude-paths`. Current workflows retain reviewed immutable action pins and
+normal dependency updates. Artifact-action policy accepts Gate0's historical pins only
+when the whole file matches its existing sealed SHA-256; its integrity guard is never
+rebaselined for an automated dependency bump. Other workflow files cannot inherit this
+exception by resemblance or a wildcard.
 
 An active command or module that names focused tests must name at least one test
 in the current profile; a sealed historical cohort alone does not establish a
@@ -244,6 +255,12 @@ Workflow test lists have one current declarative owner. Frozen historical lists
 remain explicit and immutable where their exact identity is evidence; current
 discovery must not replace them.
 
+Artifact action upgrades update every current workflow consumer and the matching
+immutable-pin assertions in `ReleaseWorkflowPolicy.Tests.ps1` together. Review
+upload/download input and output compatibility across build, release, nightly,
+and qualification consumers, retaining artifact names, paths, missing-file policy,
+and portable attestation verification.
+
 An active tool that reads or replaces compiled artifacts reuses
 `Tools/Modules/Build/ArtifactOperationLock.psm1` and supplies explicit platform
 and configuration evidence. Same-output operations serialize, while disjoint
@@ -293,6 +310,15 @@ entries pass the harness's governed no-activation selector, while only reviewed
 focus/caret/menu/keyboard-routing entries may omit it. Splitting a harness into
 noninteractive and interactive entries must preserve one shared runtime-artifact
 identity and explicit coverage-group arguments.
+
+FileOperations retains its conservative desktop lease classification except for
+`-Suite FileOps` with the two exact, case-sensitive folder-progress cases
+`DiscoveryScope_FolderLiveProgress` and `DiscoveryScope_MultipleFoldersLiveProgress`,
+without flaky/order proof injection. These reviewed witnesses keep
+`--selftest-no-activate` and use only owned-window hooks/WGC capture. Broad suites,
+families, prefixes, wildcards, multiple-case filters, unknown filters and casing
+near-misses keep the lease. The matched marker still propagates to quarantine
+repair; the runner's process, artifact and session-mutex contracts are unchanged.
 
 ### Operation Startrail process impact
 
@@ -363,6 +389,15 @@ without its plan marker, or an input-list change without closure proof.
 
 ## Validation
 
+Documentation link checks MUST reuse the canonical heading/link helpers in
+`SpecInformationArchitecture.psm1`. Heading fragments preserve identifier
+underscores, including inline code, remove Markdown emphasis delimiters, and
+replace each ASCII space independently after punctuation removal. Punctuation-created
+adjacent spaces must not be collapsed: `Startup & Lifecycle` links to
+`startup--lifecycle`, and the code identifier `_version` retains its underscore.
+Fixture inventory tests MUST cover actual links to those fragments as well as
+duplicate-heading suffixes. A checker must not report valid published anchors as missing.
+
 The minimum tooling-governance checks are:
 
 ```powershell
@@ -376,3 +411,7 @@ Run focused tests for each touched module or entrypoint. Tooling closeout also
 runs `.\Tools\Run-AllTests.ps1 -Suite Full`; historical Terminal behavioral
 reproduction uses its explicit archival profile rather than extending every
 default run.
+
+## Changes workflow
+
+The [shared Changes contract](../Core/Core_Changes.md) owns fragment validation and immediate folding. The current tooling profile discovers Changelog.Tests.ps1; its adapter runs the identical shared behavior fixtures in the existing marked sandbox. PrePush rejects pending fragments. Folding is an explicit source-documentation mutation and never a side effect of validation or planning.

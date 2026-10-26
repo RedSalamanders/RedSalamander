@@ -1,0 +1,1 @@
+PASS destination/message/trivial-type isolation, replay, drain; count=10000 duration_us=26812

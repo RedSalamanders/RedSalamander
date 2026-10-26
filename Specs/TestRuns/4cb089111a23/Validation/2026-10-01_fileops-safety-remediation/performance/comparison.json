@@ -1,0 +1,2062 @@
+{
+  "schema": "red-salamander.fileops-i27-paired-analysis.v2",
+  "method": "Five fresh processes per variant; median of per-capture medians per timing/scenario; medians of matched observations for resources.",
+  "build_bindings": [
+    {
+      "receipt_id": "7442adedcaf17d954a58b726f49756312beabb2c2426589e4fd71af42584fdac",
+      "source_snapshot_id": "f2e0a18a04fbc8a95368adc0c946bafb5ebccdf68d81b4a476d0fefbd323593c",
+      "git_head": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+      "configuration": "Release",
+      "platform": "x64",
+      "build_arguments": [
+        "build-number=1",
+        "official-release=False",
+        "monitor-diagnostics=False",
+        "compiler-debug-information=embedded",
+        "tests-enabled=true"
+      ],
+      "toolchain_identity_digest": "270491a7822f6732b3fab0f322710a3d063368ace4d2ee50f8bea88e1401cb50",
+      "vcpkg_identity_digest": "7ffe9209f80ebb665be746dd1dad72edf5fc0e2257115ea63e316b1aac2dd932"
+    },
+    {
+      "receipt_id": "284d47cf32a3872c22c23e0cce74a17b6d36bd81c20cc52773cae19bab9dc2fc",
+      "source_snapshot_id": "c70c26e7d63c64c8299cf57dd37b1c4e1096231ba6c250d78a0742ccbfbe9ab1",
+      "git_head": "e860022a088f8b5fc3c604a61e091452cf83337e",
+      "configuration": "Release",
+      "platform": "x64",
+      "build_arguments": [
+        "build-number=1",
+        "official-release=False",
+        "monitor-diagnostics=False",
+        "compiler-debug-information=embedded",
+        "tests-enabled=true"
+      ],
+      "toolchain_identity_digest": "270491a7822f6732b3fab0f322710a3d063368ace4d2ee50f8bea88e1401cb50",
+      "vcpkg_identity_digest": "7ffe9209f80ebb665be746dd1dad72edf5fc0e2257115ea63e316b1aac2dd932"
+    }
+  ],
+  "controls": [
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusClientPixels",
+      "detail": "compare",
+      "durationUs": 144,
+      "value0": 720,
+      "value1": 480
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusClientPixels",
+      "detail": "change-case",
+      "durationUs": 144,
+      "value0": 720,
+      "value1": 480
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusClientPixels",
+      "detail": "change-attributes",
+      "durationUs": 144,
+      "value0": 720,
+      "value1": 480
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusClientPixels",
+      "detail": "file-list",
+      "durationUs": 144,
+      "value0": 720,
+      "value1": 480
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ScanStatusWorkloadFNV64",
+      "detail": "v1-four-informational-480dip-long-unicode",
+      "durationUs": 522876664971784321,
+      "value0": 4,
+      "value1": 40
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ClientPixels",
+      "detail": "popup",
+      "durationUs": 144,
+      "value0": 1114,
+      "value1": 2032
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.ClientPixels",
+      "detail": "issues",
+      "durationUs": 144,
+      "value0": 1140,
+      "value1": 720
+    },
+    {
+      "metric": "FileOps.IntegratedPresentation.WorkloadFNV64",
+      "detail": "v1-eight-running-127-warnings-one-typed",
+      "durationUs": 11213680259031909754,
+      "value0": 8,
+      "value1": 128
+    }
+  ],
+  "timings": [
+    {
+      "metric": "GraphOpenRedraw8Us",
+      "detail": "",
+      "baseline_median_us": 66647.0,
+      "candidate_median_us": 83743.0,
+      "delta_percent": 25.651567212327638,
+      "baseline_capture_medians": [
+        66670.0,
+        66647.0,
+        66689.0,
+        66635.0,
+        66617.0
+      ],
+      "candidate_capture_medians": [
+        83743.0,
+        82601.0,
+        91821.0,
+        118827.0,
+        69431.0
+      ],
+      "captures": [
+        {
+          "variant": "baseline",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 66670.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66647.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 66689.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 66635.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 66617.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 83743.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 82601.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 91821.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 118827.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 69431.0
+        }
+      ]
+    },
+    {
+      "metric": "GraphCollapsedRedraw8Us",
+      "detail": "",
+      "baseline_median_us": 66635.0,
+      "candidate_median_us": 88148.0,
+      "delta_percent": 32.28483529676596,
+      "baseline_capture_medians": [
+        66659.0,
+        66757.0,
+        66576.0,
+        66597.0,
+        66635.0
+      ],
+      "candidate_capture_medians": [
+        94233.0,
+        66788.0,
+        88148.0,
+        93313.0,
+        77903.0
+      ],
+      "captures": [
+        {
+          "variant": "baseline",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 66659.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66757.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 66576.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 66597.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 66635.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 94233.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66788.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 88148.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 93313.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 77903.0
+        }
+      ]
+    },
+    {
+      "metric": "ChurnUpdate8Us",
+      "detail": "",
+      "baseline_median_us": 66670.0,
+      "candidate_median_us": 83148.5,
+      "delta_percent": 24.716514174291284,
+      "baseline_capture_medians": [
+        66656.0,
+        66670.0,
+        66679.0,
+        66661.5,
+        66673.5
+      ],
+      "candidate_capture_medians": [
+        78469.5,
+        71216.5,
+        88410.5,
+        83148.5,
+        85083.5
+      ],
+      "captures": [
+        {
+          "variant": "baseline",
+          "capture": 1,
+          "samples": 32,
+          "median_us": 66656.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 2,
+          "samples": 32,
+          "median_us": 66670.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 3,
+          "samples": 32,
+          "median_us": 66679.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 4,
+          "samples": 32,
+          "median_us": 66661.5
+        },
+        {
+          "variant": "baseline",
+          "capture": 5,
+          "samples": 32,
+          "median_us": 66673.5
+        },
+        {
+          "variant": "candidate",
+          "capture": 1,
+          "samples": 32,
+          "median_us": 78469.5
+        },
+        {
+          "variant": "candidate",
+          "capture": 2,
+          "samples": 32,
+          "median_us": 71216.5
+        },
+        {
+          "variant": "candidate",
+          "capture": 3,
+          "samples": 32,
+          "median_us": 88410.5
+        },
+        {
+          "variant": "candidate",
+          "capture": 4,
+          "samples": 32,
+          "median_us": 83148.5
+        },
+        {
+          "variant": "candidate",
+          "capture": 5,
+          "samples": 32,
+          "median_us": 85083.5
+        }
+      ]
+    },
+    {
+      "metric": "IssuesDetailRedraw8Us",
+      "detail": "",
+      "baseline_median_us": 66695.0,
+      "candidate_median_us": 66724.0,
+      "delta_percent": 0.04348152035384961,
+      "baseline_capture_medians": [
+        66695.0,
+        66799.0,
+        66688.0,
+        66592.0,
+        66916.0
+      ],
+      "candidate_capture_medians": [
+        66409.0,
+        66791.0,
+        66784.0,
+        66361.0,
+        66724.0
+      ],
+      "captures": [
+        {
+          "variant": "baseline",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 66695.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66799.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 66688.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 66592.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 66916.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 66409.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66791.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 66784.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 66361.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 66724.0
+        }
+      ]
+    },
+    {
+      "metric": "ScanStatusChangingRedraw8Us",
+      "detail": "compare",
+      "baseline_median_us": 66687.0,
+      "candidate_median_us": 67782.0,
+      "delta_percent": 1.6419991902469746,
+      "baseline_capture_medians": [
+        66687.0,
+        66719.0,
+        66743.0,
+        66668.0,
+        66677.0
+      ],
+      "candidate_capture_medians": [
+        69264.0,
+        66991.0,
+        98954.0,
+        67656.0,
+        67782.0
+      ],
+      "captures": [
+        {
+          "variant": "baseline",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 66687.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66719.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 66743.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 66668.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 66677.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 69264.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66991.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 98954.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 67656.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 67782.0
+        }
+      ]
+    },
+    {
+      "metric": "ScanStatusChangingRedraw8Us",
+      "detail": "change-case",
+      "baseline_median_us": 66664.0,
+      "candidate_median_us": 69865.0,
+      "delta_percent": 4.8016920676827075,
+      "baseline_capture_medians": [
+        66664.0,
+        66750.0,
+        66653.0,
+        66749.0,
+        66628.0
+      ],
+      "candidate_capture_medians": [
+        65399.0,
+        69865.0,
+        65942.0,
+        75163.0,
+        72224.0
+      ],
+      "captures": [
+        {
+          "variant": "baseline",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 66664.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66750.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 66653.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 66749.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 66628.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 65399.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 69865.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 65942.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 75163.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 72224.0
+        }
+      ]
+    },
+    {
+      "metric": "ScanStatusChangingRedraw8Us",
+      "detail": "change-attributes",
+      "baseline_median_us": 66659.0,
+      "candidate_median_us": 66898.0,
+      "delta_percent": 0.3585412322417078,
+      "baseline_capture_medians": [
+        66659.0,
+        66669.0,
+        66614.0,
+        66713.0,
+        66631.0
+      ],
+      "candidate_capture_medians": [
+        59100.0,
+        66541.0,
+        66898.0,
+        80591.0,
+        77061.0
+      ],
+      "captures": [
+        {
+          "variant": "baseline",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 66659.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66669.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 66614.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 66713.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 66631.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 59100.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66541.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 66898.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 80591.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 77061.0
+        }
+      ]
+    },
+    {
+      "metric": "ScanStatusChangingRedraw8Us",
+      "detail": "file-list",
+      "baseline_median_us": 66686.0,
+      "candidate_median_us": 84370.0,
+      "delta_percent": 26.518309690189845,
+      "baseline_capture_medians": [
+        66686.0,
+        66687.0,
+        66628.0,
+        66554.0,
+        66806.0
+      ],
+      "candidate_capture_medians": [
+        84388.0,
+        66857.0,
+        90941.0,
+        64168.0,
+        84370.0
+      ],
+      "captures": [
+        {
+          "variant": "baseline",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 66686.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66687.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 66628.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 66554.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 66806.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 84388.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66857.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 90941.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 64168.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 84370.0
+        }
+      ]
+    },
+    {
+      "metric": "ScanStatusCleanRedraw8Us",
+      "detail": "compare",
+      "baseline_median_us": 66604.0,
+      "candidate_median_us": 66787.0,
+      "delta_percent": 0.27475827277640985,
+      "baseline_capture_medians": [
+        66604.0,
+        66595.0,
+        66612.0,
+        66595.0,
+        66634.0
+      ],
+      "candidate_capture_medians": [
+        69015.0,
+        67104.0,
+        66670.0,
+        59063.0,
+        66787.0
+      ],
+      "captures": [
+        {
+          "variant": "baseline",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 66604.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66595.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 66612.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 66595.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 66634.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 69015.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 67104.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 66670.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 59063.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 66787.0
+        }
+      ]
+    },
+    {
+      "metric": "ScanStatusCleanRedraw8Us",
+      "detail": "change-case",
+      "baseline_median_us": 66653.0,
+      "candidate_median_us": 66928.0,
+      "delta_percent": 0.412584579838867,
+      "baseline_capture_medians": [
+        66678.0,
+        66547.0,
+        66653.0,
+        66916.0,
+        66647.0
+      ],
+      "candidate_capture_medians": [
+        66496.0,
+        66928.0,
+        67471.0,
+        76944.0,
+        62936.0
+      ],
+      "captures": [
+        {
+          "variant": "baseline",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 66678.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66547.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 66653.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 66916.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 66647.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 66496.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66928.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 67471.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 76944.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 62936.0
+        }
+      ]
+    },
+    {
+      "metric": "ScanStatusCleanRedraw8Us",
+      "detail": "change-attributes",
+      "baseline_median_us": 66681.0,
+      "candidate_median_us": 68649.0,
+      "delta_percent": 2.9513654564268683,
+      "baseline_capture_medians": [
+        66702.0,
+        66681.0,
+        66561.0,
+        66688.0,
+        66643.0
+      ],
+      "candidate_capture_medians": [
+        68649.0,
+        66507.0,
+        73628.0,
+        64250.0,
+        69034.0
+      ],
+      "captures": [
+        {
+          "variant": "baseline",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 66702.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66681.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 66561.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 66688.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 66643.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 68649.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66507.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 73628.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 64250.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 69034.0
+        }
+      ]
+    },
+    {
+      "metric": "ScanStatusCleanRedraw8Us",
+      "detail": "file-list",
+      "baseline_median_us": 66666.0,
+      "candidate_median_us": 66683.0,
+      "delta_percent": 0.025500255002550026,
+      "baseline_capture_medians": [
+        66684.0,
+        66579.0,
+        66682.0,
+        66617.0,
+        66666.0
+      ],
+      "candidate_capture_medians": [
+        66496.0,
+        71463.0,
+        66608.0,
+        66683.0,
+        66796.0
+      ],
+      "captures": [
+        {
+          "variant": "baseline",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 66684.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 66579.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 66682.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 66617.0
+        },
+        {
+          "variant": "baseline",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 66666.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 1,
+          "samples": 5,
+          "median_us": 66496.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 2,
+          "samples": 5,
+          "median_us": 71463.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 3,
+          "samples": 5,
+          "median_us": 66608.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 4,
+          "samples": 5,
+          "median_us": 66683.0
+        },
+        {
+          "variant": "candidate",
+          "capture": 5,
+          "samples": 5,
+          "median_us": 66796.0
+        }
+      ]
+    }
+  ],
+  "resource_comparisons": [
+    {
+      "metric": "peak_observed_private_bytes",
+      "baseline_median": 279805952.0,
+      "candidate_median": 273686528.0,
+      "delta": -6119424.0,
+      "delta_percent": -2.1870242417144863,
+      "baseline_captures": [
+        278884352.0,
+        278528000.0,
+        281411584.0,
+        279805952.0,
+        280248320.0
+      ],
+      "candidate_captures": [
+        274886656.0,
+        273686528.0,
+        271966208.0,
+        274227200.0,
+        273547264.0
+      ]
+    },
+    {
+      "metric": "peak_observed_working_set_bytes",
+      "baseline_median": 197337088.0,
+      "candidate_median": 195899392.0,
+      "delta": -1437696.0,
+      "delta_percent": -0.7285483000539665,
+      "baseline_captures": [
+        197275648.0,
+        196890624.0,
+        197836800.0,
+        197337088.0,
+        197447680.0
+      ],
+      "candidate_captures": [
+        195072000.0,
+        196100096.0,
+        195747840.0,
+        195899392.0,
+        195993600.0
+      ]
+    },
+    {
+      "metric": "closed_minus_cold_private_bytes",
+      "baseline_median": -2981888.0,
+      "candidate_median": -1421312.0,
+      "delta": 1560576.0,
+      "delta_percent": null,
+      "baseline_captures": [
+        -2981888.0,
+        -1937408.0,
+        -4157440.0,
+        -2854912.0,
+        -3477504.0
+      ],
+      "candidate_captures": [
+        -4247552.0,
+        -4997120.0,
+        6766592.0,
+        -237568.0,
+        -1421312.0
+      ]
+    },
+    {
+      "metric": "scenario_ui_cpu_us",
+      "baseline_median": 1625000.0,
+      "candidate_median": 2437500.0,
+      "delta": 812500.0,
+      "delta_percent": 50.0,
+      "baseline_captures": [
+        1625000.0,
+        1875000.0,
+        1406250.0,
+        1781250.0,
+        1468750.0
+      ],
+      "candidate_captures": [
+        2359375.0,
+        2171875.0,
+        2437500.0,
+        2625000.0,
+        2515625.0
+      ]
+    },
+    {
+      "metric": "scenario_process_cpu_us",
+      "baseline_median": 1953125.0,
+      "candidate_median": 2796875.0,
+      "delta": 843750.0,
+      "delta_percent": 43.2,
+      "baseline_captures": [
+        1953125.0,
+        2250000.0,
+        1703125.0,
+        2578125.0,
+        1671875.0
+      ],
+      "candidate_captures": [
+        2906250.0,
+        2593750.0,
+        2781250.0,
+        3062500.0,
+        2796875.0
+      ]
+    },
+    {
+      "metric": "peak_observed_handles",
+      "baseline_median": 2689.0,
+      "candidate_median": 2685.0,
+      "delta": -4.0,
+      "delta_percent": -0.14875418371141688,
+      "baseline_captures": [
+        2687.0,
+        2689.0,
+        2689.0,
+        2689.0,
+        2689.0
+      ],
+      "candidate_captures": [
+        2685.0,
+        2687.0,
+        2685.0,
+        2685.0,
+        2687.0
+      ]
+    },
+    {
+      "metric": "peak_observed_gdi",
+      "baseline_median": 59.0,
+      "candidate_median": 59.0,
+      "delta": 0.0,
+      "delta_percent": 0.0,
+      "baseline_captures": [
+        59.0,
+        59.0,
+        59.0,
+        59.0,
+        59.0
+      ],
+      "candidate_captures": [
+        59.0,
+        59.0,
+        59.0,
+        59.0,
+        59.0
+      ]
+    },
+    {
+      "metric": "peak_observed_user",
+      "baseline_median": 79.0,
+      "candidate_median": 78.0,
+      "delta": -1.0,
+      "delta_percent": -1.2658227848101267,
+      "baseline_captures": [
+        79.0,
+        79.0,
+        79.0,
+        79.0,
+        79.0
+      ],
+      "candidate_captures": [
+        78.0,
+        78.0,
+        78.0,
+        78.0,
+        78.0
+      ]
+    },
+    {
+      "metric": "closed_minus_cold_handles",
+      "baseline_median": 38.0,
+      "candidate_median": 36.0,
+      "delta": -2.0,
+      "delta_percent": null,
+      "baseline_captures": [
+        39.0,
+        38.0,
+        38.0,
+        38.0,
+        38.0
+      ],
+      "candidate_captures": [
+        36.0,
+        36.0,
+        36.0,
+        35.0,
+        35.0
+      ]
+    },
+    {
+      "metric": "closed_minus_cold_hosts",
+      "baseline_median": 0.0,
+      "candidate_median": 0.0,
+      "delta": 0.0,
+      "delta_percent": null,
+      "baseline_captures": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "candidate_captures": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "metric": "closed_minus_cold_gdi",
+      "baseline_median": 0.0,
+      "candidate_median": 0.0,
+      "delta": 0.0,
+      "delta_percent": null,
+      "baseline_captures": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "candidate_captures": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "metric": "closed_minus_cold_user",
+      "baseline_median": 4.0,
+      "candidate_median": 4.0,
+      "delta": 0.0,
+      "delta_percent": null,
+      "baseline_captures": [
+        4.0,
+        4.0,
+        4.0,
+        4.0,
+        4.0
+      ],
+      "candidate_captures": [
+        3.0,
+        4.0,
+        4.0,
+        4.0,
+        3.0
+      ]
+    },
+    {
+      "metric": "closed_minus_cold_attachments",
+      "baseline_median": 0.0,
+      "candidate_median": 0.0,
+      "delta": 0.0,
+      "delta_percent": null,
+      "baseline_captures": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "candidate_captures": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    }
+  ],
+  "resources": [
+    {
+      "variant": "baseline",
+      "capture": 1,
+      "peak_observed_private_bytes": 278884352.0,
+      "peak_observed_working_set_bytes": 197275648.0,
+      "cold_private_bytes": 270897152,
+      "closed_private_bytes": 267915264,
+      "closed_minus_cold_private_bytes": -2981888,
+      "scenario_ui_cpu_us": 1625000,
+      "scenario_process_cpu_us": 1953125,
+      "peak_observed_handles": 2687.0,
+      "peak_observed_gdi": 59.0,
+      "peak_observed_user": 79.0,
+      "closed_minus_cold_handles": 39,
+      "closed_minus_cold_hosts": 0,
+      "closed_minus_cold_gdi": 0,
+      "closed_minus_cold_user": 4,
+      "closed_minus_cold_attachments": 0,
+      "cold_handles": 2642,
+      "closed_handles": 2681,
+      "cold_gui_and_attachments": {
+        "timestamp": "2026-10-01T20:37:50.948Z",
+        "process": 58260,
+        "thread": 98820,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "cold",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 72,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-01_203743",
+        "value": 7,
+        "unit": "us"
+      },
+      "closed_gui_and_attachments": {
+        "timestamp": "2026-10-01T20:37:50.949Z",
+        "process": 58260,
+        "thread": 98820,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "scan-file-list-closed",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 76,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-01_203743",
+        "value": 7,
+        "unit": "us"
+      }
+    },
+    {
+      "variant": "baseline",
+      "capture": 2,
+      "peak_observed_private_bytes": 278528000.0,
+      "peak_observed_working_set_bytes": 196890624.0,
+      "cold_private_bytes": 270999552,
+      "closed_private_bytes": 269062144,
+      "closed_minus_cold_private_bytes": -1937408,
+      "scenario_ui_cpu_us": 1875000,
+      "scenario_process_cpu_us": 2250000,
+      "peak_observed_handles": 2689.0,
+      "peak_observed_gdi": 59.0,
+      "peak_observed_user": 79.0,
+      "closed_minus_cold_handles": 38,
+      "closed_minus_cold_hosts": 0,
+      "closed_minus_cold_gdi": 0,
+      "closed_minus_cold_user": 4,
+      "closed_minus_cold_attachments": 0,
+      "cold_handles": 2644,
+      "closed_handles": 2682,
+      "cold_gui_and_attachments": {
+        "timestamp": "2026-10-01T20:38:35.425Z",
+        "process": 89360,
+        "thread": 95444,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "cold",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 72,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-01_203827",
+        "value": 7,
+        "unit": "us"
+      },
+      "closed_gui_and_attachments": {
+        "timestamp": "2026-10-01T20:38:35.425Z",
+        "process": 89360,
+        "thread": 95444,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "scan-file-list-closed",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 76,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-01_203827",
+        "value": 7,
+        "unit": "us"
+      }
+    },
+    {
+      "variant": "baseline",
+      "capture": 3,
+      "peak_observed_private_bytes": 281411584.0,
+      "peak_observed_working_set_bytes": 197836800.0,
+      "cold_private_bytes": 272986112,
+      "closed_private_bytes": 268828672,
+      "closed_minus_cold_private_bytes": -4157440,
+      "scenario_ui_cpu_us": 1406250,
+      "scenario_process_cpu_us": 1703125,
+      "peak_observed_handles": 2689.0,
+      "peak_observed_gdi": 59.0,
+      "peak_observed_user": 79.0,
+      "closed_minus_cold_handles": 38,
+      "closed_minus_cold_hosts": 0,
+      "closed_minus_cold_gdi": 0,
+      "closed_minus_cold_user": 4,
+      "closed_minus_cold_attachments": 0,
+      "cold_handles": 2644,
+      "closed_handles": 2682,
+      "cold_gui_and_attachments": {
+        "timestamp": "2026-10-01T20:39:18.077Z",
+        "process": 93012,
+        "thread": 59368,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "cold",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 72,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-01_203910",
+        "value": 7,
+        "unit": "us"
+      },
+      "closed_gui_and_attachments": {
+        "timestamp": "2026-10-01T20:39:18.078Z",
+        "process": 93012,
+        "thread": 59368,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "scan-file-list-closed",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 76,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-01_203910",
+        "value": 7,
+        "unit": "us"
+      }
+    },
+    {
+      "variant": "baseline",
+      "capture": 4,
+      "peak_observed_private_bytes": 279805952.0,
+      "peak_observed_working_set_bytes": 197337088.0,
+      "cold_private_bytes": 271499264,
+      "closed_private_bytes": 268644352,
+      "closed_minus_cold_private_bytes": -2854912,
+      "scenario_ui_cpu_us": 1781250,
+      "scenario_process_cpu_us": 2578125,
+      "peak_observed_handles": 2689.0,
+      "peak_observed_gdi": 59.0,
+      "peak_observed_user": 79.0,
+      "closed_minus_cold_handles": 38,
+      "closed_minus_cold_hosts": 0,
+      "closed_minus_cold_gdi": 0,
+      "closed_minus_cold_user": 4,
+      "closed_minus_cold_attachments": 0,
+      "cold_handles": 2644,
+      "closed_handles": 2682,
+      "cold_gui_and_attachments": {
+        "timestamp": "2026-10-01T20:40:00.567Z",
+        "process": 104072,
+        "thread": 76048,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "cold",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 72,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-01_203952",
+        "value": 7,
+        "unit": "us"
+      },
+      "closed_gui_and_attachments": {
+        "timestamp": "2026-10-01T20:40:00.568Z",
+        "process": 104072,
+        "thread": 76048,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "scan-file-list-closed",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 76,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-01_203952",
+        "value": 7,
+        "unit": "us"
+      }
+    },
+    {
+      "variant": "baseline",
+      "capture": 5,
+      "peak_observed_private_bytes": 280248320.0,
+      "peak_observed_working_set_bytes": 197447680.0,
+      "cold_private_bytes": 272207872,
+      "closed_private_bytes": 268730368,
+      "closed_minus_cold_private_bytes": -3477504,
+      "scenario_ui_cpu_us": 1468750,
+      "scenario_process_cpu_us": 1671875,
+      "peak_observed_handles": 2689.0,
+      "peak_observed_gdi": 59.0,
+      "peak_observed_user": 79.0,
+      "closed_minus_cold_handles": 38,
+      "closed_minus_cold_hosts": 0,
+      "closed_minus_cold_gdi": 0,
+      "closed_minus_cold_user": 4,
+      "closed_minus_cold_attachments": 0,
+      "cold_handles": 2644,
+      "closed_handles": 2682,
+      "cold_gui_and_attachments": {
+        "timestamp": "2026-10-01T20:40:42.642Z",
+        "process": 89620,
+        "thread": 91588,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "cold",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 72,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-01_204034",
+        "value": 7,
+        "unit": "us"
+      },
+      "closed_gui_and_attachments": {
+        "timestamp": "2026-10-01T20:40:42.643Z",
+        "process": 89620,
+        "thread": 91588,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "scan-file-list-closed",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 76,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-01_204034",
+        "value": 7,
+        "unit": "us"
+      }
+    },
+    {
+      "variant": "candidate",
+      "capture": 1,
+      "peak_observed_private_bytes": 274886656.0,
+      "peak_observed_working_set_bytes": 195072000.0,
+      "cold_private_bytes": 274345984,
+      "closed_private_bytes": 270098432,
+      "closed_minus_cold_private_bytes": -4247552,
+      "scenario_ui_cpu_us": 2359375,
+      "scenario_process_cpu_us": 2906250,
+      "peak_observed_handles": 2685.0,
+      "peak_observed_gdi": 59.0,
+      "peak_observed_user": 78.0,
+      "closed_minus_cold_handles": 36,
+      "closed_minus_cold_hosts": 0,
+      "closed_minus_cold_gdi": 0,
+      "closed_minus_cold_user": 3,
+      "closed_minus_cold_attachments": 0,
+      "cold_handles": 2642,
+      "closed_handles": 2678,
+      "cold_gui_and_attachments": {
+        "timestamp": "2026-10-02T14:31:31.35Z",
+        "process": 69328,
+        "thread": 110796,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "cold",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 72,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "e860022a088f8b5fc3c604a61e091452cf83337e",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-02_143121",
+        "value": 7,
+        "unit": "us"
+      },
+      "closed_gui_and_attachments": {
+        "timestamp": "2026-10-02T14:31:31.351Z",
+        "process": 69328,
+        "thread": 110796,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "scan-file-list-closed",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 75,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "e860022a088f8b5fc3c604a61e091452cf83337e",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-02_143121",
+        "value": 7,
+        "unit": "us"
+      }
+    },
+    {
+      "variant": "candidate",
+      "capture": 2,
+      "peak_observed_private_bytes": 273686528.0,
+      "peak_observed_working_set_bytes": 196100096.0,
+      "cold_private_bytes": 273686528,
+      "closed_private_bytes": 268689408,
+      "closed_minus_cold_private_bytes": -4997120,
+      "scenario_ui_cpu_us": 2171875,
+      "scenario_process_cpu_us": 2593750,
+      "peak_observed_handles": 2687.0,
+      "peak_observed_gdi": 59.0,
+      "peak_observed_user": 78.0,
+      "closed_minus_cold_handles": 36,
+      "closed_minus_cold_hosts": 0,
+      "closed_minus_cold_gdi": 0,
+      "closed_minus_cold_user": 4,
+      "closed_minus_cold_attachments": 0,
+      "cold_handles": 2644,
+      "closed_handles": 2680,
+      "cold_gui_and_attachments": {
+        "timestamp": "2026-10-02T14:32:33.791Z",
+        "process": 113364,
+        "thread": 67964,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "cold",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 72,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "e860022a088f8b5fc3c604a61e091452cf83337e",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-02_143224",
+        "value": 7,
+        "unit": "us"
+      },
+      "closed_gui_and_attachments": {
+        "timestamp": "2026-10-02T14:32:33.792Z",
+        "process": 113364,
+        "thread": 67964,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "scan-file-list-closed",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 76,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "e860022a088f8b5fc3c604a61e091452cf83337e",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-02_143224",
+        "value": 7,
+        "unit": "us"
+      }
+    },
+    {
+      "variant": "candidate",
+      "capture": 3,
+      "peak_observed_private_bytes": 271966208.0,
+      "peak_observed_working_set_bytes": 195747840.0,
+      "cold_private_bytes": 261431296,
+      "closed_private_bytes": 268197888,
+      "closed_minus_cold_private_bytes": 6766592,
+      "scenario_ui_cpu_us": 2437500,
+      "scenario_process_cpu_us": 2781250,
+      "peak_observed_handles": 2685.0,
+      "peak_observed_gdi": 59.0,
+      "peak_observed_user": 78.0,
+      "closed_minus_cold_handles": 36,
+      "closed_minus_cold_hosts": 0,
+      "closed_minus_cold_gdi": 0,
+      "closed_minus_cold_user": 4,
+      "closed_minus_cold_attachments": 0,
+      "cold_handles": 2642,
+      "closed_handles": 2678,
+      "cold_gui_and_attachments": {
+        "timestamp": "2026-10-02T14:33:36.33Z",
+        "process": 81068,
+        "thread": 59036,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "cold",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 72,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "e860022a088f8b5fc3c604a61e091452cf83337e",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-02_143326",
+        "value": 7,
+        "unit": "us"
+      },
+      "closed_gui_and_attachments": {
+        "timestamp": "2026-10-02T14:33:36.331Z",
+        "process": 81068,
+        "thread": 59036,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "scan-file-list-closed",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 76,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "e860022a088f8b5fc3c604a61e091452cf83337e",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-02_143326",
+        "value": 7,
+        "unit": "us"
+      }
+    },
+    {
+      "variant": "candidate",
+      "capture": 4,
+      "peak_observed_private_bytes": 274227200.0,
+      "peak_observed_working_set_bytes": 195899392.0,
+      "cold_private_bytes": 268972032,
+      "closed_private_bytes": 268734464,
+      "closed_minus_cold_private_bytes": -237568,
+      "scenario_ui_cpu_us": 2625000,
+      "scenario_process_cpu_us": 3062500,
+      "peak_observed_handles": 2685.0,
+      "peak_observed_gdi": 59.0,
+      "peak_observed_user": 78.0,
+      "closed_minus_cold_handles": 35,
+      "closed_minus_cold_hosts": 0,
+      "closed_minus_cold_gdi": 0,
+      "closed_minus_cold_user": 4,
+      "closed_minus_cold_attachments": 0,
+      "cold_handles": 2642,
+      "closed_handles": 2677,
+      "cold_gui_and_attachments": {
+        "timestamp": "2026-10-02T14:34:56.996Z",
+        "process": 34280,
+        "thread": 105836,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "cold",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 72,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "e860022a088f8b5fc3c604a61e091452cf83337e",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-02_143446",
+        "value": 7,
+        "unit": "us"
+      },
+      "closed_gui_and_attachments": {
+        "timestamp": "2026-10-02T14:34:56.996Z",
+        "process": 34280,
+        "thread": 105836,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "scan-file-list-closed",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 76,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "e860022a088f8b5fc3c604a61e091452cf83337e",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-02_143446",
+        "value": 7,
+        "unit": "us"
+      }
+    },
+    {
+      "variant": "candidate",
+      "capture": 5,
+      "peak_observed_private_bytes": 273547264.0,
+      "peak_observed_working_set_bytes": 195993600.0,
+      "cold_private_bytes": 269967360,
+      "closed_private_bytes": 268546048,
+      "closed_minus_cold_private_bytes": -1421312,
+      "scenario_ui_cpu_us": 2515625,
+      "scenario_process_cpu_us": 2796875,
+      "peak_observed_handles": 2687.0,
+      "peak_observed_gdi": 59.0,
+      "peak_observed_user": 78.0,
+      "closed_minus_cold_handles": 35,
+      "closed_minus_cold_hosts": 0,
+      "closed_minus_cold_gdi": 0,
+      "closed_minus_cold_user": 3,
+      "closed_minus_cold_attachments": 0,
+      "cold_handles": 2644,
+      "closed_handles": 2679,
+      "cold_gui_and_attachments": {
+        "timestamp": "2026-10-02T14:36:40.427Z",
+        "process": 36892,
+        "thread": 86048,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "cold",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 72,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "e860022a088f8b5fc3c604a61e091452cf83337e",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-02_143630",
+        "value": 7,
+        "unit": "us"
+      },
+      "closed_gui_and_attachments": {
+        "timestamp": "2026-10-02T14:36:40.428Z",
+        "process": 36892,
+        "thread": 86048,
+        "metric": "FileOps.IntegratedPresentation.GuiAndAttachments",
+        "detail": "scan-file-list-closed",
+        "durationUs": 7,
+        "value0": 59,
+        "value1": 75,
+        "hr": 0,
+        "scenario": "SelfTest",
+        "build": "Release",
+        "branch": "(detached)",
+        "commit": "e860022a088f8b5fc3c604a61e091452cf83337e",
+        "machineHash": "4cb089111a23",
+        "runId": "2026-10-02_143630",
+        "value": 7,
+        "unit": "us"
+      }
+    }
+  ],
+  "captures": [
+    {
+      "variant": "baseline",
+      "capture": 1,
+      "run_id": "20261001T203721Z-31836-e4b5bf355bd24c7ea60d353654aec835",
+      "raw_sha256": "af2918267ec7f4c6658289741ca15c959679cad16c75fe2da4851c6d9617d07f",
+      "raw_bytes": 3164537,
+      "raw_rows": 8504,
+      "claim_rows": 275
+    },
+    {
+      "variant": "baseline",
+      "capture": 2,
+      "run_id": "20261001T203804Z-39324-dc47703a49cc49b59edc67d2cbb76555",
+      "raw_sha256": "e0424955a2f7eb9620bd8b41369b1a6dd615507c0591109f8656f68bee5057e9",
+      "raw_bytes": 3164668,
+      "raw_rows": 8504,
+      "claim_rows": 275
+    },
+    {
+      "variant": "baseline",
+      "capture": 3,
+      "run_id": "20261001T203849Z-30096-beb155f24bb343799d5d3e154b73ed89",
+      "raw_sha256": "96155e7121a0859a8803c4a7836f18471564411bd365fa2e109e530272861542",
+      "raw_bytes": 3164334,
+      "raw_rows": 8504,
+      "claim_rows": 275
+    },
+    {
+      "variant": "baseline",
+      "capture": 4,
+      "run_id": "20261001T203931Z-77168-530cf5ab9ad04f51b0544bc8504b50b8",
+      "raw_sha256": "52624b6e020db08a73a70de2bcb38e2e3313bc2c04a5a73ed4a42848cf0ab7a5",
+      "raw_bytes": 3172858,
+      "raw_rows": 8504,
+      "claim_rows": 275
+    },
+    {
+      "variant": "baseline",
+      "capture": 5,
+      "run_id": "20261001T204013Z-21664-0cdbff89cd8c4e708d38e4b9bd42f91c",
+      "raw_sha256": "3f446caf9afff523ed2f5eacf2302cc2df8b246858549607c4e34f4fa746fe36",
+      "raw_bytes": 3164600,
+      "raw_rows": 8504,
+      "claim_rows": 275
+    },
+    {
+      "variant": "candidate",
+      "capture": 1,
+      "run_id": "20261002T143049Z-10872-ad06e06b5db84ed1854596f5ea8ef6f7",
+      "raw_sha256": "4d4c7481d07963e9825761e2a5271b9cb9867a0f3c94a181b4b862f9d89c3909",
+      "raw_bytes": 3177133,
+      "raw_rows": 8504,
+      "claim_rows": 275
+    },
+    {
+      "variant": "candidate",
+      "capture": 2,
+      "run_id": "20261002T143153Z-35860-7e6c95545fec4483be6c09847f685081",
+      "raw_sha256": "b04ec9424822d2458177f59f1eb011e65052e3caee9047b6017641fd6d4737bd",
+      "raw_bytes": 3176393,
+      "raw_rows": 8504,
+      "claim_rows": 275
+    },
+    {
+      "variant": "candidate",
+      "capture": 3,
+      "run_id": "20261002T143255Z-2748-5d01e85e05794b7fad53acfd810624a1",
+      "raw_sha256": "5d88f6dddc125d2ad55cef66ed6f1ff6fff8fa061f988d372418895353290176",
+      "raw_bytes": 3168812,
+      "raw_rows": 8504,
+      "claim_rows": 275
+    },
+    {
+      "variant": "candidate",
+      "capture": 4,
+      "run_id": "20261002T143412Z-49808-404561466435448dbc9259a4e0da493b",
+      "raw_sha256": "907d9c6777c3c05ec54389a2f50602ca7086e3ba8ed08f6897e38ee7d4c0fc15",
+      "raw_bytes": 3177546,
+      "raw_rows": 8504,
+      "claim_rows": 275
+    },
+    {
+      "variant": "candidate",
+      "capture": 5,
+      "run_id": "20261002T143528Z-45120-0c35cd79054e44d9bfd1858ae89b74e9",
+      "raw_sha256": "6859272f032d8a0d9d51716c744547255aff44ec230d9d2230ceab49167bb596",
+      "raw_bytes": 3168882,
+      "raw_rows": 8504,
+      "claim_rows": 275
+    }
+  ],
+  "limitations": [
+    "Eight synchronous RedrawWindow calls per redraw batch; not monitor-presented FPS.",
+    "Memory peaks are maxima of labelled observations, not continuous allocator peaks.",
+    "CPU counters have OS sampling granularity and include the fixture message pump.",
+    "Integrated hidden interval remains 350ms; longer hidden/minimized timer behavior has a separate native regression.",
+    "WorkloadFNV64 durationUs contains an opaque digest; ClientPixels durationUs contains DPI, not elapsed time. These controls are compared for identity only.",
+    "GuiAndAttachments durationUs contains a DxUi attachment count, not elapsed time. Closed-minus-cold resource deltas are signed counts/bytes and have no percentage.",
+    "Driver allocation, queue depth and GPU peak bytes remain unavailable as recorded by the fixture."
+  ]
+}

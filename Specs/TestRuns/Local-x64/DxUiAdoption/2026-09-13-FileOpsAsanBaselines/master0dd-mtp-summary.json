@@ -1,0 +1,12 @@
+{
+  "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+  "configuration": "ASan Debug",
+  "platform": "x64",
+  "runId": "20260913T073402Z-99900-4576056512fd4e8294410301bac0660b",
+  "caseFilter": "R4A19_DiscoveryProviderControls",
+  "startedUtc": "2026-09-13T07:34:01.7524113Z",
+  "completedUtc": "2026-09-13T07:34:34.5907827Z",
+  "exitCode": 1,
+  "retained": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-mtp",
+  "noHostedCi": true
+}

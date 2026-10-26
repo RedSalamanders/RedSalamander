@@ -172,7 +172,7 @@ void ApplyFunctionBarTextTrimming(IDWriteTextFormat* format, IDWriteInlineObject
 }
 
 [[nodiscard]] HRESULT CreateFunctionBarTextFormat(FunctionBarRenderResources& resources,
-                                                  const DxUi::Typography::TypographySpec& spec,
+                                                  const DxUi::Typography::Spec& spec,
                                                   DWRITE_TEXT_ALIGNMENT alignment,
                                                   IDWriteTextFormat** outFormat) noexcept
 {
@@ -357,9 +357,7 @@ using Common::Colors::BlendColorRefWeightedTruncate;
     return result;
 }
 
-[[nodiscard]] DxUi::Typography::TextPixelMetrics MeasureFunctionBarTextMetrics(HWND hwnd,
-                                                                               const DxUi::Typography::TypographySpec& spec,
-                                                                               std::wstring_view text) noexcept
+[[nodiscard]] DxUi::Typography::TextPixelMetrics MeasureFunctionBarTextMetrics(HWND hwnd, const DxUi::Typography::Spec& spec, std::wstring_view text) noexcept
 {
     IDWriteFactory* dwriteFactory = DxUi::Typography::GetSharedMeasurementFactory();
     if (! dwriteFactory)

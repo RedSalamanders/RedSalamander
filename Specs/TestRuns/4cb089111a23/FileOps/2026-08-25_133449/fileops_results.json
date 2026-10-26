@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-08-25T11:34:46.599Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\src\\RedSalamander\\.build\\codex-runs\\p46-phase10-final\\runs\\p46-phase10-final\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 2187,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1296,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase10_ContentVerification",
+            "status": "passed",
+            "duration_ms": 766,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-09-13T07:35:30.148Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260913T073509Z-90500-df01ab383e0146c193d8a2704df91787\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 6484,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1484,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase6_LocalBandwidthThrottle",
+            "status": "passed",
+            "duration_ms": 4891,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 109,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

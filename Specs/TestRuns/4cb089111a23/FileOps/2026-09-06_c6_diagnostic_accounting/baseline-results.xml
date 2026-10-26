@@ -1,0 +1,118 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="30" errors="0" failures="14" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-09-06" time="03:18:52">
+  <environment clr-version="" user-domain="SINON" user="eric" os-version="10.0.26200" machine-name="SINON" nunit-version="2.5.8.0" platform="Microsoft Windows 11 Pro|C:\WINDOWS|\Device\Harddisk4\Partition3" cwd="C:\Users\eric\.codex\worktrees\fd72\RedSalamander" />
+  <culture-info current-culture="fr-GP" current-uiculture="en-US" />
+  <test-suite type="Powershell" name="Pester" executed="True" result="Failure" success="False" time="0.7769" asserts="0">
+    <results>
+      <test-suite type="TestFixture" name="MSBuild invocation helper" executed="True" result="Failure" success="False" time="0.7769" asserts="0" description="MSBuild invocation helper">
+        <results>
+          <test-case description="keeps CI-style redirected shells on the streaming path" name="MSBuild invocation helper.keeps CI-style redirected shells on the streaming path" time="0.1762" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="keeps Codex terminals on the streaming path even when the host is interactive" name="MSBuild invocation helper.keeps Codex terminals on the streaming path even when the host is interactive" time="0.0419" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="keeps Windows Terminal on the streaming path so MSBuild progress is replayed" name="MSBuild invocation helper.keeps Windows Terminal on the streaming path so MSBuild progress is replayed" time="0.0094" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="uses direct console execution for a plain interactive console while still capturing a log file" name="MSBuild invocation helper.uses direct console execution for a plain interactive console while still capturing a log file" time="0.013" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="keeps replay streaming for non-interactive terminals" name="MSBuild invocation helper.keeps replay streaming for non-interactive terminals" time="0.0088" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="colors replayed MSBuild errors and warnings" name="MSBuild invocation helper.colors replayed MSBuild errors and warnings" time="0.0102" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="colors replayed MSBuild project completion and keeps ordinary lines default" name="MSBuild invocation helper.colors replayed MSBuild project completion and keeps ordinary lines default" time="0.0104" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="summarizes MSBuild diagnostics from captured logs" name="MSBuild invocation helper.summarizes MSBuild diagnostics from captured logs" time="0.0204" asserts="0" success="True" result="Success" executed="True" />
+          <test-case description="surfaces unnumbered diagnostics in the summary and streaming presenters" name="MSBuild invocation helper.surfaces unnumbered diagnostics in the summary and streaming presenters" time="0.2175" asserts="0" success="False" result="Failure" executed="True">
+            <failure>
+              <message>Expected Write-Host in module MSBuildInvocation to be called 1 times exactly but was called 0 times</message>
+              <stack-trace>at line: 160 in 
+160:         Assert-MockCalled Write-Host -ModuleName MSBuildInvocation -Times 1 -Exactly -ParameterFilter {</stack-trace>
+            </failure>
+          </test-case>
+          <test-suite type="ParameterizedTest" name="MSBuild invocation helper.counts and colors the same diagnostic header: &lt;Name&gt;" executed="True" result="Failure" success="False" time="0.2691" asserts="0" description="counts and colors the same diagnostic header: &lt;Name&gt;">
+            <results>
+              <test-case description="counts and colors the same diagnostic header: unnumbered vcpkg warning" name="MSBuild invocation helper.counts and colors the same diagnostic header: unnumbered vcpkg warning" time="0.0431" asserts="0" success="False" result="Failure" executed="True">
+                <failure>
+                  <message>Warning count for unnumbered vcpkg warning. Expected '1' but got '0'.</message>
+                  <stack-trace>at line: 40 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\TestSupport.psm1</stack-trace>
+                </failure>
+              </test-case>
+              <test-case description="counts and colors the same diagnostic header: unnumbered build error" name="MSBuild invocation helper.counts and colors the same diagnostic header: unnumbered build error" time="0.0298" asserts="0" success="False" result="Failure" executed="True">
+                <failure>
+                  <message>Error count for unnumbered build error. Expected '1' but got '0'.</message>
+                  <stack-trace>at line: 40 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\TestSupport.psm1</stack-trace>
+                </failure>
+              </test-case>
+              <test-case description="counts and colors the same diagnostic header: unnumbered fatal linker error" name="MSBuild invocation helper.counts and colors the same diagnostic header: unnumbered fatal linker error" time="0.0096" asserts="0" success="False" result="Failure" executed="True">
+                <failure>
+                  <message>Error count for unnumbered fatal linker error. Expected '1' but got '0'.</message>
+                  <stack-trace>at line: 40 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\TestSupport.psm1</stack-trace>
+                </failure>
+              </test-case>
+              <test-case description="counts and colors the same diagnostic header: blank warning origin and code" name="MSBuild invocation helper.counts and colors the same diagnostic header: blank warning origin and code" time="0.01" asserts="0" success="False" result="Failure" executed="True">
+                <failure>
+                  <message>Warning count for blank warning origin and code. Expected '1' but got '0'.</message>
+                  <stack-trace>at line: 40 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\TestSupport.psm1</stack-trace>
+                </failure>
+              </test-case>
+              <test-case description="counts and colors the same diagnostic header: blank error origin and code" name="MSBuild invocation helper.counts and colors the same diagnostic header: blank error origin and code" time="0.0094" asserts="0" success="False" result="Failure" executed="True">
+                <failure>
+                  <message>Error count for blank error origin and code. Expected '1' but got '0'.</message>
+                  <stack-trace>at line: 40 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\TestSupport.psm1</stack-trace>
+                </failure>
+              </test-case>
+              <test-case description="counts and colors the same diagnostic header: blank origin with separator" name="MSBuild invocation helper.counts and colors the same diagnostic header: blank origin with separator" time="0.0113" asserts="0" success="False" result="Failure" executed="True">
+                <failure>
+                  <message>Warning count for blank origin with separator. Expected '1' but got '0'.</message>
+                  <stack-trace>at line: 40 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\TestSupport.psm1</stack-trace>
+                </failure>
+              </test-case>
+              <test-case description="counts and colors the same diagnostic header: code with no origin" name="MSBuild invocation helper.counts and colors the same diagnostic header: code with no origin" time="0.0092" asserts="0" success="False" result="Failure" executed="True">
+                <failure>
+                  <message>Error count for code with no origin. Expected '1' but got '0'.</message>
+                  <stack-trace>at line: 40 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\TestSupport.psm1</stack-trace>
+                </failure>
+              </test-case>
+              <test-case description="counts and colors the same diagnostic header: command-line subcategory" name="MSBuild invocation helper.counts and colors the same diagnostic header: command-line subcategory" time="0.0106" asserts="0" success="False" result="Failure" executed="True">
+                <failure>
+                  <message>Warning count for command-line subcategory. Expected '1' but got '0'.</message>
+                  <stack-trace>at line: 40 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\TestSupport.psm1</stack-trace>
+                </failure>
+              </test-case>
+              <test-case description="counts and colors the same diagnostic header: case-insensitive category" name="MSBuild invocation helper.counts and colors the same diagnostic header: case-insensitive category" time="0.0093" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="counts and colors the same diagnostic header: non-numeric code" name="MSBuild invocation helper.counts and colors the same diagnostic header: non-numeric code" time="0.0074" asserts="0" success="False" result="Failure" executed="True">
+                <failure>
+                  <message>Warning count for non-numeric code. Expected '1' but got '0'.</message>
+                  <stack-trace>at line: 40 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\TestSupport.psm1</stack-trace>
+                </failure>
+              </test-case>
+              <test-case description="counts and colors the same diagnostic header: numeric code" name="MSBuild invocation helper.counts and colors the same diagnostic header: numeric code" time="0.0456" asserts="0" success="False" result="Failure" executed="True">
+                <failure>
+                  <message>Error count for numeric code. Expected '1' but got '0'.</message>
+                  <stack-trace>at line: 40 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\TestSupport.psm1</stack-trace>
+                </failure>
+              </test-case>
+              <test-case description="counts and colors the same diagnostic header: parallel node prefix" name="MSBuild invocation helper.counts and colors the same diagnostic header: parallel node prefix" time="0.0072" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="counts and colors the same diagnostic header: UNC source" name="MSBuild invocation helper.counts and colors the same diagnostic header: UNC source" time="0.0058" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="counts and colors the same diagnostic header: warning mentioning an error" name="MSBuild invocation helper.counts and colors the same diagnostic header: warning mentioning an error" time="0.0079" asserts="0" success="False" result="Failure" executed="True">
+                <failure>
+                  <message>Error count for warning mentioning an error. Expected '0' but got '1'.</message>
+                  <stack-trace>at line: 40 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\TestSupport.psm1</stack-trace>
+                </failure>
+              </test-case>
+              <test-case description="counts and colors the same diagnostic header: error mentioning a warning" name="MSBuild invocation helper.counts and colors the same diagnostic header: error mentioning a warning" time="0.0086" asserts="0" success="False" result="Failure" executed="True">
+                <failure>
+                  <message>Warning count for error mentioning a warning. Expected '0' but got '1'.</message>
+                  <stack-trace>at line: 40 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\TestSupport.psm1</stack-trace>
+                </failure>
+              </test-case>
+              <test-case description="counts and colors the same diagnostic header: summary warning count" name="MSBuild invocation helper.counts and colors the same diagnostic header: summary warning count" time="0.0081" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="counts and colors the same diagnostic header: summary error count" name="MSBuild invocation helper.counts and colors the same diagnostic header: summary error count" time="0.008" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="counts and colors the same diagnostic header: source filename" name="MSBuild invocation helper.counts and colors the same diagnostic header: source filename" time="0.009" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="counts and colors the same diagnostic header: ordinary progress" name="MSBuild invocation helper.counts and colors the same diagnostic header: ordinary progress" time="0.0071" asserts="0" success="True" result="Success" executed="True" />
+              <test-case description="counts and colors the same diagnostic header: incomplete header" name="MSBuild invocation helper.counts and colors the same diagnostic header: incomplete header" time="0.0082" asserts="0" success="False" result="Failure" executed="True">
+                <failure>
+                  <message>Replay color for incomplete header. Expected '' but got 'Yellow'.</message>
+                  <stack-trace>at line: 40 in C:\Users\eric\.codex\worktrees\fd72\RedSalamander\Tools\Tests\TestSupport.psm1</stack-trace>
+                </failure>
+              </test-case>
+              <test-case description="counts and colors the same diagnostic header: empty line" name="MSBuild invocation helper.counts and colors the same diagnostic header: empty line" time="0.0039" asserts="0" success="True" result="Success" executed="True" />
+            </results>
+          </test-suite>
+        </results>
+      </test-suite>
+    </results>
+  </test-suite>
+</test-results>

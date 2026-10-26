@@ -1,0 +1,45 @@
+{
+    "run_started_utc": "2026-10-12T01:25:10.239Z",
+    "duration_ms": 3143,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1,
+    "case_filter": "Fairstream_DiscoveryAheadOverlapsTransfer",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261012T012434Z-44272-631455e9dc204d759a7a39d9a0ad513c\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 2375,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "repeat_count": 1,
+            "case_filter": "Fairstream_DiscoveryAheadOverlapsTransfer",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1328,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Fairstream_DiscoveryAheadOverlapsTransfer",
+                    "status": "passed",
+                    "duration_ms": 828,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 219,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

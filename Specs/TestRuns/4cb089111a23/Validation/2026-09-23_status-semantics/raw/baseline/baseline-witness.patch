@@ -1,0 +1,446 @@
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.cpp
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.cpp
+@@ -7116,6 +7116,7 @@
+     _hostedTooltipDescriptors.clear();
+ #ifdef ENABLE_TESTS
+     _paintedTaskBodiesForSelfTest.clear();
++    _paintedStatusChipsForSelfTest.clear();
+     _graphRowColorMatchCountsForSelfTest.clear();
+     _graphRowColorMismatchCountsForSelfTest.clear();
+ #endif
+@@ -7392,11 +7393,17 @@
+                             const wchar_t glyph           = useFluent ? badge.fluentGlyph : badge.fallbackGlyph;
+                             IDWriteTextFormat* iconFormat = useFluent ? _statusIconFormat.get() : _statusIconFallbackFormat.get();
+                             color.a                       = 1.0f;
++#ifdef ENABLE_TESTS
++                            wchar_t paintedGlyph = L'\0';
++#endif
+                             if (iconFormat && glyph != 0 && _graphDynamicBrush)
+                             {
+                                 _graphDynamicBrush->SetColor(color);
+                                 const wchar_t iconText[2]{glyph, 0};
+                                 _target->DrawTextW(iconText, 1u, iconFormat, iconRc, _graphDynamicBrush.get(), D2D1_DRAW_TEXT_OPTIONS_CLIP);
++#ifdef ENABLE_TESTS
++                                paintedGlyph = glyph;
++#endif
+                             }
+                             const std::wstring countText = std::to_wstring(badge.count);
+                             const D2D1_RECT_F countRc    = D2D1::RectF(iconRc.right, badgeRc.top, badgeRc.right - DipsToPixels(4.0f, _dpi), badgeRc.bottom);
+@@ -7414,6 +7421,7 @@
+                                                         .text = FormatStringResource(nullptr, badge.tooltipResourceId, static_cast<unsigned long>(badge.count)),
+                                                         .automationId = std::format(L"FileOperations.CompletedGroup.Badge.{}", badge.automationSuffix)});
+ #ifdef ENABLE_TESTS
++                            _hostedTooltipDescriptors.back().paintedGlyph       = paintedGlyph;
+                             _hostedTooltipDescriptors.back().paintedLabel       = countText;
+                             _hostedTooltipDescriptors.back().paintedLabelBounds = countRc;
+ #endif
+@@ -8233,6 +8241,14 @@
+                                                chipTextRc,
+                                                _textBrush.get(),
+                                                D2D1_DRAW_TEXT_OPTIONS_CLIP);
++#ifdef ENABLE_TESTS
++                            auto& paintedChip = _paintedStatusChipsForSelfTest[task.taskId];
++                            paintedChip.painted       = true;
++                            paintedChip.chrome        = chipRc;
++                            paintedChip.textRect      = chipTextRc;
++                            paintedChip.text          = chipText;
++                            paintedChip.paintedFormat = _smallFormat;
++#endif
+                             headerLeft = std::min(headerRight, chipRc.right + chipGap);
+                             statusChipPainted = true;
+                         }
+@@ -8298,6 +8314,9 @@
+                                        headerRc,
+                                        _textBrush.get(),
+                                        D2D1_DRAW_TEXT_OPTIONS_CLIP);
++#ifdef ENABLE_TESTS
++                    _paintedStatusChipsForSelfTest[task.taskId].headerText = headerText;
++#endif
+                 }
+ 
+                 if (isCollapsedTask)
+@@ -12352,15 +12371,21 @@
+             result.completedGroupExpectedBadges += count != 0u ? 1u : 0u;
+         result.completedGroupBadgeCountsFit = true;
+         constexpr std::array<std::wstring_view, 5> badgeSuffixes{{L"Completed", L"Partial", L"Indeterminate", L"Failed", L"Canceled"}};
+-        for (const auto& descriptor : _hostedTooltipDescriptors)
+-        {
++        for (size_t regionIndex = 0u; regionIndex < _hostedTooltipDescriptors.size(); ++regionIndex)
++        {
++            const auto& descriptor = _hostedTooltipDescriptors[regionIndex];
+             if (! descriptor.automationId.starts_with(L"FileOperations.CompletedGroup.Badge.") || descriptor.bounds.right <= descriptor.bounds.left ||
+                 descriptor.bounds.bottom <= descriptor.bounds.top)
+                 continue;
+             ++result.completedGroupPaintedBadges;
+             for (size_t index = 0u; index < badgeSuffixes.size(); ++index)
+                 if (descriptor.automationId == std::format(L"FileOperations.CompletedGroup.Badge.{}", badgeSuffixes[index]))
++                {
+                     result.completedGroupPaintedBadgeMask |= 1u << static_cast<unsigned int>(index);
++                    result.completedGroupPaintedGlyphs[index] = descriptor.paintedGlyph;
++                    if (regionIndex < _hostedTooltipRegions.size() && _hostedTooltipRegions[regionIndex])
++                        result.completedGroupHostedNames[index] = _hostedTooltipRegions[regionIndex]->GetAccessibleName();
++                }
+             const float labelWidth              = MeasureTextWidth(_dwriteFactory.get(), _smallFormat.get(), descriptor.paintedLabel, 4096.0f, 128.0f);
+             result.completedGroupBadgeCountsFit = result.completedGroupBadgeCountsFit && labelWidth > 0.0f &&
+                                                   labelWidth <= descriptor.paintedLabelBounds.right - descriptor.paintedLabelBounds.left;
+@@ -12398,6 +12423,22 @@
+             result.conflictBodyOffsetDip       = body->offsetDip;
+         }
+         result.found = true;
++        // Observe the retained DxUi control after the renderer has synchronized it.
++        // taskId selects the card; the value and state are never recomputed from the model.
++        const auto progressId = std::format(L"FileOperations.Task.{}.Progress", taskIt->taskId);
++        for (size_t i = 0u; i < _hostedProgressDescriptors.size() && i < _hostedProgressBars.size(); ++i)
++        {
++            const DxUi::ProgressBar* progress = _hostedProgressBars[i];
++            if (! progress || _hostedProgressDescriptors[i].taskId != taskIt->taskId ||
++                progress->GetAccessibleAutomationId() != std::wstring_view(progressId))
++                continue;
++            result.taskHostedProgressPresent       = true;
++            result.taskHostedProgressValue         = progress->GetValue();
++            result.taskHostedProgressIndeterminate = progress->IsIndeterminate();
++            result.taskHostedProgressSegmented     = progress->HasSegmentedValues();
++            result.taskHostedProgressHelpText      = std::wstring(progress->GetAccessibleHelpText());
++            break;
++        }
+         const auto summaryId = std::format(L"FileOperations.Task.{}.ResultSummary", taskIt->taskId);
+         for (const auto& descriptor : _hostedTooltipDescriptors)
+         {
+@@ -12567,6 +12608,40 @@
+         result.taskStatusVisualColorRef              = ColorToCOLORREF(StatusVisualColorForTone(appTheme, statusTone));
+         result.taskStatusStripeVisible               = statusTone != PopupStatusVisualTone::None;
+         result.taskStatusChipVisible                 = result.taskStatusStripeVisible && ! statusChipText.empty();
++        if (const auto painted = _paintedStatusChipsForSelfTest.find(taskIt->taskId); painted != _paintedStatusChipsForSelfTest.end())
++        {
++            const auto& chip = painted->second;
++            result.taskStatusHeaderPaintedText = chip.headerText;
++            result.taskStatusChipActuallyPainted = chip.painted;
++            if (chip.painted)
++            {
++                result.taskStatusChipPaintedRect = chip.chrome;
++                result.taskStatusChipPaintedTextRect = chip.textRect;
++                result.taskStatusChipPaintedText = chip.text;
++                const float width = chip.textRect.right - chip.textRect.left;
++                const float height = chip.textRect.bottom - chip.textRect.top;
++                result.taskStatusChipPaintedTextAvailableWidthPx = width;
++                if (_dwriteFactory && chip.paintedFormat && ! chip.text.empty() && width > 0.0f && height > 0.0f)
++                {
++                    wil::com_ptr<IDWriteTextLayout> measured;
++                    DWRITE_TEXT_METRICS metrics{};
++                    const bool measuredOk =
++                        SUCCEEDED(_dwriteFactory->CreateTextLayout(chip.text.data(), static_cast<UINT32>(chip.text.size()),
++                                                                  chip.paintedFormat.get(), width, height, measured.put())) &&
++                        measured && SUCCEEDED(measured->SetWordWrapping(DWRITE_WORD_WRAPPING_NO_WRAP)) &&
++                        SUCCEEDED(measured->GetMetrics(&metrics));
++                    if (measuredOk)
++                    {
++                        result.taskStatusChipPaintedTextWidthPx = metrics.widthIncludingTrailingWhitespace;
++                        result.taskStatusChipPaintedTextFits =
++                            metrics.lineCount == 1u && metrics.height <= height + 0.5f && metrics.left >= -0.5f &&
++                            metrics.left + metrics.widthIncludingTrailingWhitespace <= width + 0.5f &&
++                            chip.textRect.left >= chip.chrome.left && chip.textRect.top >= chip.chrome.top &&
++                            chip.textRect.right <= chip.chrome.right && chip.textRect.bottom <= chip.chrome.bottom;
++                    }
++                }
++            }
++        }
+         std::array<TerminalAxisBadge, 3u> terminalBadges{};
+         const size_t terminalBadgeCount = BuildTerminalAxisBadges(*taskIt, terminalBadges);
+         for (size_t badgeIndex = 0u; badgeIndex < terminalBadgeCount; ++badgeIndex)
+--- a/RedSalamander/FolderWindow.FileOperations.Popup.h
++++ b/RedSalamander/FolderWindow.FileOperations.Popup.h
+@@ -410,6 +410,14 @@
+     bool taskDuplicateUnderGraphItemBarVisible    = false;
+     bool taskStatusStripeVisible                  = false;
+     bool taskStatusChipVisible                    = false;
++    bool taskStatusChipActuallyPainted             = false;
++    bool taskStatusChipPaintedTextFits              = false;
++    float taskStatusChipPaintedTextWidthPx          = 0.0f;
++    float taskStatusChipPaintedTextAvailableWidthPx = 0.0f;
++    D2D1_RECT_F taskStatusChipPaintedRect{};
++    D2D1_RECT_F taskStatusChipPaintedTextRect{};
++    std::wstring taskStatusChipPaintedText;
++    std::wstring taskStatusHeaderPaintedText;
+     bool taskVerificationBadgeVisible             = false;
+     bool taskRetainedSourceBadgeVisible           = false;
+     bool taskUnknownSourceBadgeVisible            = false;
+@@ -431,13 +439,20 @@
+     size_t completedGroupExpectedBadges           = 0u;
+     size_t completedGroupPaintedBadges            = 0u;
+     uint32_t completedGroupPaintedBadgeMask       = 0u;
+-    bool completedGroupBadgeCountsFit             = false;
+-    bool taskTerminalSummaryVisible               = false;
+-    bool taskTerminalSummaryFits                  = false;
+-    bool taskTerminalSummaryPrecedesActions       = false;
++    std::array<wchar_t, 5> completedGroupPaintedGlyphs{};
++    std::array<std::wstring, 5> completedGroupHostedNames{};
++    bool completedGroupBadgeCountsFit              = false;
++    bool taskTerminalSummaryVisible                = false;
++    bool taskTerminalSummaryFits                   = false;
++    bool taskTerminalSummaryPrecedesActions        = false;
+     bool completedGroupAnimationEnabled           = false;
+     bool taskCardAnimationEnabled                 = false;
+     bool hostedProgressAnimationEnabled           = false;
++    bool taskHostedProgressPresent                 = false;
++    double taskHostedProgressValue                 = 0.0;
++    bool taskHostedProgressIndeterminate           = false;
++    bool taskHostedProgressSegmented               = false;
++    std::wstring taskHostedProgressHelpText;
+     bool usesDxUiHost                             = false;
+     size_t hostedActionControlCount               = 0u;
+     size_t hostedProgressControlCount             = 0u;
+@@ -770,6 +785,7 @@
+         D2D1_RECT_F paintedLabelBounds{};
+         std::wstring paintedLabel;
+         std::wstring paintedPath;
++        wchar_t paintedGlyph = L'\0';
+ #endif
+     };
+ 
+@@ -944,6 +960,16 @@
+         D2D1_RECT_F actions{};
+     };
+     std::unordered_map<uint64_t, PaintedTaskBodyForSelfTest> _paintedTaskBodiesForSelfTest;
++    struct PaintedStatusChipForSelfTest final
++    {
++        bool painted = false;
++        D2D1_RECT_F chrome{};
++        D2D1_RECT_F textRect{};
++        std::wstring text;
++        std::wstring headerText;
++        wil::com_ptr<IDWriteTextFormat> paintedFormat;
++    };
++    std::unordered_map<uint64_t, PaintedStatusChipForSelfTest> _paintedStatusChipsForSelfTest;
+     bool _destroyOnNextShowForSelfTest = false;
+     std::unordered_map<uint64_t, uint32_t> _graphRowColorMatchCountsForSelfTest;
+     std::unordered_map<uint64_t, uint32_t> _graphRowColorMismatchCountsForSelfTest;
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp
+@@ -609,6 +609,41 @@
+     maximumLimit.name                                          = L"138-speed-limit-maximum";
+     maximumLimit.tasks.front().desiredSpeedLimitBytesPerSecond = (std::numeric_limits<uint64_t>::max)();
+     result.push_back(std::move(maximumLimit));
++    // Synthetic text-fit stress: the stable engine does not keep an elapsed Preparing status after operation admission.
++    auto preparingElapsed                             = result[1];
++    preparingElapsed.name                             = L"139-synthetic-preparing-elapsed-chip";
++    preparingElapsed.tasks.front().operationStartTick = GetTickCount64() - 3200u;
++    result.push_back(std::move(preparingElapsed));
++    // Closed discovery with neither byte nor item denominator must remain indeterminate.
++    task                    = base;
++    task.totalBytes         = 0u;
++    task.completedBytes     = 0u;
++    task.totalItems         = 0u;
++    task.plannedItems       = 0u;
++    task.completedItems     = 0u;
++    task.itemTotalBytes     = 0u;
++    task.itemCompletedBytes = 0u;
++    task.inFlightFileCount  = 0u;
++    add(L"140-closed-zero-byte-unknown-items", task);
++    // Delete progress uses the closed work denominator, including exact zero progress.
++    task                    = base;
++    task.operation          = FILESYSTEM_DELETE;
++    task.totalBytes         = 0u;
++    task.completedBytes     = 0u;
++    task.totalItems         = 1u;
++    task.plannedItems       = 1u;
++    task.completedItems     = 0u;
++    task.itemTotalBytes     = 0u;
++    task.itemCompletedBytes = 0u;
++    add(L"141-delete-closed-known-items-zero", task);
++    task.totalBytes   = base.totalBytes;
++    task.totalItems   = base.totalItems;
++    task.plannedItems = base.plannedItems;
++    add(L"142-delete-closed-known-bytes-zero", task);
++    task.totalBytes   = 0u;
++    task.totalItems   = 0u;
++    task.plannedItems = 0u;
++    add(L"143-delete-closed-unknown", task);
+     return result;
+ }
+ 
+@@ -869,6 +904,13 @@
+     bool waitingTransitionsFit    = true;
+     bool speedLimitLabelsFit      = true;
+     bool terminalPresentationFits = true;
++    bool statusChipLabelsFit = true;
++    size_t statusChipWitnessCount     = 0u;
++    bool hostedProgressValuesMatch    = true;
++    size_t hostedProgressWitnessCount = 0u;
++    bool completedSemanticsFit        = true;
++    size_t doneHeadingWitnessCount    = 0u;
++    size_t groupBadgeWitnessCount     = 0u;
+     for (size_t display = 0u; display < monitors.size(); ++display)
+     {
+         const auto& monitor = monitors[display];
+@@ -895,11 +937,13 @@
+                     return ! task.started && ! task.finished && ! task.conflict.active && (task.waitingInQueue || task.waitingForOthers) &&
+                            (task.operation == FILESYSTEM_COPY || task.operation == FILESYSTEM_MOVE);
+                 });
++                const bool statusChipScenario    = scenario.name == L"06-discovery-before-transfer" || scenario.name == L"134-speed-limit-discovery" ||
++                                                   scenario.name == L"139-synthetic-preparing-elapsed-chip";
+                 for (const int widthDip : {480, 760})
+                 {
+                     const bool terminalTextScenario = scenario.tasks.size() == 1u && scenario.tasks.front().finished &&
+                                                       ! scenario.tasks.front().resultSummary.empty() && ! scenario.collapsed;
+-                    if (widthDip == 760 && scenario.name.find(L"completed-group") == std::wstring::npos && ! terminalTextScenario &&
++                    if (widthDip == 760 && ! statusChipScenario && scenario.name.find(L"completed-group") == std::wstring::npos && ! terminalTextScenario &&
+                         scenario.name.find(L"speed-limit") == std::wstring::npos && ! waitingLayoutScenario && scenario.name != L"09-copy-single-stream" &&
+                         scenario.name != L"14-paused" && scenario.name.find(L"queue-paused") == std::wstring::npos && sceneIndex != 9u && sceneIndex != 12u &&
+                         sceneIndex != 16u && sceneIndex != 26u && sceneIndex != 29u && sceneIndex != 32u &&
+@@ -948,6 +992,130 @@
+                     RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
+                     // A second paint reflects the stable auto-size and retained-control rectangles.
+                     RedrawWindow(popup.get(), nullptr, nullptr, RDW_INVALIDATE | RDW_UPDATENOW | RDW_ALLCHILDREN);
++                    if (statusChipScenario)
++                    {
++                        ++statusChipWitnessCount;
++                        PopupLayoutDebugSnapshot chip{};
++                        chip.taskId                      = scenario.tasks.front().taskId;
++                        const bool read                  = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), chip);
++                        const bool preparing             = scenario.name == L"139-synthetic-preparing-elapsed-chip";
++                        const std::wstring expectedShort = LoadStringResource(nullptr, preparing ? IDS_FILEOPS_PREPARING : IDS_FILEOPS_DISCOVERING);
++                        // fr-FR is forced above; this checks that the *painted header* still retains elapsed detail.
++                        const bool elapsedHeader = chip.taskStatusHeaderPaintedText.find(L"écoulé") != std::wstring::npos;
++                        const bool fits          = read && chip.taskStatusChipActuallyPainted && chip.taskStatusChipPaintedTextFits &&
++                                                   chip.taskStatusChipPaintedText == expectedShort && elapsedHeader;
++                        statusChipLabelsFit      = statusChipLabelsFit && fits;
++                        AppendLog(std::format(
++                            L"StatusChipPaintFit: {} dpi={} width={} painted={} text='{}' measuredPx={:.3f} availablePx={:.3f} elapsedHeader={} fit={}",
++                            scenario.name,
++                            dpi,
++                            widthDip,
++                            chip.taskStatusChipActuallyPainted,
++                            chip.taskStatusChipPaintedText,
++                            chip.taskStatusChipPaintedTextWidthPx,
++                            chip.taskStatusChipPaintedTextAvailableWidthPx,
++                            elapsedHeader,
++                            fits));
++                    }
++                    if (themeIndex == 0u && widthDip == 480 &&
++                        (scenario.name == L"18-completed" || scenario.name == L"19-completed-verified" || scenario.name == L"31-completed-group-expanded" ||
++                         scenario.name == L"136-completed-group-all-results-expanded"))
++                    {
++                        ++doneHeadingWitnessCount;
++                        PopupLayoutDebugSnapshot painted{};
++                        painted.taskId               = 1u;
++                        const bool read              = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), painted);
++                        const std::wstring operation = LoadStringResource(nullptr, IDS_FILEOP_OPERATION_COPY);
++                        const std::wstring done      = LoadStringResource(nullptr, IDS_FILEOPS_STATUS_COMPLETED);
++                        const bool fits              = read && painted.taskStatusChipActuallyPainted && painted.taskStatusChipPaintedTextFits &&
++                                                       painted.taskStatusChipPaintedText == done && painted.taskStatusHeaderPaintedText == operation &&
++                                                       ! painted.taskTerminalSummaryVisible;
++                        completedSemanticsFit        = completedSemanticsFit && fits;
++                        AppendLog(std::format(L"DoneHeaderPaint: {} dpi={} width={} chip='{}' header='{}' fit={}",
++                                              scenario.name,
++                                              dpi,
++                                              widthDip,
++                                              painted.taskStatusChipPaintedText,
++                                              painted.taskStatusHeaderPaintedText,
++                                              fits));
++                    }
++                    if (themeIndex == 0u && scenario.name == L"137-completed-group-all-results-collapsed")
++                    {
++                        ++groupBadgeWitnessCount;
++                        PopupLayoutDebugSnapshot painted{};
++                        const bool read                = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), painted);
++                        const std::wstring partialName = FormatStringResource(nullptr, IDS_FMT_FILEOPS_BADGE_PARTIAL_TOOLTIP, 1ul);
++                        const std::wstring unknownName = FormatStringResource(nullptr, IDS_FMT_FILEOPS_BADGE_INDETERMINATE_TOOLTIP, 1ul);
++                        const bool allGlyphsDrawn      = std::ranges::all_of(painted.completedGroupPaintedGlyphs, [](wchar_t glyph) { return glyph != L'\0'; });
++                        const bool fits       = read && painted.completedGroupExpectedBadges == 5u && painted.completedGroupPaintedBadges == 5u &&
++                                                painted.completedGroupPaintedBadgeMask == 31u && painted.completedGroupBadgeCountsFit &&
++                                                painted.completedGroupBadgeTooltipsInformative && allGlyphsDrawn &&
++                                                painted.completedGroupPaintedGlyphs[1] != painted.completedGroupPaintedGlyphs[2] &&
++                                                painted.completedGroupHostedNames[1] == partialName && painted.completedGroupHostedNames[2] == unknownName &&
++                                                partialName != unknownName;
++                        completedSemanticsFit = completedSemanticsFit && fits;
++                        AppendLog(std::format(L"CompletedGroupBadgePaint: {} dpi={} width={} partialGlyph=U+{:04X} unknownGlyph=U+{:04X} partialName='{}' "
++                                              L"unknownName='{}' fit={}",
++                                              scenario.name,
++                                              dpi,
++                                              widthDip,
++                                              static_cast<unsigned int>(painted.completedGroupPaintedGlyphs[1]),
++                                              static_cast<unsigned int>(painted.completedGroupPaintedGlyphs[2]),
++                                              painted.completedGroupHostedNames[1],
++                                              painted.completedGroupHostedNames[2],
++                                              fits));
++                    }
++                    if (themeIndex == 0u && widthDip == 480 && scenario.tasks.size() == 1u)
++                    {
++                        // Literal oracles: these exercise the actual hosted ProgressBar after SyncHostedControls,
++                        // not a second computation of the task model's expected percentage.
++                        double expectedValue       = 0.0;
++                        bool expectedIndeterminate = false;
++                        bool expectedSegmented     = false;
++                        bool checkProgress         = true;
++                        if (scenario.name == L"07-discovery-and-transfer")
++                            expectedIndeterminate = true;
++                        else if (scenario.name == L"09-copy-single-stream" || scenario.name == L"68-zero-byte-items")
++                            expectedValue = 37.5;
++                        else if (scenario.name == L"17-verifying")
++                        {
++                            expectedValue     = 75.0; // 100% transfer and 50% verification in equal halves.
++                            expectedSegmented = true;
++                        }
++                        else if (scenario.name == L"13-delete")
++                            expectedValue = 37.5; // 48 of 128 known Delete items.
++                        else if (scenario.name == L"141-delete-closed-known-items-zero" || scenario.name == L"142-delete-closed-known-bytes-zero")
++                            expectedValue = 0.0;
++                        else if (scenario.name == L"140-closed-zero-byte-unknown-items" || scenario.name == L"143-delete-closed-unknown")
++                            expectedIndeterminate = true;
++                        else
++                            checkProgress = false;
++                        if (checkProgress)
++                        {
++                            ++hostedProgressWitnessCount;
++                            PopupLayoutDebugSnapshot observed{};
++                            observed.taskId = scenario.tasks.front().taskId;
++                            const bool read = DebugGetFileOperationsPopupLayoutSnapshot(popup.get(), observed);
++                            const std::wstring expectedHelp =
++                                expectedSegmented ? FormatStringResource(nullptr, IDS_FMT_FILEOPS_PROGRESS_SEGMENTS_ACCESSIBLE, 100u, 50u) : std::wstring{};
++                            const bool match = read && observed.found && observed.taskHostedProgressPresent &&
++                                               std::abs(observed.taskHostedProgressValue - expectedValue) <= 0.01 &&
++                                               observed.taskHostedProgressIndeterminate == expectedIndeterminate &&
++                                               observed.taskHostedProgressSegmented == expectedSegmented && observed.taskHostedProgressHelpText == expectedHelp;
++                            hostedProgressValuesMatch = hostedProgressValuesMatch && match;
++                            AppendLog(std::format(
++                                L"HostedProgressValue: {} dpi={} width={} actual={:.2f} expected={:.2f} indeterminate={} segmented={} help='{}' fit={}",
++                                scenario.name,
++                                dpi,
++                                widthDip,
++                                observed.taskHostedProgressValue,
++                                expectedValue,
++                                observed.taskHostedProgressIndeterminate,
++                                observed.taskHostedProgressSegmented,
++                                observed.taskHostedProgressHelpText,
++                                match));
++                        }
++                    }
+                     for (const auto& task : scenario.tasks)
+                     {
+                         PopupLayoutDebugSnapshot measured{};
+@@ -1399,12 +1567,23 @@
+         Fail(L"The compact destination menu must show its chevron, retain its localized UIA name and tooltip, and expose an active hit target.");
+     if (! abbreviatedPathsFit)
+         Fail(L"Long French/Unicode filenames must fit their painted path rows, retain the extension and expose the complete accessible path.");
++    if (! statusChipLabelsFit || statusChipWitnessCount != 6u * monitors.size())
++        Fail(L"Elapsed Discovering/Preparing status chips must paint their short French labels entirely inside the actual chrome while the header retains "
++             L"elapsed detail.");
+     if (! terminalPresentationFits)
+         Fail(L"Completed-group actions and badges, and full expanded terminal results, must remain readable without clipping.");
++    if (! completedSemanticsFit || doneHeadingWitnessCount != 4u * monitors.size() || groupBadgeWitnessCount != 2u * monitors.size())
++        Fail(L"Done headings must not repeat the painted status chip; all five completed-group badges must draw and retain distinct Partial/Unknown hosted "
++             L"names and glyphs.");
++    if (! hostedProgressValuesMatch || hostedProgressWitnessCount != 9u * monitors.size())
++        Fail(L"The retained hosted task ProgressBar must expose the whole-task value, indeterminate state, and transfer/verification segments; see "
++             L"HostedProgressValue diagnostics.");
+     if (! speedLimitLabelsFit)
+         Fail(L"The full French speed-limit label must fit the actual Selector text lane, including both chevron-balancing margins.");
+     if (! waitingCardsFit || ! waitingTransitionsFit)
+         Fail(L"Waiting cards must use only visible body/action space and retain safe same-task phase transitions; see WaitingCardFit/Transition diagnostics.");
+-    return terminalPresentationFits && speedLimitLabelsFit && waitingCardsFit && waitingTransitionsFit && supplemental && manifest.good() && pathLabelsFit &&
+-           deletionPresentationFits && footerSummariesFit && destinationMenusFit && abbreviatedPathsFit;
++    return statusChipLabelsFit && statusChipWitnessCount == 6u * monitors.size() && hostedProgressValuesMatch &&
++           hostedProgressWitnessCount == 9u * monitors.size() && completedSemanticsFit && doneHeadingWitnessCount == 4u * monitors.size() &&
++           groupBadgeWitnessCount == 2u * monitors.size() && terminalPresentationFits && speedLimitLabelsFit && waitingCardsFit && waitingTransitionsFit &&
++           supplemental && manifest.good() && pathLabelsFit && deletionPresentationFits && footerSummariesFit && destinationMenusFit && abbreviatedPathsFit;
+ }

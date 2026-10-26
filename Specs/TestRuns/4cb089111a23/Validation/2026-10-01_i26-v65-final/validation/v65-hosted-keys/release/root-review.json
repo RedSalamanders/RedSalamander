@@ -1,0 +1,38 @@
+{
+  "schema": "i26-v65-hosted-keys-release-root-review.v1",
+  "reviewer": "root",
+  "rootReviewStatus": "passed",
+  "utc": "2026-10-01T11:24:20.6665685+00:00",
+  "configuration": "Release",
+  "runId": "20261001T112207Z-80192-1f5f873df736462f91655cb76638d1a9",
+  "manifestSha256": "3222ff1f2e90977a0bae368adb7a582fd54a938ca65b430fad5caaa0b9f121ce",
+  "sourceSnapshotId": "f2e0a18a04fbc8a95368adc0c946bafb5ebccdf68d81b4a476d0fefbd323593c",
+  "receiptSha256": "833ba176b221c1be11abb67adc6a49347fdaf2cd878c5eda8097cdfd44d73564",
+  "qualificationSha256": "e70ecd164c66640d28fbedd7d63a2eb398461d98a4250915679c8dc61b195339",
+  "nativeSha256": "850b9ab8f5b1084ab9c80978c7e4bac266edf9a4a4c8efb06fa151ca5ab65bf6",
+  "traceSha256": "d63cc207c7746ae361b3924fc9a87ab072a517502142ba02161a72885c4acaaa",
+  "traceRows": [
+    "HostedDecisionKey: scenario=ordinary default Enter task=2 key=13 bucket=0 default=FileOperations.Action.22.2.11 cancel=FileOperations.Action.22.2.11 focused= outcome=passed",
+    "HostedDecisionKey: scenario=same-host Escape task=4 key=27 bucket=20 default=FileOperations.Action.22.4.5 cancel=FileOperations.Action.22.4.11 focused=FileOperations.Action.22.4.11 outcome=passed",
+    "HostedDecisionKey: scenario=Recycle safe Enter task=6 key=13 bucket=11 default=FileOperations.Action.22.6.11 cancel=FileOperations.Action.22.6.11 focused=FileOperations.Action.22.6.11 outcome=passed",
+    "HostedDecisionKey: scenario=Recycle Escape task=8 key=27 bucket=11 default=FileOperations.Action.22.8.11 cancel=FileOperations.Action.22.8.11 focused=FileOperations.Action.22.8.11 outcome=passed"
+  ],
+  "cases": [
+    {
+      "name": "cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot",
+      "status": "passed",
+      "duration_ms": 12559,
+      "repeat_index": 1
+    },
+    {
+      "name": "cmd_pane_fileops_conflict_hosted_decision_keys",
+      "status": "passed",
+      "duration_ms": 945,
+      "repeat_index": 1
+    }
+  ],
+  "desktopSandboxClean": true,
+  "directHwndRoutingNotPhysicalInput": true,
+  "debugVerified": false,
+  "wholePlanComplete": false
+}

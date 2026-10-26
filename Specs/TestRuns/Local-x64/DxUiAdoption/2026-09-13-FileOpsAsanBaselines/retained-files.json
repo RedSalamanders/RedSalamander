@@ -1,0 +1,218 @@
+[
+  {
+    "file": "master0dd-capabilities-runner.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-capabilities.log",
+    "bytes": 2683,
+    "sha256": "f62c27ea7f15c5c4e461443722e43b1874aa26e1229f2d2df952c5147554559f"
+  },
+  {
+    "file": "master0dd-capabilities-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-capabilities-summary.json",
+    "bytes": 494,
+    "sha256": "fece0eb7d1bd23249e2314b19563c1b3d8b769f349fd7458dc8bcece7bfe125e"
+  },
+  {
+    "file": "master0dd-capabilities-fileops_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-capabilities\\archive\\4cb089111a23\\FileOps\\2026-09-13_093354\\fileops_results.json",
+    "bytes": 1129,
+    "sha256": "d49b9309b2fb6607e35412926df8aba2b509f4dd3e4998f1b4b94a02c9aaa1df"
+  },
+  {
+    "file": "master0dd-capabilities-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-capabilities\\final-results\\run-all-tests-results.json",
+    "bytes": 10611,
+    "sha256": "8299177ba807b2747a8df0f9d904929d06f894dcbd989004a4883827d156c517"
+  },
+  {
+    "file": "master0dd-mtp-runner.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-mtp.log",
+    "bytes": 2665,
+    "sha256": "f0356380f4cb70ab95659298f1e9e8b9ba887069337b63eb54108a4e69bf3f47"
+  },
+  {
+    "file": "master0dd-mtp-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-mtp-summary.json",
+    "bytes": 484,
+    "sha256": "52984f7a28e31d291b5f628ee285419d65059ca84dbcaf1cf05d4324e8cf2325"
+  },
+  {
+    "file": "master0dd-mtp-fileops_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-mtp\\archive\\4cb089111a23\\FileOps\\2026-09-13_093428\\fileops_results.json",
+    "bytes": 1098,
+    "sha256": "402a3f93ec8608e5d62bf04982363febba1252a1227d9be7789595dfb02b4400"
+  },
+  {
+    "file": "master0dd-mtp-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-mtp\\final-results\\run-all-tests-results.json",
+    "bytes": 10578,
+    "sha256": "6ca61fcd175886e366ab3c3d31acb498fd60a06cc382556ee3417cef4da33e5a"
+  },
+  {
+    "file": "master0dd-queue-after-runner.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-queue-after.log",
+    "bytes": 1776,
+    "sha256": "7b1532888ca1b9e570d264de068640d1ce93f1c1529f8f0a423dc69bb901f0d5"
+  },
+  {
+    "file": "master0dd-queue-after-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-queue-after-summary.json",
+    "bytes": 501,
+    "sha256": "5ee94d5996552d31e3a0876cbb69b1fc1ec48c150f774e041f01d325bf6667b9"
+  },
+  {
+    "file": "master0dd-queue-after-fileops_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-queue-after\\archive\\4cb089111a23\\FileOps\\2026-09-13_093501\\fileops_results.json",
+    "bytes": 896,
+    "sha256": "860f1335d72203e1bd49aea841309add65acd42ee35faee300c85630cfeb90f3"
+  },
+  {
+    "file": "master0dd-queue-after-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-queue-after\\final-results\\run-all-tests-results.json",
+    "bytes": 10176,
+    "sha256": "e83826276e3008362a2efb78db359984a19367520bb02fbd415040545a8a982b"
+  },
+  {
+    "file": "master0dd-bandwidth-runner.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-bandwidth.log",
+    "bytes": 1764,
+    "sha256": "73a23cdc574f3bc0e25d26e78e113a00852ba0da4699ae6c234daae6acf7541e"
+  },
+  {
+    "file": "master0dd-bandwidth-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-bandwidth-summary.json",
+    "bytes": 488,
+    "sha256": "f67633d70655306128ac38532fc94eb97dec095acdaa047085cfdd2ba408deca"
+  },
+  {
+    "file": "master0dd-bandwidth-fileops_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-bandwidth\\archive\\4cb089111a23\\FileOps\\2026-09-13_093538\\fileops_results.json",
+    "bytes": 885,
+    "sha256": "6d5943135843c5b09185327fd6c728cf6efc63008787cd4cf4480aefffb25c96"
+  },
+  {
+    "file": "master0dd-bandwidth-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-bandwidth\\final-results\\run-all-tests-results.json",
+    "bytes": 10154,
+    "sha256": "75b49003d274aa03468200befcc0ecdd694396d7b61e82a73dfd7699206b1734"
+  },
+  {
+    "file": "master0dd-curl-wide-runner.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-curl-wide.log",
+    "bytes": 2717,
+    "sha256": "d62aa8b6a40c2ada6a8e43bfffd2fc0922ba598ca3f0c4b43ea1c64a24b18d7b"
+  },
+  {
+    "file": "master0dd-curl-wide-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-curl-wide-summary.json",
+    "bytes": 485,
+    "sha256": "bae60f8f2f63240249ca070a4fa6c46202a4b8b5bf6bbb6a9c82968fd531fa8b"
+  },
+  {
+    "file": "master0dd-curl-wide-fileops_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-curl-wide\\archive\\4cb089111a23\\FileOps\\2026-09-13_094117\\fileops_results.json",
+    "bytes": 1199,
+    "sha256": "6ca2d0fc9a18b61f0028c038916342187d3fc6be344f0e51b3fb3a32dbe3a1fe"
+  },
+  {
+    "file": "master0dd-curl-wide-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-curl-wide\\final-results\\run-all-tests-results.json",
+    "bytes": 10673,
+    "sha256": "848176bfcd8cfc0b16c97be4dd28d4ab485365566d79b645a2b8c78d5ccd38ab"
+  },
+  {
+    "file": "master0dd-mtp-isolated-runner.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-mtp-isolated.log",
+    "bytes": 1767,
+    "sha256": "70a2daa7a316244fa6c92b0731e2542b9996778b3a58064a093c46f73a5602ae"
+  },
+  {
+    "file": "master0dd-mtp-isolated-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-mtp-isolated-summary.json",
+    "bytes": 493,
+    "sha256": "d3d252d32636d78fbc6f08d40319313f32142e45d8fa336a5f96ae2a764a8bf8"
+  },
+  {
+    "file": "master0dd-mtp-isolated-fileops_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-mtp-isolated\\archive\\4cb089111a23\\FileOps\\2026-09-13_094318\\fileops_results.json",
+    "bytes": 886,
+    "sha256": "58223509b3e831e5bc8f11da80c05e400d78e16ba8fc36ecbcb8d57581b04baf"
+  },
+  {
+    "file": "master0dd-mtp-isolated-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-mtp-isolated\\final-results\\run-all-tests-results.json",
+    "bytes": 10157,
+    "sha256": "b4363112131d4d9555472048c5d412a040ac3ad93f961ecdf23861dc8937c8bd"
+  },
+  {
+    "file": "a20f6680-mtp-isolated-runner.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-a20f6680-mtp-isolated.log",
+    "bytes": 1770,
+    "sha256": "880f2569049cdee541a4c0cc66a351f7d1a8ab96d8aa365aa8b523863fa2c9bf"
+  },
+  {
+    "file": "a20f6680-mtp-isolated-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-a20f6680-mtp-isolated-summary.json",
+    "bytes": 493,
+    "sha256": "16118e05c8abf4c1dc0bcb326bb5a64cba5bb442328dbb8dea33e389b5c46a21"
+  },
+  {
+    "file": "a20f6680-mtp-isolated-fileops_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-a20f6680-mtp-isolated\\archive\\4cb089111a23\\FileOps\\2026-09-13_094517\\fileops_results.json",
+    "bytes": 888,
+    "sha256": "70790cff289e54c87afafcbad10f619465ed52969c08f9ca41ec0579917744f3"
+  },
+  {
+    "file": "a20f6680-mtp-isolated-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-a20f6680-mtp-isolated\\final-results\\run-all-tests-results.json",
+    "bytes": 10164,
+    "sha256": "e34a2567f290b6cf05a490535948d2d4a078579d5ab5cae094a9e92759b85bbe"
+  },
+  {
+    "file": "a20f6680-queue-after-runner.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-a20f6680-queue-after.log",
+    "bytes": 1778,
+    "sha256": "cae239ab15b6111cea4d54fe3d5f4cb48beb6aafb73cd4572cd7ee1a501a8c0a"
+  },
+  {
+    "file": "a20f6680-queue-after-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-a20f6680-queue-after-summary.json",
+    "bytes": 500,
+    "sha256": "5fbc53d713b5f8ec6f70531940503e28e3de69872081f6386aaf0a1158f002fe"
+  },
+  {
+    "file": "a20f6680-queue-after-fileops_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-a20f6680-queue-after\\archive\\4cb089111a23\\FileOps\\2026-09-13_094551\\fileops_results.json",
+    "bytes": 896,
+    "sha256": "813a0d97ad5a37c68ca35d570a8baf61e2435588d75f89c16eff4e177eae999e"
+  },
+  {
+    "file": "a20f6680-queue-after-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-a20f6680-queue-after\\final-results\\run-all-tests-results.json",
+    "bytes": 10178,
+    "sha256": "b170a15fe421e18af1ac6855cec647e93da8738b88370a3e060d7d2b29456291"
+  },
+  {
+    "file": "run-fileops-baseline-asan-case.ps1.txt",
+    "source": "Z:\\RedSalamander.Perf\\runs\\I19-work\\scratch\\run-fileops-baseline-asan-case.ps1",
+    "bytes": 3137,
+    "sha256": "ba7128b65347c23ffe44c27811c91bcc5d1fdddb41f6a8f7a9f3332b0f75a186"
+  },
+  {
+    "file": "run-fileops-baseline-asan-isolated-case.ps1.txt",
+    "source": "Z:\\RedSalamander.Perf\\runs\\I19-work\\scratch\\run-fileops-baseline-asan-isolated-case.ps1",
+    "bytes": 3438,
+    "sha256": "dd1d65de4071da0d0ac4a1050004ce490d5e312bee8ecca582b333c01e389e6c"
+  },
+  {
+    "file": "run-baseline-fileops-asan-diagnostics.ps1.txt",
+    "source": "Z:\\RedSalamander.Perf\\runs\\I19-work\\scratch\\run-baseline-fileops-asan-diagnostics.ps1",
+    "bytes": 926,
+    "sha256": "4ffedf13059cbeaebc73968440e638f18484dbf66f6b9bd107aa338fad8a0254"
+  },
+  {
+    "file": "source-comparison.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\additional-fileops-source-comparison.json",
+    "bytes": 3530,
+    "sha256": "46d3e669fc659729b50457928702035e0da70926634f7fcd7cd721c3f6e5c4c0"
+  }
+]

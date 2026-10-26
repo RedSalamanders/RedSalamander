@@ -1,0 +1,298 @@
+{
+  "schema": "i27.f7-publication-allowlist.proposed.v1",
+  "status": "FINAL-PROPOSED-NOT-PUBLISHED",
+  "experimental_f7_variant": "baseline",
+  "original_runner_run_id": "20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153",
+  "native_metric_run_id": "2026-10-03_182244",
+  "native_metric_process": 70028,
+  "proposed_repo_run": "Specs/TestRuns/4cb089111a23/FileOps/20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153",
+  "segments_in_same_original_run": true,
+  "selected_rows": 5694,
+  "selected_row_bytes": 2586444,
+  "original_raw_sha256": "bc248f603434ece178be4da089787a24a49b467ffc225c33f5150bd6055b979d",
+  "original_raw_bytes": 437780804,
+  "original_raw_lines": 1284856,
+  "closed_archive_manifest_sha256": "6213679d6008e30c26c0e5b43e3f28e0e89c397bdf141b43357378bd2ba0301d",
+  "whole_archive_raw_binding_matches_curator": true,
+  "strict_line_number_order_and_segment_ranges_match_metadata": true,
+  "no_fresh_file_hashes_computed_by_this_review": false,
+  "files": [
+    {
+      "target": "raw-01/perf_metrics.jsonl",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-curation-external-20261003T204543Z\\baseline\\raw-01\\perf_metrics.jsonl",
+      "bytes": 2096732,
+      "expected_sha256": "f8af2272d43d0eeb3e77f2acd611a5f7fd2f718ce919c1b9d8a6b5597b74be90",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "unchanged native rows in original order",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "raw-02/perf_metrics.jsonl",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-curation-external-20261003T204543Z\\baseline\\raw-02\\perf_metrics.jsonl",
+      "bytes": 489712,
+      "expected_sha256": "74dc62089a1c8a6d52c133f50a8fabe07879bc023d8c144bb8b13cbb23a68187",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "unchanged native rows in original order",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/row-selection.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-curation-external-20261003T204543Z\\baseline\\row-selection.json",
+      "bytes": 76746,
+      "expected_sha256": "b4bac7a606e970759b592efa7136d1260b41363a56714e682c9d36cad4024332",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "all 5694 original line numbers and deterministic selector",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/results.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-original-buffers-idle-agreed-20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\results.json",
+      "bytes": 886,
+      "expected_sha256": "3cba93424c8c680c2450c476f1b2a8077d35b355b033514f28530833b9f76360",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "fileops/trace.txt",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-original-buffers-idle-agreed-20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+      "bytes": 805690,
+      "expected_sha256": "f5c2630ff3c42d180d2e7ca4943bd3795c4ec13d3b61fa74530cb1257f496e0b",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "results.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-original-buffers-idle-agreed-20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\results.json",
+      "bytes": 1417,
+      "expected_sha256": "6ca4b0a329785313a0f9aeeb49aeb9bc7cccdc23a5b2f791a6932e0a81394216",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "trace.txt",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-original-buffers-idle-agreed-20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\trace.txt",
+      "bytes": 820000,
+      "expected_sha256": "dbf2008f37d0291081a3a8c5e51e5e9236695403167105657a22a3fdaa8b3efd",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "run-all-tests-results.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-original-buffers-idle-agreed-20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "bytes": 74617,
+      "expected_sha256": "db6947824371c6684c66877d4539747f713a65b709d8a950f4da1a807d45f1cc",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "run-all-tests-case-history.jsonl",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-original-buffers-idle-agreed-20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153\\C-archive\\whole-run\\artifacts\\selftest\\last_run\\run-all-tests-case-history.jsonl",
+      "bytes": 1073,
+      "expected_sha256": "1cdc16f5845f682a5362ae49c3d4e12c558111e62ff38ff0dacb736def32a0ab",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/entry-fingerprints.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-original-buffers-idle-agreed-20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153\\C-archive\\whole-run\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+      "bytes": 1695,
+      "expected_sha256": "83643dc0871b2c1b8aec2db8d03d9357691702c31cd8268822280fed42ee4f6c",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/validation-plan.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-original-buffers-idle-agreed-20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153\\C-archive\\whole-run\\artifacts\\selftest\\previous_run\\validation-plan.json",
+      "bytes": 1617,
+      "expected_sha256": "fa5c5aef742054a752ff9081adca269daef07bb4bb8e63c061a92aec3d14b12d",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/validation-plan-decision.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-original-buffers-idle-agreed-20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153\\C-archive\\whole-run\\artifacts\\selftest\\previous_run\\validation-plan-decision.json",
+      "bytes": 4849,
+      "expected_sha256": "c1d022f5a38104d4deddf34484506673c50c9763e170fa86d7a3f3a8a1957902",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/whole-archive-manifest.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-original-buffers-idle-agreed-20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153\\C-archive\\archive-manifest.json",
+      "bytes": 20918,
+      "expected_sha256": "6213679d6008e30c26c0e5b43e3f28e0e89c397bdf141b43357378bd2ba0301d",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original provenance/review record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/immutable-receipt.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-original-buffers-idle-agreed-20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153\\receipt-binding\\immutable-receipt.json",
+      "bytes": 85040,
+      "expected_sha256": "aa0e88e39554d5a8f073e034e1fcbecf07ebb73c3533d530ba0e44d50ea75e3c",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original provenance/review record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/invocation.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-original-buffers-idle-agreed-20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153\\invocation.json",
+      "bytes": 473,
+      "expected_sha256": "db2144732369836f8e53f06fec4f754e8ef650b9f20c709e21e3cc6a169ad8e7",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original provenance/review record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/runner.txt",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-original-buffers-idle-agreed-20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153\\runner.log",
+      "bytes": 1770,
+      "expected_sha256": "a4ff009b156c37f9b53165154363b7bea32064f51df31e4f809b1ce0108ae9ff",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original provenance/review record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/D-post-quiet-absence.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-original-buffers-idle-agreed-20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153\\D-post-quiet-absence.json",
+      "bytes": 531,
+      "expected_sha256": "7cb0fbcc2723fac5cedb7d1559a57291b02d33450ac53d6ebe216151a6593c96",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original provenance/review record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "provenance/Curate-ClosedF7Rows.reviewed.ps1",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\Curate-ClosedF7Rows.reviewed.ps1",
+      "bytes": 10198,
+      "expected_sha256": "7b0868f55a7ed7c4672ae9f31f9e30bba4e043874e3cc0f49ef0d44c8215dc99",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original provenance/review record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "review/ROOT-F7-ASSESSMENT.md",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-comparison-review\\ROOT-F7-ASSESSMENT.md",
+      "bytes": 2706,
+      "expected_sha256": "d87c43f081cdf3f02c5fdbdc753160ce7c2f0ec84d16d3f4fe609e1192ae0f7b",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original provenance/review record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "review/ROOT-F7-COUNTER-CLOSURE.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-comparison-review\\ROOT-F7-COUNTER-CLOSURE.json",
+      "bytes": 16708,
+      "expected_sha256": "4fbaa4a544b43aa8d99d9610d05042c1c4b62550767dbe04a3bbc8c92f31dc08",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original provenance/review record, no rewriting",
+      "root_byte_verification_required": true
+    },
+    {
+      "target": "review/f7-all-triplets-and-adverses.json",
+      "source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-comparison-review\\f7-all-triplets-and-adverses.json",
+      "bytes": 624935,
+      "expected_sha256": "1b02598643780c122043f7525d7800fadaa5d0da47e1fda52e05916f9c77af53",
+      "hash_origin": "Independently byte-hashed selected bounded source; existing recorded digest matched when available",
+      "role": "complete original provenance/review record, no rewriting",
+      "root_byte_verification_required": true
+    }
+  ],
+  "source_build_binding": {
+    "experimental_f7_variant": "baseline",
+    "checkout_binding_role": "candidate",
+    "checkout": "C:\\RsI27Followup",
+    "profile": "C:\\RsI27Followup\\.build\\x64\\Release",
+    "receipt_id": "e0d3bf3d2d2a135165aa29f4541b26e1ebbd3be98b52bd6081223cca2eb5f072",
+    "source_snapshot_id": "cc4001cbcb917d8bbe10ff3b402d8c209089e9bd28996d3f0ba7f91ad6230e97",
+    "canonical_build_metadata": {
+      "schema": "red-salamander.build-receipt.v1",
+      "canonicalization": "rs-canonical-json-v1",
+      "receipt_id": "e0d3bf3d2d2a135165aa29f4541b26e1ebbd3be98b52bd6081223cca2eb5f072",
+      "repo_identity": "25f45fc9e8183f8620370c57c2ed1db9ad1c45aef47f8598aed6869549a9d22a",
+      "source_snapshot_id": "cc4001cbcb917d8bbe10ff3b402d8c209089e9bd28996d3f0ba7f91ad6230e97",
+      "git_head": "fbe113a0f747f89af32d6fb337e4e67b9f5bdd6b",
+      "platform": "x64",
+      "configuration": "Release",
+      "target": "solution",
+      "tests_enabled": true,
+      "toolchain_identity_digest": "270491a7822f6732b3fab0f322710a3d063368ace4d2ee50f8bea88e1401cb50",
+      "vcpkg_identity_digest": "d14885142b565a1097b95a5d2c1d35613a0f578e54f84a9c36111e16a56f9eb5",
+      "ghostty_runtime_identity": "f7f7ceb2e4049e34cf06734d4abb50fd54b578a25de7d65bc72b8e1c17f55172",
+      "project_graph_digest": "5b8bd281ed2f8eb3a7daa1ccd61130ab28d7750259035753596ea8a591a0a9d7",
+      "runtime_dependency_digest": "4b03132c2958340a5e22a4ec18a808052d3066f1d1fc840c6bb65041559cbc0b"
+    },
+    "original_pointer": "C:\\RsI27Followup\\.build\\x64\\Release\\build-receipt.json",
+    "original_pointer_sha256": "aa0e88e39554d5a8f073e034e1fcbecf07ebb73c3533d530ba0e44d50ea75e3c",
+    "original_record": "C:\\RsI27Followup\\.build\\x64\\Release\\receipts\\e0d3bf3d2d2a135165aa29f4541b26e1ebbd3be98b52bd6081223cca2eb5f072.json",
+    "original_record_sha256": "aa0e88e39554d5a8f073e034e1fcbecf07ebb73c3533d530ba0e44d50ea75e3c",
+    "original_git_layout": {
+      "kind": "linked_worktree_missing_native_ref_v1",
+      "actual_head": "fbe113a0f747f89af32d6fb337e4e67b9f5bdd6b",
+      "native_head_text": "ref: refs/heads/codex/fileops-safety-followup",
+      "worktree_ref": "refs/heads/codex/fileops-safety-followup",
+      "common_ref_head": "fbe113a0f747f89af32d6fb337e4e67b9f5bdd6b",
+      "gitdir": "Z:\\src\\RedSalamander\\.git\\worktrees\\RsI27Followup",
+      "commondir": "Z:\\src\\RedSalamander\\.git",
+      "missing_native_worktree_ref": true,
+      "explanation": "Native TryReadGitHeadInfo reads the per-worktree gitdir loose/packed refs but does not follow commondir."
+    },
+    "recorded_entry_fingerprint": "ca5751baa405bbe084564deac0dc6cf12d215c77ef90d023ed27515ccc772539",
+    "recorded_build_artifact_component": "bb507dc722e77388019470710ab657e1340b7d91b44034cf42004c5cb2788af9",
+    "recorded_artifact_epoch": 0,
+    "original_binding_external": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-complete-original-buffers-idle-agreed-20261003T182209Z-51656-126e7ed59f724fefae9d270d755c8153\\receipt-binding\\fresh-build-binding.json",
+    "root_canonical_receipt_component_verification_required": true,
+    "scope": "Recorded immutable provenance only; no current-source/output re-attestation or expanded receipt reconstruction."
+  },
+  "external_complete_analysis": {
+    "path": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\f7-comparison-review\\f7-analysis-20261003T195501Z-62d5f54439ae45ef987252d49d86cb53.json",
+    "sha256": "b9562bae1435d7c49e4b5b797615ac0946dfe3315e3bec0d12c3cfac8407465f",
+    "digest_origin": "parent supplied; not rehashed",
+    "bytes": 29647821
+  },
+  "omitted_duplicate_or_external_records": [
+    "receipt-binding/build-receipt.json: same recorded pointer/immutable SHA; one exact immutable JSON retained",
+    "receipt-binding/fresh-build-binding.json: full original external; scalar digest/source/git binding projected here without duplicate receipt/output arrays",
+    "summary.json: wrapper duplicate retained externally; original native results and runner aggregate retained",
+    "workspace-initial/final/after records: external complete archive and copied hashes retained; canonical snapshot digests retained",
+    "full high-frequency raw streams and full 29.6 MB analysis: exact external archive/record hashes retained",
+    "old failed/partial runs: unchanged external historical records, never relabelled passed"
+  ],
+  "required_root_checks": [
+    "Byte-verify every selected exact source/copy against expected SHA before/copy/after; all pending selected small hashes are filled here",
+    "Recompute canonical raw receipt semantics and build_artifact component from retained immutable JSON and compare to recorded fingerprint; no old output/current source comparison",
+    "Confirm complete native results/status/skip reasons, original blank native commit and scoped common-ref exception",
+    "Independent original row/selector/line provenance and compact all-triplets/adverses inspection; keep all 24 route skips and all 53 adverse observations",
+    "Validate exact final run with Test-TestRunArchive.ps1 -RunPath BEFORE force-stage; then changed-set and -Inventory; preserve every failure",
+    "No qualification or automatic pass from archive/metadata checks"
+  ],
+  "original_allowlisted_file_bytes": 5138313,
+  "this_manifest_target": "publication-manifest.json",
+  "this_manifest_bytes": 21390,
+  "proposed_total_bytes": 5159703,
+  "max_file_bytes": 2097152,
+  "max_original_run_bytes": 5242880,
+  "remaining_bytes": 83177,
+  "verification": {
+    "selected_files": 21,
+    "filled_pending_small_hashes": 6,
+    "all_selected_source_sizes_and_hashes_verified": true,
+    "original_large_raw_and_full_analysis_rehashed": false,
+    "original_source_and_PE_read_or_hashed": false,
+    "freeze": "Original receipt/source/variant axes preserved; no current build re-attestation",
+    "original_fresh_binding_sha256": "dfb5c6061ad02780ecf7b1323514f8f85f0bbe92d62968a589fe223a9f8d877d",
+    "canonical_metadata_projection_matches_archived_binding": true,
+    "native_receipt_component_validation": "Root still must recompute canonical receipt/build_artifact semantics; scalar equality alone is insufficient",
+    "qualification": "Final immutable proposal only; root assessment unchanged; no publication/native/I27 qualification"
+  },
+  "this_manifest_source": "C:\\RedSalamander.Perf\\evidence\\i27-followup-20261002-0e139fb\\resume-20261003T121349Z\\final-run-review\\F7-PublicationAllowlist.final-proposed-20261003T220637Z\\F7-baseline.json"
+}

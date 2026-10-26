@@ -1,0 +1,24 @@
+{
+  "profile": "Debug",
+  "results": [
+    {
+      "log": "menu-closeout-debug-TestViewerSpaceAnalysisHostVirtualGridAndLifetime.txt",
+      "exitCode": 0,
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime"
+    },
+    {
+      "log": "menu-closeout-debug-TestViewerSpaceLifecycleCaptures.txt",
+      "exitCode": 0,
+      "case": "TestViewerSpaceLifecycleCaptures"
+    },
+    {
+      "log": "menu-closeout-debug-interactive.txt",
+      "exitCode": 0,
+      "case": "TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses"
+    }
+  ],
+  "viewerSpaceSha256": "98FEC5A5A998C6DFA8122F087BAFC4C6E940478415A868C4DDEC16748CAAEF6E",
+  "receiptId": "f03efff201e9db0e6be38444cd2733b5619a213899ce9752a95c2e0766a83b41",
+  "sourceSnapshotId": "e6ca38d6f43ad783c78cfbdd7886945d455f436c4d23df1862a969bb6352c382",
+  "exeSha256": "378090E8D9A1A0266D240F6928174EC7069B0CDA5A9041635419A00CD287F925"
+}

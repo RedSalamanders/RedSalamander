@@ -1,4 +1,5 @@
 #include "Framework.h"
+#include "WindowActivation.h"
 
 #include "CompareDirectoriesWindow.Internal.h"
 #include "FileMetadataFormatting.h"
@@ -363,6 +364,12 @@ LRESULT CompareDirectoriesWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM
     switch (msg)
     {
         case WM_CREATE: return OnCreate(hwnd) ? 0 : -1;
+        case WM_CLOSE:
+            if (! OnClose())
+            {
+                return 0;
+            }
+            break;
         case WM_DESTROY: OnDestroy(); return 0;
         case WM_NCDESTROY: OnNcDestroy(); return 0;
         case WM_SIZE: OnSize(); return 0;
@@ -592,7 +599,7 @@ void CompareDirectoriesWindow::RestoreOwnerFocusAfterClose() noexcept
             ShowWindow(restoreOwner, SW_RESTORE);
         }
         static_cast<void>(SetActiveWindow(restoreOwner));
-        static_cast<void>(SetForegroundWindow(restoreOwner));
+        static_cast<void>(Common::RequestForegroundWindow(restoreOwner));
     }
 
     if (restoreFocus)
@@ -628,6 +635,20 @@ bool CompareDirectoriesWindow::OnCreate(HWND hwnd) noexcept
     Layout();
     ShowOptionsPanel(true);
     return true;
+}
+
+bool CompareDirectoriesWindow::OnClose() noexcept
+{
+    // The application close already asked for (or found nothing to cancel in) every engine, this
+    // one included, before it closes the remaining windows.
+    if (HostIsPromptShutdown())
+    {
+        return true;
+    }
+    // This window owns its own File Operations engine: closing it with work in progress asks the
+    // same "cancel and close, or keep running" consent as the application close, and an accepted
+    // close waits, refusing new work, until the canceled tasks have stopped.
+    return _folderWindow.ConfirmCancelAllFileOperations(_hWnd.get());
 }
 
 void CompareDirectoriesWindow::OnDestroy() noexcept
@@ -668,6 +689,7 @@ void CompareDirectoriesWindow::OnDestroy() noexcept
     }
 
     _folderWindow.SetShowSortMenuCallback({});
+    _folderWindow.SetApplicationExitFolderWindow(nullptr);
     _folderWindow.SetPanePathChangedCallback({});
     _folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Left, {});
     _folderWindow.SetPaneEnumerationCompletedCallback(FolderWindow::Pane::Right, {});
@@ -1524,6 +1546,9 @@ void CompareDirectoriesWindow::CreateChildWindows(HWND hwnd) noexcept
     static_cast<void>(EnsureDxChromeHosts());
 
     _folderWindow.Create(hwnd, 0, 0, 10, 10);
+    // An accepted application exit refuses Compare pane work and sync too, not only main-window work,
+    // and the application exit consent counts, cancels and waits for this window's engine.
+    _folderWindow.SetApplicationExitFolderWindow(_applicationFolderWindow);
     _folderWindow.SetSettings(_settings);
     _folderWindow.SetShortcutManager(_shortcuts);
     _folderWindow.SetShowSortMenuCallback([this](FolderWindow::Pane pane, POINT screenPoint) noexcept { ShowSortMenuPopup(pane, screenPoint); });
@@ -2588,6 +2613,10 @@ bool CompareDirectoriesWindow::StartCompareSyncToOtherPane(FolderWindow::Pane so
     {
         return false;
     }
+    if (_folderWindow.RefuseFileOperationForPendingExit(sourcePane, operation))
+    {
+        return true;
+    }
 
     const ComparePane compareSourcePane                = sourcePane == FolderWindow::Pane::Left ? ComparePane::Left : ComparePane::Right;
     const CompareDirectoriesPaneContext& sourceContext = compareSourcePane == ComparePane::Left ? _leftContext : _rightContext;
@@ -2739,7 +2768,7 @@ void CompareDirectoriesWindow::OnFolderWindowFileOperationCompleted(const Folder
 
 LRESULT CompareDirectoriesWindow::OnExecuteShortcutCommand(LPARAM lp) noexcept
 {
-    auto payload = TakeMessagePayload<std::wstring>(lp);
+    auto payload = TakeMessagePayload<std::wstring>(_hWnd.get(), WndMsg::kCompareDirectoriesExecuteCommand, lp);
     if (! payload || payload->empty())
     {
         return 0;
@@ -2967,6 +2996,12 @@ bool DebugSetCompareDirectoriesRunPendingForWindow(HWND compareWindow, bool pend
 {
     auto* window = ResolveCompareDirectoriesWindowForDebug(compareWindow);
     return window ? window->DebugSetRunPending(pending) : false;
+}
+
+FolderWindow* DebugGetCompareDirectoriesFolderWindowForWindow(HWND compareWindow) noexcept
+{
+    auto* window = ResolveCompareDirectoriesWindowForDebug(compareWindow);
+    return window ? &window->DebugGetFolderWindow() : nullptr;
 }
 
 void DebugFailNextCompareDirectoriesWindowCreate() noexcept

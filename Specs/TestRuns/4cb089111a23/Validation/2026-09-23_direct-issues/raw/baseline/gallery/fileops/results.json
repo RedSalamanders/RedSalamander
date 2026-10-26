@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-09-23T19:00:06.669Z",
+    "suite": "FileOperations",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20260923T185945Z-63936-c51b67dcd7374c58b690d9bc1cf642fa\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 146500,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "Direct Issues must follow actual projectable rows, while counter-only diagnostics retain More and clean Delete retains Dismiss; all hosted terminal action labels, hit targets, and bounds must fit at both widths and tested themes.",
+    "cases": [
+        {
+            "name": "FileOps_VisualGallery",
+            "status": "failed",
+            "duration_ms": 146484,
+            "repeat_index": 1,
+            "reason": "Direct Issues must follow actual projectable rows, while counter-only diagnostics retain More and clean Delete retains Dismiss; all hosted terminal action labels, hit targets, and bounds must fit at both widths and tested themes."
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

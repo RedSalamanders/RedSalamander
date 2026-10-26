@@ -1,0 +1,74 @@
+[
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\breadcrumb-natural-sorting-2026-10-17\\baseline\\results.json",
+    "file": "baseline-results.json",
+    "sha256": "CD3C913615AE66B6616A009929AFE7260DA0B1C6F6EB86C81FA785F3D2B7F062",
+    "bytes": 1285
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\breadcrumb-natural-sorting-2026-10-17\\baseline\\run-all-tests-results.json",
+    "file": "baseline-run-all-tests-results.json",
+    "sha256": "AE1A928AA6E67287C807ADC1E8AF7C509FFD132C454A45A070714D62F21D3E22",
+    "bytes": 13522
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\breadcrumb-natural-sorting-2026-10-17\\baseline\\workspace-final.json",
+    "file": "baseline-workspace-final.json",
+    "sha256": "F69F3420CEB3A1C090DD6A16EB59291E7F7ED62333B5FEE4550AF5A4227F6105",
+    "bytes": 9724
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\breadcrumb-natural-sorting-2026-10-17\\baseline\\commands-results.json",
+    "file": "baseline-commands-results.json",
+    "sha256": "9F4B84A30F80F48AEB13EFA46EF859E53B7542B5875DD7E655D7D61710D31ADF",
+    "bytes": 811
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\breadcrumb-natural-sorting-2026-10-17\\baseline\\commands-trace.txt",
+    "file": "baseline-commands-trace.txt",
+    "sha256": "5EAD40AD480597EDAF683010768D2211E09AEE2F6655ED6575F9C51F459A498E",
+    "bytes": 14444
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\breadcrumb-natural-sorting-2026-10-17\\baseline\\bindings.json",
+    "file": "baseline-bindings.json",
+    "sha256": "4C077FB54FFD92EA8E25B2CA421AE46919F27D732755B3A15405DA55FEF54921",
+    "bytes": 1967
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\breadcrumb-natural-sorting-2026-10-17\\candidate\\results.json",
+    "file": "candidate-results.json",
+    "sha256": "C34F240D032966829F1AE37B595E7FAC840ED05C167ECCB2A817BECEAC064BA9",
+    "bytes": 1035
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\breadcrumb-natural-sorting-2026-10-17\\candidate\\run-all-tests-results.json",
+    "file": "candidate-run-all-tests-results.json",
+    "sha256": "E75430AA0EA1DCBAB109E621D47C9F6BFA1D1167D78ADFB57B383732374C7016",
+    "bytes": 13073
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\breadcrumb-natural-sorting-2026-10-17\\candidate\\workspace-final.json",
+    "file": "candidate-workspace-final.json",
+    "sha256": "E237202FC71934BF8483AFB08CB61F62A5D35BF3C357F5EABDD14F2F48AFB420",
+    "bytes": 10503
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\breadcrumb-natural-sorting-2026-10-17\\candidate\\commands-results.json",
+    "file": "candidate-commands-results.json",
+    "sha256": "6356C4B81196C2DB0FB5EC526039FC056E517B08CC6BFDD27152F72AA9C07FE7",
+    "bytes": 577
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\breadcrumb-natural-sorting-2026-10-17\\candidate\\commands-trace.txt",
+    "file": "candidate-commands-trace.txt",
+    "sha256": "81E9EDBD782F0BB404A09D8849EB7A496E945264A8304D6E624C26456B6F9EEF",
+    "bytes": 13940
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\breadcrumb-natural-sorting-2026-10-17\\candidate\\bindings.json",
+    "file": "candidate-bindings.json",
+    "sha256": "97E10CC98BC110336A8A4B388BCDA751171F02E4B13565F2F8B153D5FD2AE5B0",
+    "bytes": 1973
+  }
+]

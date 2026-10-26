@@ -1,0 +1,24 @@
+{
+  "TotalCount": 432,
+  "PassedCount": 431,
+  "FailedCount": 1,
+  "SkippedCount": 0,
+  "PendingCount": 0,
+  "Time": {
+    "Ticks": 2053575754,
+    "Days": 0,
+    "Hours": 0,
+    "Milliseconds": 357,
+    "Microseconds": 575,
+    "Nanoseconds": 400,
+    "Minutes": 3,
+    "Seconds": 25,
+    "TotalDays": 0.002376823789351852,
+    "TotalHours": 0.05704377094444445,
+    "TotalMilliseconds": 205357.5754,
+    "TotalMicroseconds": 205357575.4,
+    "TotalNanoseconds": 205357575400.0,
+    "TotalMinutes": 3.4226262566666668,
+    "TotalSeconds": 205.3575754
+  }
+}

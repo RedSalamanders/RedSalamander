@@ -1,0 +1,5 @@
+mode=default-collapse
+processId=70612
+exitCode=0
+elapsedMs=4458
+completed=true

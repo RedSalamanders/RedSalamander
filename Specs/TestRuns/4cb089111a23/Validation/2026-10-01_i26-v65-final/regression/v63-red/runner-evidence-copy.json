@@ -1,0 +1,33 @@
+{
+  "schema": "redsal-i26-retained-run-evidence.v1",
+  "runId": "20261001T084255Z-86664-fca0c8b17eaf4181bf49894b7aaa7c97",
+  "originalRunRoot": "V:\\RedSalamander.Perf\\runs\\20261001T084255Z-86664-fca0c8b17eaf4181bf49894b7aaa7c97",
+  "retainedRawRunRoot": "V:\\RedSalamander.Perf\\evidence\\i26-ui\\raw-runs\\20261001T084255Z-86664-fca0c8b17eaf4181bf49894b7aaa7c97",
+  "supplementalCopy": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\final-gates-drivers-20260930\\release-v63-completed-red\\runner-run",
+  "allRawDataRetained": true,
+  "copiedFiles": 19,
+  "omittedFromSupplementalCopy": [
+    {
+      "path": "scratch",
+      "reason": "fixture or duplicate previous-run tree; complete raw directory retained"
+    },
+    {
+      "path": "artifacts/selftest/previous_run",
+      "reason": "fixture or duplicate previous-run tree; complete raw directory retained"
+    },
+    {
+      "path": "artifacts/selftest/last_run/perf/perf_metrics.jsonl",
+      "bytes": 874727,
+      "reason": "high-volume metrics; complete raw file retained"
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/work",
+      "reason": "fixture or duplicate previous-run tree; complete raw directory retained"
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/Commands/2026-10-01_104325/perf/perf_metrics.jsonl",
+      "bytes": 874727,
+      "reason": "high-volume metrics; complete raw file retained"
+    }
+  ]
+}

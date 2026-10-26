@@ -381,17 +381,16 @@ Describe 'Repository tooling governance' {
                 $_ -match '(?i)_debug\.ico$'
             } | Sort-Object -Unique)
         $expectedDebugOutputs = @(
-            'RedSalamander\\res\\logo_debug.ico',
-            'RedSalamanderMonitor\\res\\logo_background_debug.ico'
+            'RedSalamander\\res\\logo_debug.ico'
         )
         $outputDelta = @(Compare-Object -ReferenceObject $expectedDebugOutputs -DifferenceObject $declaredDebugOutputs)
         if ($outputDelta.Count -ne 0) {
-            $failures.Add("Tools/GenerateDebugIcons.ps1: executable source must declare exactly the two reviewed tracked debug-icon outputs.")
+            $failures.Add("Tools/GenerateDebugIcons.ps1: executable source must declare exactly the reviewed locally owned debug-icon output.")
         }
         $trackedOutputPaths = @($expectedDebugOutputs | ForEach-Object { $_ -replace '\\+', '/' })
         $trackedDebugOutputs = @(& git -C $script:RepoRoot ls-files -- $trackedOutputPaths)
-        if ($LASTEXITCODE -ne 0 -or $trackedDebugOutputs.Count -ne 2) {
-            $failures.Add('Tools/GenerateDebugIcons.ps1: both reviewed debug-icon outputs must remain tracked.')
+        if ($LASTEXITCODE -ne 0 -or $trackedDebugOutputs.Count -ne 1) {
+            $failures.Add('Tools/GenerateDebugIcons.ps1: the reviewed local debug-icon output must remain tracked.')
         }
         if ($iconSource -notmatch '(?s)if\s*\(\s*-not\s*\(Test-Path\s+\$InputIconPath\)\s*\)\s*\{\s*throw\s+"Input icon not found:') {
             $failures.Add('Tools/GenerateDebugIcons.ps1: required input icons must be rejected before output generation.')

@@ -1,0 +1,9 @@
+{
+  "case": "pane_view_options_toggle_file_extensions_navigation_filter_bar",
+  "itemCount": 3,
+  "metrics": {
+    "paneViewOptions.fileExtensionsToggleUs": 78980,
+    "paneViewOptions.navigationToggleUs": 92809,
+    "paneViewOptions.filterToggleUs": 29909
+  }
+}

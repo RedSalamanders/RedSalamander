@@ -1,0 +1,23 @@
+{
+  "schema": "red-salamander.i35-s2.perf-compaction.v1",
+  "reason": "Compact curated evidence (Specs/TestRuns/README.md): the walker claim rows (I35 S2 and the bulk CopyItems producer fix) are kept in their original order; the original is described by its byte count, row count and SHA-256.",
+  "filter": {
+    "metricPrefixes": [
+      "FileOps.Discovery.",
+      "FileOps.Operation",
+      "FileOps.CopyRecursiveParallel.",
+      "FileOps.Bridge.",
+      "FileOps.SelfTest."
+    ]
+  },
+  "source": {
+    "bytes": 3128333,
+    "rows": 8621,
+    "sha256": "104132e189f5015e2d3da30e1b4d0a3522aabe4fbf1b6205dae8986b0bc291f1"
+  },
+  "kept": {
+    "bytes": 33410,
+    "rows": 88,
+    "sha256": "48ca188d0ef336ddf3663213ec83bf3c6bb53629704e8b0233a985aa9fdb4c1b"
+  }
+}

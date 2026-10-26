@@ -1,0 +1,11 @@
+{
+  "schema": "red-salamander.test-sandbox-disk-audit.v1",
+  "is_clean": true,
+  "issue_count": 0,
+  "test_root": "E:\\RedSalamander.Perf",
+  "run_id": "20261016T142300Z-90968-2a4d7471cccf4ae09d5e6c57bb2c5a06",
+  "allowed_run_ids": [
+    "20261016T142300Z-90968-2a4d7471cccf4ae09d5e6c57bb2c5a06"
+  ],
+  "issues": []
+}

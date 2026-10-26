@@ -1,0 +1,49 @@
+{
+  "schemaVersion": 1,
+  "compaction": {
+    "originalRelativePath": "perf/perf_metrics.jsonl",
+    "originalSourceBytes": 358959132,
+    "originalRunBytes": 359309544,
+    "originalSourceSha256": "12d0f7914eb873cbfe88ffa9fa9545ebe558d419edfa74098e109ec265c929ba",
+    "originalRowCount": 985008,
+    "compactedSourceBytes": 143560,
+    "compactedSourceSha256": "8d8cf9591a39e76162a654e188a416a6281cd7e3d88926a251aeedcc8cb28559",
+    "compactedRowCount": 341,
+    "originalFileLimitBytes": 2097152,
+    "originalRunLimitBytes": 5242880,
+    "reason": "High-frequency popup, progress, identity, discovery, and per-transfer diagnostics are not load-bearing for P3.2a. The compact JSONL retains all FileOps.SelfTest, operation-strategy, reparse/link, Riptide, Causeway, and Fairstream rows in original order."
+  },
+  "corpusIdentity": {
+    "firstRetainedTimestamp": "2026-08-24T05:44:01.263Z",
+    "lastRetainedTimestamp": "2026-08-24T05:58:35.427Z",
+    "machineHash": "4cb089111a23",
+    "commit": "ca911ce7c73e74e90342604106bc044da1e660cb",
+    "branch": "master",
+    "scenario": "SelfTest",
+    "build": "Debug",
+    "runId": "2026-08-24_054359"
+  },
+  "behavioralResult": {
+    "suite": "FileOperations",
+    "passed": 117,
+    "failed": 0,
+    "skipped": 20,
+    "durationMs": 875264,
+    "authority": "../fileops_results.json"
+  },
+  "claimCases": [
+    { "name": "Phase12_ReparsePointPolicy", "status": "passed", "durationMs": 1046 },
+    { "name": "Riptide_ReparseNativeMoveRelocatesLinkObject", "status": "passed", "durationMs": 46 },
+    { "name": "Riptide_ReparseMoveSourceNeverUsesDirectoryMerge", "status": "passed", "durationMs": 62 },
+    { "name": "Causeway_BridgeFileReparsePolicy", "status": "passed", "durationMs": 328 },
+    { "name": "FileOps_ReparseRetargetDestinationContainment", "status": "passed", "durationMs": 63 },
+    { "name": "Fairstream_MovedTreeRetargetsInternalLinks", "status": "passed", "durationMs": 125 }
+  ],
+  "representativeMetrics": [
+    { "metric": "FileOps.SelfTest.FairstreamMoveLinkRetarget", "hr": 0 },
+    { "metric": "FileOps.SelfTest.ReparseRetargetDestinationContainment", "detail": "shape=in-tree-retarget-plus-out-of-tree-preserve", "hr": 0 },
+    { "metric": "FileOps.SelfTest.RiptideReparseNativeRelocation", "detail": "shape=junction-replaces-existing-file", "hr": 0 },
+    { "metric": "FileOps.SelfTest.CausewayBridgeFileReparsePolicy", "detail": "Preserve", "value1": 34, "hr": 2147942699 }
+  ],
+  "claimBoundary": "P3.2a behavioral validation for exact no-follow semantic link reads, selected-root Managed retargeting, exclusive link staging, conditional publication, and exact source cleanup. No sparse Keep Both mapping, forward-dependency, native-Move semantic qualification, throughput, percentile, Release-runtime, remote-credential, or production-workload claim is made."
+}

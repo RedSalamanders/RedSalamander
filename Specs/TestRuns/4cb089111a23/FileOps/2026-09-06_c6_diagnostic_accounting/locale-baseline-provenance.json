@@ -1,0 +1,13 @@
+{
+  "run_id": "c6-diagnostics-locale-baseline-20260906",
+  "git_head": "0b2ef88e5d2a7e6b1392a98a0f6186c03eb1e24a",
+  "witness": "Specs/TestRuns/4cb089111a23/FileOps/2026-09-06_c0_curl_parser_baseline_debug/build.txt",
+  "witness_sha256": "597b110ea0e8e2c3299a32c5140ebbaced54d45806df8b921a0daff8f4ae1a0a",
+  "module_sha256": "2b1384234dc097c79b0aacb68727b052332abce84d1c02dd861aeb162ec087a9",
+  "tests_sha256": "9ce5c7ff044f38d78ae9829c696461e01907f977fb7726c91ce32c18b389ac77",
+  "passed": 31,
+  "failed": 0,
+  "skipped": 0,
+  "real_warning_count": 1,
+  "real_error_count": 0
+}

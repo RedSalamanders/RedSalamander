@@ -17,7 +17,7 @@
 // fail the call with `E_INVALIDARG`.
 // For [out] structs, the caller MUST initialize `sizeBytes` before calling into the callee, and the callee MUST NOT
 // write beyond `sizeBytes`.
-// 
+//
 #pragma warning(push)
 #pragma warning(disable : 4820) // padding in data structure
 struct FileInfo
@@ -40,9 +40,9 @@ struct FileInfo
 
 enum FileSystemOperation : uint32_t
 {
-    FILESYSTEM_COPY   = 1,
-    FILESYSTEM_MOVE   = 2,
-    FILESYSTEM_DELETE = 3,
+    FILESYSTEM_COPY             = 1,
+    FILESYSTEM_MOVE             = 2,
+    FILESYSTEM_DELETE           = 3,
     FILESYSTEM_RENAME           = 4,
     FILESYSTEM_CREATE_DIRECTORY = 5,
 };
@@ -58,7 +58,7 @@ enum FileSystemFlags : uint32_t
     // Valid only with ALLOW_OVERWRITE and an exact expectedDestination whose no-follow
     // snapshot kind is LINK. This is the typed Replace Link receipt; ordinary Overwrite
     // must never remove a link object.
-    FILESYSTEM_FLAG_ALLOW_REPLACE_LINK     = 0x20,
+    FILESYSTEM_FLAG_ALLOW_REPLACE_LINK = 0x20,
 };
 
 enum FileSystemLinkPolicy : uint32_t
@@ -76,6 +76,32 @@ enum FileSystemMoveMode : uint32_t
     // generic/unqualified fallback when that route cannot complete the item. A provider-native
     // conditional server-side strategy may still include deletion as part of its qualified route.
     FILESYSTEM_MOVE_NATIVE_ONLY = 1,
+};
+
+// Transfer behaviors the host selects per call (FileSystemOptions::transferTuning). Each bit names one
+// behavior that changes how bytes reach storage, never what is published or which authority publishes
+// it; the host sets the adopted defaults and may set any combination to compare them. A provider
+// ignores bits it does not implement, and zero is the behavior before the field existed.
+enum FileSystemTransferTuning : uint32_t
+{
+    FILESYSTEM_TRANSFER_TUNING_NONE = 0,
+    // Create a writer's object (owned stage or direct final) without FILE_ATTRIBUTE_TEMPORARY when it
+    // lies on a network share, so the cache writes it back during the copy instead of holding every
+    // byte for the commit flush.
+    FILESYSTEM_TRANSFER_TUNING_NO_TEMPORARY_REMOTE = 0x1,
+    // The same on local volumes.
+    FILESYSTEM_TRANSFER_TUNING_NO_TEMPORARY_LOCAL = 0x2,
+    // Reserve the destination's allocation for the known size before the first content byte (never
+    // its end of file, so the written length stays the only size proof).
+    FILESYSTEM_TRANSFER_TUNING_PREALLOCATE = 0x4,
+    // Skip the named-stream and extended-attribute copy pass when the source has none.
+    FILESYSTEM_TRANSFER_TUNING_SKIP_ABSENT_BACKUP_STREAMS = 0x8,
+    // Host only: a provider-native Copy/Move budget also respects the destination's preferred concurrency.
+    FILESYSTEM_TRANSFER_TUNING_DESTINATION_CONCURRENCY = 0x10,
+    // Create a writer's object (owned stage or direct final) write-through when it lies on a network
+    // share: each write returns once the server has it, so the writer never holds more dirty data than
+    // one write and its progress follows the server's rate instead of the client cache's.
+    FILESYSTEM_TRANSFER_TUNING_WRITE_THROUGH_REMOTE = 0x20,
 };
 
 enum FileSystemDiscoveryMode : uint32_t
@@ -101,10 +127,91 @@ struct FileSystemDiscoveryProgress
 // keeps it alive until the provider call and every object opened with the corresponding options are released.
 interface __declspec(novtable) IFileSystemOperationControl
 {
-    virtual HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL* abort, void* cookie) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE FileSystemGetDiscoveryMode(FileSystemDiscoveryMode* mode, void* cookie) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress* progress,
-                                                                         void* cookie) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE FileSystemShouldAbort(BOOL * abort, void* cookie) noexcept                                            = 0;
+    virtual HRESULT STDMETHODCALLTYPE FileSystemGetDiscoveryMode(FileSystemDiscoveryMode * mode, void* cookie) noexcept                     = 0;
+    virtual HRESULT STDMETHODCALLTYPE FileSystemReportDiscoveryProgress(const FileSystemDiscoveryProgress* progress, void* cookie) noexcept = 0;
+};
+
+// Producer-only link activity never shares a regular transfer worker's stream or meter slot.
+inline constexpr uint64_t FILESYSTEM_PRODUCER_PROGRESS_STREAM_ID = UINT64_MAX;
+
+enum class FileSystemFileWorkPhase : uint32_t
+{
+    ScopeSupported = 1,
+    CountsUnavailable,
+    Begin,
+    Transferring,
+    Finalizing,
+    Publishing,
+    Verifying,
+    Published,
+    Terminal,
+    // A completed ordinary directory traversal (Copy), or an object whose removal committed
+    // (Delete). Independent of the copied-file lifecycle; never inferred from discovery.
+    ObjectCompleted,
+    // Delete refused the opened object's read-only attribute. Observation only; it authorizes no retry.
+    ReadOnlyDeleteBlocked,
+};
+
+enum class FileSystemFileWorkKind : uint32_t
+{
+    None = 0,
+    RegularFile,
+    FileLink,
+    DirectoryLink,
+    Directory,
+};
+
+enum class FileSystemFileWorkDisposition : uint32_t
+{
+    None = 0,
+    Completed,
+    Skipped,
+    Failed,
+    Canceled,
+};
+
+struct FileSystemFileWorkProgress
+{
+    uint32_t sizeBytes                        = 0; // sizeof(FileSystemFileWorkProgress); exact source-tree contract.
+    FileSystemFileWorkPhase phase             = FileSystemFileWorkPhase::Begin;
+    FileSystemFileWorkKind kind               = FileSystemFileWorkKind::None;
+    FileSystemFileWorkDisposition disposition = FileSystemFileWorkDisposition::None;
+    // Unique within the public provider call, including all CopyItems roots/workers. A logical leaf
+    // keeps its ID and publication fact through retry attempts and Keep Both destination changes.
+    uint64_t logicalLeafId         = 0;
+    uint64_t progressStreamId      = 0;
+    const wchar_t* sourcePath      = nullptr;
+    const wchar_t* destinationPath = nullptr;
+    BOOL sizeKnown                 = FALSE;
+    uint64_t totalBytes            = 0;
+    uint64_t completedBytes        = 0;
+    HRESULT status                 = S_OK;
+    // Independent certification, not implied by ScopeSupported: TRUE only when this traversal's
+    // metadata supplies every file's logical payload size (including a known zero and link payload0).
+    // Hosts otherwise require explicit known sizes for all discovered file-shaped leaves.
+    BOOL scopeBytesKnown = FALSE;
+};
+
+// Optional synchronous observation, not COM and never a pause/cancel checkpoint. Hosts keep the
+// object/cookie alive until the provider call and borrowed I/O are quiet. UTF-16 pointers are valid
+// only until this callback returns. Providers serialize delivery within one operation and ignore
+// its HRESULT; the existing operation control remains the authority for pause/cancel.
+// ScopeSupported advertises complete logical-leaf reporting for this public call. CountsUnavailable
+// permanently withdraws copied-count certainty after replay whose old leaf identities were lost.
+// Published reports actual successful publication once, before later proof/cleanup can fail; Terminal
+// ends the logical leaf after its outer retry loop and never undoes its earlier publication.
+// ScopeSupported with kind Directory additionally certifies ordinary-directory completion reports.
+// ObjectCompleted carries a successful completed object once, with kind/sourcePath and its known
+// logical payload bytes (directories and links contribute zero). Delete reports it only after removal
+// commits, even if a later sibling fails. Copy directory reporting withdraws certainty on replay using
+// CountsUnavailable. These observations do not authorize mutations or become cancellation checkpoints.
+// ReadOnlyDeleteBlocked carries the source path/kind opened without following links, Failed and
+// ERROR_ACCESS_DENIED, only when its read-only attribute prevented deletion without an explicit grant.
+// It lets the host offer a new exact-root/subtree confirmation; it never counts completed work.
+interface __declspec(novtable) IFileSystemFileWorkCallback
+{
+    virtual HRESULT STDMETHODCALLTYPE FileSystemReportFileWork(const FileSystemFileWorkProgress* progress, void* cookie) noexcept = 0;
 };
 
 enum class FileSystemIssueAction : uint8_t
@@ -136,38 +243,49 @@ enum class FileSystemOwnedStageDisposition : uint32_t
 // Per-item mutation truth reported with FileSystemItemCompleted. Providers initialize every field
 // they advertise through sizeBytes even on failure. A null result is permitted only when the
 // provider cannot expose mutation truth; the host then treats destructive recovery/escalation as
-// indeterminate and fails closed. The v1 prefix ends before ownedStageDisposition so older providers
-// remain valid. Stage disposition is independent of final-destination mutation truth: for example,
+// indeterminate and fails closed. The v1 prefix ends before ownedStageDisposition and the v2 prefix
+// before the metadata suffix, so older providers remain valid. Stage disposition is independent of final-destination mutation truth: for example,
 // a failed pre-publication copy can report known non-commit plus an Unknown retained stage.
 struct FileSystemItemMutationResult
 {
-    uint32_t sizeBytes; // sizeof(FileSystemItemMutationResult)
+    uint32_t sizeBytes; // sizeof(FileSystemItemMutationResult), or a prefix size below
     BOOL outcomeKnown;
     BOOL mutationCommitted;
     BOOL originalStillPresent;
     FileSystemOwnedStageDisposition ownedStageDisposition = FileSystemOwnedStageDisposition::NotApplicable;
+    // V3 suffix: metadata the provider itself transferred while producing this item (a
+    // provider-native Copy), so the host classifies it exactly as it classifies the bridge's own
+    // transfers. FileSystemMetadataFeature masks OR-ed over every object under the item, with the
+    // meanings of FileSystemMetadataTransferResult. All zero when the provider transferred none.
+    uint32_t metadataLostFeatures             = 0u;
+    uint32_t metadataChangedFeatures          = 0u;
+    uint32_t metadataInformationalFeatures    = 0u;
+    uint32_t metadataInformationalObjectCount = 0u; // objects with an informational difference
+    HRESULT metadataFirstFailure              = S_OK;
 };
 
-inline constexpr uint32_t FILESYSTEM_ITEM_MUTATION_RESULT_V1_SIZE =
-    static_cast<uint32_t>(offsetof(FileSystemItemMutationResult, ownedStageDisposition));
+inline constexpr uint32_t FILESYSTEM_ITEM_MUTATION_RESULT_V1_SIZE = static_cast<uint32_t>(offsetof(FileSystemItemMutationResult, ownedStageDisposition));
+inline constexpr uint32_t FILESYSTEM_ITEM_MUTATION_RESULT_V2_SIZE = static_cast<uint32_t>(offsetof(FileSystemItemMutationResult, metadataLostFeatures));
 
-[[nodiscard]] inline bool FileSystemItemMutationResultHasSupportedSize(
-    const FileSystemItemMutationResult& result) noexcept
+[[nodiscard]] inline bool FileSystemItemMutationResultHasSupportedSize(const FileSystemItemMutationResult& result) noexcept
 {
-    return result.sizeBytes == FILESYSTEM_ITEM_MUTATION_RESULT_V1_SIZE ||
+    return result.sizeBytes == FILESYSTEM_ITEM_MUTATION_RESULT_V1_SIZE || result.sizeBytes == FILESYSTEM_ITEM_MUTATION_RESULT_V2_SIZE ||
            result.sizeBytes >= sizeof(FileSystemItemMutationResult);
 }
 
-[[nodiscard]] inline bool FileSystemItemMutationResultHasOwnedStageDisposition(
-    const FileSystemItemMutationResult& result) noexcept
+[[nodiscard]] inline bool FileSystemItemMutationResultHasOwnedStageDisposition(const FileSystemItemMutationResult& result) noexcept
+{
+    return result.sizeBytes >= FILESYSTEM_ITEM_MUTATION_RESULT_V2_SIZE;
+}
+
+[[nodiscard]] inline bool FileSystemItemMutationResultHasMetadataOutcome(const FileSystemItemMutationResult& result) noexcept
 {
     return result.sizeBytes >= sizeof(FileSystemItemMutationResult);
 }
 
 [[nodiscard]] inline bool FileSystemOwnedStageDispositionIsValid(FileSystemOwnedStageDisposition disposition) noexcept
 {
-    return disposition >= FileSystemOwnedStageDisposition::NotApplicable &&
-           disposition <= FileSystemOwnedStageDisposition::RetainedIncomplete;
+    return disposition >= FileSystemOwnedStageDisposition::NotApplicable && disposition <= FileSystemOwnedStageDisposition::RetainedIncomplete;
 }
 
 struct FileSystemOptions
@@ -196,13 +314,19 @@ struct FileSystemOptions
     // call or the lifetime of an object opened by that operation.
     IFileSystemOperationControl* operationControl = nullptr;
     void* operationControlCookie                  = nullptr;
+
+    // FileSystemTransferTuning bits the host selected for this call (I35 R10.3); 0 = none.
+    uint32_t transferTuning = FILESYSTEM_TRANSFER_TUNING_NONE;
+    // Optional observational suffix. Null retains legacy byte/discovery-only progress. The current
+    // ABI accepts exactly sizeof(FileSystemOptions); rebuild all tree-built hosts/providers together.
+    IFileSystemFileWorkCallback* fileWorkCallback = nullptr;
+    void* fileWorkCookie                          = nullptr;
 };
 
 [[nodiscard]] inline bool FileSystemOptionsHaveValidHeader(const FileSystemOptions* options) noexcept
 {
-    return options == nullptr ||
-           (options->sizeBytes == sizeof(FileSystemOptions) &&
-            (options->linkPolicy == FILESYSTEM_LINK_PRESERVE || options->linkPolicy == FILESYSTEM_LINK_SKIP));
+    return options == nullptr || (options->sizeBytes == sizeof(FileSystemOptions) &&
+                                  (options->linkPolicy == FILESYSTEM_LINK_PRESERVE || options->linkPolicy == FILESYSTEM_LINK_SKIP));
 }
 
 inline constexpr uint64_t FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS = 2'000u;
@@ -220,11 +344,11 @@ inline constexpr uint64_t FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS = 2'000u;
     cleanupOptions.sizeBytes              = sizeof(cleanupOptions);
     cleanupOptions.operationControl       = nullptr;
     cleanupOptions.operationControlCookie = nullptr;
-    const uint64_t now                     = GetTickCount64();
+    cleanupOptions.fileWorkCallback       = nullptr;
+    cleanupOptions.fileWorkCookie         = nullptr;
+    const uint64_t now                    = GetTickCount64();
     cleanupOptions.deadlineTickCount64 =
-        now > UINT64_MAX - FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS
-            ? UINT64_MAX
-            : now + FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS;
+        now > UINT64_MAX - FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS ? UINT64_MAX : now + FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS;
     return cleanupOptions;
 }
 
@@ -251,7 +375,7 @@ inline constexpr uint64_t FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS = 2'000u;
         return S_OK;
     }
 
-    BOOL abort = FALSE;
+    BOOL abort            = FALSE;
     const HRESULT abortHr = options->operationControl->FileSystemShouldAbort(&abort, options->operationControlCookie);
     if (FAILED(abortHr))
     {
@@ -365,12 +489,12 @@ enum FileSystemNamespaceKind : uint32_t
 {
     FILESYSTEM_NAMESPACE_REAL_CONTAINER          = 1,
     FILESYSTEM_NAMESPACE_PROVIDER_VIRTUAL_FOLDER = 2,
-    FILESYSTEM_NAMESPACE_FIXED_OBJECT_SET         = 3,
+    FILESYSTEM_NAMESPACE_FIXED_OBJECT_SET        = 3,
 };
 
 enum FileSystemRouteComponentComparison : uint32_t
 {
-    FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE = 1,
+    FILESYSTEM_ROUTE_COMPONENT_ORDINAL_IGNORE_CASE    = 1,
     FILESYSTEM_ROUTE_COMPONENT_ORDINAL_CASE_SENSITIVE = 2,
 };
 
@@ -525,6 +649,9 @@ enum FileSystemSearchWarningFlags : uint32_t
     FILESYSTEM_SEARCH_WARNING_SERVICE_UNAVAILABLE   = 0x10,
     FILESYSTEM_SEARCH_WARNING_REGEX_REJECTED        = 0x20,
     FILESYSTEM_SEARCH_WARNING_SERVICE_ROOT_REJECTED = 0x40,
+    // An accepted regex hit the regex engine's complexity/stack limit on some names or
+    // contents; those items were reported as non-matches, so results may be incomplete.
+    FILESYSTEM_SEARCH_WARNING_REGEX_INCOMPLETE = 0x80,
 };
 
 enum FileSystemSearchPhase : uint32_t
@@ -716,12 +843,12 @@ interface __declspec(novtable) IFileSystemCallback
     // - This callback may block (host-driven inline conflict UI).
     virtual HRESULT STDMETHODCALLTYPE FileSystemIssue(FileSystemOperation operationType,
                                                       const wchar_t* sourcePath,
-                                                       const wchar_t* destinationPath,
-                                                       HRESULT status,
-                                                       FileSystemIssueAction* action,
-                                                       IFileSystemBoundObject** expectedDestination,
-                                                       FileSystemOptions* options,
-                                                       void* cookie) noexcept = 0;
+                                                      const wchar_t* destinationPath,
+                                                      HRESULT status,
+                                                      FileSystemIssueAction* action,
+                                                      IFileSystemBoundObject** expectedDestination,
+                                                      FileSystemOptions* options,
+                                                      void* cookie) noexcept = 0;
 };
 
 // Mandatory path-scoped capability interface for ABI v2. The returned UTF-8 JSON is owned by the
@@ -731,40 +858,31 @@ interface __declspec(novtable) IFileSystemCallback
 // never infer nativeMove from move.
 interface __declspec(uuid("9be5ee85-f247-4a95-953b-5f18ed76719d")) __declspec(novtable) IFileSystemPathCapabilities2 : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path,
-                                                           FileSystemOperation operation,
-                                                           const char** jsonUtf8) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetPathCapabilities(const wchar_t* path, FileSystemOperation operation, const char** jsonUtf8) noexcept = 0;
 };
 
 // The sole executable route-capability authority. Capability JSON remains available
 // through IFileSystemPathCapabilities2 for diagnostics/extensions only.
 interface __declspec(uuid("1e924d87-2e62-4ab4-9f37-c565d465f25e")) __declspec(novtable) IFileSystemRouteCapabilities : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE GetRouteFacts(const wchar_t* path,
-                                                     FileSystemOperation operation,
-                                                     FileSystemArena* arena,
-                                                     FileSystemRouteFacts* facts) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE IsTransferPeerAllowed(const wchar_t* path,
-                                                            FileSystemOperation operation,
-                                                            FileSystemTransferPeerRole role,
-                                                            const wchar_t* peerPluginId,
-                                                            BOOL* allowed) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE ValidateChildName(const wchar_t* parentPath,
-                                                        const wchar_t* childName,
-                                                        FileSystemOperation operation,
-                                                        FileSystemChildNameValidation* validation) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetRouteFacts(
+        const wchar_t* path, FileSystemOperation operation, FileSystemArena* arena, FileSystemRouteFacts* facts) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE IsTransferPeerAllowed(
+        const wchar_t* path, FileSystemOperation operation, FileSystemTransferPeerRole role, const wchar_t* peerPluginId, BOOL* allowed) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE ValidateChildName(
+        const wchar_t* parentPath, const wchar_t* childName, FileSystemOperation operation, FileSystemChildNameValidation* validation) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE GetChildNameCollisionKey(const wchar_t* parentPath,
                                                                const wchar_t* childName,
                                                                FileSystemOperation operation,
                                                                FileSystemArena* arena,
                                                                const wchar_t** key,
-                                                               unsigned long* requiredArenaBytes) noexcept = 0;
+                                                               unsigned long* requiredArenaBytes) noexcept                                      = 0;
     virtual HRESULT STDMETHODCALLTYPE JoinPath(const wchar_t* parentPath,
                                                const wchar_t* childName,
                                                FileSystemOperation operation,
                                                FileSystemArena* arena,
                                                const wchar_t** joinedPath,
-                                               unsigned long* requiredArenaBytes) noexcept = 0;
+                                               unsigned long* requiredArenaBytes) noexcept                                                      = 0;
 };
 
 interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21")) __declspec(novtable) IFileSystem : public IFileSystemPathCapabilities2
@@ -867,15 +985,13 @@ interface __declspec(uuid("12519afa-30e7-4e3a-9db2-7990c4be9a21")) __declspec(no
 interface __declspec(novtable) IFileSystemDirectoryEnumerationCallback
 {
     virtual HRESULT STDMETHODCALLTYPE DirectoryEnumerationProgress(uint64_t scannedEntries, uint64_t totalEntries, void* cookie) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE DirectoryEnumerationShouldCancel(BOOL * pCancel, void* cookie) noexcept                              = 0;
+    virtual HRESULT STDMETHODCALLTYPE DirectoryEnumerationShouldCancel(BOOL * pCancel, void* cookie) noexcept                             = 0;
 };
 
 interface __declspec(uuid("32f1b16a-fb45-4e59-98ca-61e16445c527")) __declspec(novtable) IFileSystemCancellableDirectoryEnumeration : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE ReadDirectoryInfoCancellable(const wchar_t* path,
-                                                                   IFileSystemDirectoryEnumerationCallback* callback,
-                                                                   void* cookie,
-                                                                   IFilesInformation** ppFilesInformation) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE ReadDirectoryInfoCancellable(
+        const wchar_t* path, IFileSystemDirectoryEnumerationCallback* callback, void* cookie, IFilesInformation** ppFilesInformation) noexcept = 0;
 };
 
 // Minimal Win32-like file reader for filesystem plugins.
@@ -958,9 +1074,28 @@ interface __declspec(uuid("bcf04a7a-9c62-4aa8-9847-d756cf432669")) __declspec(no
 // names the directory object; the recursive delete keeps the provider's own per-observation rules
 // for descendants. A route with neither object binding nor this contract deletes whatever the name
 // refers to when the mutation runs, and the host's card says so before the answer.
+//
+// Identity-less locations (I35 R7.3, D-7.3). A provider WITH object binding may also implement this
+// contract for the objects its binding reports as unsupported: objects it opens but cannot identify
+// (no stable identity, for example a Local path on a redirector without FileIdInfo). Its identity
+// text is then corroboration, not identity: the object's kind, attributes, size and last-write time
+// for a file, creation time, and the 64-bit file index with the volume serial only when the location
+// reports a non-zero index (corroboration only; an inode number can be reused). For a folder the text
+// also pins its whole tree (the digest and counts of a no-follow listing of every entry below it).
+// ResolveDeleteIdentity MUST return HRESULT_FROM_WIN32(ERROR_NOT_SUPPORTED) for an object its binding
+// can bind, so a delete by name never replaces exact authority, and DeleteIfIdentity compares the facts
+// (a folder's tree included) on the no-follow handle that performs the delete, refusing any difference
+// with ERROR_REVISION_MISMATCH and nothing deleted; it then deletes only the listed entries, each after
+// comparing its own facts while every folder above it is held open (so no path is redirected), and a stop
+// after a deletion reports the partial-tree receipt (outcome known, mutation committed, original still
+// present). An open or listing the location refuses with ERROR_NOT_SUPPORTED is reported as
+// ERROR_OPEN_FAILED, never as the "has an exact identity" answer. The host uses this route for the built-in Local provider only (D-7.3), for Permanent Delete
+// and a refused Recycle's escalation, each behind its own consent; never for Move, Rename or an
+// expected-destination replacement, and never for an object whose open failed (sharing violation,
+// access denied, delete pending).
 struct FileSystemDeleteIdentity
 {
-    uint32_t sizeBytes;    // sizeof(FileSystemDeleteIdentity)
+    uint32_t sizeBytes; // sizeof(FileSystemDeleteIdentity)
     BOOL isDirectory;
     wchar_t identity[256]; // provider-defined, NUL-terminated; empty = cannot be named
 };
@@ -969,15 +1104,14 @@ interface IFileSystemCallback;
 
 interface __declspec(uuid("7c2d9a4e-5b31-4f8e-9a6d-0e3f1b7c8d52")) __declspec(novtable) IFileSystemIdentityDelete : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE ResolveDeleteIdentity(const wchar_t* path,
-                                                            const FileSystemOptions* options,
-                                                            FileSystemDeleteIdentity* identity) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE ResolveDeleteIdentity(
+        const wchar_t* path, const FileSystemOptions* options, FileSystemDeleteIdentity* identity) noexcept = 0;
     virtual HRESULT STDMETHODCALLTYPE DeleteIfIdentity(const wchar_t* path,
                                                        const FileSystemDeleteIdentity* identity,
                                                        FileSystemFlags flags,
                                                        const FileSystemOptions* options,
                                                        IFileSystemCallback* callback,
-                                                       void* cookie) noexcept = 0;
+                                                       void* cookie) noexcept                               = 0;
 };
 
 struct FileSystemBasicInformation
@@ -1104,10 +1238,10 @@ enum FileSystemBoundObjectKind : uint32_t
 struct FileSystemBoundObjectSnapshot
 {
     uint32_t sizeBytes;
-    uint32_t kind;               // FileSystemBoundObjectKind
-    const void* objectId;        // Provider-owned; immutable for the bound-object lifetime.
+    uint32_t kind;        // FileSystemBoundObjectKind
+    const void* objectId; // Provider-owned; immutable for the bound-object lifetime.
     uint32_t objectIdBytes;
-    const void* revisionId;      // Empty only when the path profile declares no revision token.
+    const void* revisionId; // Empty only when the path profile declares no revision token.
     uint32_t revisionIdBytes;
     uint64_t committedSizeBytes; // UINT64_MAX when not applicable or unknown.
 };
@@ -1159,27 +1293,25 @@ struct FileSystemConditionalMutationResult
 };
 
 // Optional ABI-v2 binding surface. BindObject is always no-follow; providers that cannot guarantee
-// that return ERROR_NOT_SUPPORTED. A successful CreateExclusiveWriter returns both non-null outputs.
+// that return ERROR_NOT_SUPPORTED. ERROR_NOT_SUPPORTED from BindObject means the object cannot be
+// identified (or bound no-follow), never that it could not be opened: a provider whose open itself fails
+// with that code reports ERROR_OPEN_FAILED instead. A successful CreateExclusiveWriter returns both
+// non-null outputs.
 interface __declspec(uuid("d8ae290a-b84c-42ec-982c-7c01dedc7603")) __declspec(novtable) IFileSystemObjectBinding : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE BindObject(const wchar_t* path,
-                                                 FileSystemBindFlags flags,
-                                                 IFileSystemBoundObject** bound) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE CreateExclusiveWriter(const wchar_t* stagePath,
-                                                             const FileSystemOptions* options,
-                                                             IFileWriter** writer,
-                                                             IFileSystemBoundObject** ownedStage) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE CreateExclusiveDirectory(const wchar_t* stagePath,
-                                                                const FileSystemOptions* options,
-                                                                IFileSystemBoundObject** ownedStage) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE ReadBoundLink(IFileSystemBoundObject* boundLink,
+    virtual HRESULT STDMETHODCALLTYPE BindObject(const wchar_t* path, FileSystemBindFlags flags, IFileSystemBoundObject** bound) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE CreateExclusiveWriter(
+        const wchar_t* stagePath, const FileSystemOptions* options, IFileWriter** writer, IFileSystemBoundObject** ownedStage) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE CreateExclusiveDirectory(
+        const wchar_t* stagePath, const FileSystemOptions* options, IFileSystemBoundObject** ownedStage) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE ReadBoundLink(IFileSystemBoundObject * boundLink,
                                                     const FileSystemLinkTransform* transform,
                                                     const FileSystemOptions* options,
-                                                    FileSystemLinkInformation* information) noexcept = 0;
+                                                    FileSystemLinkInformation* information) noexcept              = 0;
     virtual HRESULT STDMETHODCALLTYPE CreateExclusiveLink(const wchar_t* stagePath,
                                                           const FileSystemLinkInformation* information,
                                                           const FileSystemOptions* options,
-                                                          IFileSystemBoundObject** ownedStage) noexcept = 0;
+                                                          IFileSystemBoundObject** ownedStage) noexcept           = 0;
 };
 
 // Optional immutable object/revision token used for publication and exact conditional mutation.
@@ -1187,28 +1319,26 @@ interface __declspec(uuid("d8ae290a-b84c-42ec-982c-7c01dedc7603")) __declspec(no
 // expectedDestination means "only if absent"; replacement requires the exact bound destination.
 interface __declspec(uuid("5ed3921d-a486-42cc-a5c3-33d97f75c5b5")) __declspec(novtable) IFileSystemBoundObject : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE GetSnapshot(FileSystemBoundObjectSnapshot* snapshot) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE IsSameObject(IFileSystemBoundObject* other, BOOL* same) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetSnapshot(FileSystemBoundObjectSnapshot * snapshot) noexcept              = 0;
+    virtual HRESULT STDMETHODCALLTYPE IsSameObject(IFileSystemBoundObject * other, BOOL * same) noexcept          = 0;
     virtual HRESULT STDMETHODCALLTYPE OpenReader(const FileSystemOptions* options, IFileReader** reader) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetBasicInformation(FileSystemBasicInformation* info) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE SetBasicInformation(const FileSystemBasicInformation* info) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetBasicInformation(FileSystemBasicInformation * info) noexcept             = 0;
+    virtual HRESULT STDMETHODCALLTYPE SetBasicInformation(const FileSystemBasicInformation* info) noexcept        = 0;
     virtual HRESULT STDMETHODCALLTYPE PublishAs(const wchar_t* finalPath,
                                                 IFileSystemBoundObject* expectedDestination,
                                                 FileSystemFlags flags,
                                                 const FileSystemOptions* options,
                                                 FileSystemConditionalMutationResult* result,
-                                                IFileSystemBoundObject** published) noexcept = 0;
+                                                IFileSystemBoundObject** published) noexcept                      = 0;
     virtual HRESULT STDMETHODCALLTYPE RenameIfUnchanged(const wchar_t* destinationPath,
                                                         IFileSystemBoundObject* expectedDestination,
                                                         FileSystemFlags flags,
                                                         const FileSystemOptions* options,
                                                         FileSystemConditionalMutationResult* result,
-                                                        IFileSystemBoundObject** renamed) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE DeleteIfUnchanged(FileSystemFlags flags,
-                                                        const FileSystemOptions* options,
-                                                        FileSystemConditionalMutationResult* result) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE AbortOwnedObject(const FileSystemOptions* options,
-                                                       FileSystemConditionalMutationResult* result) noexcept = 0;
+                                                        IFileSystemBoundObject** renamed) noexcept                = 0;
+    virtual HRESULT STDMETHODCALLTYPE DeleteIfUnchanged(
+        FileSystemFlags flags, const FileSystemOptions* options, FileSystemConditionalMutationResult* result) noexcept                         = 0;
+    virtual HRESULT STDMETHODCALLTYPE AbortOwnedObject(const FileSystemOptions* options, FileSystemConditionalMutationResult* result) noexcept = 0;
 };
 
 // Optional exact-object content proof. The provider must read the already-bound object/revision;
@@ -1216,8 +1346,7 @@ interface __declspec(uuid("5ed3921d-a486-42cc-a5c3-33d97f75c5b5")) __declspec(no
 // verification and can never authorize overwrite, skip, cleanup, or source deletion.
 interface __declspec(uuid("ed24d2c9-3377-468a-a8b2-72862353f7d1")) __declspec(novtable) IFileSystemBoundContentProof : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE GetContentProof(const FileSystemOptions* options,
-                                                      FileSystemContentProof* proof) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetContentProof(const FileSystemOptions* options, FileSystemContentProof* proof) noexcept = 0;
 };
 
 // R3-2: writer-side content proof for atomic-final routes without bound objects. Before the first
@@ -1231,8 +1360,8 @@ interface __declspec(uuid("ed24d2c9-3377-468a-a8b2-72862353f7d1")) __declspec(no
 // FILESYSTEM_ROUTE_PROOF_WRITER_DIGEST.
 interface __declspec(uuid("122eb65f-ef47-4d11-8c8d-d2fb144df1e3")) __declspec(novtable) IFileWriterContentProof : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE GetContentProofAlgorithms(uint32_t* algorithmMask) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE GetCommittedContentProof(FileSystemContentProof* proof) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetContentProofAlgorithms(uint32_t* algorithmMask) noexcept       = 0;
+    virtual HRESULT STDMETHODCALLTYPE GetCommittedContentProof(FileSystemContentProof * proof) noexcept = 0;
 };
 
 // Exact-object metadata contract used by the host bridge. The interface is optional and is
@@ -1274,22 +1403,33 @@ enum FileSystemMetadataTransferPhase : uint32_t
 
 struct FileSystemMetadataTransferResult
 {
-    uint32_t sizeBytes; // sizeof(FileSystemMetadataTransferResult)
+    uint32_t sizeBytes; // sizeof(FileSystemMetadataTransferResult), or the legacy size below
     uint32_t attemptedFeatures;
     uint32_t preservedFeatures;
+    // A difference the user may need to act on (for security: a protected source DACL that the
+    // destination replaced by inheritance).
     uint32_t changedFeatures;
+    // Not preserved, or (for security) not verifiable because a descriptor could not be read;
+    // firstFailure carries the first failing status.
     uint32_t lostFeatures;
     HRESULT firstFailure;
+    // Differences that are the destination's expected behavior (for security: inherited ACEs,
+    // explicit ACEs the inheriting destination does not carry, owner and group). Written only for
+    // callers that pass the full size; a legacy-size caller receives these differences, and an
+    // unverifiable security descriptor, in changedFeatures as before.
+    uint32_t informationalFeatures;
 };
+
+inline constexpr uint32_t FILESYSTEM_METADATA_TRANSFER_RESULT_LEGACY_SIZE =
+    static_cast<uint32_t>(offsetof(FileSystemMetadataTransferResult, informationalFeatures));
 
 interface __declspec(uuid("145b7908-1876-4c76-9900-88961d43f2ab")) __declspec(novtable) IFileSystemBoundMetadata : public IUnknown
 {
-    virtual HRESULT STDMETHODCALLTYPE GetMetadataSnapshot(const FileSystemOptions* options,
-                                                          FileSystemMetadataSnapshot* snapshot) noexcept = 0;
-    virtual HRESULT STDMETHODCALLTYPE TransferMetadataTo(IFileSystemBoundObject* destination,
+    virtual HRESULT STDMETHODCALLTYPE GetMetadataSnapshot(const FileSystemOptions* options, FileSystemMetadataSnapshot* snapshot) noexcept = 0;
+    virtual HRESULT STDMETHODCALLTYPE TransferMetadataTo(IFileSystemBoundObject * destination,
                                                          FileSystemMetadataTransferPhase phase,
                                                          const FileSystemOptions* options,
-                                                         FileSystemMetadataTransferResult* result) noexcept = 0;
+                                                         FileSystemMetadataTransferResult* result) noexcept                                = 0;
 };
 
 // Optional item stream operations interface for filesystem plugins.
@@ -1475,7 +1615,9 @@ class PackedFileInfoCursor final
 {
 public:
     PackedFileInfoCursor(const FileInfo* buffer, unsigned long bufferSize, unsigned long count) noexcept
-        : _buffer(reinterpret_cast<const unsigned char*>(buffer)), _bufferSize(bufferSize), _count(count)
+        : _buffer(reinterpret_cast<const unsigned char*>(buffer)),
+          _bufferSize(bufferSize),
+          _count(count)
     {
     }
 
@@ -1490,29 +1632,27 @@ public:
         {
             return HRESULT_FROM_WIN32(ERROR_NO_MORE_FILES);
         }
-        if (! _buffer || _bufferSize == 0u ||
-            (reinterpret_cast<uintptr_t>(_buffer) % alignof(FileInfo)) != 0u ||
-            (_offset % alignof(FileInfo)) != 0u || _offset > _bufferSize)
+        if (! _buffer || _bufferSize == 0u || (reinterpret_cast<uintptr_t>(_buffer) % alignof(FileInfo)) != 0u || (_offset % alignof(FileInfo)) != 0u ||
+            _offset > _bufferSize)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
         constexpr size_t headerBytes = offsetof(FileInfo, FileName);
-        const size_t remaining = static_cast<size_t>(_bufferSize) - _offset;
+        const size_t remaining       = static_cast<size_t>(_bufferSize) - _offset;
         if (remaining < headerBytes)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
         const auto* entry = reinterpret_cast<const FileInfo*>(_buffer + _offset);
-        if ((entry->FileNameSize % sizeof(wchar_t)) != 0u ||
-            static_cast<size_t>(entry->FileNameSize) > remaining - headerBytes)
+        if ((entry->FileNameSize % sizeof(wchar_t)) != 0u || static_cast<size_t>(entry->FileNameSize) > remaining - headerBytes)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
 
         const size_t requiredBytes = headerBytes + static_cast<size_t>(entry->FileNameSize);
-        const bool finalRecord = _index + 1u == _count;
-        const size_t advance = static_cast<size_t>(entry->NextEntryOffset);
+        const bool finalRecord     = _index + 1u == _count;
+        const size_t advance       = static_cast<size_t>(entry->NextEntryOffset);
         if (finalRecord)
         {
             if (advance != 0u)
@@ -1520,8 +1660,7 @@ public:
                 return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
             }
         }
-        else if (advance == 0u || (advance % alignof(FileInfo)) != 0u ||
-                 advance < requiredBytes || advance > remaining || remaining - advance < headerBytes)
+        else if (advance == 0u || (advance % alignof(FileInfo)) != 0u || advance < requiredBytes || advance > remaining || remaining - advance < headerBytes)
         {
             return HRESULT_FROM_WIN32(ERROR_INVALID_DATA);
         }
@@ -1537,17 +1676,14 @@ public:
 
 private:
     const unsigned char* _buffer = nullptr;
-    size_t _bufferSize = 0u;
-    size_t _offset = 0u;
-    unsigned long _count = 0u;
-    unsigned long _index = 0u;
+    size_t _bufferSize           = 0u;
+    size_t _offset               = 0u;
+    unsigned long _count         = 0u;
+    unsigned long _index         = 0u;
 };
 
-[[nodiscard]] inline HRESULT LocatePackedFileInfoRecord(const FileInfo* buffer,
-                                                        unsigned long bufferSize,
-                                                        unsigned long count,
-                                                        unsigned long index,
-                                                        const FileInfo** result) noexcept
+[[nodiscard]] inline HRESULT LocatePackedFileInfoRecord(
+    const FileInfo* buffer, unsigned long bufferSize, unsigned long count, unsigned long index, const FileInfo** result) noexcept
 {
     if (! result)
     {
@@ -1563,7 +1699,7 @@ private:
     for (unsigned long current = 0u; current < count; ++current)
     {
         const FileInfo* entry = nullptr;
-        const HRESULT hr = cursor.Next(&entry);
+        const HRESULT hr      = cursor.Next(&entry);
         if (FAILED(hr))
         {
             return hr;
@@ -1734,7 +1870,7 @@ inline HRESULT BuildFileSystemPathListArenaFromFilesInformation(
     for (unsigned long index = 0; index < entryCount; ++index)
     {
         const FileInfo* entry = nullptr;
-        hr = sizingCursor.Next(&entry);
+        hr                    = sizingCursor.Next(&entry);
         if (FAILED(hr))
         {
             return hr;
@@ -1759,7 +1895,6 @@ inline HRESULT BuildFileSystemPathListArenaFromFilesInformation(
         {
             return HRESULT_FROM_WIN32(ERROR_ARITHMETIC_OVERFLOW);
         }
-
     }
 
     hr = InitializeFileSystemArena(arena, static_cast<unsigned long>(totalBytes));
@@ -1788,7 +1923,7 @@ inline HRESULT BuildFileSystemPathListArenaFromFilesInformation(
     for (unsigned long index = 0; index < entryCount; ++index)
     {
         const FileInfo* entry = nullptr;
-        hr = copyCursor.Next(&entry);
+        hr                    = copyCursor.Next(&entry);
         if (FAILED(hr))
         {
             DestroyFileSystemArena(arena);
@@ -1840,7 +1975,6 @@ inline HRESULT BuildFileSystemPathListArenaFromFilesInformation(
 
         sourcePath[pathOffset + nameChars] = L'\0';
         paths[index]                       = sourcePath;
-
     }
 
     *outPaths = paths;

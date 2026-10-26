@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "compaction": {
+    "originalRelativePath": "perf/perf_metrics.jsonl",
+    "originalSourceBytes": 331368741,
+    "originalRunBytes": 331732113,
+    "originalSourceSha256": "abf7001cf9a8325b8e76ceeab1bcf02a657795ece019ca756416be37b7ae2df9",
+    "originalRowCount": 904572,
+    "originalFileLimitBytes": 2097152,
+    "originalRunLimitBytes": 5242880,
+    "reason": "The Fresh Full run appended a broad high-frequency diagnostic stream. The raw stream exceeded both checked-in archive limits and was not load-bearing for a percentile, throughput, budget, or before/after claim."
+  },
+  "corpusIdentity": {
+    "firstTimestamp": "2026-08-23T10:34:31.230Z",
+    "lastTimestamp": "2026-08-23T10:50:00.095Z",
+    "machineHash": "4cb089111a23",
+    "commit": "a0a795d5ed322ad12b6c183484cd08eb722e350c",
+    "commitNote": "The commit field is the parent HEAD recorded while the P1.6 working tree was under validation.",
+    "branch": "master",
+    "scenario": "SelfTest",
+    "build": "Debug",
+    "runIds": [
+      "2026-08-23_103431"
+    ]
+  },
+  "behavioralResult": {
+    "suite": "FileOperations",
+    "passed": 112,
+    "failed": 0,
+    "skipped": 27,
+    "durationMs": 926032,
+    "authority": "../fileops_results.json"
+  },
+  "claimCases": [
+    {
+      "name": "FileOps_ProviderCapabilityMatrix",
+      "status": "passed",
+      "durationMs": 671
+    },
+    {
+      "name": "FileOps_ReparseRetargetDestinationContainment",
+      "status": "passed",
+      "durationMs": 63
+    },
+    {
+      "name": "Floodgate_LocalWriterOverwriteIsStaged",
+      "status": "passed",
+      "durationMs": 125
+    },
+    {
+      "name": "Floodgate_LocalCopyOverwriteIsStaged",
+      "status": "passed",
+      "durationMs": 47
+    },
+    {
+      "name": "Floodgate_InlineF2WorkerQueueBypassAndInterlock",
+      "status": "passed",
+      "durationMs": 609
+    }
+  ],
+  "representativeMetrics": [
+    {
+      "timestamp": "2026-08-23T10:35:34.039Z",
+      "metric": "FileOps.Interlock.PrepareUs",
+      "detail": "rename",
+      "durationUs": 3412,
+      "value0": 1,
+      "value1": 13,
+      "hr": 0,
+      "runId": "2026-08-23_103431"
+    },
+    {
+      "timestamp": "2026-08-23T10:35:34.190Z",
+      "metric": "FileOps.SelfTest.InlineRenameRetainedAuthorityNodes",
+      "detail": "paused-before-mutation",
+      "durationUs": 13,
+      "value0": 1,
+      "value1": 1024,
+      "hr": 0,
+      "runId": "2026-08-23_103431"
+    },
+    {
+      "timestamp": "2026-08-23T10:35:34.195Z",
+      "metric": "FileOps.Interlock.PrepareUs",
+      "detail": "rename",
+      "durationUs": 2241,
+      "value0": 1,
+      "value1": 13,
+      "hr": 0,
+      "runId": "2026-08-23_103431"
+    }
+  ],
+  "claimBoundary": "This Debug evidence proves bounded Inline Rename interlock authority retention and preserves the Phase 1 correctness result. It makes no Release throughput, percentile, latency-budget, or before/after improvement claim."
+}

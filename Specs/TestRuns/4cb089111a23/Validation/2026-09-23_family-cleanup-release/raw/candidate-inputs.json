@@ -1,0 +1,54 @@
+[
+  {
+    "path": "RedSalamander/FileOperationsFooterLayout.h",
+    "sha256": "a1b3f9b36b5d2a35afd1d663cd576305db7d454bff4b06c03ddd7a3120f71711"
+  },
+  {
+    "path": "RedSalamander/FolderWindow.FileOperations.Popup.cpp",
+    "sha256": "69a2ac126b3272c30d86cad03d3d4b296d6f4c9475f124eb64c3ebdf6ea79ea1"
+  },
+  {
+    "path": "RedSalamander/FolderWindow.FileOperations.Popup.h",
+    "sha256": "e25496dbdcd07a3f2d8d4af7812e6eafcf218c02f964ccc8d9481c890f957ad2"
+  },
+  {
+    "path": "RedSalamander/RedSalamander.vcxproj",
+    "sha256": "1808ddf7f43864f67c7c62e9ebc1bb6a6903b617716a8f3aa40ae8f98c51ea64"
+  },
+  {
+    "path": "Tests/ProductUiTests/ProductUiTests.cpp",
+    "sha256": "9b47a88cab42378da734f9db723b72b699b6fedd4641c4d7c7504489e3e77b81"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallerySurfaces.cpp",
+    "sha256": "9acabe54d0523626871db42e09fc11e5a2f4bc55cd69a9cb99c3f773116bd960"
+  },
+  {
+    "path": "RedSalamander/Ui/AlertOverlayWindow.cpp",
+    "sha256": "bcf4d7f1a5f4cc966286eff418a45139f9c9b57815270afdd4e0a1b43243aebc"
+  },
+  {
+    "path": "RedSalamander/Ui/AlertOverlayWindow.h",
+    "sha256": "821623ccdbea312d72e494b785cf4744650890d01acf0d5996cd20f4f29270c2"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp",
+    "sha256": "22db9bd83a475cdf859eedb8bfe6082078ebb26e05a9a7fdb64d2b20fb1a81cd"
+  },
+  {
+    "path": "RedSalamander/RedSalamander.cpp",
+    "sha256": "34f374fed64548c30a6904f98f579d1a1db28eb052a1524c25c90c890c34a43a"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp",
+    "sha256": "0afc31e67db5082da79614bd2fc87b3d0fd2a2733d65b720c9dedac025454143"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases14_16.cpp",
+    "sha256": "f227762adce0c2c33f09ccc01b0394278582437ed8866402e7fb60a62f02a0b8"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.cpp",
+    "sha256": "d44ede54e175a350946ac6c6e22de9b5e74b1bb3332a91e83efcc0a029518f5a"
+  }
+]

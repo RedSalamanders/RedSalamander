@@ -1,0 +1,31 @@
+{
+  "source_path": "S:\\RedSalamander.Perf\\evidence\\i26-decision-candidate-v4-20260921\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "source_sha256": "a8546c3d9cc6386d531c7330541a2955074053b6e043de2a345723279089452c",
+  "selected_original_line_numbers": [
+    839,
+    1407,
+    2063,
+    2642,
+    3345,
+    3983,
+    4777,
+    5547,
+    6840,
+    7539,
+    8152,
+    8794,
+    9417,
+    10118,
+    10954,
+    11728,
+    13242,
+    13924,
+    14534,
+    15160,
+    15800,
+    16500,
+    17290,
+    18060
+  ],
+  "selected_normalized_lf_sha256": "ffeb776db226ec0ac5be1f569779f514fbd9f0c886323224eb72fc7bcd9e8aff"
+}

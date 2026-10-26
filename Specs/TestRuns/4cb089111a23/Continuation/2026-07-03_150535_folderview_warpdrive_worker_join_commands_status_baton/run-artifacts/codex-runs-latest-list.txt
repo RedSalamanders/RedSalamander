@@ -1,0 +1,35 @@
+
+Name                                                                       LastWriteTime        Length
+----                                                                       -------------        ------
+commands_broad_after_worker_join_20260703.log                              03/07/2026 15:03:01 4434051
+commands_clipboard_nav_edit_window_after_worker_join_20260703.log          03/07/2026 14:45:42 4376193
+compare_full_after_worker_join_20260703_rerun.log                          03/07/2026 14:45:04 4381726
+compare_full_after_worker_join_20260703.log                                03/07/2026 14:33:58     345
+compare_pending_wide_tree_after_worker_join_20260703.log                   03/07/2026 14:33:48 4376003
+compare_worker_shutdown_join_guard_20260703.log                            03/07/2026 14:33:16 4375999
+msbuild_redsalamander_after_compare_worker_join_20260703_rerun.log         03/07/2026 14:32:47   11231
+msbuild_redsalamander_after_compare_worker_join_20260703.log               03/07/2026 14:29:36   12910
+compare_full_after_quiet_drain_20260703.log                                03/07/2026 14:21:02 4376312
+commands_clipboard_nav_edit_focused_after_host_open_predicate_20260703.log 03/07/2026 14:19:54 4375993
+compare_pending_wide_tree_focused_after_quiet_drain_20260703.log           03/07/2026 14:19:35 4376003
+msbuild_redsalamander_after_compare_navedit_waits_20260703.log             03/07/2026 14:18:55   11308
+commands_clipboard_nav_edit_focused_after_full_red_20260703.log            03/07/2026 14:15:30 4375993
+full_with_build_after_compare_monitor_green_20260703.log                   03/07/2026 14:14:24 5099666
+compare_full_after_pending_window_green_20260703.log                       03/07/2026 13:31:30 4324848
+compare_decision_cache_window_after_full_red_20260703.log                  03/07/2026 13:27:20 4319279
+compare_pending_wide_tree_focused_after_full_red_20260703_rerun2.log       03/07/2026 13:26:27 4319125
+monitor_etw_latency_direct_current_20260703.log                            03/07/2026 13:25:41       0
+compare_pending_wide_tree_focused_after_full_red_20260703_rerun.log        03/07/2026 13:25:26       0
+full_skipbuild_after_commands_viewerpe_monitor_green_20260703.log          03/07/2026 13:21:29 5025357
+msbuild_all_debug_before_full_20260703.log                                 03/07/2026 12:43:34   19106
+monitor_etw_latency_after_commands_green_20260703.log                      03/07/2026 12:41:21       0
+viewerpe_direct_after_commands_green_20260703.log                          03/07/2026 12:41:16  194827
+commands_broad_after_nav_pref_waits_20260703.log                           03/07/2026 12:39:51 4262526
+runall_commands_pref_boundary_window_after_nav_pref_waits_20260703.log     03/07/2026 12:23:30 4206095
+runall_commands_nav_window11_after_nav_pref_waits_20260703.log             03/07/2026 12:23:13 4206030
+runall_commands_nav_status_focused_after_nav_pref_waits_20260703.log       03/07/2026 12:22:58 4205362
+runall_commands_pref_boundary_focused_after_nav_pref_waits_20260703.log    03/07/2026 12:22:46 4205378
+msbuild_redsalamander_after_nav_pref_waits_fix_20260703.log                03/07/2026 12:22:18   11231
+msbuild_redsalamander_after_nav_pref_waits_20260703.log                    03/07/2026 12:19:57   15429
+
+

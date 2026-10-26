@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-10-26T09:15:58.717Z",
+    "suite": "CompareDirectories",
+    "artifact_root": "E:\\RedSalamander.Perf\\runs\\20261026T091558Z-39100-3477e724ad9440a381aea4fff1aa001e\\artifacts\\selftest\\last_run\\compare",
+    "duration_ms": 9608,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "local_index_core_sqlite_cold_start_stale_root_refreshes_before_query",
+            "status": "passed",
+            "duration_ms": 9532,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

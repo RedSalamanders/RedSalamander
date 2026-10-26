@@ -1,0 +1,17 @@
+[
+  {
+    "archive": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Validation\\space_debug_prepush_reports_20261009T201507Z",
+    "pairs": 14,
+    "verified": true
+  },
+  {
+    "archive": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Validation\\space_debug_prepush_native_captures_20261009T201507Z",
+    "pairs": 18,
+    "verified": true
+  },
+  {
+    "archive": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Validation\\space_debug_prepush_commands_captures_20261009T201507Z",
+    "pairs": 12,
+    "verified": true
+  }
+]

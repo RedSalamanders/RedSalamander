@@ -1,0 +1,81 @@
+
+FullName                                                                                                        Length L
+                                                                                                                       a
+                                                                                                                       s
+                                                                                                                       t
+                                                                                                                       W
+                                                                                                                       r
+                                                                                                                       i
+                                                                                                                       t
+                                                                                                                       e
+                                                                                                                       T
+                                                                                                                       i
+                                                                                                                       m
+                                                                                                                       e
+--------                                                                                                        ------ -
+Z:\src\RedSalamander\.build\codex-runs\focused_prefs_plugins_custom_paths_scroll_after_family_red_20260702.log 3120004 0
+Z:\src\RedSalamander\.build\codex-runs\prefs_dialog_family_failfast_after_plugins_uia_red_20260702.log         3137035 0
+Z:\src\RedSalamander\.build\codex-runs\prefs_plugins_uia_grid_predecessor14_20260702.log                       3121105 0
+Z:\src\RedSalamander\.build\codex-runs\prefs_plugins_uia_grid_predecessor14_20260702.filter.txt                   1179 0
+Z:\src\RedSalamander\.build\codex-runs\focused_prefs_plugins_uia_grid_after_broad_red_20260702.log             3119990 0
+Z:\src\RedSalamander\.build\codex-runs\commands_broad_failfast_after_connection_reductions_20260702.exit.txt         3 0
+Z:\src\RedSalamander\.build\codex-runs\commands_broad_failfast_after_connection_reductions_20260702.log        6315696 0
+Z:\src\RedSalamander\.build\codex-runs\commands_broad_failfast_after_connection_reductions_20260702.pid.txt          7 0
+Z:\src\RedSalamander\.build\codex-runs\connection_churn_red_last35_20260702.log                                3121740 0
+Z:\src\RedSalamander\.build\codex-runs\connection_churn_red_last35_20260702.filter.txt                            1930 0
+Z:\src\RedSalamander\.build\codex-runs\plugin_config_plus_connection_churn_20260702.log                        3120796 0
+Z:\src\RedSalamander\.build\codex-runs\plugin_config_plus_connection_churn_20260702.filter.txt                     952 0
+Z:\src\RedSalamander\.build\codex-runs\connection_protocol_churn_immediate5_20260702.log                       3120145 0
+Z:\src\RedSalamander\.build\codex-runs\connection_protocol_churn_immediate5_20260702.filter.txt                    306 0
+Z:\src\RedSalamander\.build\codex-runs\focused_connection_protocol_churn_after_broad_red_20260702.log          3119911 0
+Z:\src\RedSalamander\.build\codex-runs\commands_broad_failfast_after_selection_reductions_20260702.exit.txt          3 0
+Z:\src\RedSalamander\.build\codex-runs\commands_broad_failfast_after_selection_reductions_20260702.log         6332134 0
+Z:\src\RedSalamander\.build\codex-runs\commands_broad_failfast_after_selection_reductions_20260702.pid.txt           7 0
+Z:\src\RedSalamander\.build\codex-runs\selection_av_prefix_to_invert_after_baton_20260702.log                    93886 0
+Z:\src\RedSalamander\.build\codex-runs\selection_av_prefix_to_invert_after_baton_20260702.pid.txt                    7 0
+Z:\src\RedSalamander\.build\codex-runs\selection_av_prefix_to_invert_after_baton_20260702.filter.txt             45800 0
+Z:\src\RedSalamander\.build\codex-runs\selection_av_last20_after_baton_20260702.log                            3120556 0
+Z:\src\RedSalamander\.build\codex-runs\selection_av_last20_after_baton_20260702.filter.txt                         788 0
+Z:\src\RedSalamander\.build\codex-runs\selection_av_last10_after_baton_20260702.log                            3063747 0
+Z:\src\RedSalamander\.build\codex-runs\selection_av_last10_after_baton_20260702.filter.txt                         361 0
+Z:\src\RedSalamander\.build\codex-runs\focused_selection_invert_after_av_baton_20260702.log                    3063408 0
+Z:\src\RedSalamander\.build\codex-runs\commands_broad_rerun_after_prefix456_green_20260702.exit.txt                  6 0
+Z:\src\RedSalamander\.build\codex-runs\commands_broad_rerun_after_prefix456_green_20260702.log                 6085054 0
+Z:\src\RedSalamander\.build\codex-runs\commands_broad_rerun_after_prefix456_green_20260702.pid.txt                   7 0
+Z:\src\RedSalamander\.build\codex-runs\commands_prefix456_to_find_action_buttons_20260702.exit.txt                   6 0
+Z:\src\RedSalamander\.build\codex-runs\commands_prefix456_to_find_action_buttons_20260702.log                  6029138 0
+Z:\src\RedSalamander\.build\codex-runs\commands_prefix456_to_find_action_buttons_20260702.pid.txt                    7 0
+Z:\src\RedSalamander\.build\codex-runs\commands_prefix456_to_find_action_buttons_20260702.filter.txt             28371 0
+Z:\src\RedSalamander\.build\codex-runs\find_action_buttons_suffix45_20260702.log                               3009108 0
+Z:\src\RedSalamander\.build\codex-runs\find_action_buttons_suffix45_20260702.filter.txt                           2991 0
+Z:\src\RedSalamander\.build\codex-runs\find_action_buttons_suffix15_20260702.log                               3007307 0
+Z:\src\RedSalamander\.build\codex-runs\find_action_buttons_suffix15_20260702.filter.txt                           1196 0
+Z:\src\RedSalamander\.build\codex-runs\find_action_buttons_suffix5_20260702.log                                3006599 0
+Z:\src\RedSalamander\.build\codex-runs\find_action_buttons_suffix5_20260702.filter.txt                             491 0
+Z:\src\RedSalamander\.build\codex-runs\focused_find_restored_combined_action_buttons_20260702.log              3006191 0
+Z:\src\RedSalamander\.build\codex-runs\commands_broad_after_focus_promptclose_dxui_guard_20260702.log              336 0
+Z:\src\RedSalamander\.build\codex-runs\commands_slice_532_627_repeat_after_dxuitests_20260702.log              3011296 0
+Z:\src\RedSalamander\.build\codex-runs\dxuitests_after_menubar_guard_warningfix_20260702.log                     92135 0
+Z:\src\RedSalamander\.build\codex-runs\dxuitests_build_after_menubar_guard_warningfix_20260702.log                1765 0
+Z:\src\RedSalamander\.build\codex-runs\dxuitests_build_after_menubar_guard_20260702.log                           3477 0
+Z:\src\RedSalamander\.build\codex-runs\dxuitests_after_fileop_prompt_sourceguard_20260702.log                      247 0
+Z:\src\RedSalamander\.build\codex-runs\dxuitests_build_after_fileop_prompt_sourceguard_20260702.log               2245 0
+Z:\src\RedSalamander\.build\codex-runs\commands_slice_532_627_after_focus_and_fileop_postclose_20260702.log    3011296 0
+Z:\src\RedSalamander\.build\codex-runs\speedlimit_fourcase_after_fileop_postclose_20260702.log                 3005930 0
+Z:\src\RedSalamander\.build\codex-runs\commands_slice_532_627_after_focushelper_20260702.log                   3011296 0
+Z:\src\RedSalamander\.build\codex-runs\focused_select_all_after_focushelper_20260702.log                       3005749 0
+Z:\src\RedSalamander\.build\codex-runs\selectall_prefix31_after_postclose_20260702.log                         3007691 0
+Z:\src\RedSalamander\.build\codex-runs\selectall_prefix31_after_postclose_20260702.filter.txt                     1998 0
+Z:\src\RedSalamander\.build\codex-runs\focused_select_all_after_postclose_20260702.log                         3005749 0
+Z:\src\RedSalamander\.build\codex-runs\commands_slice_532_627_rerun_before_fileop_postclose_20260702.log       3012680 0
+Z:\src\RedSalamander\.build\codex-runs\speedlimit_prefix22_after_postclose_20260702.log                        3007113 0
+Z:\src\RedSalamander\.build\codex-runs\speedlimit_prefix22_after_postclose_20260702.filter.txt                    1422 0
+Z:\src\RedSalamander\.build\codex-runs\speedlimit_threecase_cluster_before_fileop_postclose_20260702.log       3005865 0
+Z:\src\RedSalamander\.build\codex-runs\focused_fatal_error_longrun_after_postclose_20260702.log                3005742 0
+Z:\src\RedSalamander\.build\codex-runs\focused_hot_paths_after_postclose_20260702.log                          3005749 0
+Z:\src\RedSalamander\.build\codex-runs\focused_switch_pane_after_postclose_20260702.log                        3005757 0
+Z:\src\RedSalamander\.build\codex-runs\latest-folderview-warpdrive-archive.txt                                      87 3
+Z:\src\RedSalamander\.build\codex-runs\latest-commands-full-after-tsf.txt                                           59 3
+Z:\src\RedSalamander\.build\codex-runs\latest-commands-full-after-panes.txt                                         61 3
+Z:\src\RedSalamander\.build\codex-runs\latest-folderview-pause-archive.txt                                          87 3
+

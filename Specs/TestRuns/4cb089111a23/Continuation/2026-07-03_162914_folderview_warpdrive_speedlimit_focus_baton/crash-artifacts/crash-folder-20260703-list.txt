@@ -1,0 +1,9 @@
+
+FullName                                                                                    Length LastWriteTime
+--------                                                                                    ------ -------------
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260703-142049-p98100.txt    5466 03/07/2026 14:20:49
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260703-142049-p98100.dmp  760266 03/07/2026 14:20:49
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260703-161435-p81732.txt    8284 03/07/2026 16:14:36
+C:\Users\eric\AppData\Local\RedSalamander\Crashes\RedSalamander-20260703-161435-p81732.dmp 8686169 03/07/2026 16:14:36
+
+

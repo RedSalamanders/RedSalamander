@@ -1,0 +1,57 @@
+{
+    "run_started_utc": "2026-10-12T01:31:26.854Z",
+    "duration_ms": 11111,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1,
+    "case_filter": "FileOpsFamily_R4A19DiscoveryBaseline",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261012T013052Z-44272-02dfc9d1de0642ac87ab6d0631df4148\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 10313,
+            "passed": 5,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "repeat_count": 1,
+            "case_filter": "FileOpsFamily_R4A19DiscoveryBaseline",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1313,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "R4A19_DiscoveryMeasurementFacts",
+                    "status": "passed",
+                    "duration_ms": 1578,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "R4A19_DiscoveryProviderControls",
+                    "status": "passed",
+                    "duration_ms": 3500,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "R4A19_DiscoveryIndependentVolumes",
+                    "status": "passed",
+                    "duration_ms": 3734,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 188,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 5,
+    "failed": 0,
+    "skipped": 0
+}

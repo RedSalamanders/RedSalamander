@@ -1,0 +1,198 @@
+{
+  "runId": "20261019T210717Z-44008-0fb5286938e649fc9ef80fba7df0cc77",
+  "archive": "D:\\RedSalamander.Perf\\evidence\\screenshot-gaps-20261019\\fileops-live-source-eight-run.zip",
+  "sha256": "f37b21d06584badd44ea3e28b605ef55b5f60526e8f83bf132ea34f5029f9710",
+  "files": [
+    {
+      "path": "artifacts/archive/4cb089111a23/FileOps/2026-10-19_230844/commands_trace.txt",
+      "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "bytes": 2
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/FileOps/2026-10-19_230844/compare_trace.txt",
+      "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "bytes": 2
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/FileOps/2026-10-19_230844/env.txt",
+      "sha256": "42438ae4a6005c2265fa2083d007013c3b21073ac1a4543b5d49770e7c613988",
+      "bytes": 580
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/FileOps/2026-10-19_230844/fileops_results.json",
+      "sha256": "295a63af69fe0005f66c7f163c5b1cc2d00c3e51586919a6d44024a617581c0e",
+      "bytes": 890
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/FileOps/2026-10-19_230844/fileops_trace.txt",
+      "sha256": "ad699335396bc2e37b2aec67e9aefe6187f71e17d058d99514cd1ad8f4716fd9",
+      "bytes": 43810
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/FileOps/2026-10-19_230844/selftest.txt",
+      "sha256": "3f543570d69385e85f050268485abd14c5e3b9a042dfc14e9d463a69a6d3ec91",
+      "bytes": 87
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/FileOps/2026-10-19_230844/selftest_run_results.json",
+      "sha256": "3cc79c530bc32531eddb5b52d744f648169c31deca80ccde7dbd43dee316d866",
+      "bytes": 1435
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/FileOps/2026-10-19_230844/selftest_run_trace.txt",
+      "sha256": "7ee3c89c79d0c2ab95387954ba7ce9ff3a050351b0271144a6daa47e53df9e32",
+      "bytes": 57758
+    },
+    {
+      "path": "artifacts/archive/4cb089111a23/FileOps/2026-10-19_230844/perf/perf_metrics.jsonl",
+      "sha256": "e34bf0164b312df38b075a32897bf29b9bf4a51a725342353337f97d9afd51cd",
+      "bytes": 22352051
+    },
+    {
+      "path": "artifacts/selftest/last_run/results.json",
+      "sha256": "3cc79c530bc32531eddb5b52d744f648169c31deca80ccde7dbd43dee316d866",
+      "bytes": 1435
+    },
+    {
+      "path": "artifacts/selftest/last_run/trace.txt",
+      "sha256": "7ee3c89c79d0c2ab95387954ba7ce9ff3a050351b0271144a6daa47e53df9e32",
+      "bytes": 57758
+    },
+    {
+      "path": "artifacts/selftest/last_run/commands/trace.txt",
+      "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "bytes": 2
+    },
+    {
+      "path": "artifacts/selftest/last_run/compare/trace.txt",
+      "sha256": "b3d510ef04275ca8e698e5b3cbb0ece3949ef9252f0cdc839e9ee347409a2209",
+      "bytes": 2
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/results.json",
+      "sha256": "295a63af69fe0005f66c7f163c5b1cc2d00c3e51586919a6d44024a617581c0e",
+      "bytes": 890
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/trace.txt",
+      "sha256": "ad699335396bc2e37b2aec67e9aefe6187f71e17d058d99514cd1ad8f4716fd9",
+      "bytes": 43810
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/bridge-open-prefix-7.png",
+      "sha256": "6730c5d13aa524d2b58900582f30b581a394a3a10caa9abefba24403dbc1bc68",
+      "bytes": 52927
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/bridge-parallel-counts.png",
+      "sha256": "4bc8bc3f6bf83954462f85357a363ee3412e518b2cafa21ae483036fd1aa555f",
+      "bytes": 44543
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/bridge-parallel-early.png",
+      "sha256": "295e1274a095f02d0323984ecba659c8bb2278840cd60ae6dafabe7c931bde03",
+      "bytes": 44636
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/bridge-parallel-late.png",
+      "sha256": "4f0ac0dc842f8c898baa8548315a42c107155e1d2c112c4bebc0e58603e368f2",
+      "bytes": 91308
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/bridge-small-publishing.png",
+      "sha256": "e65f457299d7e95a98c59de70e3c105b806a3e4966459c268f2a7cbd22219c58",
+      "bytes": 90179
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/bridge-verify-counts.png",
+      "sha256": "8e2b39c7ddc27f04f926d52fa4263b6f382b72bb26ea68c43b78963af48d073c",
+      "bytes": 43426
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/bridge-verify-early.png",
+      "sha256": "1508883e3adfa084d2cb45d6a35b9eab1d2ef97a45d0b38632aa92404cc0b1fd",
+      "bytes": 84290
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/bridge-verify-late.png",
+      "sha256": "f182d3653f36b810e631cb38929e349670f6c5ac1b8add5d450430d25b6101bf",
+      "bytes": 86020
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/local-overwrite-counts.png",
+      "sha256": "5478dbf39512e43db18f53164f17849fc616d269a8fa57886b6ef19242ea32b7",
+      "bytes": 48712
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/local-overwrite-early.png",
+      "sha256": "0671e02f59bc003d5d557f406e0e218eae4b224c57c176a1cd73efebcd55e75b",
+      "bytes": 63272
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/local-overwrite-finalizing.png",
+      "sha256": "3243829db6d2d65c99e97cb856c83a36b3ae82cd51f990e09bf3c49aa078a693",
+      "bytes": 71318
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/local-overwrite-late.png",
+      "sha256": "c3aeca45d2e24bb499cf695c553655fa03b7339f35700358218446bdd9373501",
+      "bytes": 66967
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/local-parallel-counts.png",
+      "sha256": "97361ebaa4b5221d4cf7984e85e240a7802225fca8f37a4aea413f1c9aaf656c",
+      "bytes": 51098
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/local-parallel-early.png",
+      "sha256": "a716a65d769f201d4596ff9e60b457f53103229408e3d728730c645c342cfcef",
+      "bytes": 82847
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/local-parallel-finalizing.png",
+      "sha256": "7c3623449d6581807dccfd2d0d5a3996ff3e16175d2784189bd7188d8a308646",
+      "bytes": 88828
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/local-parallel-late.png",
+      "sha256": "dd32a6f68f632e8014f60cd0c4af676a75ae02f5c3b7f9645c1cc7fc53a350f5",
+      "bytes": 86708
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/local-serial-counts.png",
+      "sha256": "a986896705bc6f60b623ce499c28119fbeb6867603a3aa1fcaa7c3383a526715",
+      "bytes": 37840
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/local-serial-early.png",
+      "sha256": "97eb932a0ebba54544ab8b04319233f925d695132bdeed8a8df1ded802d8905f",
+      "bytes": 58286
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/local-serial-finalizing.png",
+      "sha256": "e9229b264446fec0f0a4672fab1ff7a7c348b923ed56bc8b5caf2317c68af2ec",
+      "bytes": 65246
+    },
+    {
+      "path": "artifacts/selftest/last_run/fileops/folder-copy-progress/local-serial-late.png",
+      "sha256": "8388b447734ac4d3e0fa28af62d958a0b3442b1f995e7b6368bf5b7c0a518d56",
+      "bytes": 60308
+    },
+    {
+      "path": "artifacts/selftest/last_run/perf/perf_metrics.jsonl",
+      "sha256": "4eec66f806fdfa9fbe0209e55e76285b7e58213b7478b050ab4a33c682f8f534",
+      "bytes": 22358371
+    },
+    {
+      "path": "scratch/documentation/client-capture-regression/GitHub CLI/device-id",
+      "sha256": "a03fa791e730d6cd317871c52697bb6a1671c834901ee3ae2ad11865647cbd00",
+      "bytes": 36
+    },
+    {
+      "path": "scratch/settings-store/RedSalamander/Logs/FileOperations-20261019.jsonl",
+      "sha256": "741185440cf48e770d7e0b1b93db7f171b7f7527f51a8273f26b4e7a01f76eda",
+      "bytes": 86946
+    }
+  ],
+  "reparsePointsNotFollowed": []
+}

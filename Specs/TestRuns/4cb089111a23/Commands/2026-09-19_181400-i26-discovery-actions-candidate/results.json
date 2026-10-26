@@ -1,0 +1,33 @@
+{
+    "run_started_utc": "2026-09-19T16:13:14.715Z",
+    "duration_ms": 4837,
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 1,
+    "case_filter": "cmd_pane_fileops_popup_throughput_disclosure",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "S:\\RedSalamander.Perf\\runs\\discovery-actions-retained-candidate\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 4197,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 3.0,
+            "repeat_count": 1,
+            "case_filter": "cmd_pane_fileops_popup_throughput_disclosure",
+            "cases": [
+                {
+                    "name": "cmd_pane_fileops_popup_throughput_disclosure",
+                    "status": "passed",
+                    "duration_ms": 3620,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

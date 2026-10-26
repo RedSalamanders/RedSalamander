@@ -1,0 +1,13 @@
+{
+  "source": "d404fc90bcaf7793da4289ffcbd23debd6ee73b2",
+  "configuration": "Debug",
+  "platform": "x64",
+  "runId": "20260913T084739Z-87256-10d2c657dc5c4e75ade5b3e4888b0909",
+  "caseFilter": "Phase6_LocalBandwidthThrottle",
+  "repeatCount": 10,
+  "startedUtc": "2026-09-13T08:47:39.0502559Z",
+  "completedUtc": "2026-09-13T08:48:52.7031344Z",
+  "exitCode": 0,
+  "retained": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-Debug-bandwidth-clock",
+  "noHostedCi": true
+}

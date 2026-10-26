@@ -1,0 +1,8 @@
+Run 20261018T142428Z-80296-1fdb19762d0b4c4b83a8cd590d2864a6 (x64 Debug)
+This is a transcript-derived summary, not a preserved raw selftest artifact.
+The next runner removed the failed run before its raw directory was copied. The retained build receipt binds the tested sources/outputs; full raw results/trace/metrics for this run are unavailable.
+Runner reported: FAILED, 2 passed / 1 failed / 0 skipped; FileOps_SelectionShapeSmb duration 313.0 s, entry 315.5 s, wall 337.2 s.
+All six folder/selected-file native Copy, bridge Copy and managed Move rows reported activeMax=4, exact 9 files/33554432 bytes, zero growth, correct destination contents and source outcomes. All selected-file rows reported liveStatus=true, with 0 or 16000 us task discovery duration and zero payload bytes while discovery remained open.
+All five Parallel Move safety modes reported passed with activeMax=4, acted=true, clean=true, destinationComplete=true, zero growth. Cancel additionally reported sourceIntact=true and HRESULT 0x800704C7. Retry/Skip answered one prompt; unknown answered none and returned 0x800703E4. New-child/Skip returned S_FALSE.
+Nested parallel Move reported FAILED: files=13;directories=6;enumerations=6;activeMax=4;bytes=79872;timestamps=false;content=;hr=0x00000000.
+A retained tool output showed fileops.bridge.created_directory.restore_unsupported at 2026-10-18T14:29:35.471Z, durationUs=124946, value0=1, hr=2147942450 (ERROR_NOT_SUPPORTED). The revised test requires restored timestamps OR the explicit metadata.basic.unsupported diagnostic, matching the existing normative SMB metadata contract. This failed run is not counted as a pass.

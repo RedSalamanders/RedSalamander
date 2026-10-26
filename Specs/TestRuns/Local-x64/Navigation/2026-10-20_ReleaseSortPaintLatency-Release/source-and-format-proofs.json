@@ -1,0 +1,119 @@
+{
+  "verified_utc": "2026-10-20T15:02:42.2385314Z",
+  "status": "passed",
+  "unchanged_ordering_inputs": [
+    {
+      "path": "Common/NaturalSort.h",
+      "sha256": "46BBFEB89E08027F5E2A07689547B5765E7DE9A0C60523A7FD314C13C13BAE52",
+      "unchanged": true
+    },
+    {
+      "path": "RedSalamander/FolderViewSortPolicy.h",
+      "sha256": "318F6FE32C6848803A9421522C009587A3BA0730FA9610CD29EA7CE7F97BA2C5",
+      "unchanged": true
+    },
+    {
+      "path": "RedSalamander/FolderView.Enumeration.cpp",
+      "sha256": "945963641442274D65D99F47E45DFE824CBA104550A464DA690684F4752B231A",
+      "unchanged": true
+    }
+  ],
+  "production_SetSort_unchanged_with_lf_normalization": true,
+  "production_rendering_unchanged_after_removing_only_two_test_counter_blocks": true,
+  "cpp_source": [
+    {
+      "path": "RedSalamander/FolderView.cpp",
+      "sha256": "BD2F6053228FEE6C6A45402D58DB446D0145AE29DBA4B0438CDAA7845E045CBC",
+      "matches_qualified_checkout": true
+    },
+    {
+      "path": "RedSalamander/FolderView.h",
+      "sha256": "92FB920F5A9E936C9B7CF1F8DED84BDF11135EFF09BFD7BE5EF240D5C50EB93E",
+      "matches_qualified_checkout": true
+    },
+    {
+      "path": "RedSalamander/FolderView.Enumeration.cpp",
+      "sha256": "945963641442274D65D99F47E45DFE824CBA104550A464DA690684F4752B231A",
+      "matches_qualified_checkout": true
+    },
+    {
+      "path": "RedSalamander/FolderView.Rendering.cpp",
+      "sha256": "3115F3440DDBCDD98F1946919860A16284453C38F2E6BBD999BC666B9DEA3A37",
+      "matches_qualified_checkout": true
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+      "sha256": "CEF9DC87E4731D23284D082F4BFDA4DCC82D6E2D48B212B0D0D4BF05EA1114AB",
+      "matches_qualified_checkout": true
+    }
+  ],
+  "formatter": "C:\\Program Files\\Microsoft Visual Studio\\18\\Insiders\\VC\\Tools\\Llvm\\x64\\bin\\clang-format.exe",
+  "format": [
+    {
+      "path": "RedSalamander/FolderView.cpp",
+      "replacements": 0,
+      "ranges": [
+        "-lines=262:262",
+        "-lines=318:318",
+        "-lines=635:635",
+        "-lines=1220:1220"
+      ]
+    },
+    {
+      "path": "RedSalamander/FolderView.h",
+      "replacements": 0,
+      "ranges": [
+        "-lines=649:649",
+        "-lines=1285:1285",
+        "-lines=1738:1738",
+        "-lines=1918:1918"
+      ]
+    },
+    {
+      "path": "RedSalamander/FolderView.Enumeration.cpp",
+      "replacements": 0,
+      "ranges": [
+        "-lines=6:6",
+        "-lines=1018:1018",
+        "-lines=1584:1656",
+        "-lines=1665:1665",
+        "-lines=1690:1690",
+        "-lines=1692:1695",
+        "-lines=1697:1698",
+        "-lines=2060:2216",
+        "-lines=2273:2313"
+      ]
+    },
+    {
+      "path": "RedSalamander/FolderView.Rendering.cpp",
+      "replacements": 0,
+      "ranges": [
+        "-lines=2007:2012",
+        "-lines=2053:2058"
+      ]
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+      "replacements": 0,
+      "ranges": [
+        "-lines=15277:15316",
+        "-lines=18098:18100",
+        "-lines=18121:18123",
+        "-lines=18207:18207",
+        "-lines=18287:18297",
+        "-lines=18325:18327",
+        "-lines=18331:18342",
+        "-lines=18346:18346",
+        "-lines=18366:18367",
+        "-lines=18369:18369",
+        "-lines=18375:18386",
+        "-lines=18398:18400",
+        "-lines=18418:18420",
+        "-lines=18435:18436",
+        "-lines=18443:18559",
+        "-lines=33985:33990"
+      ]
+    }
+  ],
+  "scope": "Production comparator, reorder implementation, SetSort and rendering policy remain unchanged. Test-only observation and benchmark protocol change. Fixture and request sequence are independently bound in ordering-and-fixture-checks.json."
+}

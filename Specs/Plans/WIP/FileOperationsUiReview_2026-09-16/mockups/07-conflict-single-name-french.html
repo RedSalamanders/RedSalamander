@@ -1,0 +1,127 @@
+<!doctype html>
+<html lang="fr">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Proposition — conflit de nom</title>
+<style>
+:root { color-scheme: dark; font: 16px/1.5 "Segoe UI", sans-serif; background:#101114; color:#f3f3f5; }
+* { box-sizing:border-box; }
+body { margin:0; padding:24px; }
+.review { max-width:900px; margin:0 auto 24px; color:#c6c8d0; }
+.review h1 { font-size:20px; margin:0 0 8px; }
+.review p { margin:8px 0; }
+.controls { display:flex; gap:12px; flex-wrap:wrap; align-items:center; }
+select, button { font:inherit; color:inherit; background:#303239; border:1px solid #727680; border-radius:7px; padding:9px 14px; white-space:normal; overflow-wrap:anywhere; cursor:pointer; }
+button:hover { background:#3d414a; }
+button:active { background:#505563; }
+:focus-visible { outline:3px solid #8cd0ff; outline-offset:3px; }
+.workspace { width:min(100%,760px); height:850px; max-height:calc(100dvh - 235px); min-height:340px; margin:auto; border:1px solid #666b74; border-radius:12px; display:flex; flex-direction:column; background:#1a1c21; overflow:hidden; box-shadow:0 16px 60px #0005; }
+.titlebar { flex:none; padding:12px 20px; background:#25282e; border-bottom:1px solid #50545d; }
+.body { min-height:0; flex:1; overflow:auto; padding:20px; scrollbar-gutter:stable; scrollbar-color:#969da8 #1a1c21; }
+.body::-webkit-scrollbar { width:12px; }
+.body::-webkit-scrollbar-track { background:#1a1c21; }
+.body::-webkit-scrollbar-thumb { background:#969da8; border:3px solid #1a1c21; border-radius:6px; }
+.state { display:flex; flex-wrap:wrap; gap:12px; align-items:center; color:#d4d6dc; }
+.badge { display:inline-flex; gap:8px; max-width:100%; border:1px solid #b79342; border-radius:7px; padding:4px 10px; background:#43391f; color:#ffde8b; }
+.name { font-size:25px; line-height:1.3; margin:16px 0 8px; font-weight:650; overflow-wrap:anywhere; }
+.problem { margin:0 0 20px; color:#d4d6dc; }
+.role { border-top:1px solid #535761; padding:16px 0; }
+.role h3 { font-size:17px; margin:0 0 6px; }
+.path { overflow-wrap:anywhere; margin:0 0 8px; }
+.metadata { margin:0 0 12px; color:#c6c8d0; display:flex; flex-wrap:wrap; gap:6px 18px; }
+.inspect { display:flex; flex-wrap:wrap; gap:10px; }
+.inspect button { color:#b5dfff; background:#222b35; }
+.scope { display:flex; gap:12px; align-items:start; padding:12px 0 0; }
+.scope input { flex:none; width:21px; height:21px; accent-color:#73beff; margin-top:3px; }
+.scope small { display:block; color:#c6c8d0; margin-top:4px; }
+.consequences { font-size:14px; color:#d4d6dc; border-top:1px solid #535761; padding-top:16px; margin-top:20px; }
+.actions { flex:none; padding:16px 20px; background:#24272d; border-top:1px solid #666b74; }
+.actions p { font-size:14px; margin:0 0 12px; color:#d4d6dc; }
+.buttons { display:flex; flex-wrap:wrap; gap:10px; }
+.buttons button { flex:1 0 auto; max-width:100%; }
+.safe { background:#164b71; border-color:#80c6ff; }
+.safe:hover { background:#205f8b; }
+.demo-note { min-height:1.5em; }
+.pane { border:1px solid #626976; border-radius:8px; padding:16px; }
+.selected { padding:12px; background:#214d75; border:2px solid #8cc8ff; overflow-wrap:anywhere; }
+.mono { overflow-wrap:anywhere; }
+[hidden] { display:none !important; }
+body.high-contrast { background:#000; color:#fff; }
+.high-contrast .workspace, .high-contrast .body, .high-contrast .actions, .high-contrast .titlebar { background:#000; color:#fff; border-color:#fff; }
+.high-contrast button, .high-contrast .badge { color:#ff0; background:#000; border-color:#ff0; }
+.high-contrast .selected { color:#000; background:#ff0; border-color:#fff; }
+@media(max-width:540px) { body { padding:12px; } .name { font-size:22px; } .body { padding:16px; } .actions { padding:12px 16px; } .workspace { max-height:none; height:760px; } }
+</style>
+<header class="review">
+  <h1>Proposition du 20 septembre — nom unique et inspection du conflit</h1>
+  <p>Maquette HTML avec données synthétiques. Ce n’est pas une capture de RedSalamander et elle ne valide pas le rendu natif, le DPI ou l’accessibilité de l’application.</p>
+  <div class="controls">
+    <label>Largeur <select id="width"><option>480</option><option>640</option><option selected>760</option></select> px CSS</label>
+    <label><input type="checkbox" id="short"> Fenêtre courte</label>
+    <label><input type="checkbox" id="contrast"> Contraste renforcé</label>
+  </div>
+  <p id="demo-note" class="demo-note" role="status">Les actions ci-dessous simulent uniquement la proposition.</p>
+</header>
+<main class="workspace" id="workspace" aria-label="Maquette Opérations sur les fichiers">
+  <div class="titlebar">Opérations sur les fichiers</div>
+  <div class="body" id="conflict">
+    <div class="state"><span class="badge"><span aria-hidden="true">⚠</span> Conflit de nom</span><span>Copie · fichier 48 sur 128</span></div>
+    <h2 class="name">Photographie originale de la réunion familiale 📷.raw</h2>
+    <p class="problem">Un fichier du même nom existe dans la destination.</p>
+    <section class="role" aria-labelledby="source-role">
+      <h3 id="source-role">Source · fichier à copier</h3>
+      <p class="path">C:\Photographies\Archives familiales de plusieurs générations</p>
+      <p class="metadata"><span>512 Mio</span><span>Modifié le 20/09/2026 à 10:00</span></p>
+      <div class="inspect"><button type="button" data-inspect="source">Afficher la source dans le volet actif</button><button type="button" data-copy="source">Copier le chemin complet</button></div>
+    </section>
+    <section class="role" aria-labelledby="destination-role">
+      <h3 id="destination-role">Destination · fichier existant</h3>
+      <p class="path">D:\Sauvegardes\Collection de photographies déjà présentes</p>
+      <p class="metadata"><span>480 Mio</span><span>Modifié le 18/09/2026 à 09:10</span></p>
+      <div class="inspect"><button type="button" id="inspect-destination" data-inspect="destination">Afficher la destination dans le volet actif</button><button type="button" data-copy="destination">Copier le chemin complet</button></div>
+    </section>
+    <label class="scope"><input type="checkbox" id="scope"><span>Appliquer aux prochains conflits de noms de cette copie<small>Votre choix concerne uniquement cette tâche.</small></span></label>
+    <p class="consequences">Conserver les deux crée un nouveau nom pour la copie. Remplacer écrase le fichier existant. Ignorer passe cet élément. Annuler arrête cette tâche.</p>
+  </div>
+  <div class="body" id="inspection" hidden>
+    <h2>Volet actif · <span id="role-name">Destination</span></h2>
+    <p>Le dossier s’ouvre et le fichier en conflit est sélectionné et reçoit le focus. L’opération conserve sa décision en attente.</p>
+    <div class="pane"><p class="mono" id="folder"></p><div class="selected" id="selected-item" tabindex="0">Photographie originale de la réunion familiale 📷.raw</div></div>
+    <p><button type="button" id="return">Revenir aux opérations sur les fichiers</button></p>
+    <p>Dans l’application, le retour utilise <strong>Affichage → Opérations sur les fichiers</strong> ou <strong>Ctrl+Maj+J</strong>.</p>
+  </div>
+  <footer class="actions" id="actions">
+    <div class="buttons"><button type="button" data-decision="Conserver les deux">Conserver les deux</button><button type="button" data-decision="Remplacer">Remplacer</button><button type="button" data-decision="Ignorer">Ignorer</button><button type="button" data-decision="Annuler la tâche" class="safe">Annuler la tâche</button></div>
+  </footer>
+</main>
+<script>
+const byId = id => document.getElementById(id);
+const fullName = 'Photographie originale de la réunion familiale 📷.raw';
+const folders = {source: String.raw`C:\Photographies\Archives familiales de plusieurs générations`, destination: String.raw`D:\Sauvegardes\Collection de photographies déjà présentes`};
+let returnControl = null;
+byId('width').addEventListener('change', e => byId('workspace').style.width = `min(100%,${e.target.value}px)`);
+byId('short').addEventListener('change', e => byId('workspace').style.height = e.target.checked ? '520px' : '850px');
+byId('contrast').addEventListener('change', e => document.body.classList.toggle('high-contrast', e.target.checked));
+for (const control of document.querySelectorAll('[data-inspect]')) control.addEventListener('click', () => {
+  returnControl = control;
+  byId('role-name').textContent = control.dataset.inspect === 'source' ? 'Source' : 'Destination';
+  byId('folder').textContent = folders[control.dataset.inspect];
+  byId('conflict').hidden = byId('actions').hidden = true;
+  byId('inspection').hidden = false;
+  byId('selected-item').focus();
+  byId('demo-note').textContent = 'Simulation : aucune décision n’a été envoyée. La case de portée conserve son état.';
+});
+byId('return').addEventListener('click', () => {
+  byId('inspection').hidden = true;
+  byId('conflict').hidden = byId('actions').hidden = false;
+  returnControl?.focus();
+  byId('demo-note').textContent = 'Retour à la même décision, sans remplacement ni annulation.';
+});
+for (const control of document.querySelectorAll('[data-copy]')) control.addEventListener('click', () => {
+  byId('demo-note').textContent = `Simulation du chemin complet : ${folders[control.dataset.copy]}\\${fullName}`;
+});
+for (const control of document.querySelectorAll('[data-decision]')) control.addEventListener('click', () => {
+  byId('demo-note').textContent = `Simulation : décision « ${control.dataset.decision} », portée ${byId('scope').checked ? 'prochains conflits admissibles de cette tâche' : 'cet élément uniquement'}. Aucun résultat d’exécution n’est déduit.`;
+});
+</script>
+</html>

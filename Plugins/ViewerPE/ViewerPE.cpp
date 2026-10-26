@@ -576,6 +576,19 @@ LRESULT ViewerPE::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
     switch (msg)
     {
 #ifdef ENABLE_TESTS
+        case WndMsg::kViewerDebugGetMenuAttachmentSnapshot:
+        {
+            auto* snapshot = reinterpret_cast<WndMsg::ViewerMenuAttachmentDebugSnapshot*>(lp);
+            if (! snapshot)
+                return FALSE;
+            *snapshot = {_menuAttachResult.inputMenu,
+                         _menuAttachResult.menuAfterAttach,
+                         static_cast<unsigned>(_menuAttachResult.outcome),
+                         _menuAttachResult.fallbackError,
+                         _menuAttachResult.attempted,
+                         _menuAttachResult.attached};
+            return TRUE;
+        }
         case WndMsg::kViewerPeDebugGetSnapshot:
         {
             auto* snapshot = reinterpret_cast<WndMsg::ViewerPeDebugSnapshot*>(lp);
@@ -667,7 +680,7 @@ LRESULT ViewerPE::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
         }
         case kAsyncParseCompleteMessage:
         {
-            auto result = TakeMessagePayload<AsyncParseResult>(lp);
+            auto result = TakeMessagePayload<AsyncParseResult>(hwnd, msg, lp);
             OnAsyncParseComplete(std::move(result));
             return 0;
         }
@@ -785,11 +798,7 @@ void ViewerPE::OnCreate(HWND hwnd) noexcept
         _fileComboHost.SetRoot(std::move(combo));
     }
 
-    if (! _menuHandle)
-    {
-        _menuHandle.reset(GetMenu(hwnd));
-    }
-    if (_menuHandle)
+    if (GetMenu(hwnd))
     {
         _menuBarHost.SetTheme(_hasTheme ? MakeThemePaletteFromViewerTheme(_theme) : MakeDefaultThemePalette(false));
         _menuBarHost.SetRefreshMenuStateCallback([this]
@@ -815,7 +824,6 @@ void ViewerPE::OnCreate(HWND hwnd) noexcept
             }
             return true;
         });
-        static_cast<void>(_menuBarHost.Attach(g_hInstance, hwnd, _menuHandle.get()));
     }
 
     if (! _embeddedMode)
@@ -1087,7 +1095,7 @@ void ViewerPE::OnCommand(HWND hwnd, UINT commandId, [[maybe_unused]] UINT notify
 
 void ViewerPE::OnContextMenu(HWND hwnd, POINT screenPt) noexcept
 {
-    if (! _menuHandle)
+    if (! _menuHandle && ! GetMenu(hwnd))
     {
         _menuHandle.reset(Localization::LoadMenuResource(g_hInstance, IDR_VIEWERPE_MENU));
     }
@@ -2998,6 +3006,11 @@ HRESULT STDMETHODCALLTYPE ViewerPE::Open(const ViewerOpenContext* context) noexc
         }
 
         AddRef(); // Self-reference for window lifetime (released in WM_NCDESTROY)
+        if (! _embeddedMode)
+        {
+            _menuAttachResult = RedSalamander::ViewerMenuHost::Attach(g_hInstance, _hWnd.get(), _menuBarHost, _menuHandle);
+            Layout(_hWnd.get());
+        }
         ShowWindow(_hWnd.get(), embeddedMode ? SW_SHOWNA : SW_SHOWNORMAL);
         if (! embeddedMode)
         {

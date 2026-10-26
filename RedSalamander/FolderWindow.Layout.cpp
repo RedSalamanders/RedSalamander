@@ -267,6 +267,7 @@ void FolderWindow::ApplyTheme(const AppTheme& theme)
     ApplyViewerTheme();
     ApplyOpenedFilesDialogTheme();
     ApplySharedDirectoriesDialogTheme();
+    ApplyLeftoverCleanupDialogTheme();
 
     if (_hWnd)
     {

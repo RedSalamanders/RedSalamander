@@ -1,0 +1,35 @@
+{
+  "scope": "Focused native diagnostic; not a canonical aggregate or Full",
+  "phase": "baseline",
+  "configuration": "Debug",
+  "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+  "arguments": [
+    "--no-activate",
+    "TestViewerSpaceAnalysisHostVirtualGridAndLifetime"
+  ],
+  "run_id": "20261017T170024Z-95968-d086509ea68a443483f0f734a032439c",
+  "receipt_id": "0a66197beddf05eade37ca6bf167d48554bbc333c107584e32a1dae48a6e52a3",
+  "started_utc": "2026-10-17T17:00:24.8692469Z",
+  "inputs": [
+    {
+      "path": "Plugins/ViewerSpace/ViewerSpace.cpp",
+      "sha256": "E7EE9B6ED88158CB218E168CC6E34FFA35DB174C7F014A34E56B3549833ECEE3"
+    },
+    {
+      "path": "Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp",
+      "sha256": "4307A4A3D4B6C24507D86797EF962A19E535A6EE6E6ADBA797246A585084F332"
+    }
+  ],
+  "binaries": [
+    {
+      "path": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\ViewerPETests.exe",
+      "sha256": "C92BFE30D682185E9A94BAB20AB1BAC52C6CD068C4CF572D66F046148CDC63C1"
+    },
+    {
+      "path": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\Plugins\\ViewerSpace.dll",
+      "sha256": "C943701980B59A337968CF3183021B6BDA445C58B2C4F64A7BC60080E743B2DC"
+    }
+  ],
+  "exit_code": 1,
+  "ended_utc": "2026-10-17T17:00:27.8785090Z"
+}

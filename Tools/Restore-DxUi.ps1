@@ -4,6 +4,7 @@ Restore RedSalamander's exact DxUi source and isolated build dependencies.
 .DESCRIPTION
 Clones only the locked commit into repository .build, restores WIL and writes platform-specific
 MSBuild properties using the selected first-party compiler host, including explicit overrides.
+New managed source clones enable Git long paths for metadata creation and locally for checkout; global Git settings are unchanged.
 Uses the shared-dependency lease and contained child processes. Does not edit
 a sibling checkout or the lock. Unavailable pinned source or a dirty source fails closed; public HTTPS requires no secret.
 .PARAMETER Platform

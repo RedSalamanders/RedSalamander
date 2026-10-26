@@ -1,0 +1,13 @@
+{
+  "source": "d404fc90bcaf7793da4289ffcbd23debd6ee73b2",
+  "configuration": "ASan Debug",
+  "platform": "x64",
+  "runId": "20260913T082910Z-99000-b6921fd234474ba59eaf45ce6a66546a",
+  "caseFilter": "cmd_pane_fileops_removal_focus_exact_outcomes_and_ownership_epochs",
+  "repeatCount": 10,
+  "startedUtc": "2026-09-13T08:29:09.7783070Z",
+  "completedUtc": "2026-09-13T08:29:46.8013776Z",
+  "exitCode": 0,
+  "retained": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\d404fc90-isolated-x64-ASan-Debug-removal-focus",
+  "noHostedCi": true
+}

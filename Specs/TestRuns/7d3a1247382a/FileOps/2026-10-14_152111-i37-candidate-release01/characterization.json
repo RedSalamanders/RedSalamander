@@ -1,0 +1,205 @@
+{
+  "schema": 1,
+  "machineHash": "7d3a1247382a",
+  "profile": "test-enabled x64 Release",
+  "runId": "20261014T152111Z-53292-fd0ac4b8d8b849b3aea620afea08e980",
+  "receipt": "abbd693d6b993271b352381c7c6f30c67c3a2a6ddc417c36b5e7b85f28224d0e",
+  "sourceSnapshotId": "180bb20cdea4370b1c3376df556a6c1000e51c6a6e58386afeb63c4854d3a152",
+  "rawPath": "D:\\RedSalamander.Perf\\evidence\\folder-copy-progress-candidate-release-20261014-01\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "rawSha256": "4B128466547F69F3A05FF7435C078374FAA6FDD81C9FF5951C4D5E68631362CE",
+  "rawBytes": 20223938,
+  "rawRows": 58461,
+  "originalReleaseBaseline": "unavailable",
+  "characterization": [
+    {
+      "route": "local-serial",
+      "operationUs": 11734000,
+      "reportedWrittenBytes": 100663296,
+      "legacyCallbacks": {
+        "callbackTotalUs": 866,
+        "callbackCount": 60,
+        "lockWaitTotalUs": 18,
+        "lockHoldTotalUs": 27
+      },
+      "observerCallbacks": {
+        "callbackTotalUs": 32,
+        "callbackCount": 25,
+        "lockWaitTotalUs": 1,
+        "lockHoldTotalUs": 30
+      },
+      "paints": {
+        "sampleCount": 453,
+        "buildSnapshotUs": {
+          "sampleCount": 453,
+          "median": 157,
+          "p95": 262,
+          "max": 1054
+        },
+        "renderTotalUs": {
+          "sampleCount": 453,
+          "median": 1957,
+          "p95": 2954,
+          "max": 21425
+        }
+      }
+    },
+    {
+      "route": "local-overwrite",
+      "operationUs": 11843000,
+      "reportedWrittenBytes": 100663296,
+      "legacyCallbacks": {
+        "callbackTotalUs": 805,
+        "callbackCount": 62,
+        "lockWaitTotalUs": 11,
+        "lockHoldTotalUs": 20
+      },
+      "observerCallbacks": {
+        "callbackTotalUs": 50,
+        "callbackCount": 29,
+        "lockWaitTotalUs": 2,
+        "lockHoldTotalUs": 42
+      },
+      "paints": {
+        "sampleCount": 522,
+        "buildSnapshotUs": {
+          "sampleCount": 522,
+          "median": 120.0,
+          "p95": 269,
+          "max": 545
+        },
+        "renderTotalUs": {
+          "sampleCount": 522,
+          "median": 1999.0,
+          "p95": 2921,
+          "max": 12825
+        }
+      }
+    },
+    {
+      "route": "local-parallel",
+      "operationUs": 8031000,
+      "reportedWrittenBytes": 100663296,
+      "legacyCallbacks": {
+        "callbackTotalUs": 2609,
+        "callbackCount": 107,
+        "lockWaitTotalUs": 35,
+        "lockHoldTotalUs": 22
+      },
+      "observerCallbacks": {
+        "callbackTotalUs": 30,
+        "callbackCount": 25,
+        "lockWaitTotalUs": 3,
+        "lockHoldTotalUs": 23
+      },
+      "paints": {
+        "sampleCount": 318,
+        "buildSnapshotUs": {
+          "sampleCount": 318,
+          "median": 125.0,
+          "p95": 271,
+          "max": 654
+        },
+        "renderTotalUs": {
+          "sampleCount": 318,
+          "median": 2943.0,
+          "p95": 4125,
+          "max": 10481
+        }
+      }
+    },
+    {
+      "route": "bridge-parallel",
+      "operationUs": 6141000,
+      "reportedWrittenBytes": 100663296,
+      "legacyCallbacks": {
+        "callbackTotalUs": 880,
+        "callbackCount": 59,
+        "lockWaitTotalUs": 13,
+        "lockHoldTotalUs": 17
+      },
+      "observerCallbacks": {
+        "callbackTotalUs": 36,
+        "callbackCount": 25,
+        "lockWaitTotalUs": 4,
+        "lockHoldTotalUs": 26
+      },
+      "paints": {
+        "sampleCount": 248,
+        "buildSnapshotUs": {
+          "sampleCount": 248,
+          "median": 106.5,
+          "p95": 258,
+          "max": 414
+        },
+        "renderTotalUs": {
+          "sampleCount": 248,
+          "median": 2376.5,
+          "p95": 3514,
+          "max": 8934
+        }
+      }
+    },
+    {
+      "route": "bridge-verify",
+      "operationUs": 6110000,
+      "reportedWrittenBytes": 100663296,
+      "legacyCallbacks": {
+        "callbackTotalUs": 204,
+        "callbackCount": 36,
+        "lockWaitTotalUs": 4,
+        "lockHoldTotalUs": 12
+      },
+      "observerCallbacks": {
+        "callbackTotalUs": 43,
+        "callbackCount": 29,
+        "lockWaitTotalUs": 4,
+        "lockHoldTotalUs": 33
+      },
+      "paints": {
+        "sampleCount": 273,
+        "buildSnapshotUs": {
+          "sampleCount": 273,
+          "median": 130,
+          "p95": 274,
+          "max": 664
+        },
+        "renderTotalUs": {
+          "sampleCount": 273,
+          "median": 1941,
+          "p95": 3118,
+          "max": 9647
+        }
+      }
+    }
+  ],
+  "allPaints": {
+    "sampleCount": 3354,
+    "buildSnapshotUs": {
+      "sampleCount": 3354,
+      "median": 141.0,
+      "p95": 274,
+      "max": 1054
+    },
+    "renderTotalUs": {
+      "sampleCount": 3354,
+      "median": 2033.0,
+      "p95": 3349,
+      "max": 21425
+    },
+    "wmPaintUs": {
+      "sampleCount": 3354,
+      "median": 3740.5,
+      "p95": 5660,
+      "max": 25845
+    }
+  },
+  "method": "Process/UI-thread emission-order Snapshot/Total pairing; nearest-rank p95. Whole pair assigned by Total timestamp within operation timestamp minus duration through operation timestamp; operation-boundary proxy, not per-file attribution. Callback durations are task totals, not a callback distribution.",
+  "limitations": [
+    "Absolute Release characterization; no original Release pair and no Debug to Release speed claim.",
+    "First five fixed payload/speed/delay routes only; sixth wide traversal and negative/small/empty controls excluded from primary group.",
+    "Eight-message harness sampling and extra ink/natural-paint/phase captures change observation workload relative to original Debug baseline.",
+    "Direct Native CopyItems host callback totals unavailable.",
+    "Native semantic-link subcases remain explicitly unavailable with 1314 where recorded; top-level skipped zero does not imply coverage.",
+    "Three unrelated sandbox audit directories remain separate from the selected runner verdict."
+  ]
+}

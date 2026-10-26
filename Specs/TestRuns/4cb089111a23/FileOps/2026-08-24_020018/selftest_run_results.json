@@ -1,0 +1,63 @@
+{
+    "run_started_utc": "2026-08-24T00:00:14.723Z",
+    "duration_ms": 4168,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "Phase5_Discovery",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-family-final\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 3594,
+            "passed": 6,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "Phase5_Discovery",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1203,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_DiscoverySingleTraversal",
+                    "status": "passed",
+                    "duration_ms": 297,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_DiscoveryCancelReleasesSlot",
+                    "status": "passed",
+                    "duration_ms": 1031,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_DiscoveryCancelLatencyLocal",
+                    "status": "passed",
+                    "duration_ms": 422,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase5_DiscoverySkipContinues",
+                    "status": "passed",
+                    "duration_ms": 469,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 172,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 6,
+    "failed": 0,
+    "skipped": 0
+}

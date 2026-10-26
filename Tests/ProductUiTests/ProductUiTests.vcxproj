@@ -47,7 +47,8 @@
   <ItemGroup>
     <ClCompile Include="..\..\RedSalamander\AppTheme.cpp" />
     <ClCompile Include="..\..\RedSalamander\UiMetrics.cpp" />
-    <ClCompile Include="ProductUiTests.cpp" />
+    <ClCompile Include="ProductUi.Tests.Runner.cpp" />
+    <ClCompile Include="ProductUi.Scope.Tests.DirectoryRecords.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Common\Common\Common.vcxproj">

@@ -1,0 +1,11 @@
+{
+  "rawRun": "c0-curl-loopback-topology-predecessor-release-20260905",
+  "sha256": "67532114518a1ead66d959ae3fd35baaa8c65b31f4225e098679d5cc218ca60a",
+  "bytes": 79922,
+  "rows": 224,
+  "selectionRegex": "^FileOps\\.Curl\\.|^fileops\\.c0\\.",
+  "originalOneBasedLines": [],
+  "selectedRows": 0,
+  "selectedBytes": 0,
+  "selectedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+}

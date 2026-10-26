@@ -1,0 +1,55 @@
+{
+  "source": "676391cb3edb65c5b38ee4e3db8c0677678e9558",
+  "ownerPid": 72112,
+  "scope": "focused diagnostic only; never Full qualification",
+  "label": "seed-scratch-asan-service-regressions",
+  "suite": "Compare",
+  "configuration": "ASan Debug",
+  "filter": "search_service_sqlite_cold_start_stale_root_refreshes_before_query,search_service_sqlite_default_store_uses_build_specific_programdata_root,search_service_sqlite_seeded_default_store_reuses_build_specific_programdata_root,local_search_service_single_request_uses_query,local_search_index_status_snapshot_does_not_wait_for_warmup,local_search_index_nowait_query_does_not_wait_for_warmup,local_search_index_opportunistic_query_does_not_wait_for_warmup",
+  "repeat": 1,
+  "runId": "20261026T095025Z-72112-69376aeb83d64e12adba8543c64c8e5a",
+  "root": "E:\\RedSalamander.Perf",
+  "buildReceipt": "90540d8185fcba87ea5b2e75cb6bd2df6b279340d69393c181da727d468c90d6",
+  "sourceSnapshot": "a1005a97e89f7f5bb427bf44ba3779ba5984ce6f44e158a07cd00467d1608d1e",
+  "artifacts": [
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\ASan Debug\\RedSalamander.exe",
+      "sha256": "18FBAF5282C3C989F9EB3D94C8BE5826D99CFFB05A91DC6186A1148046E85605"
+    },
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\ASan Debug\\RedSalamanderSearchService.exe",
+      "sha256": "50BBC169FEC069A4C187A136E62A9E798F067CC96D110541CF4B18866B00A0B9"
+    },
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\ASan Debug\\Common.dll",
+      "sha256": "9C3273D9351DCC0368F6478553FB09BFBEEE632188729749C994DBC8B88BC772"
+    },
+    {
+      "path": "E:\\RedSalamander.Perf\\integration-20261024\\.build\\x64\\ASan Debug\\Plugins\\ViewerSpace.dll",
+      "sha256": "FDB561730FB1D302C65F581793691BE07BC516D6B57656B887066068338033CC"
+    }
+  ],
+  "desktopOperationSourceSha256": "F96309169EB717FC69D1EACF77228F3BAE66FC87ED7EA0FD6767122190C6D0D5",
+  "startedUtc": "2026-10-26T09:50:25.8691849Z",
+  "outcome": "focused_pass_only",
+  "log": "E:\\RedSalamander.Perf\\runs\\20261026T095025Z-72112-69376aeb83d64e12adba8543c64c8e5a\\artifacts\\residual-observer\\native-output.txt",
+  "errorLog": "E:\\RedSalamander.Perf\\runs\\20261026T095025Z-72112-69376aeb83d64e12adba8543c64c8e5a\\artifacts\\residual-observer\\native-error.txt",
+  "requestedMetricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T095025Z-72112-69376aeb83d64e12adba8543c64c8e5a\\artifacts\\residual-observer\\residual-perf.jsonl",
+  "exitCode": 0,
+  "finishedUtc": "2026-10-26T09:51:01.1829072Z",
+  "arguments": [
+    "--compare-selftest",
+    "--selftest-case=search_service_sqlite_cold_start_stale_root_refreshes_before_query,search_service_sqlite_default_store_uses_build_specific_programdata_root,search_service_sqlite_seeded_default_store_reuses_build_specific_programdata_root,local_search_service_single_request_uses_query,local_search_index_status_snapshot_does_not_wait_for_warmup,local_search_index_nowait_query_does_not_wait_for_warmup,local_search_index_opportunistic_query_does_not_wait_for_warmup",
+    "--selftest-repeat=1",
+    "--selftest-no-activate"
+  ],
+  "nativeResults": "E:\\RedSalamander.Perf\\runs\\20261026T095025Z-72112-69376aeb83d64e12adba8543c64c8e5a\\artifacts\\selftest\\last_run\\compare\\results.json",
+  "nativeResultsSha256": "C5144B3053A7A04977EF6739F5A61CF6BD0C01D1796AF3377805C8C5AEDB2185",
+  "nativePassed": 7,
+  "nativeFailed": 0,
+  "nativeSkipped": 0,
+  "exactCaseCounts": true,
+  "metricsPaths": [
+    "E:\\RedSalamander.Perf\\runs\\20261026T095025Z-72112-69376aeb83d64e12adba8543c64c8e5a\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl"
+  ]
+}

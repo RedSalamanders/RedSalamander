@@ -7,11 +7,11 @@
 #include "Preferences.h"
 #include <DxUi/DxUi.h>
 
-class PluginsPane final : public DxUi::IDxGridDelegate
+class PluginsPane final : public DxUi::IGridDelegate
 {
 public:
-    using DxUi::IDxGridDelegate::OnGridCheckboxToggled;
-    using DxUi::IDxGridDelegate::OnGridSelectionChanged;
+    using DxUi::IGridDelegate::OnGridCheckboxToggled;
+    using DxUi::IGridDelegate::OnGridSelectionChanged;
 
     PluginsPane();
     ~PluginsPane();

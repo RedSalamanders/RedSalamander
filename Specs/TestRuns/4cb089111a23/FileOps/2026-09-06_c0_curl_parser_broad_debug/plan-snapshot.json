@@ -1,0 +1,8 @@
+{
+  "source": "Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md",
+  "bytes": 49941,
+  "sha256": "c69926fe8db718f5c966db3d937def58bd9dba84268c4444620c5d6b1aea6e34",
+  "transform": "none",
+  "base": "3917fef5f20eee3638518ed4de149f677d459db9",
+  "note": "Exact plan at candidate test snapshot; historical relative links use the original WIP base. Its pending statements are superseded by the current plan."
+}

@@ -1,0 +1,120 @@
+diff --git a/Specs/FileSystem/FileSystem_FileOperations.md b/Specs/FileSystem/FileSystem_FileOperations.md
+index f917c1b..476d9b1 100644
+--- a/Specs/FileSystem/FileSystem_FileOperations.md
++++ b/Specs/FileSystem/FileSystem_FileOperations.md
+@@ -963,22 +963,44 @@ conflict class and selected-root facts. Its task/generation key is scoped to the
+ FileOperationState lifetime; combining historical logs requires separate run provenance.
+ The UI can associate problems and choices despite enqueue ordering; later results still require
+ independent typed evidence. JSONL and task-issue export include the reference additively.
+-Inline rename carries an observation-only accepted task/prompt reference into its terminal item
+-result. After first-truth storage succeeds, diagnostics retain independent publication, verification,
+-source-disposition, completion, owned-stage and HRESULT facts as `conflictResult` schema v1. Rejecting
+-a duplicate terminal store or invalid source index emits no later result. A foreign/zero reference
+-cannot associate an otherwise valid terminal item. Logging disabled for ordinary Info records does
+-not discard this bounded observation or turn it into a warning. This reference grants no authority.
+-Executors without exact propagation remain uncorrelated; no root-index/path/overall-task inference
+-fills the gap. Missing or contradictory UI observations remain explicitly unknown.
++Inline Rename carries an observation-only accepted task/prompt reference into its terminal item
++result. An exact Batch Rename scheduler callback may carry the same reference only for the
++conflict choice actually accepted for that callback; preview/Run is not a conflict acceptance.
++The callback captures the returned conditional `RenameIfUnchanged` receipt and the unambiguous
++accepted reference before the engine folds callback statuses into a coarse task result. Its typed
++terminal item preserves the receipt-derived publication, verification, source disposition,
++completion, owned-stage disposition and HRESULT independently. A malformed, unknown or
++contradictory conditional receipt after the provider call leaves publication and source disposition
++`Unknown`, completion `Indeterminate`, and status `ERROR_IO_INCOMPLETE`; even when the provider
++changed the namespace, the host must not infer success or attempt the mutation again.
++
++For per-item Recycle failure, the accepted **Delete permanently** choice is exact-item only. The
++fresh delete-bound authority remains owned through that choice and its single
++`DeleteIfUnchanged` call. The final item retains the choice's explicit task/prompt reference and
++the bound-delete receipt rather than associating a result by source path or the task HRESULT.
++Delete has `NotAttempted` destination publication and `NotRequested` content verification;
++a valid committed removal is `Removed`/`Completed`. A missing, malformed, unknown or
++contradictory conditional-delete receipt is instead `Unknown` source disposition,
++`Indeterminate` completion and `ERROR_IO_INCOMPLETE`, with no second destructive attempt.
++The original failed Recycle HRESULT remains problem context, never evidence of the accepted
++delete's outcome.
++
++After first-truth terminal storage succeeds, diagnostics retain these independent facts as
++`conflictResult` schema v1. Rejecting a duplicate terminal store or invalid source index emits
++no later result. A foreign/zero reference cannot associate an otherwise valid terminal item.
++Logging disabled for ordinary Info records does not discard this bounded observation or turn it
++into a warning. The reference changes neither provider ABI nor mutation authority.
++Copy, Move, bulk Recycle and other executors without an exact carrier remain uncorrelated;
++no selected-root index, path or overall-task inference fills the gap. Missing or contradictory
++UI observations remain explicitly unknown.
+ The prompt closes before optional diagnostic I/O. Diagnostics never authorize mutation or retry.
+ Conflict prompt observations also retain the already provider-qualified source/destination names and
+ parent folders as display-only strings. They copy the prompt's own facts, including each distinct
+ cached application, without retaining its inspection capability. Empty qualification requires exact-path
+ fallback. These additive JSONL/TSV fields do not identify a later mutation result or authorize navigation.
+ 
+-See [the UI contract](../UI/UI_FileOperationsPopup.md#accepted-decision-observations-i26-implementation)
+-for the current projection; typed result association and revised Issues detail remain I26 work.
++See [the UI contract](../UI/UI_FileOperationsPopup.md#accepted-decision-observations-i26-implementation)
++for projection and the remaining I26 qualification.
+ 
+ Retry is proof-gated, not counted. A prompt offers Retry only for an attempt the canonical receipt
+ classifier proved a non-commit (or one that failed before any provider mutation); unknown or
+diff --git a/Specs/UI/UI_FileOperationsPopup.md b/Specs/UI/UI_FileOperationsPopup.md
+index 5b89f9f..6f0be3a 100644
+--- a/Specs/UI/UI_FileOperationsPopup.md
++++ b/Specs/UI/UI_FileOperationsPopup.md
+@@ -1548,13 +1548,31 @@ adds the same object as an optional trailing field. Missing or evicted records r
+ Neither a decision record nor its selected-root index authorizes mutation or establishes a descendant
+ result correlation.
+ 
+-Inline rename now carries the exact accepted task/prompt generation through its executor and
+-publishes a separate `conflictResult` only after first-truth terminal storage succeeds. The record
+-preserves publication, verification, source disposition, completion, owned-stage disposition and
+-HRESULT independently; JSONL and the trailing task-issue TSV field retain schema-v1 numeric codes.
++Inline Rename carries the exact accepted task/prompt generation through its executor. An exact
++Batch Rename scheduler callback also carries an unambiguous accepted reference when that callback
++consumes a conflict choice. The callback captures its conditional `RenameIfUnchanged` receipt
++and accepted reference before a coarse engine result is folded across rows; preview/Run alone does
++not create an accepted conflict decision. Per-item Recycle escalation carries its exact
++**Delete permanently** choice through the retained bound object's single
++`DeleteIfUnchanged` result. The earlier Recycle failure remains the original problem, not the
++result of the accepted deletion. Bulk Recycle has no equivalent per-item carrier.
++
++Only after first-truth terminal storage succeeds does a carrier publish a separate
++`conflictResult`. The record preserves publication, verification, source disposition, completion,
++owned-stage disposition and HRESULT independently; JSONL and the trailing task-issue TSV field
++retain schema-v1 numeric codes. A malformed, unknown or contradictory conditional rename receipt
++projects `Unknown` publication and source disposition, `Indeterminate` completion and
++`ERROR_IO_INCOMPLETE`. For exact Recycle escalation, destination publication is
++`NotAttempted`, content verification is `NotRequested`, and a malformed, unknown or
++contradictory bound-delete receipt projects `Unknown` source disposition,
++`Indeterminate` completion and `ERROR_IO_INCOMPLETE`. The UI must not show a confirmed
++removal merely because the real file disappeared or the provider returned a successful HRESULT;
++neither case retries the destructive mutation.
++
+ Duplicate terminal stores, invalid source indexes, foreign task references and zero generations
+ cannot publish a new correlated observation. Ordinary Info logging may be disabled without losing
+-this bounded record or incrementing warning/error counts.
++this bounded record or incrementing warning/error counts. The observation extends no provider ABI
++and grants no mutation authority.
+ 
+ Issues joins these results only by the explicit owner-local task/prompt reference. Original problem,
+ accepted decision and result can arrive in any order. Identical duplicates do not rebuild the grid;
+@@ -1564,11 +1582,14 @@ or decisions from falling through as legacy problems; promptless ordinary warnin
+ Until an original diagnostic arrives, the Problem field is unknown rather than copied from result prose.
+ The result column/detail translate the typed completion, not HRESULT or the
+ chosen action; complete copied technical detail preserves every independent result axis. Completed
+-does not imply content verification. Other executors without an explicit carrier remain unknown;
+-paths, selected-root indexes and overall task completion are never association fallbacks.
+-
+-This bounded implementation is qualified in focused x64 Debug tests. Final Release, native mixed-DPI,
+-assistive-technology and integrated resource acceptance remain tracked by I26.
++does not imply content verification. Copy, Move, bulk Recycle and other executors without an exact
++carrier remain unknown; paths, selected-root indexes and overall task completion are never
++association fallbacks.
++
++The earlier Inline Rename association was qualified in focused x64 Debug tests. The additional
++Batch Rename and exact Recycle carriers remain implementation candidates until their native
++fixtures pass. Final Release, native mixed-DPI, assistive-technology and integrated resource
++acceptance remain tracked by I26.
+ 
+ Original conflict diagnostics and accepted/cached records carry a `conflictPrompt` observation.
+ Within the producing FileOperationState lifetime, the containing task ID plus prompt generation

@@ -1,0 +1,207 @@
+{
+    "run_started_utc": "2026-07-03T14:22:50.542Z",
+    "duration_ms": 220778,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "case_filter": "cmd_compare_directories_options_uses_dxui_labels_without_visible_legacy_statics,cmd_compare_directories_window_uses_dxui_menu_bar_and_banner_buttons,cmd_compare_directories_options_long_run_open_close_stays_stable,cmd_compare_directories_options_live_dx_body_interaction,cmd_compare_directories_options_pointer_click_toggles_live_dx_interaction,cmd_compare_directories_options_tab_traversal_live_dx_interaction,cmd_compare_directories_options_scroll_to_lower_cards_stays_stable,cmd_compare_directories_options_enter_and_escape_route_default_cancel,cmd_compare_directories_options_access_keys_focus_expected_controls,cmd_compare_directories_options_theme_cycle_keeps_surface_legible,cmd_compare_directories_non_file_plugin_path_form_selection_and_empty_state,cmd_compare_directories_leave_scope_prompt_defers_out_of_navigation_callback,cmd_compare_directories_create_failure_does_not_double_delete,cmd_compare_directories_options_hot_reload_visible_only_and_reopen_clean,cmd_compare_directories_progress_perf,cmd_pane_fileops_issues_pane_uses_dxui_host_without_visible_child_controls,cmd_pane_fileops_issues_pane_diff_refresh_preserves_selection,cmd_pane_fileops_issues_pane_header_click_sorts_results,cmd_pane_fileops_issues_pane_header_resize_changes_visible_width,cmd_pane_fileops_issues_pane_header_drag_reorders_columns_without_sort,cmd_pane_fileops_issues_pane_copy_follows_reordered_columns,cmd_pane_fileops_issues_pane_reordered_columns_survive_sort_cycles,cmd_pane_fileops_issues_pane_reordered_copy_follows_visible_columns_after_sort_cycles,cmd_pane_fileops_issues_pane_resized_columns_survive_sort_cycles,cmd_pane_fileops_issues_pane_reordered_resized_columns_survive_sort_cycles,cmd_pane_fileops_issues_pane_reordered_resized_copy_follows_visible_columns_after_sort_cycles,cmd_pane_fileops_issues_pane_restores_combined_view_state_after_recreate,cmd_pane_fileops_issues_pane_exposes_live_uia_selection,cmd_pane_fileops_issues_pane_tab_keeps_grid_focus,cmd_pane_fileops_issues_pane_hide_restores_folder_focus,cmd_pane_fileops_issues_pane_long_run_scrolling_stays_bounded,cmd_pane_fileops_issues_pane_long_run_open_close_stays_stable,cmd_pane_fileops_issues_pane_theme_cycle_keeps_grid_legible,cmd_pane_fileops_conflict_prompt_compacts_actions,cmd_pane_fileops_speedLimit_prompt_uses_dxui_surface,cmd_pane_fileops_speedLimit_prompt_live_dx_interaction",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands",
+            "duration_ms": 220143,
+            "passed": 35,
+            "failed": 1,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "case_filter": "cmd_compare_directories_options_uses_dxui_labels_without_visible_legacy_statics,cmd_compare_directories_window_uses_dxui_menu_bar_and_banner_buttons,cmd_compare_directories_options_long_run_open_close_stays_stable,cmd_compare_directories_options_live_dx_body_interaction,cmd_compare_directories_options_pointer_click_toggles_live_dx_interaction,cmd_compare_directories_options_tab_traversal_live_dx_interaction,cmd_compare_directories_options_scroll_to_lower_cards_stays_stable,cmd_compare_directories_options_enter_and_escape_route_default_cancel,cmd_compare_directories_options_access_keys_focus_expected_controls,cmd_compare_directories_options_theme_cycle_keeps_surface_legible,cmd_compare_directories_non_file_plugin_path_form_selection_and_empty_state,cmd_compare_directories_leave_scope_prompt_defers_out_of_navigation_callback,cmd_compare_directories_create_failure_does_not_double_delete,cmd_compare_directories_options_hot_reload_visible_only_and_reopen_clean,cmd_compare_directories_progress_perf,cmd_pane_fileops_issues_pane_uses_dxui_host_without_visible_child_controls,cmd_pane_fileops_issues_pane_diff_refresh_preserves_selection,cmd_pane_fileops_issues_pane_header_click_sorts_results,cmd_pane_fileops_issues_pane_header_resize_changes_visible_width,cmd_pane_fileops_issues_pane_header_drag_reorders_columns_without_sort,cmd_pane_fileops_issues_pane_copy_follows_reordered_columns,cmd_pane_fileops_issues_pane_reordered_columns_survive_sort_cycles,cmd_pane_fileops_issues_pane_reordered_copy_follows_visible_columns_after_sort_cycles,cmd_pane_fileops_issues_pane_resized_columns_survive_sort_cycles,cmd_pane_fileops_issues_pane_reordered_resized_columns_survive_sort_cycles,cmd_pane_fileops_issues_pane_reordered_resized_copy_follows_visible_columns_after_sort_cycles,cmd_pane_fileops_issues_pane_restores_combined_view_state_after_recreate,cmd_pane_fileops_issues_pane_exposes_live_uia_selection,cmd_pane_fileops_issues_pane_tab_keeps_grid_focus,cmd_pane_fileops_issues_pane_hide_restores_folder_focus,cmd_pane_fileops_issues_pane_long_run_scrolling_stays_bounded,cmd_pane_fileops_issues_pane_long_run_open_close_stays_stable,cmd_pane_fileops_issues_pane_theme_cycle_keeps_grid_legible,cmd_pane_fileops_conflict_prompt_compacts_actions,cmd_pane_fileops_speedLimit_prompt_uses_dxui_surface,cmd_pane_fileops_speedLimit_prompt_live_dx_interaction",
+            "failureMessage": "Issues-pane HWND should own Win32 focus before hide; focusHwnd=0x0, pane=0x8920D2.",
+            "cases": [
+                {
+                    "name": "cmd_compare_directories_options_uses_dxui_labels_without_visible_legacy_statics",
+                    "status": "passed",
+                    "duration_ms": 16840
+                },
+                {
+                    "name": "cmd_compare_directories_window_uses_dxui_menu_bar_and_banner_buttons",
+                    "status": "passed",
+                    "duration_ms": 397
+                },
+                {
+                    "name": "cmd_compare_directories_options_long_run_open_close_stays_stable",
+                    "status": "passed",
+                    "duration_ms": 97671
+                },
+                {
+                    "name": "cmd_compare_directories_options_live_dx_body_interaction",
+                    "status": "passed",
+                    "duration_ms": 74521
+                },
+                {
+                    "name": "cmd_compare_directories_options_pointer_click_toggles_live_dx_interaction",
+                    "status": "passed",
+                    "duration_ms": 263
+                },
+                {
+                    "name": "cmd_compare_directories_options_tab_traversal_live_dx_interaction",
+                    "status": "passed",
+                    "duration_ms": 882
+                },
+                {
+                    "name": "cmd_compare_directories_options_scroll_to_lower_cards_stays_stable",
+                    "status": "passed",
+                    "duration_ms": 883
+                },
+                {
+                    "name": "cmd_compare_directories_options_enter_and_escape_route_default_cancel",
+                    "status": "passed",
+                    "duration_ms": 1147
+                },
+                {
+                    "name": "cmd_compare_directories_options_access_keys_focus_expected_controls",
+                    "status": "passed",
+                    "duration_ms": 281
+                },
+                {
+                    "name": "cmd_compare_directories_options_theme_cycle_keeps_surface_legible",
+                    "status": "passed",
+                    "duration_ms": 15504
+                },
+                {
+                    "name": "cmd_compare_directories_non_file_plugin_path_form_selection_and_empty_state",
+                    "status": "passed",
+                    "duration_ms": 1931
+                },
+                {
+                    "name": "cmd_compare_directories_leave_scope_prompt_defers_out_of_navigation_callback",
+                    "status": "passed",
+                    "duration_ms": 983
+                },
+                {
+                    "name": "cmd_compare_directories_create_failure_does_not_double_delete",
+                    "status": "passed",
+                    "duration_ms": 378
+                },
+                {
+                    "name": "cmd_compare_directories_options_hot_reload_visible_only_and_reopen_clean",
+                    "status": "passed",
+                    "duration_ms": 2328
+                },
+                {
+                    "name": "cmd_compare_directories_progress_perf",
+                    "status": "passed",
+                    "duration_ms": 1283
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_uses_dxui_host_without_visible_child_controls",
+                    "status": "passed",
+                    "duration_ms": 145
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_diff_refresh_preserves_selection",
+                    "status": "passed",
+                    "duration_ms": 83
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_header_click_sorts_results",
+                    "status": "passed",
+                    "duration_ms": 110
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_header_resize_changes_visible_width",
+                    "status": "passed",
+                    "duration_ms": 62
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_header_drag_reorders_columns_without_sort",
+                    "status": "passed",
+                    "duration_ms": 66
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_copy_follows_reordered_columns",
+                    "status": "passed",
+                    "duration_ms": 183
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_reordered_columns_survive_sort_cycles",
+                    "status": "passed",
+                    "duration_ms": 95
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_reordered_copy_follows_visible_columns_after_sort_cycles",
+                    "status": "passed",
+                    "duration_ms": 271
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_resized_columns_survive_sort_cycles",
+                    "status": "passed",
+                    "duration_ms": 217
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_reordered_resized_columns_survive_sort_cycles",
+                    "status": "passed",
+                    "duration_ms": 102
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_reordered_resized_copy_follows_visible_columns_after_sort_cycles",
+                    "status": "passed",
+                    "duration_ms": 178
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_restores_combined_view_state_after_recreate",
+                    "status": "passed",
+                    "duration_ms": 371
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_exposes_live_uia_selection",
+                    "status": "passed",
+                    "duration_ms": 210
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_tab_keeps_grid_focus",
+                    "status": "passed",
+                    "duration_ms": 59
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_hide_restores_folder_focus",
+                    "status": "failed",
+                    "duration_ms": 112,
+                    "reason": "Issues-pane HWND should own Win32 focus before hide; focusHwnd=0x0, pane=0x8920D2."
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_long_run_scrolling_stays_bounded",
+                    "status": "passed",
+                    "duration_ms": 203
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_long_run_open_close_stays_stable",
+                    "status": "passed",
+                    "duration_ms": 736
+                },
+                {
+                    "name": "cmd_pane_fileops_issues_pane_theme_cycle_keeps_grid_legible",
+                    "status": "passed",
+                    "duration_ms": 177
+                },
+                {
+                    "name": "cmd_pane_fileops_conflict_prompt_compacts_actions",
+                    "status": "passed",
+                    "duration_ms": 268
+                },
+                {
+                    "name": "cmd_pane_fileops_speedLimit_prompt_uses_dxui_surface",
+                    "status": "passed",
+                    "duration_ms": 554
+                },
+                {
+                    "name": "cmd_pane_fileops_speedLimit_prompt_live_dx_interaction",
+                    "status": "passed",
+                    "duration_ms": 473
+                }
+            ]
+        }
+    ],
+    "passed": 35,
+    "failed": 1,
+    "skipped": 0
+}

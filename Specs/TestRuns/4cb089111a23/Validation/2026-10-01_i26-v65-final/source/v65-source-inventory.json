@@ -1,0 +1,32 @@
+{
+  "baseLogicalInputCount": 64,
+  "basePhysicalInputCount": 63,
+  "logicalInputCount": 86,
+  "physicalInputCount": 85,
+  "additionalPaths": [
+    "Common/LocalSearchIndexCore.cpp",
+    "Common/LocalSearchIndexCore.h",
+    "Common/SearchServiceBroker.cpp",
+    "Common/SearchTextHelpers.cpp",
+    "Common/SearchTextHelpers.h",
+    "RedSalamander/FileSystemPluginManager.cpp",
+    "RedSalamander/HostServices.cpp",
+    "RedSalamander/HostServices.h",
+    "RedSalamander/PluginModuleLifecycle.h",
+    "RedSalamander/SelfTest/Commands/Commands.SelfTest.cpp",
+    "RedSalamander/SelfTest/Commands/Commands.SelfTest.Preferences.cpp",
+    "RedSalamander/SelfTest/Commands/Commands.SelfTest.Settings.cpp",
+    "RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp",
+    "RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp",
+    "RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.SelfTest.cpp",
+    "RedSalamander/WindowPlacementPersistence.h",
+    "RedSalamanderSearchService/RedSalamanderSearchService.vcxproj",
+    "Specs/Testing/Testing_ToolingGovernance.md",
+    "Tests/PerformanceTests2/PerformanceTests2.cpp",
+    "Tools/Modules/Tooling/SpecInformationArchitecture.psm1",
+    "Tools/Tests/ReleaseWorkflowPolicy.Tests.ps1",
+    "Tools/Tests/SpecInformationArchitecture.Tests.ps1"
+  ],
+  "expectedHead": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+  "candidateDxUiSha": "19ca44d95a0cd493fc7fb1a57f4d4ad227bdefc1"
+}

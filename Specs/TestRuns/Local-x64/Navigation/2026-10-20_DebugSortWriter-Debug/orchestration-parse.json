@@ -1,0 +1,45 @@
+{
+  "status": "passed",
+  "files": [
+    {
+      "file": "analyze-results.ps1",
+      "sha256": "7387EE48B2759926A3131ADD2D854F6CDC7FBA8F04CD137AC15DCB6834B4164E",
+      "parse_errors": 0
+    },
+    {
+      "file": "curate-evidence.ps1",
+      "sha256": "819201A7D25829C83A867C4752757E586DEF40B475BB15C00482CB16677C2453",
+      "parse_errors": 0
+    },
+    {
+      "file": "render-report.ps1",
+      "sha256": "5FB69A25BB86A158BBC6CA1C5AE3076C024F41FFC5E3FBB03ADB64FBDBAB08AE",
+      "parse_errors": 0
+    },
+    {
+      "file": "verify-evidence.ps1",
+      "sha256": "8E2D7077AABDC0ACBC9921A86E896E76AD50409420F70B486DF4BFEB08B14909",
+      "parse_errors": 0
+    },
+    {
+      "file": "write-attempt-ledger.ps1",
+      "sha256": "8F6E3F933B45F755281C4ADAD2FE204E537E7F5F90B514621D3075C60357D4AD",
+      "parse_errors": 0
+    },
+    {
+      "file": "run-matrix.ps1",
+      "sha256": "2129E42C57E21EC72AD0B1D13E6E2CBF3261966BC08C89ABB0CA47873D132DCD",
+      "parse_errors": 0
+    },
+    {
+      "file": "AcceptedPrefix.psm1",
+      "sha256": "93BF5D113D0C7BE33CD8A5EDA931CB6C575B67592C9FFCD94E4E61A150A4A2D4",
+      "parse_errors": 0
+    },
+    {
+      "file": "AcceptedPrefix.Tests.ps1",
+      "sha256": "FCBE1E205E6B7AE139EDBB74A2A25027B79411B531619E8F6C353FC6BFC93F6F",
+      "parse_errors": 0
+    }
+  ]
+}

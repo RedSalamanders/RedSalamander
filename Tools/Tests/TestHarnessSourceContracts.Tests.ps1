@@ -4,6 +4,189 @@ $ErrorActionPreference = 'Stop'
 $repoRoot = Split-Path -Parent (Split-Path -Parent $PSScriptRoot)
 Import-Module (Join-Path $PSScriptRoot 'TestSupport.psm1') -Force
 
+Describe 'Authorized ReFS sandbox' {
+    It 'keeps ReFS index coverage inside the runner sandbox and skips a different filesystem' {
+        $source = Get-RSText -Path 'RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.Tests.Cases.SearchAndIndex.cpp'
+        $runner = Get-RSText -Path 'RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.Tests.Runner.cpp'
+        $start = $source.IndexOf('constexpr std::wstring_view kRefsCaseName')
+        $next = $source.IndexOf('L"local_index_core_journal_replay_rename_delete_create"', $start)
+        $start | Should BeGreaterThan -1
+        $next | Should BeGreaterThan $start
+        $case = $source.Substring($start, $next - $start)
+        $case | Should Match 'SelfTest::AcquireTestSandbox\(SelfTest::SelfTestSuite::CompareDirectories,\s*L"index_core_refs_probe_and_query"\)'
+        $case | Should Match 'state\.Require\(sandbox\.IsValid\(\)'
+        $case | Should Match 'caseRoot\s*=\s*sandbox\.root'
+        $case | Should Match 'support\.fileSystemKind != LocalSearchIndexCore::FileSystemKind::Refs'
+        $case | Should Match 'state\.Skip\(L"Selected authorized test sandbox is not on ReFS\."\)'
+        $case | Should Not Match 'FindFirstFixedVolumeByFileSystem|refsVolumeRoot|refsSuiteRoot|RedSalamanderSelfTest'
+        $runner | Should Not Match 'FindFirstFixedVolumeByFileSystem'
+        $case.IndexOf('state.Skip(') | Should BeLessThan $case.IndexOf('L"alpha.txt"')
+    }
+}
+
+Describe 'Product documentation capture fixtures' {
+    It 'keeps Terminal transcripts shell-free and provider scenes confined to owned fakes' {
+        $terminal = Get-RSText -Path 'Plugins/Terminal/Terminal.cpp'
+        $factory = Get-RSText -Path 'Plugins/Terminal/Factory.cpp'
+        $terminal | Should Match '(?s)#if defined\(ENABLE_TESTS\)\s+if \(_documentationSession\).*?terminalVtWrite.*?return S_OK;\s*\}\s*#endif\s+const TerminalLocationKind'
+        $factory | Should Match 'thread_local bool g_documentationSessionArmed = false'
+        $factory | Should Match 'std::exchange\(g_documentationSessionArmed, false\)'
+        $source = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp'
+        foreach ($value in @('RedSalamanderCurlStartFakeFtpForSelfTest','RedSalamanderGoogleDriveStartFakeDriveForSelfTest','RedSalamanderMicrosoftDriveStartFakeGraphForSelfTest',
+                'RedSalamanderS3StartFakeS3ForSelfTest','RedSalamanderMtpCreateForSelfTest','DebugSetSharedDirectoriesProviderResultForTest',
+                'DebugClearSharedDirectoriesProviderForTest','DebugOpenTerminalPaneForTests','isDocumentation(fixtureProbe.get())')) {
+            $source.Contains($value) | Should Be $true
+        }
+        $source | Should Match 'stopEndpoint\s*=\s*wil::scope_exit'
+        $source | Should Match 'providerWorkspace\.Destroy\(\)'
+        $source | Should Match 'NavigationLocation::FormatHistoryPath\(scene.shortId'
+        $source | Should Match 'Compiled Terminal Find instructions must preserve'
+        $factory | Should Match 'RedSalamanderTerminalDocumentationFindHintIsUnicodeForSelfTest'
+        $source | Should Match 'Only the owned provider workspace may be visible at capture'
+        $source | Should Match 'SetPluginConfigurationForFileOpsPrompt\(catalogEntry->informations.get\(\), ownedConfiguration\)'
+        $source | Should Match 'SetPluginConfigurationForFileOpsPrompt\(catalogEntry->informations.get\(\), priorConfiguration\)'
+        $source | Should Match 'documentationLibrary'
+        $source | Should Match 'Read-only MTP warm-up may check sandbox journal absence once'
+        $source | Should Match 'Warm read-only MTP capture must reuse sandbox journal absence'
+        foreach ($name in @('LOCALAPPDATA','TEMP','TMP')) {
+            $source | Should Match ('\.emplace\(L"'+$name+'", path\)')
+        }
+        $source | Should Match 'DocumentationModalCapture'
+        $source | Should Match 'PostMessageW\(prompt,\s*WM_CLOSE'
+        $modal = [regex]::Match($source, '(?s)struct DocumentationModalCapture.*?modal\(L"change-case"').Value
+        $modal | Should Not Match 'std::jthread|worker\.join|SendMessageW'
+        $terminalHostSource = Get-RSText -Path 'RedSalamander/FolderWindow.FileSystem.Navigation.cpp'
+        $terminalHostSource | Should Match 'documentationSource && TerminalHostSupport::DebugDocumentationSessionIsArmed\(\)'
+        $terminalHostSource | Should Match 'return E_ACCESSDENIED'
+        $playback = Get-RSText -Path 'Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp'
+        $case = [regex]::Match($playback, '(?s)bool TestViewerVlcDocumentationPlayback\(\) noexcept.*?\r?\n\}')
+        $case.Success | Should Be $true
+        $case.Value | Should Match 'AcquireViewerPETestSandbox'
+        $case.Value | Should Match 'FindInstalledVlcForLoaderTest'
+        $case.Value | Should Match 'snapshot\.lengthMs\s*>=\s*11000'
+        $case.Value | Should Match 'snapshot\.timeMs\s*>\s*100'
+        $case.Value | Should Match 'Paused decoder time stays stable'
+        $case.Value | Should Match 'SaveWindowScreenshot'
+        $case.Value | Should Match 'wholeFrame\s*=\s*true'
+        $case.Value | Should Match 'SendMessageW\(videoWindow, WM_KEYDOWN, VK_SPACE'
+        $case.Value | Should Match 'Client-coordinate probes refuse a different UI thread'
+        $case.Value | Should Match 'Whole-frame probes reject an absent video color'
+        $case.Value | Should Match 'capturePlaybackFrame'
+        $case.Value | Should Match 'CoInitializeEx\(nullptr, COINIT_MULTITHREADED\)'
+        $case.Value | Should Match 'captureThread\.join\(\)'
+        $case.Value | Should Match '"videoOutput":"wingdi"'
+        $captureHelper = Get-RSText -Path 'Tests/TestSupport/TestSupport.Tests.WindowScreenshot.cpp'
+        $captureHelper | Should Match 'needsClientCoordinates && windowThread != GetCurrentThreadId\(\)'
+        $case.Value | Should Not Match '\b(?:SendInput|SetCursorPos|SetForegroundWindow|RequestForegroundWindow|AttachThreadInput)\s*\('
+    }
+
+    It 'uses private synthetic state and the canonical nonactivating capture helpers' {
+        $commands = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp'
+        $fixture = [regex]::Match($commands, '(?s)bool TestProductDocumentationGallery\(.*?\r?\n\}')
+        $fixture.Success | Should Be $true
+        $fixture.Value | Should Match 'ScopedWindowActivationBlocker::IsActiveForCurrentThread'
+        $fixture.Value | Should Match 'ScopedNonActivatingDesktopObserver'
+        $fixture.Value | Should Match 'Common::Settings::Settings settings\{\}'
+        $fixture.Value | Should Match 'DebugSeedFindFilesDocumentationScenario'
+        $fixture.Value | Should Match 'DebugCancelPreferencesDialog'
+        $fixture.Value | Should Match 'SetMtpPluginPickerFakeBackendForConnectionSelfTest'
+        $fixture.Value | Should Match 'mtpDevicePickerItemCount == 1u'
+        $fixture.Value | Should Match 'categoryTreeSelectedVisibleIndex > 0u'
+        $app = Get-RSText -Path 'RedSalamander/RedSalamander.cpp'
+        $app | Should Match 'selectedCaptureCase == L"cmd_product_documentation_gallery"'
+        $app | Should Match '! getArgValue\(L"--selftest-flaky-proof-case="'
+        $app | Should Match '! getArgValue\(L"--selftest-order-proof-case="'
+        $runner = Get-RSText -Path 'RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp'
+        $runner | Should Match 'options.caseFilter == L"cmd_product_documentation_gallery"'
+        $runner | Should Match 'else if \(! options.listCasesOnly\)'
+        $runner | Should Match 'PrepareMainWindowForIsolatedUiCase'
+
+        $fixture.Value | Should Not Match '\b(?:SendInput|SetCursorPos|SetForegroundWindow|RequestForegroundWindow|AttachThreadInput|DebugStartFindFilesWindowSearch)\s*\('
+        $viewer = Get-RSText -Path 'Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp'
+        $viewer | Should Match '\{L"TestViewerDocumentationGallery", 120000ms, TestDesktopInteraction::Noninteractive\}'
+        $gallery = [regex]::Match($viewer, '(?s)bool TestViewerDocumentationGallery\(\) noexcept\s*\{.*?\r?\n\}')
+        $gallery.Success | Should Be $true
+        $gallery.Value | Should Match 'MapVirtualPath'
+        $gallery.Value | Should Match 'AcquireViewerPETestSandbox'
+        $gallery.Value | Should Match 'SaveWindowScreenshot'
+        $gallery.Value | Should Match 'viewer\.reset\(\);[\s\S]{0,200}Check\(PumpUntil'
+        $gallery.Value | Should Match 'manifest\.flush\(\)'
+        $gallery.Value | Should Match 'RedSalamanderPluginShutdown'
+        $gallery.Value | Should Match 'libraries\[scenario\.dll\]'
+        $gallery.Value | Should Not Match '\b(?:SendInput|SetCursorPos|SetForegroundWindow|RequestForegroundWindow|AttachThreadInput)\s*\('
+    }
+
+    It 'keeps Search documentation seeding UI-thread-only and refuses an active search' {
+        $source = Get-RSText -Path 'RedSalamander/FindFilesWindow.cpp'
+        $seed = [regex]::Match($source, '(?s)bool FindFilesWindow::DebugSeedDocumentationScenario\(bool emptyResults\) noexcept\s*\{.*?\r?\n\}')
+        $seed.Success | Should Be $true
+        $seed.Value | Should Match 'IsSearchActive\(\)'
+        $seed.Value | Should Match 'GetWindowThreadProcessId.*GetCurrentThreadId'
+        $seed.Value | Should Match 'C:.*Demo.*Workspace'
+        $seed.Value | Should Match 'RebuildResultsList\(\)'
+        $seed.Value | Should Not Match '\b(?:StartSearch|CreateFileW|ReadFile|SearchAsync)\s*\('
+    }
+
+    It 'repaints programmatic Preferences tree selection before capturing its page' {
+        $source = Get-RSText -Path 'RedSalamander/Preferences.Dialog.cpp'
+        foreach ($method in @('DebugSelectCategory', 'DebugSelectPluginsTreeChild')) {
+            $body = [regex]::Match($source, ('(?s)bool PreferencesDialog::' + $method + '\(.*?\r?\n\}'))
+            $body.Success | Should Be $true
+            $body.Value | Should Match '_categoryTreeHost\.Invalidate\(\)'
+        }
+    }
+}
+
+Describe 'ViewerSpace nonactivating desktop observations' {
+    It 'keeps UIA observations and synthetic desktop interference free of physical input writes' {
+        $sources = @(
+            Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.DesktopObservation.h'
+            Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp'
+        )
+        $runner = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
+        $fixture = [regex]::Match($runner, '(?s)bool TestViewerSpaceAnalysisAllowsAmbientDesktopChanges\(\) noexcept\s*\{.*?\r?\n\}')
+        $fixture.Success | Should Be $true
+        $sources += $fixture.Value
+        $lifecycle = [regex]::Match($runner, '(?s)bool TestViewerSpaceLifecycleCaptures\(\) noexcept\s*\{.*?\r?\n\}')
+        $lifecycle.Success | Should Be $true
+        $sources += $lifecycle.Value
+        $lifecycle.Value | Should Not Match 'GetForegroundWindow\(\)\s*==\s*foregroundBefore'
+        $lifecycle.Value | Should Match 'guarded-process-owned-events'
+
+        $writePattern = '\b(?:SetCursorPos|SetPhysicalCursorPos|SendInput|mouse_event|keybd_event|ClipCursor|SetForegroundWindow|RequestForegroundWindow|SetActiveWindow|SetFocus|BringWindowToTop|SwitchToThisWindow|AttachThreadInput)\s*\('
+        foreach ($source in $sources) {
+            $source | Should Not Match $writePattern
+            $source | Should Not Match 'NotifyWinEvent\s*\(\s*EVENT_SYSTEM_FOREGROUND'
+        }
+        $plugin = (Get-ChildItem -LiteralPath (Join-Path $repoRoot 'Plugins\ViewerSpace') -File |
+            Where-Object Extension -in '.cpp', '.h' | ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
+        $plugin | Should Not Match '\b(?:SetCursorPos|SetPhysicalCursorPos|SendInput|mouse_event|keybd_event|ClipCursor)\s*\('
+    }
+
+    It 'requires process-filtered foreground evidence and a bounded private event drain' {
+        $observer = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.DesktopObservation.h'
+        $observer | Should Match 'SetWinEventHook\(\s*EVENT_SYSTEM_FOREGROUND,\s*EVENT_OBJECT_NAMECHANGE,\s*nullptr,\s*OnWinEvent,\s*GetCurrentProcessId\(\),\s*0,\s*WINEVENT_OUTOFCONTEXT\)'
+        $observer | Should Match 'ScopedWindowActivationBlocker::IsActiveForCurrentThread\(\)'
+        $observer | Should Match 'HWND_MESSAGE'
+        $observer | Should Match 'NotifyWinEvent\(EVENT_OBJECT_NAMECHANGE, _sentinel.get\(\), OBJID_WINDOW, CHILDID_SELF\)'
+        $observer | Should Match 'observer->_events.Record\(event\)'
+        $observer | Should Match 'options\.timeout\s*=\s*std::chrono::milliseconds\(250\)'
+        $observer | Should Match 'if \(! drained.conditionMet\)'
+        $observer | Should Match 'UnhookWinEvent'
+    }
+
+    It 'keeps ambient and negative-control cases in the noninteractive viewer inventory' {
+        $runner = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
+        foreach ($name in @('TestViewerSpaceDesktopObservationContracts', 'TestViewerSpaceAnalysisAllowsAmbientDesktopChanges')) {
+            $runner | Should Match ('\{L"' + $name + '", kViewerHarnessDefaultTimeout, TestDesktopInteraction::Noninteractive\}')
+        }
+        $analysis = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp'
+        $analysis | Should Not Match 'GetForegroundWindow\(\)\s*==\s*foregroundBefore|cursorAfter\.x\s*!=\s*cursorBefore\.x'
+        $analysis | Should Match 'desktop.Finish\(\)'
+        $analysis | Should Match 'transient owned activation remains a failure'
+    }
+}
+
 Describe 'IMAP UIDVALIDITY and single-message delete source contracts' {
     BeforeAll {
         $imapSource = Get-RSText -Path 'Plugins\FileSystemCurl\FileSystemCurl.Imap.cpp'
@@ -71,7 +254,7 @@ Describe 'Preferences settings-backed page source contracts' {
     BeforeAll {
         $dialogSource = Get-RSText -Path 'RedSalamander\Preferences.Dialog.cpp'
         $mouseSource = Get-RSText -Path 'RedSalamander\Preferences.Mouse.cpp'
-        $mouseTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp'
+        $mouseTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.FileOpsCompareAndTree.cpp'
         $preferencesSpec = Get-RSText -Path 'Specs\UI\UI_PreferencesDialog.md'
         $preferencesSkill = Get-RSText -Path '.github\skills\build-preferences-pages\SKILL.md'
     }
@@ -146,7 +329,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'keeps scaled self-test timeouts finite and nonzero for nonzero bases' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.cpp'
 
         $source | Should Match 'std::isfinite\(scaled\)'
         $source | Should Match 'baseMs\s*>\s*0u'
@@ -180,7 +363,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'gives ViewerPETests nested shell churn its own timeout budget' {
-        $source = Get-RSText -Path 'Tests\ViewerPETests\ViewerPETests.cpp'
+        $source = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
 
         $source | Should Match 'kViewerHarnessDefaultTimeout\s*=\s*120000ms'
         $source | Should Match 'kViewerShellComboLongRunTimeout\s*=\s*600000ms'
@@ -202,8 +385,8 @@ Describe 'Test harness source contracts' {
 
     It 'keeps ViewerVLC probing, loader fallback, drawable teardown, and option boundaries safe' {
         $source = Get-RSText -Path 'Plugins\ViewerVLC\ViewerVLC.cpp'
-        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPETests.cpp'
-        $commands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
+        $commands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
         $startPlayback = [regex]::Match($source, 'bool\s+ViewerVLC::StartPlayback\([\s\S]*?\n\}')
         $submitFailure = [regex]::Match($source, 'if\s*\(queued\s*==\s*0\)[\s\S]{0,1800}?\n\s*\}')
 
@@ -253,8 +436,8 @@ Describe 'Test harness source contracts' {
         $viewerManager = Get-RSText -Path 'RedSalamander\ViewerPluginManager.cpp'
         $fileSystemManager = Get-RSText -Path 'RedSalamander\FileSystemPluginManager.cpp'
         $localization = Get-RSText -Path 'Common\Common\LocalizationManager.cpp'
-        $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContractTests.cpp'
-        $localizationTests = Get-RSText -Path 'Tests\LocalizationTests\LocalizationTests.cpp'
+        $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContract.Tests.Runner.cpp'
+        $localizationTests = Get-RSText -Path 'Tests\LocalizationTests\Localization.Tests.Runner.cpp'
 
         $factoryHeader | Should Match 'kMaxEnumeratedPluginsPerModule\s*=\s*256u'
         $factoryHeader | Should Match 'return\s+metaData\s*!=\s*nullptr\s*&&\s*IsValidEnumeratedPluginCount\(count\)'
@@ -333,7 +516,7 @@ Describe 'Test harness source contracts' {
 
     It 'keeps ViewerImgRaw main decode scheduling bounded, exact, terminal, and ordered' {
         $source = Get-RSText -Path 'Plugins\ViewerImgRaw\ViewerImgRaw.Decode.cpp'
-        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPETests.cpp'
+        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
 
         $source | Should Match 'struct\s+ViewerImgRaw::AsyncOpenSchedulerState[\s\S]{0,900}std::unique_ptr<AsyncOpenRequest>\s+pending'
         $source | Should Match 'bool\s+workerActive\s*=\s*false'
@@ -360,7 +543,7 @@ Describe 'Test harness source contracts' {
         $source = Get-RSText -Path 'Plugins\ViewerWeb\ViewerWeb.cpp'
         $header = Get-RSText -Path 'Plugins\ViewerWeb\ViewerWeb.h'
         $dllMain = Get-RSText -Path 'Plugins\ViewerWeb\dllmain.cpp'
-        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPETests.cpp'
+        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
 
         $header | Should Match '\[\[nodiscard\]\]\s+HRESULT\s+ConfigureWebViewSettings\(\)\s+noexcept'
         $source | Should Match 'HRESULT\s+ViewerWeb::ConfigureWebViewSettings\(\)\s+noexcept'
@@ -402,7 +585,7 @@ Describe 'Test harness source contracts' {
 
     It 'keeps ViewerPE reader commitments exact and current terminal delivery recoverable' {
         $source = Get-RSText -Path 'Plugins\ViewerPE\ViewerPE.cpp'
-        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPETests.cpp'
+        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
 
         $source | Should Match 'reader->Seek\(0,\s*FILE_BEGIN,\s*&position\)'
         $source | Should Match 'FAILED\(hr\)\s*\|\|\s*position\s*!=\s*0u'
@@ -423,7 +606,7 @@ Describe 'Test harness source contracts' {
         $source = Get-RSText -Path 'Plugins\ViewerSpace\ViewerSpace.cpp'
         $header = Get-RSText -Path 'Plugins\ViewerSpace\ViewerSpace.h'
         $factory = Get-RSText -Path 'Plugins\ViewerSpace\Factory.cpp'
-        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPETests.cpp'
+        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
 
         $header | Should Match 'void\s+AbandonScanWorkers\(\)\s+noexcept'
         $source | Should Not Match 'CancelScanAndWait|ReapFinishedScanWorkers\(bool\s+wait\)'
@@ -442,11 +625,15 @@ Describe 'Test harness source contracts' {
 
     It 'publishes authoritative ViewerSpace totals before root completion becomes visible' {
         $source = Get-RSText -Path 'Plugins\ViewerSpace\ViewerSpace.cpp'
-        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPETests.cpp'
+        $model = Get-RSText -Path 'Plugins\ViewerSpace\ViewerSpace.Model.cpp'
+        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
         $spec = Get-RSText -Path 'Specs\Plugins\Plugins_ViewerSpace.md'
 
         $source | Should Match 'if\s*\(completedRoot\)[\s\S]{0,900}finalProgress\.kind\s*=\s*PendingUpdate::Kind::Progress[\s\S]{0,900}finalProgress\.bytes\s*=\s*scannedBytes\.load[\s\S]{0,900}finalProgress\.scannedFolders\s*=\s*scannedFolders\.load[\s\S]{0,900}finalProgress\.scannedFiles\s*=\s*scannedFiles\.load[\s\S]{0,900}PostUpdate\(std::move\(finalProgress\)\)[\s\S]{0,300}postDirectoryCompletion'
-        $source | Should Match 'case\s+PendingUpdate::Kind::UpdateSize:[\s\S]{0,500}node->totalBytes\s*=\s*std::max\(node->totalBytes,\s*update\.bytes\)'
+        $source | Should Match 'case\s+PendingUpdate::Kind::UpdateSize:[\s\S]{0,700}RaiseNodeObservedBytes\(node->id,\s*update\.bytes\)'
+        $model | Should Match 'next\s*=\s*std::max\(node->totalBytes,\s*std::max\(reportedBytes,\s*derived\)\)'
+        $model | Should Match 'node->totalBytes\s*=\s*next'
+        $model | Should Match 'parent->observedChildBytes\s*=\s*ViewerSpaceScan::SaturatingAdd\(parent->observedChildBytes,\s*delta\)'
         $tests | Should Match 'stableTerminalSnapshot'
         $tests | Should Match 'bytes=\{\}, folders=\{\}, files=\{\}'
         $spec | Should Match 'Same-generation directory-size publication is monotonic'
@@ -467,7 +654,7 @@ Describe 'Test harness source contracts' {
 
     It 'keeps ViewerText Save As source-first and transactionally committed' {
         $source = Get-RSText -Path 'Plugins\ViewerText\ViewerText.cpp'
-        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPETests.cpp'
+        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
         $saveMatch = [regex]::Match($source, 'HRESULT\s+ViewerText::SaveAsToPath[\s\S]*?\n\}\r?\n\r?\nvoid\s+ViewerText::CommandSaveAs')
 
         $saveMatch.Success | Should Be $true
@@ -504,7 +691,7 @@ Describe 'Test harness source contracts' {
         $hexSource = Get-RSText -Path 'Plugins\ViewerText\ViewerText.Hex.cpp'
         $helpers = Get-RSText -Path 'Plugins\ViewerText\ViewerText.SafetyHelpers.h'
         $header = Get-RSText -Path 'Plugins\ViewerText\ViewerText.h'
-        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPETests.cpp'
+        $tests = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
 
         $openSource | Should Match 'auto postTerminal = wil::scope_exit'
         $openSource | Should Match 'PostMessagePayload\(hwnd,\s*kAsyncOpenCompleteMessage,\s*static_cast<WPARAM>\(requestId\)'
@@ -546,7 +733,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'requires git identity before accepting self-test archive repo roots' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.cpp'
 
         $source | Should Match 'kRepoGitDirName'
         $source | Should Match 'IsRepoRootCandidate'
@@ -554,7 +741,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'keeps self-test archive parent walking bounded by a named limit' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.cpp'
 
         $source | Should Match 'kRepoRootParentWalkLimit'
         $source | Should Match 'i\s*<\s*kRepoRootParentWalkLimit'
@@ -571,7 +758,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'lets native selftests consume the unified test root and run id directly' {
-        $common = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.cpp'
+        $common = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.cpp'
         $runner = Get-RSText -Path 'Tools\Run-AllTests.ps1'
 
         $common | Should Match 'REDSALAMANDER_TEST_ROOT'
@@ -590,8 +777,8 @@ Describe 'Test harness source contracts' {
     }
 
     It 'exposes native TestSandbox scratch acquisition separate from last_run artifacts' {
-        $common = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.cpp'
-        $header = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.h'
+        $common = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.cpp'
+        $header = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.h'
 
         $header | Should Match 'struct\s+TestSandbox'
         $header | Should Match 'AcquireTestSandbox'
@@ -605,9 +792,9 @@ Describe 'Test harness source contracts' {
     }
 
     It 'removes native self-test sandboxes without traversing directory reparse points' {
-        $common = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.cpp'
-        $header = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.h'
-        $fileOps = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp'
+        $common = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.cpp'
+        $header = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.h'
+        $fileOps = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
 
         $header | Should Match 'Removes a self-test tree without traversing directory reparse points'
         $common | Should Match 'RemovePathTreeNoFollow'
@@ -619,7 +806,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'keeps nested settings-save child artifacts shallow and removes them before audit' {
-        $settingsTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $settingsTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
         $childLauncher = [regex]::Match(
             $settingsTests,
             '(?s)\[\[nodiscard\]\]\s+bool\s+RequireSettingsSaveChild\(.*?\n\}').Value
@@ -632,9 +819,9 @@ Describe 'Test harness source contracts' {
     }
 
     It 'routes FileOperations cross-volume scratch through the sanctioned alternate TestSandbox root' {
-        $common = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.cpp'
-        $header = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.h'
-        $fileOps = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp'
+        $common = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.cpp'
+        $header = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.h'
+        $fileOps = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
 
         $header | Should Match 'AcquireTestSandboxOnVolume'
         $common | Should Match 'kTestSandboxDirectoryName'
@@ -657,9 +844,9 @@ Describe 'Test harness source contracts' {
     }
 
     It 'authorizes test roots centrally and fails closed before native mutation' {
-        $policy = Get-RSText -Path 'Common\TestSandboxPath.h'
-        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.h'
-        $selfTest = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.cpp'
+        $policy = Get-RSText -Path 'Common\Common.Tests.SandboxPath.h'
+        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.Runner.h'
+        $selfTest = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.cpp'
         $settings = Get-RSText -Path 'Common\Common\SettingsStore.cpp'
         $sandbox = Get-RSText -Path 'Tools\Modules\Testing\TestSandbox.psm1'
 
@@ -676,8 +863,8 @@ Describe 'Test harness source contracts' {
     }
 
     It 'routes RedConfigureTests scratch through the unified TestSandbox root' {
-        $source = Get-RSText -Path 'Tests\RedConfigureTests\RedConfigureTests.cpp'
-        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.h'
+        $source = Get-RSText -Path 'Tests\RedConfigureTests\RedConfigure.Tests.Runner.cpp'
+        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.Runner.h'
 
         $source | Should Match 'AcquireRedConfigureTestSandbox'
         $source | Should Match 'kRedConfigureHarnessSegment\{L"redconfigure"\}'
@@ -691,8 +878,8 @@ Describe 'Test harness source contracts' {
     }
 
     It 'routes ViewerSqliteTests scratch through the unified TestSandbox root' {
-        $source = Get-RSText -Path 'Tests\ViewerSqliteTests\ViewerSqliteTests.cpp'
-        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.h'
+        $source = Get-RSText -Path 'Tests\ViewerSqliteTests\ViewerSqlite.Tests.Runner.cpp'
+        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.Runner.h'
 
         $source | Should Match 'AcquireViewerSqliteTestSandbox'
         $source | Should Match 'kViewerSqliteHarnessSegment\{L"viewer-sqlite"\}'
@@ -706,8 +893,8 @@ Describe 'Test harness source contracts' {
     }
 
     It 'routes CrashHandlingTests scratch through the unified TestSandbox root' {
-        $source = Get-RSText -Path 'Tests\CrashHandlingTests\CrashHandlingTests.cpp'
-        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.h'
+        $source = Get-RSText -Path 'Tests\CrashHandlingTests\CrashHandling.Tests.Runner.cpp'
+        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.Runner.h'
 
         $source | Should Match 'AcquireCrashHandlingTestSandbox'
         $source | Should Match 'kCrashHandlingHarnessSegment\{L"crash-handling"\}'
@@ -721,7 +908,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'routes Commands plugin-config scratch through native TestSandbox roots' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.PluginConfig.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.PluginConfig.cpp'
 
         $source | Should Match 'AcquireTestSandbox\(SelfTest::SelfTestSuite::Commands,\s*L"viewer_text_hex_byte_color_perf"\)'
         $source | Should Match 'AcquireTestSandbox\(SelfTest::SelfTestSuite::Commands,\s*L"viewer_text_diff_perf"\)'
@@ -742,7 +929,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'keeps plugin-config tab traversal retries from sending an extra tab after a successful advance' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.PluginConfig.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.PluginConfig.cpp'
 
         $source | Should Match 'waitForExpectedSnapshot'
         $source | Should Match 'const bool advanced = DebugAdvancePluginConfigurationDialogTab\(reverse\)'
@@ -750,7 +937,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'waits for preview fallback text and source-pane focus together' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
 
         $source | Should Match 'WaitForPreviewPaneTextAndFocus'
         $source | Should Match 'WaitForPreviewPaneTextAndFocus\(\s*L"Name: mystery\.no-preview-props"'
@@ -759,7 +946,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'separates configured preview publication from external desktop deactivation' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
 
         $source | Should Match 'requireSourcePaneFocusAfterPreview'
         $source | Should Match 'if \(! focusWindow && foregroundWindow != rootWindow\)'
@@ -769,8 +956,8 @@ Describe 'Test harness source contracts' {
     }
 
     It 'makes quick-search tests own pane sort and extension visibility' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Search.cpp'
-        $viewSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
+        $viewSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
 
         $source | Should Match 'const FolderView::SortBy leftSortByBefore\s*=\s*g_folderWindow\.GetSortBy\(FolderWindow::Pane::Left\)'
         $source | Should Match 'const FolderView::SortDirection leftSortDirectionBefore\s*=\s*g_folderWindow\.GetSortDirection\(FolderWindow::Pane::Left\)'
@@ -792,7 +979,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'keeps quick-search navigation expectations tied to visible match order' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Search.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
         $dispatcherSource = Get-RSText -Path 'RedSalamander\RedSalamander.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestPaneQuickSearchIntegratedNavigation')
@@ -845,7 +1032,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'keeps Hot Paths browse page-settle failures diagnostic-rich' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.HotPathsAndKeyboard.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.HotPathsAndKeyboard.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogHotPathsBrowseLiveDxInteraction')
         $nextTestStart = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogHotPathsTabTraversalLiveDxInteraction', $testStart)
@@ -859,7 +1046,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'uses condition-based focus waiting for Viewers roundtrip category navigation' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ChromeAndPlugins.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.ChromeAndPlugins.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogViewersRoundTripRestoresDxUiSurface')
         $nextTestStart = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogViewersThemeCycleKeepsSurfaceLegible', $testStart)
@@ -875,7 +1062,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'retries Preferences focus acquisition during condition-based waits' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.cpp'
 
         $helperStart = $source.IndexOf('[[nodiscard]] bool FocusWindowAndWait')
         $nextBlock = $source.IndexOf('struct ScopedSettingsArtifactBackup', $helperStart)
@@ -898,7 +1085,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'keeps embedded Terminal pointer-follow lifecycle proof capability-aware and fail-closed' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Navigation.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Navigation.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestEmbeddedTerminalPluginLifecycle(HWND mainWindow')
         $nextTestStart = $source.IndexOf('[[nodiscard]] bool TestEmbeddedTerminalShellExitClosesOnlyItsTab', $testStart)
@@ -916,7 +1103,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'waits for Plugins sort-search header rects before reorder-resize interactions' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ChromeAndPlugins.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.ChromeAndPlugins.cpp'
 
         $plainTestStart = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogPluginsReorderedResizedColumnsSurviveSearchRoundTrip')
         $plainNextTestStart = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogPluginsReorderedResizedCopyFollowsVisibleColumnsAfterSearchRoundTrip', $plainTestStart)
@@ -949,7 +1136,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'waits for Viewers sort-search header rects before reorder-resize interactions' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ViewersAndKeyboardLists.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.ViewersAndKeyboardLists.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogViewersReorderedResizedColumnsSurviveSortCyclesAndSearchRoundTrip')
         $nextTestStart = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogViewersReorderedResizedCopyFollowsVisibleColumnsAfterSortCyclesAndSearchRoundTrip', $testStart)
@@ -979,16 +1166,16 @@ Describe 'Test harness source contracts' {
     }
 
     It 'keeps broad Preferences focus paths on the shared focus helper' {
-        $themes = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ThemesGeneralPanes.cpp'
-        $compare = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp'
+        $themes = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.ThemesGeneralPanes.cpp'
+        $compare = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.FileOpsCompareAndTree.cpp'
 
         @(
-            'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ChromeAndPlugins.cpp',
-            'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp',
-            'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.HotPathsAndKeyboard.cpp',
-            'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.PluginsThemesAdvanced.cpp',
-            'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ThemesGeneralPanes.cpp',
-            'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ViewersAndKeyboardLists.cpp'
+            'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.ChromeAndPlugins.cpp',
+            'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.FileOpsCompareAndTree.cpp',
+            'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.HotPathsAndKeyboard.cpp',
+            'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.PluginsThemesAdvanced.cpp',
+            'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.ThemesGeneralPanes.cpp',
+            'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.ViewersAndKeyboardLists.cpp'
         ) | ForEach-Object {
             $focusSource = Get-RSText -Path $_
             $focusSource | Should Match 'FocusWindowAndWait\('
@@ -1145,7 +1332,7 @@ Describe 'Test harness source contracts' {
 
     It 'defers change-case folder focus restoration until modal teardown unwinds' {
         $promptSource = Get-RSText -Path 'RedSalamander\FolderWindow.FileSystem.cpp'
-        $navigationTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Navigation.cpp'
+        $navigationTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Navigation.cpp'
 
         $promptStart = $promptSource.IndexOf('class FolderViewChangeCasePromptWindow final')
         $promptNext = $promptSource.IndexOf('std::optional<ChangeCase::Options> PromptForChangeCase', $promptStart)
@@ -1167,7 +1354,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'retries transient selected-path lease observations to a diagnostic quiet point' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
         $caseStart = $source.IndexOf('[[nodiscard]] bool TestFileActionSelectedPathsFileLifecycle')
         $caseNext = $source.IndexOf('[[nodiscard]] bool TestSettingsStoreShortcutDefaultsRoundTrip', $caseStart)
         $caseStart | Should BeGreaterThan -1
@@ -1182,7 +1369,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'keeps broad Commands app navigation shell focus checks condition-based' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
 
         $driveStart = $source.IndexOf('[[nodiscard]] bool TestAppOpenDriveMenusKeepsNavigationShellStable')
         $driveNext = $source.IndexOf('[[nodiscard]] bool TestPaneRefresh', $driveStart)
@@ -1219,12 +1406,13 @@ Describe 'Test harness source contracts' {
         $historyBlock | Should Match 'popupStateDeadline\s*=\s*std::chrono::steady_clock::now\(\)\s*\+\s*SelfTest::Scale\(3000ms\)'
         $historyBlock | Should Match 'while\s*\(std::chrono::steady_clock::now\(\)\s*<\s*popupStateDeadline\)'
         $historyBlock | Should Match 'const bool stateReadable\s*=\s*DxUi::DebugGetContextMenuPopupState\(popup,\s*popupState\)'
-        $historyBlock | Should Match 'if\s*\(stateReadable\s*&&\s*popupState\.keyboardIndex\.has_value\(\)\)\s*\{\s*popupResult\.popupStateCaptured\s*=\s*true;\s*break;'
+        $historyBlock | Should Match 'PostMessageW\(popup,\s*WM_KEYDOWN,\s*VK_HOME,\s*0\)'
+        $historyBlock | Should Match 'if\s*\(stateReadable\s*&&\s*popupState\.keyboardIndex\.has_value\(\)\s*&&\s*popupState\.keyboardIndex\.value\(\)\s*==\s*0u\)\s*\{\s*popupResult\.popupStateCaptured\s*=\s*true;\s*break;'
         $historyBlock | Should Not Match 'if\s*\(!\s*(?:RedSalamander::)?DxUi::DebugGetContextMenuPopupState\(popup,\s*popupState\)'
     }
 
     It 'makes the app Shortcuts navigation-shell fixture own its settings and window isolation' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
         $testStart = $source.IndexOf('[[nodiscard]] bool TestAppShowShortcutsKeepsNavigationShellStable')
         $testNext = $source.IndexOf('[[nodiscard]] bool TestSwapPanesCommand', $testStart)
         $testStart | Should BeGreaterThan -1
@@ -1238,7 +1426,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'isolates the Preferences Keyboard reset live interaction fixture' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.HotPathsAndKeyboard.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.HotPathsAndKeyboard.cpp'
         $testStart = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogKeyboardResetLiveDxInteraction')
         $testNext = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogKeyboardExportLiveDxInteraction', $testStart)
         $testStart | Should BeGreaterThan -1
@@ -1251,7 +1439,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'isolates the pane-filter DxUi surface fixture before global prompt discovery' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Dialogs.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Dialogs.cpp'
         $testStart = $source.IndexOf('[[nodiscard]] bool TestPaneFilterPromptUsesDxUiSurface')
         $testNext = $source.IndexOf('[[nodiscard]] bool TestPaneFilterPromptLiveDxInteraction', $testStart)
         $testStart | Should BeGreaterThan -1
@@ -1264,8 +1452,8 @@ Describe 'Test harness source contracts' {
     }
 
     It 'isolates both Compare navigation-shell fixtures before asserting restored focus' {
-        $navigation = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Navigation.cpp'
-        $viewCommands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $navigation = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Navigation.cpp'
+        $viewCommands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
 
         $navigationStart = $navigation.IndexOf('[[nodiscard]] bool TestCompareDirectoriesKeepsNavigationShellStable')
         $navigationNext = $navigation.IndexOf('[[nodiscard]] bool TestSwitchPaneFocusKeepsNavigationShellStable', $navigationStart)
@@ -1286,7 +1474,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'isolates mouse-opened menu keyboard ordering and preserves split post diagnostics' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
         $testStart = $source.IndexOf('[[nodiscard]] bool TestMainMenuMouseOpenedPopupProcessesKeyboardBeforeMouseMove')
         $testNext = $source.IndexOf('[[nodiscard]] bool TestMainMenuTopLevelMappingMatchesRawMenu', $testStart)
         $testStart | Should BeGreaterThan -1
@@ -1303,7 +1491,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'reacquires the submenu placement cascade target after root-menu initialization' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
         $testStart = $source.IndexOf('[[nodiscard]] bool TestMainMenuSubmenuPlacementMatchesSpec')
         $testNext = $source.IndexOf('[[nodiscard]] bool TestAppPreferencesKeepsNavigationShellStable', $testStart)
         $testStart | Should BeGreaterThan -1
@@ -1321,9 +1509,9 @@ Describe 'Test harness source contracts' {
     }
 
     It 'reports locked-desktop clipboard and foreground dependencies as explicit Commands skips' {
-        $settings = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
-        $shell = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ShellCommands.cpp'
-        $view = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $settings = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
+        $shell = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ShellCommands.cpp'
+        $view = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
 
         $settings | Should Match 'SkipIfCommandsSelfTestClipboardUnavailable'
         $settings | Should Match 'OS clipboard unavailable for Commands selftest'
@@ -1336,7 +1524,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'keeps Preferences category-tree UIA selection pinned to category-id selection' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ChromeAndPlugins.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.ChromeAndPlugins.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogCategoryTreeExposesLiveUiaSelection')
         $testNext = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogShellUsesDxUiChrome', $testStart)
@@ -1372,11 +1560,11 @@ Describe 'Test harness source contracts' {
     }
 
     It 'keeps broad-process Preferences navigation on a stable category surface and retires stale UIA providers' {
-        $preferencesFamily = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.cpp'
-        $panes = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ThemesGeneralPanes.cpp'
-        $hotPaths = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.HotPathsAndKeyboard.cpp'
-        $fileOpsCompare = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp'
-        $settings = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $preferencesFamily = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.cpp'
+        $panes = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.ThemesGeneralPanes.cpp'
+        $hotPaths = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.HotPathsAndKeyboard.cpp'
+        $fileOpsCompare = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.FileOpsCompareAndTree.cpp'
+        $settings = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
 
         $preferencesFamily | Should Match 'SelectPreferencesCategoryAndWaitForStableSurface'
         $preferencesFamily | Should Match 'kRequiredStableSamples\s*=\s*3u'
@@ -1393,7 +1581,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'keeps Preferences category churn settled, attributable, and bounded under uncontended focus' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.FileOpsCompareAndTree.cpp'
         $preferencesHeader = Get-RSText -Path 'RedSalamander\Preferences.h'
         $preferencesDialog = Get-RSText -Path 'RedSalamander\Preferences.Dialog.cpp'
 
@@ -1425,7 +1613,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'isolates Compare Directories wrap traversal and keeps failures diagnostic-rich' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.FileOpsCompareAndTree.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogCompareDirectoriesTabTraversalLiveDxInteraction')
         $testNext = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogCompareDirectoriesRoundTripRestoresDxUiSurface', $testStart)
@@ -1453,9 +1641,9 @@ Describe 'Test harness source contracts' {
     }
 
     It 'routes Commands long-path and high-cardinality fixtures through native TestSandbox roots' {
-        $search = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Search.cpp'
-        $dialogs = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Dialogs.cpp'
-        $viewCommands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $search = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
+        $dialogs = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Dialogs.cpp'
+        $viewCommands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
 
         $search | Should Match 'AcquireTestSandbox\(SelfTest::SelfTestSuite::Commands,\s*L"search_index_stream"\)'
         $dialogs | Should Match 'AcquireTestSandbox\(SelfTest::SelfTestSuite::Commands,\s*L"pane_rename_long_selection"\)'
@@ -1466,8 +1654,39 @@ Describe 'Test harness source contracts' {
         $viewCommands | Should Match 'AcquireTestSandbox\(SelfTest::SelfTestSuite::Commands,\s*L"viewer_space_synthetic_bucket_metrics"\)'
     }
 
+    It 'keeps sort product-paint observation free of synthetic warm-up and invalidation' {
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
+        $start = $source.IndexOf('[[nodiscard]] bool WaitForFolderViewSortProductPaint(')
+        $end = $source.IndexOf('[[nodiscard]] bool ClearSyntheticTextInputModifiersForFolderViewPerf()', $start)
+        $start | Should BeGreaterThan -1
+        $end | Should BeGreaterThan $start
+        $observer = $source.Substring($start, $end - $start)
+        $observer | Should Not Match 'InvalidateRect\(|DebugWarmPaneRendering\(|OnDeferredInit\(|Render\('
+        $observer | Should Match 'successfulPresentCount'
+        $source | Should Match 'folderView_perf_sort_toggle_legacy_warm_control'
+        $source | Should Match 'product_paint_v2'
+        $benchmarkStart = $source.IndexOf('[[nodiscard]] bool TestFolderViewPerfSortToggleStress(')
+        $benchmarkEnd = $source.IndexOf('[[nodiscard]] bool TestFolderViewSortProductPaintContracts(', $benchmarkStart)
+        $benchmarkStart | Should BeGreaterThan -1
+        $benchmarkEnd | Should BeGreaterThan $benchmarkStart
+        $benchmark = $source.Substring($benchmarkStart, $benchmarkEnd - $benchmarkStart)
+        $benchmark | Should Not Match 'ClearJsonlOutput\(|ConfigureJsonlOutput\('
+        $benchmark | Should Match 'folder\.sort_jsonl_write_us'
+    }
+
+    It 'keeps pre-timer JSONL observations free of writer synchronization' {
+        $source = Get-RSText -Path 'Common/Common/PerfJsonl.cpp'
+        $start = $source.IndexOf('COMMON_API JsonlDebugSnapshot GetJsonlDebugSnapshotForSelfTest()')
+        $end = $source.IndexOf('COMMON_API void ConfigureJsonlOutput(', $start)
+        $start | Should BeGreaterThan -1
+        $end | Should BeGreaterThan $start
+        $snapshot = $source.Substring($start, $end - $start)
+        $snapshot | Should Not Match 'scoped_lock|unique_lock|lock_guard|WaitFor|Sleep\('
+        $source | Should Match 'is_always_lock_free'
+    }
+
     It 'routes ShellCommands shortcut save temp files through native TestSandbox roots' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ShellCommands.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ShellCommands.cpp'
 
         $source | Should Match 'AcquireTestSandbox\(SelfTest::SelfTestSuite::Commands,\s*L"shell_shortcut_save_temp"\)'
         $source | Should Not Match 'GetTempPathW'
@@ -1475,12 +1694,12 @@ Describe 'Test harness source contracts' {
     }
 
     It 'routes PerformanceTests2 scratch through the unified TestSandbox root' {
-        $header = Get-RSText -Path 'Tests\PerformanceTests2\pch.h'
-        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.h'
+        $header = Get-RSText -Path 'Tests\PerformanceTests2\Performance.Tests.pch.h'
+        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.Runner.h'
         $sources = @(
-            'Tests\PerformanceTests2\FolderIconEnumerationPerfTest.cpp',
-            'Tests\PerformanceTests2\FolderIconEnumerationDuplicatePathPerfTest.cpp',
-            'Tests\PerformanceTests2\FolderViewRefreshDuplicatePathPerfTest.cpp'
+            'Tests\PerformanceTests2\Performance.Tests.FolderIconEnumerationPerfTest.cpp',
+            'Tests\PerformanceTests2\Performance.Tests.FolderIconEnumerationDuplicatePathPerfTest.cpp',
+            'Tests\PerformanceTests2\Performance.Tests.FolderViewRefreshDuplicatePathPerfTest.cpp'
         ) | ForEach-Object { Get-RSText -Path $_ }
         $combined = $sources -join "`n"
 
@@ -1499,7 +1718,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'routes BatchRename window fixture roots through native TestSandbox roots' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.BatchRename.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.BatchRename.cpp'
 
         $source | Should Match 'AcquireBatchRenameCommandsSandboxRoot'
         $source | Should Match 'SelfTest::AcquireTestSandbox\(SelfTest::SelfTestSuite::Commands'
@@ -1511,8 +1730,8 @@ Describe 'Test harness source contracts' {
     }
 
     It 'routes ViewerPETests fixture files through the unified TestSandbox root' {
-        $source = Get-RSText -Path 'Tests\ViewerPETests\ViewerPETests.cpp'
-        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.h'
+        $source = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
+        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.Runner.h'
 
         $source | Should Match 'AcquireViewerPETestSandbox'
         $source | Should Match 'kViewerPEHarnessSegment\{L"viewer-pe"\}'
@@ -1525,7 +1744,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'keeps shared TestSupport sandbox and environment policies explicit' {
-        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.h'
+        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.Runner.h'
 
         $support | Should Match 'class ScopedEnvironmentVariable final'
         $support | Should Match 'ReadEnvironmentValue'
@@ -1537,10 +1756,10 @@ Describe 'Test harness source contracts' {
     }
 
     It 'keeps viewer message pumping and typed snapshot polling on bounded shared support' {
-        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.h'
-        $viewerPe = Get-RSText -Path 'Tests\ViewerPETests\ViewerPETests.cpp'
-        $viewerSqlite = Get-RSText -Path 'Tests\ViewerSqliteTests\ViewerSqliteTests.cpp'
-        $windowHost = Get-RSText -Path 'Tests\ProductUiTests\ProductUiTests.cpp'
+        $support = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.Runner.h'
+        $viewerPe = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
+        $viewerSqlite = Get-RSText -Path 'Tests\ViewerSqliteTests\ViewerSqlite.Tests.Runner.cpp'
+        $windowHost = Get-RSText -Path 'Tests\ProductUiTests\ProductUi.Tests.Runner.cpp'
 
         $support | Should Match 'size_t PumpPendingMessages\(size_t maxMessageCount = 1024u\)'
         $support | Should Match 'MessagePumpWaitResult PumpMessagesUntil'
@@ -1558,7 +1777,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'routes MTP fake journal LOCALAPPDATA state through native TestSandbox roots' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.Mtp.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Cases.Mtp.cpp'
 
         $source | Should Match 'AcquireMtpJournalLocalAppDataSandbox'
         $source | Should Match 'SelfTest::AcquireTestSandbox\(SelfTest::SelfTestSuite::CompareDirectories'
@@ -1577,7 +1796,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'routes Compare dummy filesystem scratch through native TestSandbox roots' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.CoreDiffs.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Cases.CoreDiffs.cpp'
 
         $source | Should Match 'AcquireTestSandbox\(SelfTest::SelfTestSuite::CompareDirectories,\s*L"dummy_content"\)'
         $source | Should Match 'AcquireTestSandbox\(SelfTest::SelfTestSuite::CompareDirectories,\s*L"normalized_name_collision_preserves_same_side_entries"\)'
@@ -1620,7 +1839,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'gives retained Preferences page-state activation a broad-order settle budget' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.FileOpsCompareAndTree.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogScrollHostPreservesRetainedPageState')
         $testNext = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogRapidSwitchesKeepPageSpecificUiaSubtrees', $testStart)
@@ -1651,8 +1870,8 @@ Describe 'Test harness source contracts' {
     }
 
     It 'unwinds retained Plugins children before parent-grid UIA validation' {
-        $plugins = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ChromeAndPlugins.cpp'
-        $lists = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ViewersAndKeyboardLists.cpp'
+        $plugins = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.ChromeAndPlugins.cpp'
+        $lists = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.ViewersAndKeyboardLists.cpp'
 
         $mainStart = $plugins.IndexOf('[[nodiscard]] bool TestPreferencesDialogPluginsPageExposesLiveGridSelection')
         $mainEnd = $plugins.IndexOf('[[nodiscard]] bool TestPreferencesDialogPluginsMainListHeaderDragReordersColumnsWithoutSort', $mainStart)
@@ -1677,7 +1896,7 @@ Describe 'Test harness source contracts' {
     }
 
     It 'uses deterministic retryable category-tree boundary routes in broad-order Preferences coverage' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.FileOpsCompareAndTree.cpp'
 
         $reverseStart = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogCategoryTreeReverseKeyboardNavigation')
         $reverseEnd = $source.IndexOf('[[nodiscard]] bool TestPreferencesDialogCategoryTreePageNavigation', $reverseStart)
@@ -1699,12 +1918,12 @@ Describe 'Test harness source contracts' {
     }
 
     It 'quiesces asynchronous UI state before broad-order preview, overlay, Preferences, and Find fixtures' {
-        $settings = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
-        $themeOverlay = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ThemeOverlay.cpp'
-        $themes = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ThemesGeneralPanes.cpp'
-        $keyboard = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.HotPathsAndKeyboard.cpp'
-        $editorsMouse = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.PluginsThemesAdvanced.cpp'
-        $search = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Search.cpp'
+        $settings = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
+        $themeOverlay = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ThemeOverlay.cpp'
+        $themes = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.ThemesGeneralPanes.cpp'
+        $keyboard = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.HotPathsAndKeyboard.cpp'
+        $editorsMouse = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.PluginsThemesAdvanced.cpp'
+        $search = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
         $findWindow = Get-RSText -Path 'RedSalamander\FindFilesWindow.cpp'
 
         $closePreview = [regex]::Match($settings, 'bool\s+CloseActivePreviewPaneForSelfTest[\s\S]{0,1600}?\n\}')
@@ -1735,7 +1954,7 @@ Describe 'Test harness source contracts' {
         $folderWindowHeader | Should Match 'void\s+DebugExitIncrementalSearch\(Pane pane\)\s+noexcept;'
         $folderWindowCommands | Should Match 'void\s+FolderWindow::DebugExitIncrementalSearch\(Pane pane\)\s+noexcept[\s\S]{0,220}?DebugExitIncrementalSearch\(\)'
 
-        $fileOps = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.FileOps.cpp'
+        $fileOps = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.FileOps.cpp'
         $fileOps | Should Match 'autoCollapseDeadline[\s\S]{0,900}?taskAutoCollapsedOnCompletion[\s\S]{0,240}?completedAutoCollapsedCount >= 1u'
 
         $perfStart = $themeOverlay.IndexOf('[[nodiscard]] bool TestThemeCycleOverlayPerfBaseline')
@@ -1786,7 +2005,7 @@ Describe 'Test harness source contracts' {
         $keyboardBlock | Should Match 'CollectVisibleDescendantValuePatternStateByNameWithMessagePump\(\s*activePage,\s*UIA_EditControlTypeId,\s*expectedName'
         $keyboardBlock | Should Match 'FocusWindowAndWait\(targetCategoryTreeHost[\s\S]{0,420}?PumpPendingMessages\(\);\s*state\.Require\(DebugSelectPreferencesCategory\(kPrefCategoryKeyboard\)'
 
-        $compareOptions = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp'
+        $compareOptions = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.CompareOptions.cpp'
         $compareOptions | Should Match 'bool\s+FocusCompareDirectoriesOptionsTargetAndWait[\s\S]{0,1500}?DebugFocusCompareDirectoriesOptionsTargetForWindow'
         $enterEscapeStart = $compareOptions.IndexOf('[[nodiscard]] bool TestCompareDirectoriesOptionsEnterAndEscapeRouteDefaultCancel')
         $enterEscapeEnd = $compareOptions.IndexOf('[[nodiscard]] bool TestCompareDirectoriesOptionsAccessKeysFocusExpectedControls', $enterEscapeStart)
@@ -1798,7 +2017,7 @@ Describe 'Test harness source contracts' {
         $themeCycleBlock = $compareOptions.Substring($themeCycleStart, $themeCycleEnd - $themeCycleStart)
         $themeCycleBlock | Should Match 'FocusCompareDirectoriesOptionsTargetAndWait\(\s*compare,\s*CompareDirectoriesOptionsDebugFocusTarget::IgnoreFilesEdit'
 
-        $viewCommands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $viewCommands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
         $viewCommands | Should Match 'TestFolderViewPerfRelayoutChurnWhileScrolled[\s\S]{0,700}?PrepareMainWindowForIsolatedUiCase\(mainWindow,\s*state,\s*L"FolderView relayout churn performance validation"\)'
         $viewCommands | Should Match 'TestFolderViewPerfRefreshPreservation[\s\S]{0,700}?PrepareMainWindowForIsolatedUiCase\(mainWindow,\s*state,\s*L"FolderView refresh-preservation performance validation"\)'
         $hugeScaleStart = $viewCommands.IndexOf('[[nodiscard]] bool TestFolderViewPerfHugeFolderScale')
@@ -1894,7 +2113,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'moves Compare foreground service capture files into TestSandbox instead of process temp' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Runner.cpp'
 
         $source | Should Match 'AcquireTestSandbox\(SelfTest::SelfTestSuite::CompareDirectories,\s*L"foreground_search_service_stdout"'
         $source | Should Match 'foreground_search_service_stdout'
@@ -1903,7 +2122,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'wraps foreground search service selftest processes in a kill-on-close JobObject' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Runner.cpp'
 
         $source | Should Match 'CreateKillOnCloseJob'
         $source | Should Match 'JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE'
@@ -1932,7 +2151,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps broad-order foreground Search service failures process-diagnostic' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Cases.SearchAndIndex.cpp'
 
         $coldStart = $source.IndexOf('L"search_service_sqlite_cold_start_stale_root_refreshes_before_query"')
         $coldEnd = $source.IndexOf('L"search_service_sqlite_external_rotation_refreshes_without_retry"', $coldStart)
@@ -1962,7 +2181,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps foreground Search service stdout tests independent from hidden readiness requests' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Cases.SearchAndIndex.cpp'
 
         $idleStart = $source.IndexOf('L"search_service_sqlite_idle_maintenance_queue_and_completion"')
         $idleNext = $source.IndexOf('L"search_service_sqlite_delete_burst_maintenance_preserves_query_parity"', $idleStart)
@@ -2016,7 +2235,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps Compare live compact requests bound to an explicit pipe with captured-output diagnostics' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Cases.SearchAndIndex.cpp'
 
         $testStart = $source.IndexOf('L"search_service_compact_request_roundtrip"')
         $testNext = $source.IndexOf('L"search_service_sqlite_status_reports_maintenance_history"', $testStart)
@@ -2041,9 +2260,9 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps the shared child-process runner contained, concurrently drained, and parity-tested' {
-        $header = Get-RSText -Path 'Tests\TestSupport\ChildProcess.h'
-        $compare = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.cpp'
-        $cases = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp'
+        $header = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.ChildProcess.h'
+        $compare = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Runner.cpp'
+        $cases = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Cases.SearchAndIndex.cpp'
         $probe = Get-RSText -Path 'RedSalamanderSearchService\Main.cpp'
 
         $header | Should Match 'JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE'
@@ -2066,7 +2285,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps local index snapshot reload timing advisory instead of a correctness ceiling' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Cases.SearchAndIndex.cpp'
 
         $source | Should Match 'compare\.selftest\.local_index\.snapshot_reload_us'
         $source | Should Match 'Debug::Perf::Emit'
@@ -2086,8 +2305,8 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps foreground Search service status probes behind a condition-based status wait' {
-        $harness = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.cpp'
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp'
+        $harness = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Runner.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Cases.SearchAndIndex.cpp'
 
         $harness | Should Match 'WaitForSearchServiceStatus'
         $harness | Should Match 'SearchServiceBroker::GetStatus\(candidate\)'
@@ -2204,7 +2423,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'lets delete-burst maintenance tests accept an already completed first idle window' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.SearchAndIndex.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Cases.SearchAndIndex.cpp'
 
         $testStart = $source.IndexOf('L"search_service_sqlite_delete_burst_maintenance_preserves_query_parity"')
         $testNext = $source.IndexOf('L"search_service_sqlite_bootstrap_status_roundtrip"', $testStart)
@@ -2226,7 +2445,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'drains Batch Rename central test tasks before provider teardown' {
-        $batchRename = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.BatchRename.cpp'
+        $batchRename = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.BatchRename.cpp'
 
         $shutdownMatch = [regex]::Match($batchRename, 'void\s+ShutdownBatchRenameCentralTestTasks\(\)\s+noexcept[\s\S]*?\n\}')
         $shutdownMatch.Success | Should Be $true
@@ -2241,10 +2460,10 @@ Specs\TestRuns\local_scratch
     }
 
     It 'scales named raw self-test waits through the timeout multiplier' {
-        $search = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Search.cpp'
-        $batchRename = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.BatchRename.cpp'
-        $fileOps = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp'
-        $fileOpsPhase05 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases05_06.cpp'
+        $search = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
+        $batchRename = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.BatchRename.cpp'
+        $fileOps = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
+        $fileOpsPhase05 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases05_06.cpp'
 
         $waitForFlagMatch = [regex]::Match($search, '\[\[nodiscard\]\]\s+bool\s+WaitForFlag\([\s\S]*?\n\}')
         $waitForFlagMatch.Success | Should Be $true
@@ -2290,25 +2509,36 @@ Specs\TestRuns\local_scratch
         $queuedCancelBlock | Should Match '! taskA->HasEnteredOperation\(\)'
         $queuedCancelBlock | Should Match 'Failed to start the queued dummy copy task for queued-cancel test'
         $queuedCancelBlock | Should Match 'Queued task entered operation before queued cancellation'
-        $queuedCancelBlock | Should Match 'if\s*\(taskB->IsWaitingInQueue\(\)\)\s*\{\s*taskB->RequestCancel\(\);\s*state\.stepState\s*=\s*3;'
-        $queuedCancelBlock | Should Match 'Queued task cancellation expected cancel hr'
+        $queuedCancelBlock | Should Match 'if\s*\(taskB->IsWaitingInQueue\(\)\)'
+        $queuedCancelBlock | Should Match 'queuedLayout\.taskCancelVisible\s*\|\|\s*!\s*queuedLayout\.taskCancelHitTargetActive'
+        $queuedCancelBlock | Should Match 'FindFileOpsTaskAction\(popup,\s*FileOperationsPopupInternal::PopupHitTest::Kind::TaskCancel,\s*state\.taskB\.value\(\),\s*state\.queuedCancelAction\)'
+        $queuedCancelBlock | Should Match 'InvokeFileOpsTaskActionWithoutActivation\(\*state\.queuedCancelAction\)'
+        $queuedCancelBlock | Should Match 'InvokeFileOpsTaskActionWithoutActivation\(\*state\.queuedCancelAction,\s*true\)'
+        $queuedCancelBlock | Should Match 'taskA\s*=\s*state\.fileOps->FindTask\(state\.taskA\.value\(\)\);\s*taskB\s*=\s*state\.fileOps->FindTask\(state\.taskB\.value\(\)\)'
+        $queuedCancelBlock | Should Match '! isCancelHr\(queuedCompletionIt->second\.hr\)\s*\|\|\s*queuedCompletionIt->second\.started\s*\|\|\s*queuedCompletionIt->second\.progressCompletedBytes\s*!=\s*0u'
         $queuedCancelBlock | Should Match 'Active queue holder expected cancel hr'
         $queuedCancelBlock | Should Not Match 'Fail\(L"Phase5_CancelQueuedTask timed out\."\)'
 
         $activeEnteredIndex = $queuedCancelBlock.IndexOf('if (! taskA->HasEnteredOperation())')
         $queuedStartIndex = $queuedCancelBlock.IndexOf('state.taskB = StartFileOperationAndGetId')
         $queuedObservedIndex = $queuedCancelBlock.IndexOf('if (taskB->IsWaitingInQueue())')
-        $queuedCancelIndex = $queuedCancelBlock.IndexOf('taskB->RequestCancel()', $queuedObservedIndex)
+        $cancelVisibleIndex = $queuedCancelBlock.IndexOf('queuedLayout.taskCancelVisible', $queuedObservedIndex)
+        $queuedActionIndex = $queuedCancelBlock.IndexOf('FindFileOpsTaskAction(', $cancelVisibleIndex)
+        $queuedCancelIndex = $queuedCancelBlock.IndexOf('InvokeFileOpsTaskActionWithoutActivation(*state.queuedCancelAction)', $queuedActionIndex)
+        $reacquiredIndex = $queuedCancelBlock.IndexOf('taskA = state.fileOps->FindTask(state.taskA.value())', $queuedCancelIndex)
         $activeEnteredIndex | Should BeGreaterThan -1
         $queuedStartIndex | Should BeGreaterThan $activeEnteredIndex
         $queuedObservedIndex | Should BeGreaterThan $queuedStartIndex
-        $queuedCancelIndex | Should BeGreaterThan $queuedObservedIndex
+        $cancelVisibleIndex | Should BeGreaterThan $queuedObservedIndex
+        $queuedActionIndex | Should BeGreaterThan $cancelVisibleIndex
+        $queuedCancelIndex | Should BeGreaterThan $queuedActionIndex
+        $reacquiredIndex | Should BeGreaterThan $queuedCancelIndex
     }
 
     It 'keeps FileOperations popup fixtures inside the current self-test process' {
-        $fileOps = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp'
-        $phase05 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases05_06.cpp'
-        $phase14 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases14_16.cpp'
+        $fileOps = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
+        $phase05 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases05_06.cpp'
+        $phase14 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases14_16.cpp'
 
         $fileOps | Should Match '\[\[nodiscard\]\]\s+HWND\s+FindCurrentProcessPopupWindow\(\)\s+noexcept'
         $fileOps | Should Match 'FindWindowExW\(nullptr,\s*candidate,\s*kPopupClassName\.data\(\),\s*nullptr\)'
@@ -2321,8 +2551,8 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps Commands UIA action helpers deterministic under DxUi dispatch timeouts' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
-        $search = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Search.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
+        $search = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
 
         $threadContextStart = $source.IndexOf('struct UiaThreadContext final')
         $lifetimeHelperStart = $source.IndexOf('struct UiaOperationLifetime final', $threadContextStart)
@@ -2384,7 +2614,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'suppresses the deliberately parked live cursor during persistent View-to-Plugins menu hover selftests' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestMainMenuPersistentViewToPluginsHoverSwitchesPopup')
         $nextTestStart = $source.IndexOf('[[nodiscard]] bool TestMainMenuPersistentViewToFilesHoverHighlightFollowsPointer', $testStart)
@@ -2405,7 +2635,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'routes persistent View-to-Files menu hover through the menu bar root-switch path' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestMainMenuPersistentViewToFilesHoverHighlightFollowsPointer')
         $nextTestStart = $source.IndexOf('[[nodiscard]] bool TestMainMenuMouseOpenKeepsPopupSelectionClear', $testStart)
@@ -2424,12 +2654,12 @@ Specs\TestRuns\local_scratch
     }
 
     It 'centralizes the Commands real-input warning and guards every cursor-warp family' {
-        $commands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp'
-        $view = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
-        $search = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Search.cpp'
-        $preferences = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp'
+        $commands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp'
+        $view = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
+        $search = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
+        $preferences = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.FileOpsCompareAndTree.cpp'
 
-        (Get-RSText -Path 'Tests\TestSupport\DirectedSelfTestInputWarning.h') | Should Match 'class\s+DirectedSelfTestInputWarning'
+        (Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.DirectedSelfTestInputWarning.h') | Should Match 'class\s+DirectedSelfTestInputWarning'
         $commands | Should Match 'using RedSalamander::TestSupport::DirectedSelfTestInputWarning'
         $view | Should Not Match 'class\s+DirectedSelfTestInputWarning'
         $search | Should Not Match 'class\s+SearchDirectedSelfTestInputWarning'
@@ -2461,28 +2691,28 @@ Specs\TestRuns\local_scratch
     }
 
     It 'reuses one native warning across foreground suites and preserves it through Commands isolation' {
-        $warning = Get-RSText -Path 'Tests\TestSupport\DirectedSelfTestInputWarning.h'
+        $warning = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.DirectedSelfTestInputWarning.h'
         $warning | Should Match 'WS_EX_NOACTIVATE[\s\S]*WS_EX_LAYERED[\s\S]*WS_EX_TRANSPARENT'
         $warning | Should Match 'SW_SHOWNOACTIVATE'
         $warning | Should Match 'GetTickCount64\(\) \+ 3000u'
         $warning | Should Match 'compare_exchange_strong'
         $warning | Should Match 'GetMonitorInfoW'
         $warning | Should Match 'GetDpiForWindow'
-        foreach ($path in @('RedSalamander\RedSalamander.cpp', 'RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp',
-                           'Tests\ViewerPETests\ViewerPETests.cpp',
-                           'Tests\ViewerSqliteTests\ViewerSqliteTests.cpp')) {
+        foreach ($path in @('RedSalamander\RedSalamander.cpp', 'RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp',
+                           'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp',
+                           'Tests\ViewerSqliteTests\ViewerSqlite.Tests.Runner.cpp')) {
             $source = Get-RSText -Path $path
-            $source | Should Match 'TestSupport/DirectedSelfTestInputWarning.h'
+            $source | Should Match 'TestSupport/TestSupport.Tests.DirectedSelfTestInputWarning.h'
             $source | Should Match 'inputWarning.IsVisible\(\)'
             $source | Should Not Match 'class\s+DirectedSelfTestInputWarning'
         }
-        $settings = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $settings = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
         $settings | Should Match 'pid != ctx->processId \|\| DirectedSelfTestInputWarning::IsWarningWindow\(hwnd\)'
         (Test-Path (Join-Path $repoRoot 'Tools\Modules\Testing\TestDesktopNotice.psm1')) | Should Be $false
     }
 
     It 'opens the temporary menu-bar hover-switch popup through keyboard activation' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestMainMenuHoverSwitchesTopLevelPopup')
         $nextTestStart = $source.IndexOf('[[nodiscard]] bool TestMainMenuPersistentDirectHoverSwitchesTopLevelPopup', $testStart)
@@ -2502,7 +2732,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'parks real cursor away from DxUi popup initial hover in menu selftests' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
 
         $source | Should Match '\[\[nodiscard\]\]\s+bool\s+TryChooseMainWindowNeutralCursorPoint'
 
@@ -2533,7 +2763,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'restores broad command-probe UI state and isolates modeless ownership fixtures' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestDispatchAllCommandsSmoke')
         $nextTestStart = $source.IndexOf('[[nodiscard]] bool TestModelessWindowOwnership', $testStart)
@@ -2579,8 +2809,8 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps Shortcuts live UIA search interaction message-pumped under broad order' {
-        $shortcutsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Shortcuts.cpp'
-        $settingsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $shortcutsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Shortcuts.cpp'
+        $settingsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
 
         $testStart = $shortcutsSource.IndexOf('[[nodiscard]] bool TestShortcutsWindowLiveDxSearchInteraction')
         $testNext = $shortcutsSource.IndexOf('[[nodiscard]] bool TestShortcutsWindowLongRunScrollingStaysBounded', $testStart)
@@ -2604,7 +2834,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps Compare Options close-reopen churn globally settled before live UIA reuse' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.CompareOptions.cpp'
 
         $source | Should Match 'WaitForNoCompareDirectoriesWindowForOptionsSelfTest'
         $source | Should Match 'CloseCompareDirectoriesWindowsForOptionsSelfTest'
@@ -2642,8 +2872,8 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps File Operations speed-limit prompt churn ValuePattern checks condition-based' {
-        $fileOpsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.FileOps.cpp'
-        $settingsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $fileOpsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.FileOps.cpp'
+        $settingsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
 
         $testStart = $fileOpsSource.IndexOf('[[nodiscard]] bool TestFileOperationsSpeedLimitPromptLongRunOpenCloseStaysStable')
         $testNext = $fileOpsSource.IndexOf('[[nodiscard]] bool TestFileOperationsSpeedLimitPromptKeepsNavigationShellStable', $testStart)
@@ -2662,7 +2892,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps dialog prompt model and UIA checks condition-based under broad order' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Dialogs.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Dialogs.cpp'
 
         $changeStart = $source.IndexOf('[[nodiscard]] bool TestPaneChangeCasePromptLiveDxInteraction')
         $changeNext = $source.IndexOf('[[nodiscard]] bool TestPaneChangeCasePromptLongRunOpenCloseStaysStable', $changeStart)
@@ -2698,7 +2928,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps Item Properties UIA interaction off the owning window thread and joins bounded workers' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Dialogs.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Dialogs.cpp'
 
         $helperStart = $source.IndexOf('template <typename Task> [[nodiscard]] auto RunDialogUiaTaskWithMessagePump')
         $helperNext = $source.IndexOf('template <typename WorkerFunc> void RunRenamePromptModalCycle', $helperStart)
@@ -2729,9 +2959,9 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps broad-order Commands fixtures pinned to the state each case owns' {
-        $viewCommands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
-        $preferences = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ViewersAndKeyboardLists.cpp'
-        $shellCommands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ShellCommands.cpp'
+        $viewCommands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
+        $preferences = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.ViewersAndKeyboardLists.cpp'
+        $shellCommands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ShellCommands.cpp'
 
         $viewersStart = $preferences.IndexOf('[[nodiscard]] bool TestPreferencesDialogViewersLongRunListScrollingStaysBounded')
         $viewersNext = $preferences.IndexOf('[[nodiscard]] bool TestPreferencesDialogViewersEditorsAdaptiveListHeightUsesWindowHeight', $viewersStart)
@@ -2745,7 +2975,7 @@ Specs\TestRuns\local_scratch
         $navigationBlock | Should Match 'SetSplitRatio\(splitRatioBefore\)'
         $navigationBlock | Should Match 'DebugResetPaneVisibilityState\(FolderWindow::Pane::Right\)'
 
-        $selectionSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Navigation.cpp'
+        $selectionSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Navigation.cpp'
         $selectNextStart = $selectionSource.IndexOf('[[nodiscard]] bool TestSelectionSelectNextKeepsNavigationShellStable')
         $selectNextEnd = $selectionSource.IndexOf('[[nodiscard]] bool TestSelectionSelectCalculateDirectorySizeNextKeepsNavigationShellStable', $selectNextStart)
         $selectNextStart | Should BeGreaterThan -1
@@ -2772,7 +3002,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps Find destination/action button probes pinned to deterministic input state' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Search.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
 
         $historyStart = $source.IndexOf('[[nodiscard]] bool ProbeFindDestinationHistoryMenu')
         $historyNext = $source.IndexOf('[[nodiscard]] bool ProbeFindDestinationHistoryMenuFromActiveEditMode', $historyStart)
@@ -2835,7 +3065,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps Find header-drag reorder failures diagnostic-rich' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Search.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestFindDialogHeaderDragReordersColumnsWithoutSort')
         $nextTestStart = $source.IndexOf('[[nodiscard]] bool TestFindDialogCopyFollowsReorderedColumns', $testStart)
@@ -2851,7 +3081,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps Find reordered-sort restore checks diagnostic-rich under broad order' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Search.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestFindDialogRestoresReorderedSortedGridLayout')
         $nextTestStart = $source.IndexOf('[[nodiscard]] bool TestFindDialogRestoresCombinedViewState', $testStart)
@@ -2871,11 +3101,11 @@ Specs\TestRuns\local_scratch
     }
 
     It 'stabilizes shared-process Preferences close-reopen and category transitions before UIA assertions' {
-        $themesAdvanced = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.PluginsThemesAdvanced.cpp'
-        $lists = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.ViewersAndKeyboardLists.cpp'
-        $keyboard = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.HotPathsAndKeyboard.cpp'
-        $tree = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp'
-        $search = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Search.cpp'
+        $themesAdvanced = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.PluginsThemesAdvanced.cpp'
+        $lists = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.ViewersAndKeyboardLists.cpp'
+        $keyboard = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.HotPathsAndKeyboard.cpp'
+        $tree = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.FileOpsCompareAndTree.cpp'
+        $search = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Search.cpp'
         $selfTestSpec = Get-RSText -Path 'Specs\Testing\Testing_SelfTests.md'
         $dxUiSpec = Get-RSText -Path 'Specs\UI\UI_DxUiWinUIDesign.md'
         $perfSkill = Get-RSText -Path '.github\skills\perf-validation\SKILL.md'
@@ -2929,7 +3159,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps Compare Directories lower-card scroll focus failures diagnostic-rich' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.CompareOptions.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.CompareOptions.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestCompareDirectoriesOptionsScrollToLowerCardsStaysStable')
         $nextTestStart = $source.IndexOf('[[nodiscard]] bool TestCompareDirectoriesOptionsEnterAndEscapeRouteDefaultCancel', $testStart)
@@ -2950,7 +3180,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps Connection Manager long-run open-close settled and diagnostic-rich' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Connections.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Connections.cpp'
 
         $testStart = $source.IndexOf('[[nodiscard]] bool TestConnectionManagerWindowLongRunOpenCloseStaysStable')
         $nextTestStart = $source.IndexOf('[[nodiscard]] bool TestConnectionManagerWindowThemeCycleKeepsFormAndSelectionLegible', $testStart)
@@ -3006,17 +3236,17 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps Commands Preferences chunks namespace-self-contained' {
-        $coordinator = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Preferences.cpp'
+        $coordinator = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Preferences.cpp'
         $coordinator.TrimEnd() | Should Not Match 'namespace\s*\{\s*$'
 
         $chunkNames = @(
-            'Commands.SelfTest.Preferences.ChromeAndPlugins.cpp',
-            'Commands.SelfTest.Preferences.FileOpsCompareAndTree.cpp',
-            'Commands.SelfTest.Preferences.HotPathsAndKeyboard.cpp',
-            'Commands.SelfTest.Preferences.PluginsThemesAdvanced.cpp',
-            'Commands.SelfTest.Preferences.ThemesGeneralPanes.cpp',
-            'Commands.SelfTest.Preferences.ViewersAndKeyboardLists.cpp',
-            'Commands.SelfTest.Preferences.Dispatch.cpp'
+            'Commands.Tests.Preferences.ChromeAndPlugins.cpp',
+            'Commands.Tests.Preferences.FileOpsCompareAndTree.cpp',
+            'Commands.Tests.Preferences.HotPathsAndKeyboard.cpp',
+            'Commands.Tests.Preferences.PluginsThemesAdvanced.cpp',
+            'Commands.Tests.Preferences.ThemesGeneralPanes.cpp',
+            'Commands.Tests.Preferences.ViewersAndKeyboardLists.cpp',
+            'Commands.Tests.Preferences.Dispatch.cpp'
         )
 
         foreach ($chunkName in $chunkNames) {
@@ -3097,11 +3327,11 @@ Specs\TestRuns\local_scratch
 
     It 'exposes runner-native self-test case listing without executing case bodies' {
         $main = Get-RSText -Path 'RedSalamander\RedSalamander.cpp'
-        $common = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.h'
-        $commandsHeader = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.h'
-        $commandsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp'
-        $compareHeader = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.h'
-        $compareSource = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.cpp'
+        $common = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.h'
+        $commandsHeader = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Runner.h'
+        $commandsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp'
+        $compareHeader = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Runner.h'
+        $compareSource = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Runner.cpp'
 
         $main | Should Match '--selftest-list-cases'
         $main | Should Match 'BuildSelfTestCaseListJson'
@@ -3116,9 +3346,9 @@ Specs\TestRuns\local_scratch
 
     It 'exposes native self-test repeat and seeded shuffle execution controls' {
         $main = Get-RSText -Path 'RedSalamander\RedSalamander.cpp'
-        $commonHeader = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.h'
-        $commonSource = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.cpp'
-        $commandsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp'
+        $commonHeader = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.h'
+        $commonSource = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.cpp'
+        $commandsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp'
 
         $main | Should Match '--selftest-repeat=N'
         $main | Should Match '--selftest-shuffle=SEED'
@@ -3144,7 +3374,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'reinitializes Commands UIA cache after explicit-order case listing' {
-        $settingsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $settingsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
 
         $contextStart = $settingsSource.IndexOf('struct UiaThreadContext final')
         $contextNext = $settingsSource.IndexOf('[[nodiscard]] UiaThreadContext& GetThreadUiAutomationContext', $contextStart)
@@ -3166,7 +3396,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'isolates every Commands case before fixture dispatch' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp'
         $source | Should Match 'if \(! options\.listCasesOnly\)'
         $loopStart = $source.IndexOf('for (const SelfTest::SelfTestCaseExecution& execution : executionOrder)')
         $loopNext = $source.IndexOf('else', $loopStart)
@@ -3183,7 +3413,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'resets pane content and transient UI state between Commands explicit-order cases' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
         $helperStart = $source.IndexOf('[[nodiscard]] bool PrepareMainWindowForIsolatedUiCase')
         $helperNext = $source.IndexOf('void FocusFolderViewPane', $helperStart)
         $helperStart | Should BeGreaterThan -1
@@ -3209,7 +3439,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'rehydrates runtime plugins after the MTP deferred-unload probe' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Connections.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Connections.cpp'
         $caseStart = $source.IndexOf('[[nodiscard]] bool TestConnectionManagerWindowMtpPickerPopulatesProfile')
         $caseNext = $source.IndexOf('[[nodiscard]] bool TestConnectionManagerWindowCloudProfilesPersistOAuth2', $caseStart)
         $caseStart | Should BeGreaterThan -1
@@ -3254,7 +3484,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps FolderView overlay perf sample sufficiency advisory' {
-        $viewCommands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $viewCommands = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
         $perfSpec = Get-RSText -Path 'Specs\Testing\Testing_PerformanceValidation.md'
 
         $caseStart = $viewCommands.IndexOf('[[nodiscard]] bool TestFolderViewPerfOverlayInvalidationStress')
@@ -3274,10 +3504,10 @@ Specs\TestRuns\local_scratch
     }
 
     It 'uses shared self-test result emission for ad hoc and state-machine cases' {
-        $commonHeader = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.h'
-        $commonSource = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.cpp'
-        $compareSource = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.cpp'
-        $fileOpsSource = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp'
+        $commonHeader = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.h'
+        $commonSource = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.cpp'
+        $compareSource = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Runner.cpp'
+        $fileOpsSource = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
 
         $commonHeader | Should Match 'AppendCaseResult'
         $commonSource | Should Match 'void\s+AppendCaseResult'
@@ -3286,8 +3516,8 @@ Specs\TestRuns\local_scratch
     }
 
     It 'preserves partial self-test results when a case or suite crashes' {
-        $commonHeader = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.h'
-        $commonSource = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.cpp'
+        $commonHeader = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.h'
+        $commonSource = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.cpp'
         $main = Get-RSText -Path 'RedSalamander\RedSalamander.cpp'
         $runner = Get-RSText -Path 'Tools\Run-AllTests.ps1'
 
@@ -3337,8 +3567,8 @@ Specs\TestRuns\local_scratch
 
     It 'keeps injected classifier proof hooks explicit and debug-only' {
         $main = Get-RSText -Path 'RedSalamander\RedSalamander.cpp'
-        $commonHeader = Get-RSText -Path 'RedSalamander\SelfTest\Common\SelfTestCommon.h'
-        $commandsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp'
+        $commonHeader = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.h'
+        $commandsSource = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp'
 
         $main | Should Match '--selftest-flaky-proof-case=NAME'
         $main | Should Match '--selftest-order-proof-case=NAME'
@@ -3366,7 +3596,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps CompareDirectories runner-listed case names unique' {
-        $compareSource = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.cpp'
+        $compareSource = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Runner.cpp'
         $arrayMatch = [regex]::Match($compareSource, 'kCompareCaseNames[\s\S]*?=\s*\{(?<body>[\s\S]*?)\};')
         $arrayMatch.Success | Should Be $true
 
@@ -3377,7 +3607,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps CompareDirectories literal RunCase names listed for runner coverage' {
-        $compareSource = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.cpp'
+        $compareSource = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Runner.cpp'
         $arrayMatch = [regex]::Match($compareSource, 'kCompareCaseNames[\s\S]*?=\s*\{(?<body>[\s\S]*?)\};')
         $arrayMatch.Success | Should Be $true
 
@@ -3412,7 +3642,7 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps FileOperations self-test case prefixes runnable' {
-        $fileOpsSource = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp'
+        $fileOpsSource = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
 
         $fileOpsSource | Should Match 'FindPhasesByPrefix'
         $fileOpsSource | Should Match 'StartsWithIgnoreCase\(StepToString\(step\),\s*prefix\)'
@@ -3662,8 +3892,14 @@ Specs\TestRuns\local_scratch
 
         $source | Should Match 'copyOnlyMove\s*=\s*_operation\s*==\s*FILESYSTEM_MOVE[\s\S]{0,220}OperationStrategy::CopyOnly'
         $source | Should Match 'managedMove\s*=\s*_operation\s*==\s*FILESYSTEM_MOVE[\s\S]{0,220}OperationStrategy::Managed'
-        $source | Should Match 'CrossFileSystemBridge\s+bridge\([\s\S]{0,1600}reparsePointPolicy,[\s\S]{0,500}managedMove,'
-        $source | Should Match 'move\.copyOnly\.sourceKept[\s\S]{0,220}Copied; source kept'
+        # Match the constructor statement, not a formatting-dependent character window. The
+        # admitted endpoint identities precede the one cleanup-permission argument.
+        $bridgeCall = [regex]::Match($source, 'CrossFileSystemBridge\s+bridge\((?<arguments>[^;]+)\);')
+        $bridgeCall.Success | Should Be $true
+        $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
+        $source | Should Match 'sourceCleanupPermitted\(sourceCleanupPermittedIn\)'
+        # I35 R5.6: the message is one constant shared by the disclosed note and the undisclosed Warning.
+        $source | Should Match 'kCopyOnlyMessage\s*=\s*L"Copied; source kept[\s\S]{0,900}L"move\.copyOnly\.sourceKept",\s*kCopyOnlyMessage'
         $source | Should Not Match 'ShouldDeleteMoveSourceAfterBridgeCopy'
     }
 
@@ -3678,7 +3914,8 @@ Specs\TestRuns\local_scratch
         $state | Should Match 'defaultAction\s*=\s*ConflictAction::Cancel[\s\S]{0,120}escapeAction\s*=\s*ConflictAction::Cancel'
         $popup | Should Match 'SetDefaultButton\(defaultButton\)'
         $popup | Should Match 'SetCancelButton\(escapeButton\)'
-        $popup | Should Match 'SetFocusControl\(defaultButton\)'
+        $popup | Should Match 'const bool recycleEscalation\s*=[\s\S]{0,250}ConflictBucket::RecycleFailed[\s\S]{0,250}ConflictAction::Cancel'
+        $popup | Should Match 'if\s*\(recycleEscalation\s*&&\s*defaultButton\s*!=\s*nullptr\)[\s\S]{0,500}SetFocusControl\(defaultButton,\s*false\)'
     }
 
     It 'keeps FileOperations conflict routing in one arbiter and one engine policy builder' {
@@ -3697,7 +3934,10 @@ Specs\TestRuns\local_scratch
         ([regex]::Matches($source, '\[\[nodiscard\]\]\s+ConflictActionPolicy\s+BuildConflictActionPolicy')).Count | Should Be 1
         $source | Should Match 'SetConflictPromptLocked\([\s\S]{0,1200}const\s+ConflictActionPolicy&\s+actionPolicy'
         $source | Should Match 'const\s+ConflictActionPolicy\s+actionPolicy\s*=[\s\S]{0,500}BuildConflictActionPolicy'
-        $source | Should Match 'LoadEligibleConflictDecisionFromCacheLocked\([\s\S]{0,500}actionPolicy\.Contains'
+        $source | Should Match 'LoadEligibleConflictDecisionFromCacheLocked\(task,\s*perItemCookie,\s*decisionScope,\s*promptDestinationPath\);\s*cachedDecision\s*!=\s*nullptr\s*&&\s*IsCachedActionOffered\(actionPolicy,\s*bucket,\s*cachedDecision->action\)'
+        $offered = [regex]::Match($source, '(?s)bool\s+IsCachedActionOffered\([^{};]*\)\s+noexcept\s*\{(?<body>[^{}]*)\}')
+        $offered.Success | Should Be $true
+        $offered.Groups['body'].Value | Should Match 'return\s+policy\.Contains\(action\)\s*\|\|\s*\(bucket\s*==\s*ConflictBucket::DiskFull\s*&&\s*action\s*==\s*ConflictAction::Skip\s*&&\s*policy\.skipAllEligible\s*&&\s*policy\.Contains\(ConflictAction::SkipAll\)\);'
         $source | Should Match 'SetConflictPromptLocked\([\s\S]{0,500}actionPolicy'
         $popup | Should Match 'CopyPublishedConflictPolicy'
         $popup | Should Match 'task\.conflict\.primaryActions'
@@ -3716,19 +3956,21 @@ Specs\TestRuns\local_scratch
         $header = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperationsInternal.h'
         $state = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.cpp'
         $queue = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.Queue.cpp'
-        $popup = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.Popup.cpp'
-        $selfTest = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases05_06.cpp'
+        # The conflict action labels shared by the popup and Issues live with the model.
+        $actionLabels = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.Diagnostics.cpp'
+        $selfTest = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases05_06.cpp'
 
         $header | Should Match 'kMaxSameHostOverlapRelations\s*=\s*64u'
-        $header | Should Match '_overlapPredecessorTaskIds'
-        $header | Should Match '_concurrentOverlapTaskIds'
+        $header | Should Match 'struct\s+MutationInterlockRelations[\s\S]{0,220}predecessorKeys[\s\S]{0,220}concurrentKeys'
+        $header | Should Match 'struct\s+MutationInterlockAdmission[\s\S]{0,180}key\s*=\s*0u[\s\S]{0,180}shared_ptr<const\s+MutationInterlockScopes>\s+scopes'
         $header | Should Match 'RunConcurrently'
         $header | Should Match 'kMaxLivePublishedScopes\s*=\s*256u'
-        $header | Should Match 'struct\s+LivePublishedScope[\s\S]{0,240}providerPath'
+        $header | Should Match 'struct\s+LivePublishedScope[\s\S]{0,320}admissionKey[\s\S]{0,240}providerPath'
         $header | Should Match '_liveOutputIndexOverflowed'
-        $queue | Should Match 'prepared\s*&&\s*other\.taskId\s*>\s*task\._taskId'
-        $queue | Should Match 'predecessorStillPublished'
-        $queue | Should Match '!\s*task\.AllowsConcurrentOverlapWith\(active\.taskId\)'
+        $queue | Should Match 'prepared\s*&&\s*other\.admission->key\s*>\s*admission->key\s*&&\s*!\s*newerPeerNameable\(other\)'
+        $queue | Should Match 'HasPublishedOverlapPredecessor[\s\S]{0,850}relations\.predecessorKeys[\s\S]{0,420}published\.admission->key\s*==\s*key'
+        $queue | Should Match 'candidate\.relations\.Allows\(published\.admission->key\)'
+        $queue | Should Match 'HasConcurrentPublisherConsent[\s\S]{0,330}candidate\.relations\.Allows\(publisher\.admission->key\)'
         $queue | Should Match 'ExactMutationPathsOverlap'
         $queue | Should Match '_livePublishedIndexOverflow[\s\S]{0,900}_activeMutationInterlocks'
         $queue | Should Match 'WaitForLiveOutputPublisher[\s\S]{0,700}active\.taskId\s*==\s*publisherTaskId'
@@ -3737,10 +3979,12 @@ Specs\TestRuns\local_scratch
         $state | Should Match 'policy\.Add\(ConflictAction::RunConcurrently\)'
         $state | Should Match 'policy\.Add\(ConflictAction::QueueUntilOtherTaskFinishes\)'
         $state | Should Match 'GuardLiveOutputBeforeInvalidation'
-        $state | Should Match '_concurrentOverlapTaskIds\s*=\s*advice\.taskIds'
-        $state | Should Match '_overlapPredecessorTaskIds\s*=\s*advice\.taskIds'
-        $popup | Should Match 'ConflictAction::RunConcurrently:\s*return\s+LoadStringResource\(nullptr,\s*IDS_FILEOPS_CONSENT_BTN_RUN_CONCURRENT\)'
-        $popup | Should Match 'ConflictAction::QueueUntilOtherTaskFinishes:\s*return\s+LoadStringResource\(nullptr,\s*IDS_FILEOPS_CONSENT_BTN_QUEUE_UNTIL_FINISHED\)'
+        $state | Should Match 'relations\.concurrentKeys\s*=\s*advice\.admissionKeys'
+        $state | Should Match 'relations\.predecessorKeys\s*=\s*advice\.admissionKeys'
+        $queue | Should Match 'PublishMutationInterlockDecision[\s\S]{0,1600}for\s*\(auto&\s+registration\s*:\s*_preparedMutationInterlocks\)[\s\S]{0,160}registration\.admission\s*=\s*sealed'
+        $queue | Should Match 'for\s*\(auto&\s+registration\s*:\s*_activeMutationInterlocks\)[\s\S]{0,160}registration\.admission\s*=\s*sealed[\s\S]{0,120}task\._selectedAdmission\.store'
+        $actionLabels | Should Match 'ConflictAction::RunConcurrently:\s*return\s+LoadStringResource\(nullptr,\s*IDS_FILEOPS_CONSENT_BTN_RUN_CONCURRENT\)'
+        $actionLabels | Should Match 'ConflictAction::QueueUntilOtherTaskFinishes:\s*return\s+LoadStringResource\(nullptr,\s*IDS_FILEOPS_CONSENT_BTN_QUEUE_UNTIL_FINISHED\)'
         $selfTest | Should Match 'R4A02_RunConcurrentSameDestinationStaysSafe'
         $selfTest | Should Match 'R4A02_LiveOutputGuardChoices'
         $selfTest | Should Match 'DebugForceLiveOutputIndexOverflowForSelfTest'
@@ -3749,15 +3993,33 @@ Specs\TestRuns\local_scratch
         $queue | Should Match 'DebugForceLiveOutputIndexOverflowForSelfTest[\s\S]{0,900}FileOps\.LiveOutput\.IndexOverflow'
     }
 
-    It 'keeps cached Keep Both eligibility scoped to the current top-level conflict' {
+    It 'keeps cached Keep Both selected-root and descendant grants separate with native witnesses' {
         $header = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperationsInternal.h'
         $source = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.cpp'
-        $phase9 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases07_09.cpp'
+        $phase9 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases07_09.cpp'
+        $brokerTests = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.ConflictBroker.cpp'
+        $runner = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
 
-        $source | Should Match 'IsCachedConflictDecisionEligible[\s\S]{0,700}action\s*!=\s*ConflictAction::KeepBoth[\s\S]{0,700}operationDestinationPath[\s\S]{0,280}EqualsNoCase\(conflictDestinationPath'
-        $source | Should Match 'LoadEligibleConflictDecisionFromCacheLocked[\s\S]{0,800}IsCachedConflictDecisionEligible'
+        $eligible = [regex]::Match($source, '(?s)bool\s+IsCachedConflictDecisionEligible\([^;]*?\)\s+noexcept\s*\{(?<body>.*?)(?=\r?\n\[\[nodiscard\]\]\s+bool\s+IsKeepBothActionEligible\()')
+        $eligible.Success | Should Be $true
+        $eligible.Groups['body'].Value | Should Match 'if\s*\(!\s*scope\.applyToAllEligible\)\s*\{\s*return false;'
+        $eligible.Groups['body'].Value | Should Match 'if\s*\(action\s*!=\s*ConflictAction::KeepBoth\)\s*\{\s*return true;'
+        $eligible.Groups['body'].Value | Should Match 'task\._executionMode\s*==\s*FolderWindow::FileOperationState::ExecutionMode::PerItem\s*&&'
+        $eligible.Groups['body'].Value | Should Match 'perItemCookie\s*!=\s*nullptr\s*&&\s*scope\.keepBothContext\s*!=\s*FileOperations::ConflictRepeatContext::None\s*&&\s*!\s*conflictDestinationPath\.empty\(\)'
+        $header | Should Match 'enum class ConflictRepeatContext[^{}]*\{\s*None,\s*SelectedRoot,\s*Descendant,'
+        $header | Should Match 'ConflictRepeatContext\s+keepBothContext\s*=\s*ConflictRepeatContext::None'
+        $source | Should Match 'decisionScope\.keepBothContext\s*=\s*!\s*perItemCookie->operationDestinationPath\.empty\(\)\s*&&\s*NavigationLocation::EqualsNoCase\(promptDestinationPath,\s*perItemCookie->operationDestinationPath\)\s*\?\s*FileOperations::ConflictRepeatContext::SelectedRoot\s*:\s*FileOperations::ConflictRepeatContext::Descendant;'
+        $scopeMatch = [regex]::Match($source, '(?s)bool\s+ConflictCacheEntryMatchesScope\([^{};]*\)\s+noexcept\s*\{(?<body>[^{}]*)\}')
+        $scopeMatch.Success | Should Be $true
+        $scopeMatch.Groups['body'].Value | Should Match 'return\s+ConflictScopesHaveSameRepeatKey\(entry\.scope,\s*scope,\s*entry\.action\)\s*&&\s*\(entry\.action\s*!=\s*ConflictAction::KeepBoth\s*\|\|\s*entry\.scope\.keepBothContext\s*==\s*scope\.keepBothContext\);'
+        $lookup = [regex]::Match($source, '(?s)const Task::CachedConflictDecision\*\s+LoadEligibleConflictDecisionFromCacheLocked\([^;]*?\)\s+noexcept\s*\{(?<body>.*?)(?=\r?\n// Q2:)')
+        $lookup.Success | Should Be $true
+        $lookup.Groups['body'].Value | Should Match 'ConflictCacheEntryMatchesScope\(entry\.value\(\),\s*scope\)'
+        $lookup.Groups['body'].Value | Should Match 'IsCachedConflictDecisionEligible\(task,\s*perItemCookie,\s*scope,\s*conflictDestinationPath,\s*entry->action\)'
         $source | Should Not Match '(?<!Eligible)LoadConflictDecisionFromCache'
-        ([regex]::Matches($source, 'LoadEligibleConflictDecisionFromCacheLocked\(')).Count | Should Be 2
+        # Definition, the prompt lookup, and the Q2 Recycle-grant probe that skips the folder size walk.
+        ([regex]::Matches($source, 'LoadEligibleConflictDecisionFromCacheLocked\(')).Count | Should Be 3
+        $source | Should Match 'HasCachedRecycleEscalationGrant[\s\S]{0,900}LoadEligibleConflictDecisionFromCacheLocked\(task,\s*perItemCookie,\s*scope'
         ([regex]::Matches($source, 'LoadEligibleConflictDecisionFromCache\(')).Count | Should Be 0
         $header | Should Not Match 'keepBothConflictDestinationPath'
 
@@ -3765,6 +4027,17 @@ Specs\TestRuns\local_scratch
         $phase9 | Should Match 'FILESYSTEM_COPY,\s*1u[\s\S]{0,260}FILESYSTEM_COPY,\s*2u[\s\S]{0,260}FILESYSTEM_MOVE,\s*1u[\s\S]{0,260}FILESYSTEM_MOVE,\s*2u'
         $phase9 | Should Match 'PromptHasAction\(prompt\.value\(\),\s*Task::ConflictAction::KeepBoth\)[\s\S]{0,180}Task::ConflictAction::Skip'
         $phase9 | Should Match 'retriedTreeAttributes\s*!=\s*INVALID_FILE_ATTRIBUTES'
+        # Source guards preserve both runtime witnesses: a selected-root grant cannot cross
+        # into a descendant, while matching descendants in different parents reuse one choice.
+        $nested = [regex]::Match($brokerTests, '(?ms)bool\s+RunFileOpsKeepBothNestedRepeatChecks\([^;]*?\)\s+noexcept\s*\{(?<body>.*?)^\}')
+        $nested.Success | Should Be $true
+        $nested.Groups['body'].Value | Should Match 'ConflictRepeatContext::Descendant'
+        $nested.Groups['body'].Value | Should Match 'ToggleConflictApplyToAllChecked\(prompt->generation\);\s*if\s*\(!\s*task->SubmitConflictDecision\(prompt->generation,\s*Task::ConflictAction::KeepBoth,\s*std::nullopt\)\)'
+        $nested.Groups['body'].Value | Should Match 'prompts\s*!=\s*1u'
+        $nested.Groups['body'].Value | Should Match 'cached\s*!=\s*1'
+        $nested.Groups['body'].Value | Should Match 'FilesEqualBytes\(source\s*/\s*parents\[index\][^;]*leaf \(2\)\.bin'
+        $nested.Groups['body'].Value | Should Match 'FilesEqualBytes\(root\s*/\s*std::format\(L"original-\{\}\.bin",\s*index\),\s*destination'
+        $runner | Should Match 'RunFileOpsKeepBothNestedRepeatChecks\(state\)'
     }
 
     It 'keeps Riptide low-risk hardening invariants wired' {
@@ -3818,13 +4091,13 @@ Specs\TestRuns\local_scratch
         $bridgeQueue = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.Queue.cpp'
         $fileSystemContract = Get-RSText -Path 'Common\PlugInterfaces\FileSystem.h'
         $sevenZip = Get-RSText -Path 'Plugins\FileSystem7z\FileSystem7z.cpp'
-        $fileOpsSelfTest = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp'
-        $fairstreamSelfTest = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Fairstream.cpp'
+        $fileOpsSelfTest = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
+        $fairstreamSelfTest = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Fairstream.cpp'
         $s3 = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.Directory.cpp'
         $s3Factory = Get-RSText -Path 'Plugins\FileSystemS3\Factory.cpp'
         $s3Io = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.IO.cpp'
         $s3Api = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.S3.cpp'
-        $pluginContractTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContractTests.cpp'
+        $pluginContractTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContract.Tests.Runner.cpp'
         $dummy = Get-RSText -Path 'Plugins\FileSystemDummy\FileSystemDummy.cpp'
         $curl = Get-RSText -Path 'Plugins\FileSystemCurl\FileSystemCurl.CopyMove.cpp'
         $curlWriter = Get-RSText -Path 'Plugins\FileSystemCurl\FileSystemCurl.DirectoryOps.cpp'
@@ -3833,6 +4106,7 @@ Specs\TestRuns\local_scratch
         $watch = Get-RSText -Path 'Plugins\FileSystem\FileSystem.Watch.cpp'
         $fileOpsDiagnostics = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.Diagnostics.cpp'
         $issuesPane = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.IssuesPane.cpp'
+        $issuesProjection = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.IssuesProjection.cpp'
         $localIndex = Get-RSText -Path 'Common\LocalSearchIndexCore.cpp'
         $folderView = Get-RSText -Path 'RedSalamander\FolderView.cpp'
         $folderViewEnumeration = Get-RSText -Path 'RedSalamander\FolderView.Enumeration.cpp'
@@ -3977,10 +4251,18 @@ Specs\TestRuns\local_scratch
         $fileOpsDiagnostics | Should Match 'WriteFile\(file\.get\(\),\s*&bom[\s\S]{0,120}written\s*!=\s*sizeof\(bom\)'
         $fileOpsDiagnostics | Should Match 'WriteFile\(file\.get\(\),\s*header\.data\(\)[\s\S]{0,160}written\s*!=\s*static_cast<DWORD>\(headerBytes\)'
         $fileOpsDiagnostics | Should Match 'WriteFile\(file\.get\(\),\s*line\.data\(\)[\s\S]{0,160}written\s*!=\s*static_cast<DWORD>\(bytesToWrite\)'
-        $issuesPane | Should Match 'std::format\(L"\{\}\|\{\}\|\{\}\|\{\}\|\{\}\|\{\}\|\{\}\|\{\}\|\{\}\|\{\}\|\{\}\|\{\}"'
-        $issuesPane | Should Match 'issue\.operation'
-        $issuesPane | Should Match 'issue\.storageType'
-        $issuesPane | Should Match 'issue\.destinationStorageType'
+        $issuesPane | Should Match 'CollectIssuesSnapshotIfChanged'
+        $issuesPane | Should Match '_projection\.Update\('
+        $issuesProjection | Should Match 'std::format\(L"prompt\|\{\}\|\{\}",\s*issue\.taskId,\s*generation\)'
+        $issuesProjection | Should Match 'value->size\(\),\s*\*value'
+        $issuesProjection | Should Match 'const\s+auto\s+facts\s*=\s*FolderWindow::FileOperationState::QualifyIssueFacts\(issue\)'
+        $issuesProjection | Should Match 'if\s*\(!\s*facts\.ProjectsRow\(\)\)\s*continue;'
+        $issuesProjection | Should Match 'if\s*\(facts\.acceptedDecision\)\s*accepted\s*=\s*\*facts\.acceptedDecision'
+        $fileOpsDiagnostics | Should Match 'choice\.taskId\s*==\s*issue\.taskId\s*&&\s*choice\.taskId\s*!=\s*0u\s*&&\s*choice\.promptGeneration\s*!=\s*0u\s*&&\s*choice\.action\s*!=\s*FileOperations::ConflictAction::None'
+        $issuesProjection | Should Match 'retained\.ambiguousDecision\s*=\s*true'
+        $issuesProjection | Should Match 'issue\.operation'
+        $issuesProjection | Should Match 'issue\.storageType'
+        $issuesProjection | Should Match 'issue\.destinationStorageType'
         $localIndex | Should Not Match 'IsRedSalamanderStagedTempName|HasGeneratedBridgeTempSuffix|HasGeneratedCopyTempSuffix'
 
         $microsoftDrive | Should Match 'incompleteDueToInvalidChildNameOut'
@@ -4075,12 +4357,12 @@ Specs\TestRuns\local_scratch
 
     It 'keeps Delta reverify file-system safety fixes wired' {
         $bridge = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.cpp'
-        $phase12 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases10_13.cpp'
+        $phase12 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases10_13.cpp'
         $pathOps = Get-RSText -Path 'Plugins\FileSystem\FileSystem.Path.cpp'
         $search = Get-RSText -Path 'Plugins\FileSystem\FileSystem.Search.cpp'
         $fileOps = Get-RSText -Path 'Plugins\FileSystem\FileSystem.FileOps.cpp'
         $localIndex = Get-RSText -Path 'Common\LocalSearchIndexCore.cpp'
-        $mtpCompareCases = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.Cases.Mtp.cpp'
+        $mtpCompareCases = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Cases.Mtp.cpp'
 
         $pathOps | Should Match 'const\s+DWORD\s+replaceFlags\s*=\s*options\.ignoreReplaceMergeErrors\s*\?\s*REPLACEFILE_IGNORE_MERGE_ERRORS\s*:\s*0u'
         $pathOps | Should Match 'Debug::Warning\(L"FileSystem: promoted ''\{\}'' but failed to set final attributes'
@@ -4104,10 +4386,13 @@ Specs\TestRuns\local_scratch
         $bridge | Should Match 'Non-owning stack references\.[\s\S]{0,120}WaitJob and Shutdown join every callback'
         $bridge | Should Not Match 'std::function<HRESULT\(size_t\)>|const\s+auto\s+processIndex\s*='
         ([regex]::Matches($bridge, 'CrossFileSystemBridge\s+bridge\(')).Count | Should Be 1
-        $bridge | Should Match 'CrossFileSystemBridge\s+bridge\([\s\S]{0,1600}reparsePointPolicy,[\s\S]{0,500}managedMove,'
+        $bridgeCall = [regex]::Match($bridge, 'CrossFileSystemBridge\s+bridge\((?<arguments>[^;]+)\);')
+        $bridgeCall.Success | Should Be $true
+        $bridgeCall.Groups['arguments'].Value | Should Match 'reparsePointPolicy,\s*transferPlan->sourceEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.profileId,\s*transferPlan->destinationEndpoint\.rootId,\s*transferPlan->sourceEndpoint\.pathIdentity\.value\(\),\s*transferPlan->destinationEndpoint\.pathIdentity\.value\(\),\s*managedMove,\s*transferPlan->options\.verifyAfterCopy,'
         $bridge | Should Not Match 'moveBridge->cookie\s*=\s*static_cast<void\*>\(&cookie\);'
         $bridge | Should Match 'hasManagedMovePlans\s*=\s*_operation\s*==\s*FILESYSTEM_MOVE[\s\S]{0,420}OperationStrategy::Managed'
-        $bridge | Should Match 'useCrossFileSystemBridge\s*=\s*\(_destinationFileSystem\s*!=\s*nullptr\s*\|\|\s*hasManagedMovePlans\s*\|\|\s*hasVerificationPlans\)'
+        $bridge | Should Match 'useCrossFileSystemBridge\s*=\s*\(selectedAdmission->destination->fileSystem\s*!=\s*nullptr\s*\|\|\s*hasManagedMovePlans\s*\|\|\s*hasVerificationPlans\)\s*&&'
+        $bridge | Should Match 'bridgeDestinationFileSystem\s*=\s*selectedAdmission->destination->fileSystem\s*\?\s*selectedAdmission->destination->fileSystem\.get\(\)\s*:\s*_fileSystem\.get\(\)'
         $bridge | Should Not Match 'strategy\.nativeBridgeRejected'
         $bridge | Should Not Match 'bridge\.move\.cleanup\.cancelled'
 
@@ -4156,7 +4441,7 @@ Specs\TestRuns\local_scratch
         $viewers = Get-RSText -Path 'RedSalamander\FolderWindow.Viewers.cpp'
         $itemProperties = Get-RSText -Path 'RedSalamander\FolderWindow.ItemProperties.cpp'
         $fileActionLauncher = Get-RSText -Path 'RedSalamander\FileActionLauncher.cpp'
-        $fileOpsSelfTest = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases10_13.cpp'
+        $fileOpsSelfTest = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases10_13.cpp'
 
         $enumeration | Should Match 'HasPossibleArtifactName\(item\.displayName\)[\s\S]{0,900}ProjectProviderChildObject'
         $enumeration | Should Match '_pendingEnumerationFileSystem\s*=\s*_fileSystem'
@@ -4168,13 +4453,19 @@ Specs\TestRuns\local_scratch
         $find | Should Match 'IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE'
         $find | Should Not Match 'IDS_FILEOPS_ARTIFACT_PROVEN_BADGE'
         $fileOperations | Should Match 'CaptureProviderObjectCandidate[\s\S]{0,5500}FILESYSTEM_BIND_NO_FOLLOW\s*\|\s*FILESYSTEM_BIND_READ_METADATA'
-        $runtime | Should Match 'CollectArtifactTouchCandidates[\s\S]{0,9000}FILESYSTEM_BIND_NO_FOLLOW\s*\|\s*FILESYSTEM_BIND_READ_METADATA'
-        $runtime | Should Match 'defaultResult\s*=\s*blocked\s*\?\s*HOST_PROMPT_RESULT_OK\s*:\s*HOST_PROMPT_RESULT_CANCEL'
+        $runtime | Should Match 'AppendArtifactTouchCandidate\([\s\S]{0,1600}FILESYSTEM_BIND_NO_FOLLOW\s*\|\s*FILESYSTEM_BIND_READ_METADATA'
+        $runtime | Should Match 'HRESULT CollectArtifactTouchCandidates\([\s\S]{0,3000}AppendArtifactTouchCandidate\('
+        $runtime | Should Match 'defaultResult\s*=\s*blocked\s*\?\s*blockedClose\s*:\s*HOST_PROMPT_RESULT_CANCEL'
+        $runtime | Should Match 'presentation\s*=\s*blocked\s*\?\s*HOST_PROMPT_PRESENTATION_ARTIFACT_BLOCKED\s*:\s*HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH'
+        $runtime | Should Match 'const std::wstring openText\s*=[\s\S]{0,220}identityProbe\.openStatus[\s\S]{0,900}refused to touch a possible leftover[\s\S]{0,200}openHr=[\s\S]{0,40}identityHr='
+        $runtime | Should Match 'Debug::Perf::Emit\(L"fileops\.artifact\.touch\.blocked"'
         $runtime | Should Match 'AcceptTouchGuard\(request,\s*receipt\)'
-        $runtime | Should Match '_artifactTouchReceipt\s*=\s*std::move\(artifactTouchReceipt\)'
+        $state | Should Match 'StoreInitialArtifactTouchReceipt[\s\S]{0,600}selected->artifactTouchReceipt\s*=\s*receipt\s*\?\s*std::make_shared<const\s+FileOperationArtifacts::TouchGuardReceipt>'
+        $runtime | Should Match 'PrepareBatchRenameArtifactGuard[\s\S]{0,900}StoreInitialArtifactTouchReceipt\(std::move\(prepared\)\)'
+        $runtime | Should Match 'RevalidateArtifactTouchGuard[\s\S]{0,650}admission\.artifactTouchReceipt[\s\S]{0,850}RevalidateTouchGuard\(\*admission\.artifactTouchReceipt'
         $runtime | Should Match 'RevalidateArtifactTouchGuard[\s\S]{0,1800}RevalidateTouchGuard'
         $runtime | Should Match 'ConfirmExternalArtifactTouch[\s\S]{0,7000}ConfirmArtifactTouch[\s\S]{0,4000}RevalidateTouchGuard'
-        $state | Should Match 'RevalidateArtifactTouchGuard\(\)[\s\S]{0,500}_observedSkipAction\.store'
+        $state | Should Match 'RevalidateArtifactTouchGuard\(\*selectedAdmission\)[\s\S]{0,500}_observedSkipAction\.store'
         $hostServices | Should Match 'HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH[\s\S]{0,240}IDS_FILEOPS_CONSENT_BTN_CONTINUE'
         $folderViewHeader | Should Not Match 'ExternalOpenGuardCallback|SetExternalOpenGuardCallback'
         $folderViewSelection | Should Not Match '_externalOpenGuardCallback'
@@ -4203,9 +4494,32 @@ Specs\TestRuns\local_scratch
         $fileSystemHandlers | Should Match 'OnChangeCaseCompleted[\s\S]{0,1800}AdmitScheduledRename\([\s\S]{0,300}RenameOrigin::ChangeCase'
         $fileOperations | Should Match 'RevalidateProviderTouchGuard[\s\S]{0,2600}CaptureProviderObjectCandidate[\s\S]{0,500}RevalidateTouchGuard'
         $fileOpsSelfTest | Should Match 'Phase10_ArtifactTouchGuard[\s\S]{0,4200}HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH'
-        $resources | Should Match 'IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE\s+"Possible interrupted-operation artifact"'
+        $resources | Should Match 'IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE\s+"Possibly incomplete file \(left by an interrupted copy or move\)"'
+        # I35 S0 red-team R-5: a backup or rename-hop leftover may hold the only complete copy, so it is never called incomplete.
+        $resources | Should Match 'IDS_FILEOPS_ARTIFACT_POSSIBLE_ORIGINAL_BADGE\s+"Possibly an original kept by an interrupted copy or move"'
+        $registry | Should Match 'bool HasPossibleOriginalArtifactName\(const std::wstring_view leaf\) noexcept[\s\S]{0,120}\.rs_bak_[\s\S]{0,80}\.rs_ren_'
+        $registry | Should Match 'projection\.mayHoldOriginal\s*=\s*HasPossibleOriginalArtifactName'
+        $find | Should Match 'artifactProjection->mayHoldOriginal\s*\?\s*IDS_FILEOPS_ARTIFACT_POSSIBLE_ORIGINAL_BADGE'
+        $statusBar | Should Match 'projection->mayHoldOriginal\s*\?\s*IDS_FILEOPS_ARTIFACT_POSSIBLE_ORIGINAL_BADGE'
+        $itemProperties | Should Match 'explanation\.mayHoldOriginal[\s\S]{0,80}IDS_FILEOPS_ARTIFACT_POSSIBLE_ORIGINAL_BADGE'
+        # The File Explorer hint is for an item the location cannot identify, not for one that could not be opened (R7.1).
+        $runtime | Should Match 'if \(identityUnsupportedWin32Item\)[\s\S]{0,160}IDS_FILEOPS_ARTIFACT_BLOCKED_NEXT_OPEN_LOCATION'
+        $runtime | Should Not Match 'if \(openLocationPath\.has_value\(\)\)[\s\S]{0,160}IDS_FILEOPS_ARTIFACT_BLOCKED_NEXT_OPEN_LOCATION'
+        # R-1: closing a blocked prompt is a refusal the prompt already explained; no caller shows a second alert.
+        $runtime | Should Match 'HRESULT FolderWindow::FileOperationState::ConfirmExternalArtifactTouch[\s\S]{0,4000}!\s*request\.allItemsRevalidatable\s*&&\s*confirmHr\s*==\s*HRESULT_FROM_WIN32\(ERROR_NOT_SUPPORTED\)[\s\S]{0,300}return FolderWindow::kFileOperationRefusedAlreadyReported'
+        $fileSystemCommands | Should Match 'FAILED\(artifactTouchHr\)\s*&&\s*artifactTouchHr\s*!=\s*kFileOperationRefusedAlreadyReported'
+        $fileSystemCommands | Should Match 'hr\s*==\s*S_FALSE\s*\|\|\s*hr\s*==\s*FolderWindow::kFileOperationRefusedAlreadyReported\s*\?\s*HRESULT_FROM_WIN32\(ERROR_CANCELLED\)'
+        $fileSystemCommands | Should Match 'FormatStringResource\(nullptr,\s*IDS_FMT_FILEOPS_ARTIFACT_TOUCH_FAILED'
+        $fileSystemCommands | Should Not Match 'FormatStringResource\(nullptr,\s*IDS_FMT_FILEOPS_ARTIFACT_TOUCH_BLOCKED'
+        $folderViewMenus | Should Match 'AppendArtifactContextMenu[\s\S]{0,2200}capabilities\.openLocation[\s\S]{0,200}IDS_FILEOPS_ARTIFACT_ACTION_OPEN_LOCATION'
+        $folderViewInteraction | Should Match 'CmdArtifactOpenLocation[\s\S]{0,400}OpenLocationInFileExplorer'
+        # R-6: the shell call runs on its own STA thread-pool callback, never on the prompt's (possibly MTA) thread.
+        $fileOperations | Should Match 'OpenLocationInFileExplorerCallback[\s\S]{0,600}COINIT_APARTMENTTHREADED[\s\S]{0,1800}SHOpenFolderAndSelectItems'
+        $fileOperations | Should Match 'TrySubmitThreadpoolCallback\(OpenLocationInFileExplorerCallback'
         $resources | Should Not Match 'IDS_FILEOPS_ARTIFACT_PROVEN_BADGE'
-        $registry | Should Not Match 'Classification::Proven|RecoveryAction|Resume|RollBack'
+        # The provider staging marker `.redsalamander-rollback-` (I35 R7.6) is a name shape the classifier
+        # recognizes, not a recovery action: only that literal is removed before the case-insensitive check.
+        ($registry -replace [regex]::Escape('.redsalamander-rollback-'), '') | Should Not Match 'Classification::Proven|RecoveryAction|Resume|RollBack'
         $resources | Should Match 'IDS_FMT_FILEOPS_ARTIFACT_TOUCH_WARNING\s+"[^"]*\{0:L\}'
         $resources | Should Not Match 'IDS_FMT_FILEOPS_ARTIFACT_TOUCH_WARNING\s+"[^"]*\{1:L\}'
     }
@@ -4215,7 +4529,7 @@ Specs\TestRuns\local_scratch
         $handler = Get-RSText -Path 'RedSalamander\FolderWindow.FileSystem.cpp'
         $privateHeader = Get-RSText -Path 'RedSalamander\FolderWindow.FileSystem.Private.h'
         $changeCase = Get-RSText -Path 'RedSalamander\ChangeCase.cpp'
-        $tests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Dialogs.cpp'
+        $tests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Dialogs.cpp'
 
         $commandStart = $commands.IndexOf('void FolderWindow::CommandChangeCase(Pane pane)')
         $commandStart | Should BeGreaterThan -1
@@ -4239,7 +4553,7 @@ Specs\TestRuns\local_scratch
         $breadcrumb = Get-RSText -Path 'RedSalamander\FileOperationMoveBreadcrumb.cpp'
         $registry = Get-RSText -Path 'RedSalamander\FileOperationArtifactRegistry.cpp'
         $project = Get-RSText -Path 'RedSalamander\RedSalamander.vcxproj'
-        $selftest = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.BatchRename.cpp'
+        $selftest = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.BatchRename.cpp'
 
         $helper | Should Match 'LocalFileTransaction::Create'
         $helper | Should Match 'FILE_FLAG_OPEN_REPARSE_POINT'
@@ -4254,7 +4568,10 @@ Specs\TestRuns\local_scratch
         (Test-Path -LiteralPath (Join-Path $repoRoot 'RedSalamander\BatchRenameRecoveryJournal.cpp')) | Should Be $false
         $project | Should Not Match 'BatchRenameRecoveryJournal'
         $breadcrumb | Should Match 'FileOperationDurableStore::EnumerateDirectRegularFiles\([\s\S]{0,100}kMaximumStoreEntries'
-        $breadcrumb | Should Match 'FileOperationDurableStore::PersistDirectChild\([\s\S]{0,220}failIfExists'
+        # Match the complete publication call; formatter indentation must not exhaust a character-distance budget.
+        $breadcrumb | Should Match ('FileOperationDurableStore::PersistDirectChild\(\s*ResolveRoot\(\),\s*_path,\s*json,\s*' +
+            'kMaximumRecordBytes,\s*failIfExists\s*\?\s*Common::Files::ExistingTargetPolicy::FailIfExists\s*' +
+            ':\s*Common::Files::ExistingTargetPolicy::Replace\s*\)')
         $breadcrumb | Should Match 'FileOperationDurableStore::RemoveDirectRegularFile\(ResolveRoot\(\),\s*path\)'
         $registry | Should Match 'bool HasPossibleArtifactName\(const std::wstring_view leaf\) noexcept'
         $registry | Should Not Match 'FileOperationDurableStore|kMaximumRegistryEntries|yyjson|LoadDefault|records_read|class Registry'
@@ -4283,7 +4600,7 @@ Specs\TestRuns\local_scratch
         $hostState = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.cpp'
         $diagnostics = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.Diagnostics.cpp'
         $resources = Get-RSText -Path 'RedSalamander\RedSalamander.rc'
-        $selftest = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Phases05_06.cpp'
+        $selftest = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases05_06.cpp'
 
         $fileSystemContract | Should Match 'FILESYSTEM_OWNED_STAGE_CLEANUP_TIMEOUT_MS\s*=\s*2''000u'
         $fileSystemContract | Should Match 'MakeOwnedStageCleanupOptions[\s\S]{0,900}operationControl\s*=\s*nullptr[\s\S]{0,220}operationControlCookie\s*=\s*nullptr[\s\S]{0,500}deadlineTickCount64'
@@ -4312,7 +4629,7 @@ Specs\TestRuns\local_scratch
 
     It 'keeps File Operations scheduler failure policy local and the worker start gate cancelable' {
         $state = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.State.cpp'
-        $fairstream = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Fairstream.cpp'
+        $fairstream = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Fairstream.cpp'
 
         $state | Should Match 'enum class FailurePolicy[\s\S]{0,160}RecordOnly[\s\S]{0,80}CancelTask'
         $state | Should Match 'withinFolderBudget,[\s\S]{0,260}FailurePolicy::RecordOnly'
@@ -4345,10 +4662,10 @@ Specs\TestRuns\local_scratch
     }
 
     It 'isolates the destructive missing-directory hot-reload fixture from the shared settings run' {
-        $driver = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp'
-        $settings = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $driver = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp'
+        $settings = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
 
-        $driver | Should Match '#include\s+"TestSupport/TestSupport\.h"'
+        $driver | Should Match '#include\s+"TestSupport/TestSupport\.Tests\.Runner\.h"'
         $testStart = $settings.IndexOf('[[nodiscard]] bool TestSettingsHotReloadCreatesMissingDirectory')
         $testEnd = $settings.IndexOf('[[nodiscard]] bool TestPaneViewOptionsPreviewRejectsInvalidEmbeddedChildSetOnReuse', $testStart)
         $testStart | Should BeGreaterThan -1
@@ -4365,7 +4682,7 @@ Specs\TestRuns\local_scratch
     It 'keeps HostServices synchronous marshaling, result-capacity, and connection-secret lifecycle contracts wired' {
         $hostServices = Get-RSText -Path 'RedSalamander\HostServices.cpp'
         $connectionManager = Get-RSText -Path 'RedSalamander\ConnectionManagerWindow.cpp'
-        $connectionTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Connections.cpp'
+        $connectionTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Connections.cpp'
 
         $hostServices | Should Match 'resultCapacity\s*=\s*result->sizeBytes[\s\S]{0,180}resultCapacity\s*<\s*sizeof\(HostConnectionManagerResult\)[\s\S]{0,180}result->sizeBytes\s*=\s*sizeof\(HostConnectionManagerResult\)'
         $hostServices | Should Match 'SendSynchronousHostPayload\(hostWindow,\s*WndMsg::kHostShowPrompt'
@@ -4411,7 +4728,7 @@ Specs\TestRuns\local_scratch
         $hostCatalog = Get-RSText -Path 'RedSalamander\WSLDistro.cpp'
         $pluginMenu = Get-RSText -Path 'Plugins\FileSystem\FileSystem.Menu.cpp'
         $shellCommands = Get-RSText -Path 'RedSalamander\FolderWindow.FileSystem.Commands.cpp'
-        $contracts = Get-RSText -Path 'Tests\PluginContractTests\PluginContractTests.cpp'
+        $contracts = Get-RSText -Path 'Tests\PluginContractTests\PluginContract.Tests.Runner.cpp'
 
         $registryHeader | Should Match 'kDefaultMaxStringBytes'
         $registryHeader | Should Match 'kDefaultMaxReadAttempts'
@@ -4441,7 +4758,7 @@ Specs\TestRuns\local_scratch
         $session = Get-RSText -Path 'RedConfigure\RedConfigureSession.cpp'
         $workflow = Get-RSText -Path 'RedConfigure\RedConfigureWorkflow.cpp'
         $root = Get-RSText -Path 'RedConfigure\RedConfigureRoot.cpp'
-        $tests = Get-RSText -Path 'Tests\RedConfigureTests\RedConfigureTests.cpp'
+        $tests = Get-RSText -Path 'Tests\RedConfigureTests\RedConfigure.Tests.Runner.cpp'
 
         $sessionHeader | Should Match 'ApplyClipboardMatrix\(std::span<const LocalizationReviewRowIdentity>\s+destinationRows'
         $sessionHeader | Should Not Match 'ApplyClipboardMatrix\(size_t\s+startRow'
@@ -4461,10 +4778,10 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps Riptide test-credibility gaps closed' {
-        $fairstream = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.Fairstream.cpp'
+        $fairstream = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Fairstream.cpp'
         $popup = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.Popup.cpp'
         $popupHeader = Get-RSText -Path 'RedSalamander\FolderWindow.FileOperations.Popup.h'
-        $selfTest = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.SelfTest.cpp'
+        $selfTest = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
 
         $fairstream | Should Match 'shouldOverwriteConflict'
         $fairstream | Should Match 'Task::ConflictAction::Overwrite'
@@ -4492,11 +4809,10 @@ Specs\TestRuns\local_scratch
     }
 
     It 'keeps focus-independent GUI coverage behind the shared no-activation guard' {
-        $guard = Get-RSText -Path 'Common\TestWindowActivationGuard.h'
+        $guard = Get-RSText -Path 'Common\Common.Tests.WindowActivationGuard.h'
         $app = Get-RSText -Path 'RedSalamander\RedSalamander.cpp'
-        $viewerPe = Get-RSText -Path 'Tests\ViewerPETests\ViewerPETests.cpp'
-        $viewerSqlite = Get-RSText -Path 'Tests\ViewerSqliteTests\ViewerSqliteTests.cpp'
-        $monitor = Get-RSText -Path 'RedSalamanderMonitor\RedSalamanderMonitor.cpp'
+        $viewerPe = Get-RSText -Path 'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp'
+        $viewerSqlite = Get-RSText -Path 'Tests\ViewerSqliteTests\ViewerSqlite.Tests.Runner.cpp'
 
         $guard | Should Match 'SetWindowsHookExW\(WH_CBT'
         $guard | Should Match 'HCBT_CREATEWND[\s\S]{0,500}WS_EX_NOACTIVATE'
@@ -4504,28 +4820,35 @@ Specs\TestRuns\local_scratch
         $guard | Should Match 'HCBT_SETFOCUS[\s\S]{0,250}return 1;'
 
         $app | Should Match 'selectedSafeSuite\s*=\s*hasArg\(L"--compare-selftest"\)\s*\|\|\s*hasArg\(L"--fileops-selftest"\)'
-        $app | Should Match 'selectedFocusSuite\s*=\s*hasArg\(L"--selftest"\)\s*\|\|\s*hasArg\(L"--commands-selftest"\)'
+        $app | Should Match 'selectedFocusSuite\s*=\s*hasArg\(L"--selftest"\)\s*\|\|\s*\(hasArg\(L"--commands-selftest"\)\s*&&\s*! selectedDocumentationGallery\)'
         $app | Should Match 'selectedSafeSuite\s*&&\s*!\s*selectedFocusSuite[\s\S]{0,250}selfTestActivationBlocker\.Start\(\)'
 
 
         $viewerPe | Should Match 'enum class TestDesktopInteraction[\s\S]{0,200}Noninteractive[\s\S]{0,100}RequiresActivation'
         $viewerPe | Should Match 'desktopInteraction\s*==\s*TestDesktopInteraction::Noninteractive[\s\S]{0,150}--no-activate'
         $viewerSqlite | Should Match 'if \(shouldRun\(kTabTraversalTestName,[\s\S]{0,250}activationBlocker\.Stop\(\)'
-        $monitor | Should Match '!\s*g_monitorChromeSelfTest\.enabled[\s\S]{0,250}~WS_EX_NOACTIVATE'
-        $monitor | Should Match 'g_monitorChromeSelfTest\.enabled\s*\?\s*SW_SHOWNOACTIVATE\s*:\s*showCmd'
+    }
+
+    It 'routes application foreground requests through the cooperative no-activation policy' {
+        $productionSources = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'RedSalamander') -Recurse -File -Filter *.cpp |
+                Where-Object { $_.FullName -notmatch '\\SelfTest\\|\.Tests\.' })
+        $directRequests = @($productionSources | Select-String -Pattern '\bSetForegroundWindow\s*\(')
+        $directRequests | Should BeNullOrEmpty
+        $cooperativeRequests = @($productionSources | Select-String -Pattern 'Common::RequestForegroundWindow\s*\(')
+        $cooperativeRequests.Count | Should BeGreaterThan 0
     }
 
     It 'keeps new native focus calls inside reviewed focus-sensitive test adapters' {
         $reviewedFocusFiles = @(
-            'Tests\ProductUiTests\ProductUiTests.cpp',
-            'Tests\PerformanceTests2\FolderViewInternal.Access.h',
+            'Tests\ProductUiTests\ProductUi.Tests.Runner.cpp',
+            'Tests\PerformanceTests2\Performance.Tests.FolderViewInternal.Access.h',
             # TryActivateOwnedWindow: the shared foreground-queue activation adapter
             # documented in Specs/Core/Core_SharedHelpers.md.
-            'Tests\TestSupport\DirectedSelfTestInputWarning.h',
-            'Tests\ViewerPETests\ViewerPETests.cpp',
-            'Tests\ViewerSqliteTests\ViewerSqliteTests.cpp'
+            'Tests\TestSupport\TestSupport.Tests.DirectedSelfTestInputWarning.h',
+            'Tests\ViewerPETests\ViewerPE.Tests.Runner.cpp',
+            'Tests\ViewerSqliteTests\ViewerSqlite.Tests.Runner.cpp'
         )
-        $focusPattern = '\b(?:SetForegroundWindow|SetActiveWindow|SetFocus|BringWindowToTop|SwitchToThisWindow)\s*\('
+        $focusPattern = '\b(?:SetForegroundWindow|RequestForegroundWindow|SetActiveWindow|SetFocus|BringWindowToTop|SwitchToThisWindow)\s*\('
         $unexpected = @(Get-ChildItem -Path (Join-Path $repoRoot 'Tests') -Recurse -File -Include *.cpp,*.h |
                 Select-String -Pattern $focusPattern |
                 Where-Object {
@@ -4539,6 +4862,20 @@ Specs\TestRuns\local_scratch
             $safeSource = (Get-ChildItem -Path (Join-Path $repoRoot $safeRoot) -Recurse -File -Include *.cpp,*.h |
                     ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }) -join "`n"
             $safeSource | Should Not Match $focusPattern
+        }
+    }
+
+    It 'stops File Operations interaction immediately when foreground activation fails' {
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.FileOps.cpp'
+        $activations = [regex]::Matches($source, 'state\.Require\(DirectedSelfTestInputWarning::TryActivateOwnedWindow[\s\S]*?;')
+        $activations.Count | Should BeGreaterThan 0
+        foreach ($activation in $activations) {
+            $after = $source.Substring($activation.Index + $activation.Length)
+            $prefixStart = [Math]::Max(0, $activation.Index - 24)
+            $prefix = $source.Substring($prefixStart, $activation.Index - $prefixStart)
+            $guardedAfter = $after -match '^\s*if\s*\(\s*!\s*state\.failure\.empty\(\)\s*\)\s*return(?:\s+false)?;'
+            $guardedInline = $prefix -match 'if\s*\(\s*!\s*$' -and $activation.Value -match '\)\s*return(?:\s+false)?;\s*$'
+            ($guardedAfter -or $guardedInline) | Should Be $true
         }
     }
 
@@ -4725,7 +5062,6 @@ Specs\TestRuns\local_scratch
     It 'keeps Observatory Track 5 local outputs transactional' {
         $transaction = Get-RSText -Path 'Common\LocalFileTransaction.h'
         $commands = Get-RSText -Path 'RedSalamander\FolderWindow.FileSystem.Commands.cpp'
-        $monitorExporter = Get-RSText -Path 'RedSalamanderMonitor\MonitorFileExporter.cpp'
 
         $transaction | Should Match 'CreateUniqueSiblingFile\(extendedTarget\.native\(\)'
         $transaction | Should Match 'Common::HandleIo::WriteAll'
@@ -4742,25 +5078,13 @@ Specs\TestRuns\local_scratch
         $commands | Should Match 'WriteMakeFileListUtf8File[\s\S]{0,500}LocalFileTransaction::Create'
         $commands | Should Match 'transaction\.Commit\(static_cast<uint64_t>\(bytes\.size\(\)\)\)'
         $commands | Should Not Match 'WriteMakeFileListUtf8File[\s\S]{0,900}CREATE_ALWAYS'
-
-        $monitorExporter | Should Match 'WriteMonitorTextSnapshot[\s\S]{0,900}LocalFileTransaction::Create'
-        $monitorExporter | Should Match 'AppendUtf8Scalar\(output,\s*scalar\)'
-        $monitorExporter | Should Match 'codeUnit\s*>=\s*0xD800u\s*&&\s*codeUnit\s*<=\s*0xDBFFu'
-        $monitorExporter | Should Match 'transaction\.Commit\(bytesWritten\)'
-        $monitorExporter | Should Not Match 'std::ofstream'
-
-        $monitorTest = Get-RSText -Path 'Tests\MonitorTest\MonitorTest.cpp'
-        $monitorTest | Should Match 'RunLocalFileTransactionFaultSelfTest'
-        $monitorTest | Should Match 'FailNextLocalFileTransactionWrite\(diskFull\)'
-        $monitorTest | Should Match 'FailNextLocalFileTransactionFlush\(flushFault\)'
-        $monitorTest | Should Match 'Commit\(replacement\.size\(\) \+ 1u\)'
     }
 
     It 'keeps Observatory Track 5 Make File List responsive, cancellable, and explicit about its destination' {
         $commands = Get-RSText -Path 'RedSalamander\FolderWindow.FileSystem.Commands.cpp'
         $folderWindow = Get-RSText -Path 'RedSalamander\FolderWindow.h'
         $messages = Get-RSText -Path 'Common\WindowMessages.h'
-        $selftest = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $selftest = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
 
         $commands | Should Match 'PromptForMakeFileListOutputFile[\s\S]{0,1800}GetSaveFileNameW'
         $commands | Should Match 'OFN_OVERWRITEPROMPT\s*\|\s*OFN_PATHMUSTEXIST'
@@ -4782,8 +5106,8 @@ Specs\TestRuns\local_scratch
 
     It 'keeps Observatory Track 5 archive extraction conflicts explicit and transactional' {
         $commands = Get-RSText -Path 'RedSalamander\FolderWindow.FileSystem.Commands.cpp'
-        $settingsSelftest = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
-        $dialogSelftest = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Dialogs.cpp'
+        $settingsSelftest = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
+        $dialogSelftest = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Dialogs.cpp'
 
         $commands | Should Match 'enum class ArchiveExistingTargetPolicy[\s\S]{0,160}Skip,[\s\S]{0,80}Replace'
         $commands | Should Match 'BuildArchiveConflictPolicyComboItems[\s\S]{0,260}IDS_ARCHIVE_UNPACK_CONFLICT_SKIP[\s\S]{0,180}IDS_ARCHIVE_UNPACK_CONFLICT_REPLACE'
@@ -4799,62 +5123,7 @@ Specs\TestRuns\local_scratch
         $dialogSelftest | Should Match 'DebugSetArchiveUnpackPromptReplaceExisting\(true\)'
     }
 
-    It 'keeps Observatory Track 6 Monitor ownership and bounded-pipeline guards wired' {
-        $clipboard = Get-RSText -Path 'Common\UnicodeClipboard.h'
-        $colorView = Get-RSText -Path 'RedSalamanderMonitor\ColorTextView.cpp'
-        $document = Get-RSText -Path 'RedSalamanderMonitor\Document.h'
-        $listener = Get-RSText -Path 'RedSalamanderMonitor\EtwListener.cpp'
-        $reader = Get-RSText -Path 'RedSalamanderMonitor\MonitorFileReader.cpp'
-        $exporter = Get-RSText -Path 'RedSalamanderMonitor\MonitorFileExporter.cpp'
-        $monitor = Get-RSText -Path 'RedSalamanderMonitor\RedSalamanderMonitor.cpp'
-        $monitorTest = Get-RSText -Path 'Tests\MonitorTest\MonitorTest.cpp'
 
-        $clipboard | Should Match 'wil::unique_hglobal storage\(GlobalAlloc\(GMEM_MOVEABLE,\s*bytes\)\)'
-        $clipboard | Should Match 'SetClipboardData\(CF_UNICODETEXT,\s*storage\.get\(\)\)[\s\S]{0,180}storage\.release\(\)'
-        $clipboard | Should Not Match 'Win32UnicodeClipboardApi|TrySetUnicodeTextWithApi|HGLOBAL storage\s*=\s*api\.'
-
-        $colorView | Should Match '_etwEventQueue\.size\(\)\s*>=\s*maxQueuedEvents[\s\S]{0,160}_etwEventQueue\.pop_front\(\)'
-        $colorView | Should Match 'EnforceRetentionLimits\(_maxRetainedLines,\s*_maxRetainedTextBytes\)'
-        $colorView | Should Match 'monitor\.etw\.queue_high_water_mark'
-        $colorView | Should Match 'monitor\.etw\.dropped_count'
-        $colorView | Should Match 'monitor\.search\.match_update_us'
-        $colorView | Should Match '_searchScanLine\s*-='
-        $colorView | Should Match '_searchScanOffset\s*=\s*position\s*\+\s*_search\.size\(\)'
-        $colorView | Should Match 'EnableShowIds[\s\S]{0,240}_selStart\s*=\s*0u[\s\S]{0,180}RebuildMatches\(\)'
-        $document | Should Not Match 'const\s+std::(?:vector|deque)<Line>\s*&\s*Lines\('
-
-        $listener | Should Match 'logfile\.Context\s*=\s*callbackState\.get\(\)'
-        $listener | Should Match 'TRACEHANDLE stableTraceHandle\s*=\s*traceHandle[\s\S]{0,120}ProcessTrace\(&stableTraceHandle'
-        $listener | Should Match 'WaitForSingleObject\(workerHandle,\s*shutdownTimeoutMs\)'
-        $listener | Should Match '_workerThread\.detach\(\)'
-        $listener | Should Not Match 's_instance|ProcessTrace\(&_traceHandle'
-
-        $reader | Should Match 'GetFileSizeEx[\s\S]{0,900}ERROR_FILE_TOO_LARGE'
-        $reader | Should Match 'stopToken\.stop_requested\(\)'
-        $reader | Should Match 'class\s+Utf8StreamDecoder[\s\S]{0,7000}class\s+Utf16LeStreamDecoder'
-        $reader | Should Match 'SnapshotBuilder\s+builder\(limits\.maxRetainedTextBytes,\s*limits\.maxLines\)'
-        $reader | Should Not Match 'std::vector<char>\s+bytes|TryUtf16FromUtf8Strict'
-        $exporter | Should Match 'LocalFileTransaction::Create[\s\S]{0,4500}transaction\.Commit\(bytesWritten\)'
-        $exporter | Should Match 'stopToken\.stop_requested\(\)'
-        $monitor | Should Match 'CaptureTextSnapshot\(\)[\s\S]{0,1300}std::thread'
-        $monitor | Should Match 'PostMessagePayload\(owner,\s*kMsgMonitorFileSaveCompleted'
-        $monitor | Should Match 'DrainPostedPayloadsForWindow\(hWnd\)'
-        $monitor | Should Match 'CloseMonitorFileOpenWorker[\s\S]{0,700}WaitForSingleObject\(g_monitorFileOpenThread\.native_handle\(\),\s*kCloseWaitMs\)[\s\S]{0,500}detach\(\)'
-        $monitor | Should Match 'monitor\.file_open\.cancel_us'
-        $monitor | Should Match 'monitor\.file_open\.close_us'
-        $monitor | Should Match 'kRequiredMonitorRetainedStateMetrics'
-        $monitor | Should Match 'RunMonitorRetainedStateIoSelfTest'
-        $monitor | Should Match 'ConfigureJsonlOutput\([\s\S]{0,240}kMonitorBuildFlavor'
-        $monitor | Should Not Match 'ConfigureJsonlOutput\([\s\S]{0,180}L"MonitorChromeSelfTest",\s*L"Debug"'
-        $monitor | Should Match 'WaitForSingleObject\(g_monitorFileSaveThread\.native_handle\(\),\s*kCloseWaitMs\)[\s\S]{0,600}detach\(\)'
-        $monitorTest | Should Match 'RunEtwConsumerShutdownSelfTest'
-        $monitorTest | Should Match 'kDetachedHandle[\s\S]{0,1800}20u'
-        $monitorTest | Should Match 'sparse-over-2gib\.txt'
-        $monitorTest | Should Match 'decoded-expansion\.txt'
-        $monitorTest | Should Match 'split-utf8\.txt'
-        $monitorTest | Should Match 'arrived-during-export'
-        $monitorTest | Should Match 'RunUnicodeClipboardContractSelfTest'
-    }
 
     It 'keeps Observatory Track 7 settings commits conflict-aware and recoverable' {
         $header = Get-RSText -Path 'Common\SettingsStore.h'
@@ -4863,7 +5132,7 @@ Specs\TestRuns\local_scratch
         $hotReload = Get-RSText -Path 'RedSalamander\SettingsHotReload.cpp'
         $preferences = Get-RSText -Path 'RedSalamander\Preferences.Dialog.cpp'
         $resource = Get-RSText -Path 'RedSalamander\RedSalamander.rc'
-        $tests = Get-RSText -Path 'Tests\SettingsSchemaTests\SettingsSchemaTests.cpp'
+        $tests = Get-RSText -Path 'Tests\SettingsSchemaTests\SettingsSchema.Tests.Runner.cpp'
 
         $header | Should Match 'SettingsPersistenceState[\s\S]{0,700}std::optional<SettingsFileStamp> expectedFileStamp'
         $header | Should Match 'SaveSettings\(std::wstring_view appId,\s*Settings& settings\)'
@@ -4901,8 +5170,8 @@ Specs\TestRuns\local_scratch
         $manager = Get-RSText -Path 'RedSalamander\ConnectionManagerWindow.cpp'
         $hostServices = Get-RSText -Path 'RedSalamander\HostServices.cpp'
         $app = Get-RSText -Path 'RedSalamander\RedSalamander.cpp'
-        $settingsTests = Get-RSText -Path 'Tests\SettingsSchemaTests\SettingsSchemaTests.cpp'
-        $connectionTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Connections.cpp'
+        $settingsTests = Get-RSText -Path 'Tests\SettingsSchemaTests\SettingsSchema.Tests.Runner.cpp'
+        $connectionTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Connections.cpp'
 
         $settingsHeader | Should Match 'CreateConnectionProfileId'
         $settingsHeader | Should Match 'NormalizeConnectionProfileId'
@@ -4932,7 +5201,7 @@ Specs\TestRuns\local_scratch
 
     It 'keeps Observatory Track 9 DxUi identity, reentrancy, and text-input guards wired' {
         $navigationPopup = Get-RSText -Path 'RedSalamander\NavigationView.FullPathPopup.cpp'
-        $commandTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $commandTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
 
 
 
@@ -4952,8 +5221,8 @@ Specs\TestRuns\local_scratch
         $s3DirectoryOps = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.DirectoryOps.cpp'
         $s3 = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.S3.cpp'
         $s3Table = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.S3Table.cpp'
-        $themeTests = Get-RSText -Path 'Tests\ProductUiTests\ProductUiTests.cpp'
-        $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContractTests.cpp'
+        $themeTests = Get-RSText -Path 'Tests\ProductUiTests\ProductUi.Tests.Runner.cpp'
+        $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContract.Tests.Runner.cpp'
 
         $pager | Should Match 'class ContinuationGuard final'
         $pager | Should Match 'maxPages'
@@ -4995,7 +5264,7 @@ Specs\TestRuns\local_scratch
         $directoryOps = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.DirectoryOps.cpp'
         $io = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.IO.cpp'
         $s3 = Get-RSText -Path 'Plugins\FileSystemS3\FileSystemS3.S3.cpp'
-        $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContractTests.cpp'
+        $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContract.Tests.Runner.cpp'
 
         $shared | Should Match 'State::Initializing'
         $shared | Should Match '_refCount\s*=\s*1u'
@@ -5021,7 +5290,7 @@ Specs\TestRuns\local_scratch
         $sevenZip = Get-RSText -Path 'Plugins\FileSystem7z\FileSystem7z.cpp'
         $curlFactory = Get-RSText -Path 'Plugins\FileSystemCurl\Factory.cpp'
         $googleFactory = Get-RSText -Path 'Plugins\FileSystemGoogleDrive\Factory.cpp'
-        $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContractTests.cpp'
+        $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContract.Tests.Runner.cpp'
         $terminalConfig = Get-RSText -Path 'Plugins\Terminal\Terminal.cpp'
         $terminalVt = Get-RSText -Path 'Plugins\Terminal\TerminalVt.cpp'
         $prefsPluginConfig = Get-RSText -Path 'RedSalamander\Preferences.Plugin.Configuration.cpp'
@@ -5092,7 +5361,7 @@ Specs\TestRuns\local_scratch
         $local = Get-RSText -Path 'Plugins\FileSystem\FileSystem.cpp'
         $localPath = Get-RSText -Path 'Plugins\FileSystem\FileSystem.Path.cpp'
         $dummy = Get-RSText -Path 'Plugins\FileSystemDummy\FileSystemDummy.cpp'
-        $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContractTests.cpp'
+        $pluginTests = Get-RSText -Path 'Tests\PluginContractTests\PluginContract.Tests.Runner.cpp'
 
         $local | Should Match 'allowReplaceReadOnly\s*&&\s*!\s*allowOverwrite[\s\S]{0,100}return E_INVALIDARG'
         $local | Should Not Match 'SetFileAttributesW\(filePath\.c_str\(\),\s*attributes\s*&\s*~FILE_ATTRIBUTE_READONLY\)'
@@ -5112,11 +5381,11 @@ Specs\TestRuns\local_scratch
 
     It 'keeps Observatory Track 14 final-save, stale-suggestion, and bounded-menu contracts wired' {
         $settings = Get-RSText -Path 'RedSalamander\SettingsHotReload.cpp'
-        $settingsTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+        $settingsTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
         $navigationHeader = Get-RSText -Path 'RedSalamander\NavigationView.h'
         $navigationEdit = Get-RSText -Path 'RedSalamander\NavigationView.Edit.cpp'
         $navigationMenus = Get-RSText -Path 'RedSalamander\NavigationView.Menus.cpp'
-        $navigationTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.ViewCommands.cpp'
+        $navigationTests = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.ViewCommands.cpp'
 
         $settings | Should Match 'enum class SettingsSaveShutdownState[\s\S]{0,220}Running[\s\S]{0,100}FinalSavePending[\s\S]{0,100}FinalSaveQueued[\s\S]{0,100}ShuttingDown'
         $settings | Should Match 'BeginProcessShutdown\(\)[\s\S]{0,180}_submissionMutex[\s\S]{0,220}FinalSavePending'
@@ -5141,7 +5410,6 @@ Specs\TestRuns\local_scratch
             'RedConfigure',
             'RedLauncher',
             'RedSalamander',
-            'RedSalamanderMonitor',
             'RedSalamanderSearchService'
         )
         $implementationIncludePattern = '(?m)^\s*#\s*include\s*"[^"\r\n]+\.cpp"'
@@ -5197,12 +5465,400 @@ Describe 'Product source policies retained from the extracted DxUi test target' 
     }
 
     It 'TestConnectionCredentialPromptUiaPumpDoesNotDetachTimedOutWorkers' {
-        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Connections.cpp'
+        $source = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Connections.cpp'
         $helper = [regex]::Match($source, 'template <typename Task> \[\[nodiscard\]\] auto RunUiaTaskWithMessagePump\(std::wstring_view label[\s\S]*?(?=template <typename Task> \[\[nodiscard\]\] auto RunUiaTaskWithMessagePump\(Task&& task)')
         $helper.Success | Should Be $true
         $helper.Value | Should Not Match 'worker\.detach\(\)'
         $helper.Value | Should Match 'worker\.request_stop\(\);[\s\S]*worker\.join\(\);'
         $defaultReturn = $helper.Value.IndexOf('return Result{}')
         if ($defaultReturn -ge 0) { $helper.Value.IndexOf('worker.join()') | Should BeLessThan $defaultReturn }
+    }
+}
+
+Describe 'Test-owned volume mount source contracts' {
+    It 'never mounts a volume from native code and lets F7 consume only the harness-proved test-owned VHDX' {
+        # Q12: a test never mounts a volume it did not create. The only mount is the harness's
+        # Add-PartitionAccessPath on the VHDX volume it created and proved.
+        $mountCallers = @(git -C $repoRoot grep -l -E 'SetVolumeMountPoint[AW]?[[:space:]]*\(' -- '*.cpp' '*.h' '*.hpp' '*.inl')
+        $mountCallers | Should BeNullOrEmpty
+        $f7 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.AdmissionBaseline.cpp'
+        $helper = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.OwnedVirtualDisk.h'
+        $sandbox = Get-RSText -Path 'Tools\Modules\Testing\TestSandbox.psm1'
+        $f7 | Should Not Match 'DeleteVolumeMountPoint'
+        $f7 | Should Not Match 'TryGetVolumeGuidPathForPath\(alternateRoot\)'
+        $f7 | Should Match 'EvaluateOwnedVirtualDiskMount\(ObserveOwnedVirtualDiskMount\('
+        $f7 | Should Match 'RunOwnedVolumeRefusalControls'
+        $helper | Should Match 'BusTypeFileBackedVirtual'
+        $helper | Should Match 'foreign-volume-guid'
+
+        # The ownership proof and the durable receipt precede the only mount call.
+        $provision = [regex]::Match($sandbox, '(?s)function New-RSTestOwnedVirtualDiskMount \{.*?\r?\n\}').Value
+        $mount = $provision.IndexOf('& $operations.AddMount')
+        $mount | Should BeGreaterThan 0
+        $proof = $provision.IndexOf('Assert-RSTestOwnedVirtualDiskVolume')
+        $proof | Should BeGreaterThan 0
+        $proof | Should BeLessThan $mount
+        $receipt = $provision.IndexOf('-Stage mounting')
+        $receipt | Should BeGreaterThan $proof
+        $receipt | Should BeLessThan $mount
+        $created = $provision.IndexOf('-Stage creating')
+        $created | Should BeGreaterThan 0
+        $created | Should BeLessThan $provision.IndexOf('& $operations.CreateFile')
+
+        # The attached disk is proven to be the blank run-owned VHDX before anything formats it.
+        $format = $provision.IndexOf('& $operations.Format')
+        $blankProof = $provision.IndexOf('Assert-RSTestOwnedVirtualDiskBlankDisk')
+        $blankProof | Should BeGreaterThan $provision.IndexOf('& $operations.Attach')
+        $blankProof | Should BeLessThan $format
+        $provision.IndexOf('& $operations.GetDiskFacts') | Should BeGreaterThan $blankProof
+        $provision.IndexOf('& $operations.GetDiskFacts') | Should BeLessThan $format
+    }
+
+    It 'agrees on the test-owned VHDX mount layout, F7 name and environment between the harness and native code' {
+        $helper = Get-RSText -Path 'Tests\TestSupport\TestSupport.Tests.OwnedVirtualDisk.h'
+        $f7 = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.AdmissionBaseline.cpp'
+        $runner = Get-RSText -Path 'Tools\Run-AllTests.ps1'
+        $sandbox = Get-RSText -Path 'Tools\Modules\Testing\TestSandbox.psm1'
+
+        # F7 validates the mount the runner provisions under one name.
+        $f7Names = @([regex]::Matches($f7, 'GetOwnedVirtualDiskMountPath\(testRoot, runId, L"([^"]+)"\)') | ForEach-Object { $_.Groups[1].Value })
+        $f7Names.Count | Should Be 1
+        $f7Names[0] | Should Be 'f7-admission-baseline'
+        $f7 | Should Match ([regex]::Escape("mountedRoot = mountPath / L`"$($f7Names[0])`""))
+        $provider = [regex]::Match($runner, '(?s)function Get-RSRunAllTestsOwnedVirtualDisk \{.*?\r?\n\}').Value
+        $runnerNames = @([regex]::Matches($provider, "-Name '([^']+)'") | ForEach-Object { $_.Groups[1].Value })
+        $runnerNames.Count | Should Be 1
+        $runnerNames[0] | Should Be $f7Names[0]
+
+        # The native mount path, rebuilt from its own segments, is the harness layout's mount path.
+        $directoryName = [regex]::Match($helper, 'kOwnedVirtualDiskDirectoryName\{L"([^"]+)"\}').Groups[1].Value
+        $directoryName | Should Not BeNullOrEmpty
+        $native = [regex]::Match($helper, '(?s)GetOwnedVirtualDiskMountPath\([^)]*\)\s*\{\s*return \(testRoot((?:\s*/\s*[^/;]+?)+)\)\s*\.lexically_normal\(\);').Groups[1].Value
+        $native | Should Not BeNullOrEmpty
+        $segments = @($native -split '\s*/\s*' | Where-Object { $_ -ne '' } | ForEach-Object {
+                $segment = $_.Trim()
+                if ($segment -match '^L"([^"]+)"$') { $Matches[1] }
+                elseif ($segment -eq 'std::wstring(runId)') { '<run>' }
+                elseif ($segment -eq 'std::wstring(kOwnedVirtualDiskDirectoryName)') { $directoryName }
+                elseif ($segment -eq 'std::wstring(name)') { '<name>' }
+                else { throw "Unrecognized native mount-path segment '$segment'." }
+            })
+        ($segments -join '\') | Should Be "runs\<run>\scratch\$directoryName\<name>\mount"
+        $nativeMount = 'C:\T\' + (($segments -join '\').Replace('<run>', 'R').Replace('<name>', $f7Names[0]))
+        $provision = [regex]::Match($sandbox, '(?s)function New-RSTestOwnedVirtualDiskMount \{.*?\r?\n\}').Value
+        $provision | Should Match ([regex]::Escape("Get-RSTestOwnedVirtualDiskLayout -RunRoot (Join-Path (Join-Path `$root 'runs') `$safeRunId) -Name `$Name"))
+        $sandboxPath = Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1'
+        Import-Module $sandboxPath -ErrorAction Stop
+        $sandboxModule = @(Get-Module | Where-Object { $_.Path -eq $sandboxPath })
+        $sandboxModule.Count | Should Be 1
+        $layout = & $sandboxModule[0] { param($RunRoot, $Name) Get-RSTestOwnedVirtualDiskLayout -RunRoot $RunRoot -Name $Name } 'C:\T\runs\R' $f7Names[0]
+        $layout.MountPath | Should Be $nativeMount
+
+        # Only the runner hands these exact variables to a FileOps child.
+        foreach ($constant in @('kOwnedVirtualDiskMountEnvironmentVariable', 'kOwnedVirtualDiskVolumeEnvironmentVariable', 'kOwnedVirtualDiskUnavailableEnvironmentVariable')) {
+            $name = [regex]::Match($helper, "$constant\{L`"([^`"]+)`"\}").Groups[1].Value
+            $name | Should Match '^REDSALAMANDER_TEST_OWNED_VHDX_'
+            $runner | Should Match ([regex]::Escape("EnvironmentVariables['$name'] = "))
+            $f7 | Should Match "GetEnvironmentString\($constant\)"
+        }
+    }
+}
+
+# Q12: a test may create a link, mount, SUBST drive or share only inside a governed helper that
+# first proves the link and its target (or the exposed directory) lie inside one marked
+# X:\RedSalamander.Perf. Every call site in test code must sit inside one allowlisted body below.
+# The script pattern also covers -ItemType:Value, the -Type alias, -I* abbreviations, the ni alias and
+# splatted New-Item calls; the native pattern covers the Transacted and _EX variants.
+$script:RSTestExposureNativePattern = '\b(?:SetVolumeMountPoint[AW]?|DefineDosDevice[AW]?|CreateSymbolicLink(?:Transacted)?[AW]?|CreateHardLink(?:Transacted)?[AW]?|NetShareAdd|create_(?:directory_)?symlink|create_hard_link|copy_symlink|CreateAsSymbolicLink)\s*\(|\bFSCTL_SET_REPARSE_POINT(?:_EX)?\b|\b0x000900A4\b|\b0x0009040C\b'
+$script:RSTestExposureScriptPattern = '(?i)(?:\bNew-Item\b|(?<![\w$-])ni(?![\w-]))(?:[^\r\n`;|]|`\r?\n)*?(?:-(?:I\w*|Type)[\s:]+[''"]?(?:Junction|SymbolicLink|HardLink|\$\w+)|(?<![\w$])@\w+)|\bmklink\b|\bsubst(?:\.exe)?\b|\bfsutil(?:\.exe)?\s+hardlink\b|\bNew-SmbShare\b|\bnet(?:\.exe)?\s+share\b|\bAdd-PartitionAccessPath\b|\bMount-(?:DiskImage|VHD)\b|\bmountvol(?:\.exe)?\b(?![^\r\n]*\s/D\b)'
+$script:RSTestExposureAllowlist = @(
+    [pscustomobject]@{ Path = 'Common/Common.Tests.SandboxPath.h'; Anchor = 'inline bool CreateSandboxedSymbolicLink\('; Guard = 'RequireSandboxedLinkTarget\(link, target, ec\)'
+        Why = 'Shared guarded symbolic-link creator for native test fixtures.' }
+    [pscustomobject]@{ Path = 'Common/Common.Tests.SandboxPath.h'; Anchor = 'inline bool CreateSandboxedHardLink\('; Guard = 'RequireSandboxedLinkTarget\(link, existingFile, ec\)'
+        Why = 'Shared guarded hard-link creator; it also refuses a relative existing path.' }
+    [pscustomobject]@{ Path = 'RedSalamander/SelfTest/Commands/Commands.Tests.BatchRename.cpp'; Anchor = 'bool TryCreateBatchRenameDirectorySymlink\('; Guard = 'RequireSandboxedLinkTarget\(linkPath, targetPath'
+        Why = 'Retries without the unprivileged flag and reports the Win32 error so a missing privilege can skip; a guard refusal reports ERROR_BAD_PATHNAME, which fails the case.' }
+    [pscustomobject]@{ Path = 'RedSalamander/SelfTest/Commands/Commands.Tests.ShellCommands.cpp'; Anchor = 'HRESULT CreateDirectoryJunctionForCommandsSelfTest\('; Guard = 'RequireSandboxedLinkTarget\(junctionPath, targetPath'
+        Why = 'Writes a mount-point reparse buffer for a deterministic junction.' }
+    [pscustomobject]@{ Path = 'RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.Tests.Runner.cpp'; Anchor = 'bool TryCreateDirectorySymlink\('; Guard = 'RequireSandboxedLinkTarget\(linkPath, targetPath'
+        Why = 'Directory symbolic link with privilege fallback; a guard refusal sets ERROR_BAD_PATHNAME, which callers fail on.' }
+    [pscustomobject]@{ Path = 'RedSalamander/SelfTest/CompareDirectories/CompareDirectoriesEngine.Tests.Runner.cpp'; Anchor = 'bool TryCreateDirectoryJunction\('; Guard = 'RequireSandboxedLinkTarget\(junctionPath, targetPath'
+        Why = 'Writes a mount-point reparse buffer for a search alias junction.' }
+    [pscustomobject]@{ Path = 'RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp'; Anchor = 'bool TryCreateJunction\('; Guard = 'RequireSandboxedLinkTarget\(junctionPath, targetDirectoryPath'
+        Why = 'FileOps junction fixtures; the guard runs before the junction path is cleared.' }
+    [pscustomobject]@{ Path = 'RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp'; Anchor = 'bool DefineSandboxedSubstDrive\('; Guard = 'RequireSandboxedExposureTarget\(directory'
+        Why = 'No-broadcast SUBST drive naming one sandbox directory.' }
+    [pscustomobject]@{ Path = 'RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp'; Anchor = 'void RemoveSandboxedSubstDrive\('; Guard = 'DDD_REMOVE_DEFINITION \| DDD_EXACT_MATCH_ON_REMOVE'
+        Why = 'Removes only the exact SUBST definition DefineSandboxedSubstDrive made.' }
+    [pscustomobject]@{ Path = 'Tools/Modules/Testing/TestSandbox.psm1'; Anchor = 'function New-RSTestSandboxLink \{'; Guard = 'Assert-RSTestSandboxLinkTarget -Path'
+        Why = 'The one governed PowerShell creator of test junctions, symbolic links and hard links.' }
+    [pscustomobject]@{ Path = 'Tools/Modules/Testing/TestSandbox.psm1'; Anchor = '^    Attach = \{'; Guard = '-NoDriveLetter'
+        Why = 'Attaches only the run-owned VHDX, with no drive letter; New-RSTestOwnedVirtualDiskMount proves ownership before mounting.' }
+    [pscustomobject]@{ Path = 'Tools/Modules/Testing/TestSandbox.psm1'; Anchor = '^    AddMount = \{'; Guard = $null
+        Why = 'Mounts the proved test-owned VHDX volume at its empty run-owned directory; the test-owned volume mount contract above enforces proof before mount.' }
+    [pscustomobject]@{ Path = 'Tools/Tests/TestSandboxContainment.Tests.ps1'; Anchor = 'public static void SetMountPoint\('; Guard = 'string\.Equals\(substituteName, SyntheticVolume'
+        Why = 'Raw mount point naming a reserved GUID that resolves to no volume, inside a marked sandbox; it exercises cleanup refusal without the mount manager.' }
+    # Frozen historical terminal-engine evidence inputs. Their bytes belong to the sealed Round 3/4
+    # frozen-input and collection-neutrality closures, so they are pinned here rather than edited.
+    # Each junction stays under $TestDrive or a sandbox scratch directory, which Run-AllTests places in the run sandbox.
+    [pscustomobject]@{ Path = 'Tools/Tests/TerminalEngineCollectionDescriptor.Tests.ps1'; Anchor = "It 'rejects a reparse parent on the generated-output path'"; Guard = $null
+        Why = 'Frozen historical evidence input; junction from $TestDrive to $TestDrive.' }
+    [pscustomobject]@{ Path = 'Tools/Tests/TerminalEngineEvaluator.Tests.ps1'; Anchor = "It 'rejects a reparse directory before any governance path is followed'"; Guard = $null
+        Why = 'Frozen historical evidence input; junction inside a New-RSTestSandboxScratchDirectory fixture.' }
+    [pscustomobject]@{ Path = 'Tools/Tests/TerminalEngineGate0Harness.Tests.ps1'; Anchor = "It 'rejects a host-header root reached through an ancestor junction'"; Guard = $null
+        Why = 'Frozen historical evidence input; junction from $TestDrive to $TestDrive.' }
+)
+
+function Get-RSTestExposureSourcePaths {
+    $files = @(git -C $repoRoot ls-files -- `
+            'RedSalamander/SelfTest/**' 'RedSalamander/**/*.Tests.*' 'Tests/**' 'Plugins/**/*.Tests.*' 'Common/Common.Tests.*' `
+            'Tools/Tests/**' 'Tools/**/*.Tests.ps1' 'Tools/Modules/Testing/**' 'Tools/Run-AllTests.ps1' 'Tools/Test-Changes.ps1' 'Tools/Clean-TestSandbox.ps1')
+    if ($LASTEXITCODE -ne 0) { throw "git ls-files failed with exit $LASTEXITCODE." }
+    # This contract file spells every pattern it forbids, so it is the one exclusion.
+    return @($files | Where-Object { $_ -match '\.(?:cpp|h|hpp|inl|c|cs|ps1|psm1)$' -and $_ -ne 'Tools/Tests/TestHarnessSourceContracts.Tests.ps1' } | Sort-Object -Unique)
+}
+
+function Get-RSTestExposureBodySpans {
+    param([Parameter(Mandatory = $true)][string]$Text, [Parameter(Mandatory = $true)][string]$Anchor)
+
+    $spans = @()
+    foreach ($anchorMatch in [regex]::Matches($Text, $Anchor, [Text.RegularExpressions.RegexOptions]::Multiline)) {
+        $lineStart = if ($anchorMatch.Index -eq 0) { 0 } else { $Text.LastIndexOf("`n", $anchorMatch.Index - 1) + 1 }
+        $indent = [regex]::Match($Text.Substring($lineStart), '^[ \t]*').Value
+        # The body ends at the first closing brace at the anchor line's own indentation.
+        $close = [regex]::Match($Text.Substring($anchorMatch.Index), "(?m)^$([regex]::Escape($indent))\}")
+        if (-not $close.Success) { throw "Allowlisted body '$Anchor' has no closing brace at its indentation." }
+        $spans += [pscustomobject]@{ Start = $anchorMatch.Index; End = $anchorMatch.Index + $close.Index + $close.Length }
+    }
+    return $spans
+}
+
+function Get-RSTestExposureViolations {
+    param([Parameter(Mandatory = $true)][hashtable]$Sources, [Parameter(Mandatory = $true)][object[]]$Allowlist)
+
+    $violations = [Collections.Generic.List[string]]::new()
+    $usedEntries = [Collections.Generic.HashSet[object]]::new()
+    foreach ($path in @($Sources.Keys | Sort-Object)) {
+        $text = [string]$Sources[$path]
+        $patterns = @($script:RSTestExposureNativePattern)
+        if ($path -match '\.psm?1$') { $patterns += $script:RSTestExposureScriptPattern }
+        $sites = @(foreach ($pattern in $patterns) { [regex]::Matches($text, $pattern) })
+        if ($sites.Count -eq 0) { continue }
+        $bodies = @(foreach ($entry in @($Allowlist | Where-Object { $_.Path -eq $path })) {
+                foreach ($span in @(Get-RSTestExposureBodySpans -Text $text -Anchor $entry.Anchor)) {
+                    [pscustomobject]@{ Entry = $entry; Start = $span.Start; End = $span.End }
+                }
+            })
+        foreach ($site in $sites) {
+            $line = ([regex]::Matches($text.Substring(0, $site.Index), "`n")).Count + 1
+            $owner = @($bodies | Where-Object { $site.Index -ge $_.Start -and $site.Index -lt $_.End })
+            if ($owner.Count -ne 1) {
+                $violations.Add("${path}:${line}: '$($site.Value.Trim())' is not inside an allowlisted sandbox-guarded helper")
+                continue
+            }
+            [void]$usedEntries.Add($owner[0].Entry)
+            $guard = $owner[0].Entry.Guard
+            if ($null -ne $guard) {
+                $before = [regex]::IsMatch($text.Substring($owner[0].Start, $site.Index - $owner[0].Start), $guard)
+                $sameLine = [regex]::IsMatch($text.Substring($site.Index, $owner[0].End - $site.Index), "^[^\r\n]*$guard")
+                if (-not $before -and -not $sameLine) {
+                    $violations.Add("${path}:${line}: '$($site.Value.Trim())' is not preceded by its guard '$guard'")
+                }
+            }
+        }
+    }
+    foreach ($entry in $Allowlist) {
+        if ($Sources.ContainsKey($entry.Path) -and -not $usedEntries.Contains($entry)) {
+            $violations.Add("$($entry.Path): allowlist entry '$($entry.Anchor)' no longer owns a call site; remove it")
+        }
+    }
+    return [string[]]$violations
+}
+
+Describe 'Test link, mount and share exposure source contracts' {
+    It 'keeps every link, mount, SUBST and share call in test code inside a sandbox-guarded allowlisted helper' {
+        foreach ($entry in $script:RSTestExposureAllowlist) {
+            [string]::IsNullOrWhiteSpace($entry.Why) | Should Be $false
+        }
+        $sources = @{}
+        foreach ($path in Get-RSTestExposureSourcePaths) {
+            $sources[$path] = [IO.File]::ReadAllText((Join-Path $repoRoot $path))
+        }
+        $sources.Count | Should BeGreaterThan 100
+        $violations = @(Get-RSTestExposureViolations -Sources $sources -Allowlist $script:RSTestExposureAllowlist)
+        ($violations -join [Environment]::NewLine) | Should BeNullOrEmpty
+    }
+
+    It 'flags the old F7 real-volume mount, an unguarded helper call and unallowlisted links' {
+        $f7 = 'RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.AdmissionBaseline.cpp'
+        $synthetic = @{
+            $f7 = "    if (! SetVolumeMountPointW(mountText.c_str(), mountedVolumeGuid.c_str()))`n        return reject(L`"mount`");`n"
+            'Tools/Modules/Testing/TestSandbox.psm1' = "function New-RSTestSandboxLink {`n    New-Item -ItemType Junction -Path `$Path -Target `$Target`n}`n"
+            'Tools/Tests/Example.Tests.ps1' = "`$null = New-Item ```n    -ItemType SymbolicLink ```n    -Path `$link -Target `$target`n& subst.exe Q: `$root`n"
+            'Plugins/Example/Example.Tests.Links.cpp' = "std::filesystem::create_directory_symlink(target, link, ec);`n"
+            'Tools/Tests/Bypass.Tests.ps1' = "New-Item -ItemType:Junction -Path `$a -Target `$b`nni -Type SymbolicLink `$a -Target `$b`nNew-Item -It HardLink `$a -Value `$b`n`$null = New-Item @linkArguments`nNew-Item -ItemType Directory -Path `$a`n"
+            'Tests/Example/Example.Tests.Bypass.cpp' = "CreateSymbolicLinkTransactedW(link, target, 0, tx);`nCreateHardLinkTransactedW(link, target, nullptr, tx);`nDeviceIoControl(h, FSCTL_SET_REPARSE_POINT_EX, buf, size, nullptr, 0, &bytes, nullptr);`n"
+        }
+        $violations = @(Get-RSTestExposureViolations -Sources $synthetic -Allowlist $script:RSTestExposureAllowlist)
+        @($violations | Where-Object { $_ -like "${f7}:1: 'SetVolumeMountPointW(*" }).Count | Should Be 1
+        @($violations | Where-Object { $_ -like '*TestSandbox.psm1:2:*not preceded by its guard*' }).Count | Should Be 1
+        @($violations | Where-Object { $_ -like 'Tools/Tests/Example.Tests.ps1:1:*' }).Count | Should Be 1
+        @($violations | Where-Object { $_ -like 'Tools/Tests/Example.Tests.ps1:4:*subst.exe*' }).Count | Should Be 1
+        @($violations | Where-Object { $_ -like 'Plugins/Example/Example.Tests.Links.cpp:1:*create_directory_symlink(*' }).Count | Should Be 1
+        # Colon syntax, the -Type alias, an -I* abbreviation, the ni alias and a splat are flagged; a directory is not.
+        foreach ($line in 1..4) {
+            @($violations | Where-Object { $_ -like "Tools/Tests/Bypass.Tests.ps1:${line}:*" }).Count | Should Be 1
+        }
+        @($violations | Where-Object { $_ -like 'Tools/Tests/Bypass.Tests.ps1:5:*' }).Count | Should Be 0
+        foreach ($line in 1..3) {
+            @($violations | Where-Object { $_ -like "Tests/Example/Example.Tests.Bypass.cpp:${line}:*" }).Count | Should Be 1
+        }
+
+        # The real pre-fix F7 source, when this clone has that history (hosted clones may be shallow).
+        & git -C $repoRoot cat-file -e "fc222f854^:$f7" 2>$null
+        if ($LASTEXITCODE -eq 0) {
+            $old = (& git -C $repoRoot show "fc222f854^:$f7") -join "`n"
+            $oldViolations = @(Get-RSTestExposureViolations -Sources @{ $f7 = $old } -Allowlist $script:RSTestExposureAllowlist)
+            @($oldViolations | Where-Object { $_ -match 'SetVolumeMountPointW\(' }).Count | Should Be 1
+        }
+    }
+
+    It 'fails, never skips, a FileOps case whose loopback share alias the sandbox guard refuses' {
+        $runner = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
+        $probe = [regex]::Match($runner, '(?s)LoopbackShareStatus ProbeLoopbackShare\(.*?\r?\n\}').Value
+        $probe | Should Match '(?s)if \(alias\.empty\(\)\)\s*\{\s*return LoopbackShareStatus::Refused;'
+        $throughputPath = Join-Path $repoRoot 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Throughput.cpp'
+        $throughput = [IO.File]::ReadAllText($throughputPath)
+        # This reviewed result-returning case fails with a reason-only aggregate. Verify its
+        # defaults and the runner's failure route before admitting that one structured return.
+        $throughput | Should Match 'struct\s+ThroughputCaseResult\s+final\s*\{\s*bool\s+passed\s*=\s*false;\s*bool\s+skipped\s*=\s*false;'
+        $runner | Should Match 'if\s*\(!\s*result\.passed\s*&&\s*!\s*result\.skipped\)\s*\{\s*Fail\([^;]*\);\s*return true;'
+        $structuredCase = [regex]::Match($throughput, '(?ms)^\[\[nodiscard\]\]\s+ThroughputCaseResult\s+RunFileOpsSameProviderBridgeDestinationStorageChecks\([^{};]*\)\s+noexcept\s*\{.*?(?=^\[\[nodiscard\]\]|\z)')
+        $structuredCase.Success | Should Be $true
+        # Structural, not a count: every call site anywhere under the self-test tree must route a
+        # Refused status to failure, so adding a case cannot silently reintroduce a skip.
+        $files = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot 'RedSalamander\SelfTest') -Recurse -File |
+                Where-Object { $_.Extension -in '.cpp', '.h' })
+        $probes = 0
+        foreach ($file in $files) {
+            $text = [IO.File]::ReadAllText($file.FullName)
+            # The old boolean probe folded a refusal into "unreachable", so callers skipped on it.
+            $text | Should Not Match '\bLoopbackShareReachable\('
+            foreach ($call in [regex]::Matches($text, '\bProbeLoopbackShare\(')) {
+                $following = $text.Substring($call.Index, [Math]::Min(600, $text.Length - $call.Index))
+                # The definition itself (`ProbeLoopbackShare(const std::filesystem::path&`) is not a call site.
+                if ($following -match '^ProbeLoopbackShare\(const ') { continue }
+                $probes++
+                $refusal = [regex]::Match($following, '(?s)^ProbeLoopbackShare\([^;]*\);\s*if\s*\(uncStatus == LoopbackShareStatus::Refused\)\s*(?<body>(?:\{\s*)?(?:\w+\([^;{}]*\);\s*)*(?:Fail|return reject)\([^;]*\);(?:\s*return true;)?(?:\s*\})?|return\s*\{[^{}]*\};)')
+                $refusal.Success | Should Be $true
+                $body = $refusal.Groups['body'].Value
+                $body | Should Not Match '\b(?:skipped|passed)\s*=\s*true'
+                $directFailure = $body -match '\b(?:Fail|return reject)\('
+                $reviewedStructuredFailure = $file.FullName -eq $throughputPath -and
+                    $call.Index -ge $structuredCase.Index -and $call.Index -lt ($structuredCase.Index + $structuredCase.Length) -and
+                    $body -match '^return\s*\{\s*\.reason\s*=\s*L"[^"\r\n]+"\s*\};\s*$'
+                ($directFailure -or $reviewedStructuredFailure) | Should Be $true
+            }
+        }
+        # Guards against the scan going vacuous (for example a moved directory).
+        $probes | Should BeGreaterThan 0
+    }
+
+    It 'guards every link the FileSystem object-binding debug self-test creates' {
+        $source = Get-RSText -Path 'Plugins\FileSystem\FileSystem.FileOps.cpp'
+        $body = [regex]::Match($source, '(?s)void FileSystemInternal::RunDebugObjectBindingSelfTest\(.*?\r?\n\}\r?\n').Value
+        $body.Length | Should BeGreaterThan 0
+        $body | Should Not Match '\bCreateHardLinkW\s*\('
+        $rootGuard = $body.IndexOf('RequireSandboxedExposureTarget(root, sandboxEc)')
+        $rootGuard | Should BeGreaterThan 0
+        $rootGuard | Should BeLessThan $body.IndexOf('CreateDirectoryW(root.c_str()')
+        $body | Should Match 'CreateSandboxedHardLink\(alias, original, sandboxEc\)'
+        $body | Should Match 'RequireSandboxedLinkTarget\(junction, target, sandboxEc\) &&\s+SUCCEEDED\(BuildMountPointReparseData'
+        # Every reparse write in the body follows a guard issued after the previous write.
+        $previous = 0
+        $writes = @([regex]::Matches($body, 'WriteReparsePointData\('))
+        $writes.Count | Should Be 2
+        foreach ($write in $writes) {
+            $body.Substring($previous, $write.Index - $previous) | Should Match 'RequireSandboxedLinkTarget\('
+            $previous = $write.Index + $write.Length
+        }
+    }
+}
+
+Describe 'Recycle Bin hygiene source contracts' {
+    BeforeAll {
+        $fileOps = Get-RSText -Path 'Plugins\FileSystem\FileSystem.FileOps.cpp'
+        $runnerHeader = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.h'
+        $runnerSource = Get-RSText -Path 'RedSalamander\SelfTest\Common\Common.Tests.Runner.cpp'
+        $fileOpsRunner = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Runner.cpp'
+    }
+
+    It 'journals the Recycle Bin item every Local recycle progress sink sees created' {
+        $sinks = @([regex]::Matches($fileOps, '(?s)HRESULT STDMETHODCALLTYPE PostDeleteItem\(\[\[maybe_unused\]\] DWORD flags, IShellItem\* item, HRESULT hrDelete, IShellItem\* newlyCreated\) noexcept override\s*\{(?<body>.*?)\r?\n    \}\r?\n'))
+        $sinks.Count | Should Be 2
+        foreach ($sink in $sinks) {
+            $sink.Groups['body'].Value | Should Match '(?s)^\s*#if defined\(ENABLE_TESTS\)\s*JournalRecycledItemForTest\(item, newlyCreated\);\s*#endif'
+        }
+        $fileOps | Should Match 'GetDedicatedExternalTestSandboxBase\(std::filesystem::path\(originalPath\.get\(\)\), Common::Testing::kTestSandboxDirectoryName\)'
+        $fileOps | Should Match 'extern "C" __declspec\(dllexport\) HRESULT __stdcall RedSalamanderFileSystemTestTakeRecycledItems\('
+    }
+
+    It 'purges a case''s recycled items at every case and phase boundary, whatever the outcome' {
+        $attempt = [regex]::Match($runnerHeader, '(?s)void RunCaseAttempt\(.*?\r?\n\}\r?\n').Value
+        $attempt.Length | Should BeGreaterThan 0
+        $body = $attempt.IndexOf('std::forward<Func>(func)(state)')
+        $purge = $attempt.IndexOf('PurgeRecycledTestItems()')
+        $body | Should BeGreaterThan 0
+        $purge | Should BeGreaterThan $body
+        # The purge runs before any outcome branch can return.
+        $purge | Should BeLessThan $attempt.IndexOf('if (! ok || ! state.failure.empty())')
+        $attempt | Should Match 'state\.Require\(false, recycleLeak\)'
+
+        $record = [regex]::Match($fileOpsRunner, '(?s)void RecordCurrentPhase\(SelfTestState& state,.*?\r?\n\}\r?\n').Value
+        $record.Length | Should BeGreaterThan 0
+        $record.IndexOf('SelfTest::PurgeRecycledTestItems(') | Should BeLessThan $record.IndexOf('state.phaseResults.push_back(')
+        $record.IndexOf('SelfTest::PurgeRecycledTestItems(') | Should BeGreaterThan 0
+        $record | Should Match 'item\.status = SelfTest::SelfTestCaseResult::Status::failed;'
+
+        # A Recycle still finishing when a suite's last case returned is purged at the suite end.
+        $commandsRunner = Get-RSText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp'
+        $compareRunner = Get-RSText -Path 'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Runner.cpp'
+        $commandsRun = [regex]::Match($commandsRunner, '(?s)bool CommandsSelfTest::Run\(HWND mainWindow,.*?\r?\n\}\r?\n').Value
+        $commandsRun.Length | Should BeGreaterThan 0
+        $drainAt = $commandsRun.IndexOf('fileOps->HasActiveOperations()')
+        $drainAt | Should BeGreaterThan 0
+        $commandsRun.IndexOf('SelfTest::PurgeRecycledTestItemsAtSuiteEnd(suite);') | Should BeGreaterThan $drainAt
+        $commandsRun.IndexOf('SelfTest::PurgeRecycledTestItemsAtSuiteEnd(suite);') | Should BeLessThan $commandsRun.IndexOf('suite.durationMs')
+        $compareFinal = $compareRunner.IndexOf('SelfTest::PurgeRecycledTestItemsAtSuiteEnd(suite);')
+        $compareFinal | Should BeGreaterThan $compareRunner.IndexOf('#include "CompareDirectoriesEngine.Tests.Cases.SearchAndIndex.cpp"')
+        $compareFinal | Should BeLessThan $compareRunner.IndexOf('AppendCompareSelfTestTraceLine(L"Run: finalizing");')
+        $runnerSource | Should Match '(?s)void PurgeRecycledTestItemsAtSuiteEnd\(SelfTestSuiteResult& suite\) noexcept.*?SelfTestCaseResult::Status::failed'
+    }
+
+    It 'requires every recycle-bin batch phase to purge exactly the items its task recycled' {
+        $phases = Get-RSText -Path 'RedSalamander\SelfTest\FileOperations\FolderWindow.FileOperations.Tests.Phases07_09.cpp'
+        $fileOpsRunner | Should Match '(?s)std::wstring PurgeExpectedRecycledTestItems\(uint64_t expectedCount\) noexcept.*?purged != expectedCount'
+        foreach ($phase in @('Phase7_RecycleBinBatchDelete', 'Phase7_RecycleBinBatchDeleteMultiBatch')) {
+            $body = [regex]::Match($phases, "(?s)case SelfTestState::Step::$($phase):\r?\n\{.*?\r?\n\}\r?\n").Value
+            $body.Length | Should BeGreaterThan 0
+            $expected = if ($phase -eq 'Phase7_RecycleBinBatchDelete') { 2 } else { 1 }
+            @([regex]::Matches($body, 'PurgeExpectedRecycledTestItems\(kBatchFileCount\)')).Count | Should Be $expected
+        }
+    }
+
+    It 'deletes only a proven entry of the current user''s Recycle Bin and never enumerates the bin' {
+        $purge = [regex]::Match($runnerSource, '(?s)std::wstring PurgeRecycledTestItem\(const RecycledTestItem& item\) noexcept\r?\n\{.*?\r?\n\}\r?\n').Value
+        $purge.Length | Should BeGreaterThan 0
+        $purge | Should Match 'HasValidTestSandboxMarker\(sandboxBase\.value\(\)\)'
+        $purge | Should Match 'IsInsideCurrentSelfTestRun\(original, sandboxBase\.value\(\)\)'
+        $purge | Should Match 'kRecycleBinDirectoryName'
+        $purge | Should Match 'userSid'
+        $purge | Should Match 'IsExistingTestSandboxPathReparseFree\(sidDirectory'
+        $purge | Should Match '_wcsicmp\(recordedOriginal\.c_str\(\), item\.originalPath\.c_str\(\)\)'
+        $deleteAt = $purge.IndexOf('RemovePathTreeNoFollow(recycled)')
+        $deleteAt | Should BeGreaterThan $purge.IndexOf('ReadRecycleBinInfoOriginalPath(')
+        $deleteAt | Should BeGreaterThan $purge.IndexOf('_wcsicmp(recordedOriginal')
+        $runnerSource | Should Not Match 'SHEmptyRecycleBin'
+        $purge | Should Not Match 'FindFirstFile|directory_iterator'
     }
 }

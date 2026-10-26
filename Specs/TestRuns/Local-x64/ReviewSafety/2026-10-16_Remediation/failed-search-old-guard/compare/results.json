@@ -1,0 +1,22 @@
+{
+    "run_started_utc": "2026-10-16T10:22:32.863Z",
+    "suite": "CompareDirectories",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261016T102152Z-93612-bbeec424b3174dd1b3ced5a47c98a1a9\\artifacts\\selftest\\last_run\\compare",
+    "duration_ms": 89,
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "FILE_FULL_DIR_INFO parsing must bound FileNameLength against the validated entry bytes before reading FileName.",
+    "cases": [
+        {
+            "name": "search_low_hardening_smoke",
+            "status": "failed",
+            "duration_ms": 70,
+            "repeat_index": 1,
+            "reason": "FILE_FULL_DIR_INFO parsing must bound FileNameLength against the validated entry bytes before reading FileName."
+        }
+    ],
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

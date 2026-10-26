@@ -17,6 +17,9 @@ namespace RedSalamander.Tooling
     {
         private const int JobObjectExtendedLimitInformation = 9;
         private const int ProcessBasicInformationClass = 0;
+        // JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION applies SEM_NOGPFAULTERRORBOX to every process of the job: a contained
+        // process that crashes ends with its exception code instead of holding the run on a Windows Error Reporting dialog.
+        private const uint JobObjectLimitDieOnUnhandledException = 0x00000400;
         private const uint JobObjectLimitKillOnJobClose = 0x00002000;
 
         [StructLayout(LayoutKind.Sequential)]
@@ -106,7 +109,7 @@ namespace RedSalamander.Tooling
             try
             {
                 ExtendedLimitInformation limits = new ExtendedLimitInformation();
-                limits.BasicLimitInformation.LimitFlags = JobObjectLimitKillOnJobClose;
+                limits.BasicLimitInformation.LimitFlags = JobObjectLimitKillOnJobClose | JobObjectLimitDieOnUnhandledException;
                 int size = Marshal.SizeOf(typeof(ExtendedLimitInformation));
                 IntPtr buffer = Marshal.AllocHGlobal(size);
                 try
@@ -1013,13 +1016,13 @@ function Set-RSProcessEnvironmentValue {
         [string]$Name,
 
         [AllowNull()]
-        [string]$Value
+        [object]$Value
     )
 
     $canonicalName = Get-RSCanonicalEnvironmentName -Name $Name
 
     if ($null -ne $Value) {
-        $EnvironmentDictionary[$canonicalName] = $Value
+        $EnvironmentDictionary[$canonicalName] = [string]$Value
         return
     }
 

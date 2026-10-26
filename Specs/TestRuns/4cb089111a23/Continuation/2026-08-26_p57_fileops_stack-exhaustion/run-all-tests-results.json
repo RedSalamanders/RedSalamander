@@ -1,0 +1,1011 @@
+{
+  "schema": "red-salamander.run-all-tests.v1",
+  "run_started_utc": "2026-08-26T16:22:25.3731058Z",
+  "run_ended_utc": "2026-08-26T16:25:43.1632883Z",
+  "duration_ms": 197790,
+  "suite": "FileOps",
+  "platform": "x64",
+  "configuration": "Debug",
+  "executable": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\RedSalamander.exe",
+  "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260826T162158Z-34212-fe29ecddad7d4fd7a406d3de9217cf61\\artifacts\\selftest\\last_run",
+  "test_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox",
+  "run_id": "20260826T162158Z-34212-fe29ecddad7d4fd7a406d3de9217cf61",
+  "fail_fast": false,
+  "timeout_scale": 1.0,
+  "case_filter": "",
+  "exit_code": 1,
+  "passed": 53,
+  "failed": 1,
+  "skipped": 0,
+  "total": 54,
+  "classifications": {
+    "passed": 0,
+    "flaky": 0,
+    "regression": 0,
+    "isolation_suspect": 0,
+    "unclassified_failure": 1
+  },
+  "quarantine": {
+    "is_valid": true,
+    "has_blocking_entries": false,
+    "active_count": 0,
+    "invalid_count": 0,
+    "active_entries": [],
+    "invalid_entries": [],
+    "errors": [],
+    "repair_attempt_count": 0,
+    "repair_reproduced_count": 0,
+    "repair_attempts": []
+  },
+  "test_sandbox_audit": {
+    "schema": "red-salamander.test-sandbox-disk-audit.v1",
+    "is_clean": false,
+    "issue_count": 112,
+    "test_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox",
+    "run_id": "20260826T162158Z-34212-fe29ecddad7d4fd7a406d3de9217cf61",
+    "allowed_run_ids": [
+      "20260826T162158Z-34212-fe29ecddad7d4fd7a406d3de9217cf61"
+    ],
+    "issues": [
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\focused-p34-copyonly",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\focused-p34-copyonly-final",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\focused-p34-phase11",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\focused-p34-phase11-final",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\focused-p34-phase11-final2",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\focused-p34-phase12",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\focused-p34-phase9",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\focused-p34-phase9-fixed",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\focused-path-parent",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\manual-p3-link",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\manual-pester",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\pester-focused-phase4-2.xml",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\pester-focused-phase4-3.xml",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\pester-focused-phase4-4.xml",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\pester-focused-phase4-5.xml",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-root-child",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\pester-focused-phase4.xml",
+        "reason": "Unified TestSandbox root should contain only the runs directory."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260825T151823392Z-87032-f938e8c882e144e9a8b8eb1fb99bc2c7",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260825T151824749Z-87032-b60f9ba4cdea49bfaeca45df559de35d",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260825T151832095Z-33920-626fbaf75184442c9e092c6f15248915",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\a90e6726-fo-high-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\artifact-touch-direct-20260826",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p1-final-clipboard-20260822",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p1-final-contract-20260822",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p1-final-validator-20260822",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p48-fileops_movemergeintoexistingfoldersamevolume",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p48-focused-current",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p52-01-cmd_pane_batchRename_window_executes_local_rename",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p52-02-cmd_pane_batchRename_window_invokes_success_callback",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p52-03-cmd_pane_batchRename_window_executes_swap_rename",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p52-04-cmd_pane_batchRename_window_executes_three_member_cycle",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p52-05-cmd_pane_batchRename_partial_batch_failure_tracks_completed_rows",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p52-06-cmd_pane_batchRename_cancel_mid_batch_tracks_completed_rows",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p52-07-cmd_pane_batchRename_window_does_not_bypass_central_mutation_when_unsupported",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p52-08-cmd_pane_batchRename_window_blocks_destination_created_after_preview",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p52-09-cmd_pane_batchRename_window_blocks_source_missing_after_preview",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p52-10-cmd_pane_batchRename_close_while_execution_inflight_is_bounded",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p52-11-cmd_pane_batchRename_window_executes_case_only_local_rename",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p52-12-file_operations_phase0_typed_contract_source_guard",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-p52-engine-direct-20260826",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-phase4-conflict-loading",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-phase4-conflict-loading-2",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-phase4-conflict-loading-release",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-phase4-conflict-popup-suite",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-phase4-phase10-debug",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\codex-phase4-phase10-release",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-chrome-tab-only-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-commands-focused-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-commands-focused-retry-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-commands-focused-retry2-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-fileops-Fairstream_CrossFsConcurrentMoveUsesBridge-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-fileops-Floodgate_CrossFsMoveCleanupDetectsDestinationCorruption-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-fileops-Floodgate_CrossFsMoveDestinationGetSizeFailurePreservesSource-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-fileops-floodgate-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-fileops-one-floodgate-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-fileops-one-noredirect-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-highs-fo-debug-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-lifecycle-only-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-removal-focus-release-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-review-fixes-final-debug-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-review-fixes-focused-debug-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\i12-terminal-lifecycle-layoutfix-20260819",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-delete-bytes",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-delete-bytes-final",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-delete-bytes-fixed",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-delete-locked-child",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-delete-locked-child-fixed",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-delete-parallel-knobs",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-delete-parallel-knobs-fixed",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-family-final",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-overlap-closeout",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-overlap-cookie-fix",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-overlap-final",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-phase5",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-phase5-2",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-popup-contract",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-popup-contract-final",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-settings-contract-final",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-single",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-skip-release-final",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-skip-release-fixed",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-source-contract",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-source-contract-final",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-switch",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-switch-2",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-switch-3",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-discovery-switch-closeout",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-p25-bridge-discovery-bound-fixed",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-p25-delete-bytes-post-cleanup",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-p25-delete-locked-post-cleanup",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-p25-delete-parallel-post-cleanup",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-p25-delete-swap-post-cleanup",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-p25-peritem-discovery-fixed",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-p25-popup-smoke-after-leaf-discovery",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-p25-source-contract-delete-final",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-p25-source-contract-final2",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-p3-link-2",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\manual-p3-link-3",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\p46-confirmation-focused-1",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\p46-confirmation-focused-2",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\p46-permanent-delete-focused-3",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\p46-verification-focused-1",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\p46-verification-focused-10",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\p46-verification-focused-11",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\p46-verification-focused-2",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\p46-verification-focused-3",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\p46-verification-focused-4",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\p46-verification-focused-5",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\p46-verification-focused-6",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\p46-verification-focused-7",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\p46-verification-focused-8",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\p46-verification-focused-9",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      },
+      {
+        "category": "unexpected-test-run-dir",
+        "path": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\pester-targeted-retry-20260826",
+        "reason": "Only the current runner-owned run directory should remain during post-run audit."
+      }
+    ]
+  },
+  "suites": [
+    {
+      "suite": "FileOperations",
+      "kind": "SelfTest",
+      "exit_code": 1,
+      "duration_ms": 187868,
+      "classification": "UNCLASSIFIED_FAILURE",
+      "classification_reason": "Initial attempt failed and no retry classification evidence was collected.",
+      "shuffle_seed": "",
+      "repeat_count": 1,
+      "passed": 53,
+      "failed": 1,
+      "skipped": 0,
+      "output_log_path": "",
+      "retry_attempts": [],
+      "cases": [
+        {
+          "name": "Setup",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 125,
+          "attempt": 1
+        },
+        {
+          "name": "Riptide_MoveDistinctSameSizeFilePreservesSource",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 250,
+          "attempt": 1
+        },
+        {
+          "name": "Riptide_ReparseNativeMoveRelocatesLinkObject",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 31,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_ManagedMovePreservesUncopiedNewFiles",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 204,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_MoveMergeReadonlyDestinationFolder",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 187,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_OverwriteGrantIsOneShot",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1313,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_ConflictPromptsSerializedUnderParallelism",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 453,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_ReparseReplaceNonEmptyDirRequiresConsent",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 390,
+          "attempt": 1
+        },
+        {
+          "name": "Floodgate_ConflictApplyAllKeepsRiskBucketsSeparate",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 422,
+          "attempt": 1
+        },
+        {
+          "name": "Riptide_ReparseCopyOntoEmptyRealDirRequiresConsent",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 250,
+          "attempt": 1
+        },
+        {
+          "name": "Riptide_ReparseMoveSourceNeverUsesDirectoryMerge",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 94,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_MovedTreeRetargetsInternalLinks",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1437,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_CrossFsConcurrentMoveUsesBridge",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 688,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_RerunCopyIdenticalCollisionPrompts",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1172,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_MoveSameSizeCollisionPrompts",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 437,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_GraphBandsFairUnderParallelCopy",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 78,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_ManagedMergeMovePreservesChildren",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 329,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_JunctionMergeTargetRequiresConsent",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 703,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_CopyIntoSelfAliasRejected",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 281,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_StorageKindProbed",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 25641,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_ParallelDeleteContinuesPastLockedChild",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 406,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_BridgePerFileConflictSkips",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 719,
+          "attempt": 1
+        },
+        {
+          "name": "Cinderstar_BridgeMovePerFileConflictSkipsParallel",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 656,
+          "attempt": 1
+        },
+        {
+          "name": "Riptide_BridgeNestedDirVsFileSkipContinuesSiblings",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 640,
+          "attempt": 1
+        },
+        {
+          "name": "Riptide_BridgeDirectoryOverReadOnlyFileIsTypeMismatch",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 579,
+          "attempt": 1
+        },
+        {
+          "name": "Riptide_BridgeCreateDirectoryRaceExistingFilePromptsPartial",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 593,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_SaturationConcurrentCopiesMakeProgress",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 13844,
+          "attempt": 1
+        },
+        {
+          "name": "Fairstream_DiscoveryAheadOverlapsTransfer",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 891,
+          "attempt": 1
+        },
+        {
+          "name": "Riptide_LiveFinishedSnapshotCarriesDiagnostics",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 531,
+          "attempt": 1
+        },
+        {
+          "name": "Riptide_BridgeSequentialContinueOnErrorCopiesSiblings",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 750,
+          "attempt": 1
+        },
+        {
+          "name": "Causeway_BridgeRejectsHostileChildNames",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1859,
+          "attempt": 1
+        },
+        {
+          "name": "Causeway_BridgeProviderOutputContracts",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1782,
+          "attempt": 1
+        },
+        {
+          "name": "Causeway_BridgeSchedulingAndResourceContracts",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6281,
+          "attempt": 1
+        },
+        {
+          "name": "Causeway_BridgeFileReparsePolicy",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 672,
+          "attempt": 1
+        },
+        {
+          "name": "Causeway_BridgeFailureStatusAndPausedReader",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 781,
+          "attempt": 1
+        },
+        {
+          "name": "Floodgate_CrossFsCopyGetSizeFailureRefusesCommit",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 344,
+          "attempt": 1
+        },
+        {
+          "name": "Floodgate_CrossFsMoveGetSizeFailurePreservesSource",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 359,
+          "attempt": 1
+        },
+        {
+          "name": "Floodgate_CrossFsMoveDestinationGetSizeFailurePreservesSource",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 313,
+          "attempt": 1
+        },
+        {
+          "name": "Cinderstar_LegacyWriterEventuallyConsistentMove",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 515,
+          "attempt": 1
+        },
+        {
+          "name": "Cinderstar_LegacyWriterPermanentMissMove",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 328,
+          "attempt": 1
+        },
+        {
+          "name": "Cinderstar_LegacyWriterWrongSizeMove",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 407,
+          "attempt": 1
+        },
+        {
+          "name": "Cinderstar_LegacyWriterConcurrentReplacementCopy",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 281,
+          "attempt": 1
+        },
+        {
+          "name": "Cinderstar_LegacyWriterCancelDuringBackoff",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 437,
+          "attempt": 1
+        },
+        {
+          "name": "Floodgate_CrossFsCopyOnlyUsesCopyVerification",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1172,
+          "attempt": 1
+        },
+        {
+          "name": "Floodgate_CrossFsMoveGetSizeFailuresParallelPreserveSourceTree",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1516,
+          "attempt": 1
+        },
+        {
+          "name": "Floodgate_CrossFsCopyOnlyNeverEntersSourceCleanup",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 312,
+          "attempt": 1
+        },
+        {
+          "name": "Floodgate_CrossFsDirectoryCopyOnlyRetainsSource",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 469,
+          "attempt": 1
+        },
+        {
+          "name": "Floodgate_LocalWriterOverwriteIsStaged",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 125,
+          "attempt": 1
+        },
+        {
+          "name": "Floodgate_LocalCopyOverwriteIsStaged",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 141,
+          "attempt": 1
+        },
+        {
+          "name": "Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 328,
+          "attempt": 1
+        },
+        {
+          "name": "Riptide_HostPerItemSchedulerShutdownWaitsForBlockedWorker",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 281,
+          "attempt": 1
+        },
+        {
+          "name": "Floodgate_InlineF2WorkerQueueBypassAndInterlock",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 1250,
+          "attempt": 1
+        },
+        {
+          "name": "Cleanup_RestorePluginConfig",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 297,
+          "attempt": 1
+        }
+      ],
+      "failures": [
+        {
+          "name": "selftest_result_coverage",
+          "status": "failed",
+          "reason": "missing: FileOps_CopyMergeIntoExistingFolder, FileOps_CrossVolumeMovePartialFailureStatus, FileOps_DeleteToctouSwapGuard, FileOps_MoveMergeIntoExistingFolderSameVolume, FileOps_ParallelGraphFairColorWeight, FileOps_ProviderCapabilityMatrix, FileOps_ReparseDirectoryMergeIntoExistingFolder, FileOps_ReparseRetargetDestinationContainment, FileOps_ResolvedItemsExactDestinations, Phase10_ArtifactTouchGuard, Phase10_ClipboardAdmissionAndRetainedActions, Phase10_ContentVerification, Phase10_DeferredConsentAndRecycleEscalation, Phase10_MetadataPreservationAndSourceRetention, Phase10_PermanentDelete, Phase10_TypedResultsAndConsumers, Phase11_BridgeMultiFolderParallelCopyInFlightLines, Phase11_BridgePipelineDummyToDummyPerf, Phase11_BridgeSingleFolderParallelCopyInFlightLines, Phase11_ConnectionOverrideClamp, Phase11_ConnectionOverrideGlobalGate, Phase11_ConnectionOverridePrecedence, Phase11_CrossFileSystemBridge, Phase12_ReparsePointPolicy, Phase13_PostMortemDiagnostics, Phase14_PopupHostLifetimeGuard, Phase15_FileSystem7zMountPathImpact, Phase15_FileSystem7zReadSeekSmoke, Phase16_RemoteFtpSandbox, Phase16_RemoteFtpSecret, Phase16_RemoteImapSandbox, Phase16_RemoteImapSecret, Phase16_RemoteOneDriveBusinessSandbox, Phase16_RemoteOneDriveBusinessSecret, Phase16_RemoteOneDrivePersonalFileOps, Phase16_RemoteOneDrivePersonalSandbox, Phase16_RemoteOneDrivePersonalSecret, Phase16_RemoteS3FileOps, Phase16_RemoteS3Sandbox, Phase16_RemoteS3Secret, Phase16_RemoteScpSandbox, Phase16_RemoteScpSecret, Phase16_RemoteSftpSandbox, Phase16_RemoteSftpSecret, Phase16_RemoteSharePointSandbox, Phase16_RemoteSharePointSecret, Phase16_RemoteWatchContractExposure, Phase5_CancelQueuedTask, Phase5_DiscoveryCancelLatencyLocal, Phase5_DiscoveryCancelReleasesSlot, Phase5_DiscoverySingleTraversal, Phase5_DiscoverySkipContinues, Phase5_SwitchParallelToWaitDuringDiscovery, Phase5_SwitchWaitToParallelResume, Phase6_DeleteBytesMeaningful, Phase6_LocalBandwidthThrottle, Phase6_ParallelBandwidthThrottleFairness, Phase6_PopupRateSmoothing, Phase6_PopupSmokeResizeAndPause, Phase7_AutoConcurrencyHints, Phase7_CacheBorrowNoWatchInvalidation, Phase7_CopyItemsMultiRootUnevenRecursiveParallelism, Phase7_CopyItemsSingleFolderRecursiveParallelism, Phase7_CopyMoveConcurrency16Perf, Phase7_CopyRecursiveParallelismMatrix, Phase7_CrossPaneRelocateLocal, Phase7_CrossPaneVisibleRefreshDummy, Phase7_CrossPaneVisibleRefreshLocal, Phase7_LargeDirectoryEnumeration, Phase7_ParallelCopyMoveKnobs, Phase7_ParallelDeleteKnobs, Phase7_PerItemDirectoryCopyInFlightLines, Phase7_RecycleBinBatchDelete, Phase7_RecycleBinBatchDeleteMultiBatch, Phase7_SharedPerItemScheduler, Phase7_WatcherChurn, Phase8_DefaultBandwidthLimitFromSettings, Phase8_InvalidDestinationRejected, Phase8_InvalidSizeBytesRejected, Phase8_PerItemOrchestration, Phase8_TightDefaults_NoOverwrite, Phase9_ConflictPrompt_ApplyToAllUiCache, Phase9_ConflictPrompt_KeepBothNestedCacheEligibility, Phase9_ConflictPrompt_LocalFileOntoDirectory, Phase9_ConflictPrompt_OverwriteReplaceReadonly, Phase9_ConflictPrompt_RetryCap, Phase9_ConflictPrompt_SkipApplyToAll, Phase9_ConflictPrompt_SkipContinuesDirectoryCopy, Phase9_ConflictPrompt_TypeMismatchNoOverwrite, Phase9_PerItemConcurrency",
+          "duration_ms": 0,
+          "attempt": 1
+        }
+      ]
+    }
+  ]
+}

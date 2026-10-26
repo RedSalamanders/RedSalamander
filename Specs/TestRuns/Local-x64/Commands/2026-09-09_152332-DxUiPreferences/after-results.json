@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-09-09T15:23:35.980Z",
+    "suite": "Commands",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20260909T152332Z-69876-25e3a1d2d8ae48589f4ccb36a1e5aa09\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 8228,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_preferences_dialog_repeated_close_releases_hosts",
+            "status": "passed",
+            "duration_ms": 7512,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

@@ -1,0 +1,15 @@
+{
+  "archives": [
+    {
+      "runId": "20261019T212535Z-36512-1c02f08e92504e03b250fc266aea4ad5",
+      "archive": "D:\\RedSalamander.Perf\\evidence\\screenshot-gaps-20261019\\product-native-run.zip",
+      "sha256": "c7e0d2d428e3b6064a8da73ac5db99720cce55717d97686b0e574b5cf3f152b9"
+    },
+    {
+      "runId": "20261019T213348Z-77148-f891b86b047b44ac985c22016e4aaa31",
+      "archive": "D:\\RedSalamander.Perf\\evidence\\screenshot-gaps-20261019\\playback-native-run.zip",
+      "sha256": "a923f1d8fee88a5140e8957e53bb1c8ab1d73ebd8f8ed68b3d2ba5665e6d51f1"
+    }
+  ],
+  "firstAttempt": "UI fixture stalled before utility capture; preserved separately with minidump/executable/PDB. Not publication evidence."
+}

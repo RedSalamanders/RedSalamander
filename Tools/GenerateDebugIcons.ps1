@@ -3,13 +3,13 @@
 Regenerates the checked-in debug-badged application icons.
 
 .DESCRIPTION
-Reads the canonical RedSalamander and Monitor icon sources, adds the standard amber debug badge at 16, 32, 48, and 256 pixels, and replaces their checked-in *_debug.ico counterparts.
+Reads the canonical RedSalamander icon source, adds the standard amber debug badge at 16, 32, 48, and 256 pixels, and replaces their checked-in *_debug.ico counterparts.
 
 .OUTPUTS
-No pipeline output. Replaces RedSalamander/res/logo_debug.ico and RedSalamanderMonitor/res/logo_background_debug.ico.
+No pipeline output. Replaces RedSalamander/res/logo_debug.ico. RedMonitor owns its icon generator independently.
 
 .NOTES
-Prerequisites: PowerShell on Windows with System.Drawing support and both source icon files. Side effects: overwrites two tracked source assets; review their Git diff before committing. Exit is nonzero when an input is missing or image/ICO generation fails. Primary consumers: maintainers regenerating debug assets; the generated icons are compiled by the application resource projects.
+Prerequisites: PowerShell on Windows with System.Drawing support and the source icon file. Side effects: overwrites one tracked source asset; review their Git diff before committing. Exit is nonzero when an input is missing or image/ICO generation fails. Primary consumers: maintainers regenerating debug assets; the generated icons are compiled by the application resource projects.
 
 .EXAMPLE
 .\Tools\GenerateDebugIcons.ps1
@@ -206,11 +206,8 @@ $pairs = @(
     @{
         In  = (Join-Path $repoRoot "RedSalamander\\res\\logo.ico")
         Out = (Join-Path $repoRoot "RedSalamander\\res\\logo_debug.ico")
-    },
-    @{
-        In  = (Join-Path $repoRoot "RedSalamanderMonitor\\res\\logo_background.ico")
-        Out = (Join-Path $repoRoot "RedSalamanderMonitor\\res\\logo_background_debug.ico")
     }
+
 )
 
 foreach ($pair in $pairs) {

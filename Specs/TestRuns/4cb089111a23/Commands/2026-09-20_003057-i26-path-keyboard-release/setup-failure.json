@@ -1,0 +1,6 @@
+{
+  "log": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\path-release-isolated.log",
+  "sha256": "e33ef793254e9af62dfe717d306303bd3e87396ca6521df24acc570ef3fad31c",
+  "tests_executed": false,
+  "reason": "Long isolated checkout caused four pinned DxUi Git paths to exceed the filesystem path limit."
+}

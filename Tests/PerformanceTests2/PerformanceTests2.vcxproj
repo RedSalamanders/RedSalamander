@@ -174,7 +174,7 @@
       <UseFullPaths>true</UseFullPaths>
       <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\RedSalamander;$(MSBuildThisFileDirectory)..\..\Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>Performance.Tests.pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -189,7 +189,7 @@
       <UseFullPaths>true</UseFullPaths>
       <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\RedSalamander;$(MSBuildThisFileDirectory)..\..\Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>Performance.Tests.pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -204,7 +204,7 @@
       <UseFullPaths>true</UseFullPaths>
       <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\RedSalamander;$(MSBuildThisFileDirectory)..\..\Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>Performance.Tests.pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -221,7 +221,7 @@
       <UseFullPaths>true</UseFullPaths>
       <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\RedSalamander;$(MSBuildThisFileDirectory)..\..\Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>Performance.Tests.pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -238,7 +238,7 @@
       <UseFullPaths>true</UseFullPaths>
       <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\RedSalamander;$(MSBuildThisFileDirectory)..\..\Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>Performance.Tests.pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -253,7 +253,7 @@
       <UseFullPaths>true</UseFullPaths>
       <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\RedSalamander;$(MSBuildThisFileDirectory)..\..\Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>Performance.Tests.pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -270,7 +270,7 @@
       <UseFullPaths>true</UseFullPaths>
       <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\RedSalamander;$(MSBuildThisFileDirectory)..\..\Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>Performance.Tests.pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -289,7 +289,7 @@
       <UseFullPaths>true</UseFullPaths>
       <ExternalIncludePath>$(VcpkgInstalledDir)$(RSVcpkgTriplet)\include;$(ExternalIncludePath)</ExternalIncludePath>
       <AdditionalIncludeDirectories>$(MSBuildThisFileDirectory)..\..\RedSalamander;$(MSBuildThisFileDirectory)..\..\Common;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
-      <PrecompiledHeaderFile>pch.h</PrecompiledHeaderFile>
+      <PrecompiledHeaderFile>Performance.Tests.pch.h</PrecompiledHeaderFile>
     </ClCompile>
     <Link>
       <SubSystem>Windows</SubSystem>
@@ -312,7 +312,7 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="FolderView.Enumeration.Access.cpp">
+    <ClCompile Include="Performance.Tests.FolderView.Enumeration.Access.cpp">
       <DisableSpecificWarnings>$(RSPerformanceTests2SourceImportDisabledWarnings);%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <PrecompiledHeader>
       </PrecompiledHeader>
@@ -358,7 +358,7 @@
       <AdditionalIncludeDirectories Condition="'$(Configuration)|$(Platform)'=='Release|x64'">../../RedSalamander;%(AdditionalIncludeDirectories)</AdditionalIncludeDirectories>
       <PreprocessorDefinitions Condition="'$(Configuration)|$(Platform)'=='Release|x64'">main=__ignored_main_IconCache;wmain=__ignored_wmain_IconCache;WinMain=__ignored_WinMain_IconCache;%(PreprocessorDefinitions)</PreprocessorDefinitions>
     </ClCompile>
-    <ClCompile Include="..\..\RedSalamander\SelfTest\Common\SelfTestLatencyHooks.cpp">
+    <ClCompile Include="..\..\RedSalamander\SelfTest\Common\Common.Tests.LatencyHooks.cpp">
       <DisableSpecificWarnings>$(RSPerformanceTests2SourceImportDisabledWarnings);%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <PrecompiledHeader>
       </PrecompiledHeader>
@@ -371,10 +371,10 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">
       </PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="FolderIconEnumerationDuplicatePathPerfTest.cpp" />
-    <ClCompile Include="FolderIconEnumerationPerfTest.cpp" />
-    <ClCompile Include="FolderViewColumnLayoutTests.cpp" />
-    <ClCompile Include="FolderViewRefreshDuplicatePathPerfTest.cpp" />
+    <ClCompile Include="Performance.Tests.FolderIconEnumerationDuplicatePathPerfTest.cpp" />
+    <ClCompile Include="Performance.Tests.FolderIconEnumerationPerfTest.cpp" />
+    <ClCompile Include="Performance.Tests.FolderViewColumnLayout.cpp" />
+    <ClCompile Include="Performance.Tests.FolderViewRefreshDuplicatePathPerfTest.cpp" />
     <ClCompile Include="..\..\RedSalamander\FileSystemPluginManager.cpp">
       <DisableSpecificWarnings>$(RSPerformanceTests2SourceImportDisabledWarnings);%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <PrecompiledHeader></PrecompiledHeader>
@@ -391,15 +391,15 @@
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'"></PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'"></PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="pch.cpp">
+    <ClCompile Include="Performance.Tests.pch.cpp">
       <PrecompiledHeader>Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|Win32'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Debug|x64'">Create</PrecompiledHeader>
       <PrecompiledHeader Condition="'$(Configuration)|$(Platform)'=='Release|Win32'">Create</PrecompiledHeader>
     </ClCompile>
-    <ClCompile Include="PerformanceTests2.cpp" />
-    <ClCompile Include="PluginManager.TestStubs.cpp" />
+    <ClCompile Include="Performance.Tests.Runner.cpp" />
+    <ClCompile Include="Performance.Tests.PluginManager.Stubs.cpp" />
     <ClCompile Include="..\..\RedSalamander\ViewerPluginManager.cpp">
       <DisableSpecificWarnings>$(RSPerformanceTests2SourceImportDisabledWarnings);%(DisableSpecificWarnings)</DisableSpecificWarnings>
       <PrecompiledHeader></PrecompiledHeader>
@@ -410,7 +410,7 @@
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
-    <ClInclude Include="pch.h" />
+    <ClInclude Include="Performance.Tests.pch.h" />
   </ItemGroup>
   <ItemGroup>
     <ProjectReference Include="..\..\Common\Common\Common.vcxproj">

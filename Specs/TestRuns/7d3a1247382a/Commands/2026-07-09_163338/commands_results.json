@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-07-09T14:33:36.259Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260709T143335Z-59308-f559cd9bfa8a44859096d355c9dd69c7\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 1201,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_fileops_conflict_prompt_compacts_actions",
+            "status": "passed",
+            "duration_ms": 1187,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1
+}

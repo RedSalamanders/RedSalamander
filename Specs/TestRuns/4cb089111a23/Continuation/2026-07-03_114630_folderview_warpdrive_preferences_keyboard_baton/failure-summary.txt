@@ -1,0 +1,25 @@
+Archive path: Specs/TestRuns/4cb089111a23/Continuation/2026-07-03_114630_folderview_warpdrive_preferences_keyboard_baton
+Created: 2026-07-03T11:46:33.6149738+02:00
+
+## .build/codex-runs/commands_broad_after_find_action_buttons_wait_20260703.run-all.json
+total=778 passed=774 failed=2 skipped=2 exitCode= durationMs=
+FAILED: cmd_pane_navigationView_path_doubleClick_after_focusAddressBar_tab_traversal
+  reason: Focused window unavailable before navigation-view path edit tab handoff.
+FAILED: cmd_app_menuBar_persistent_view_to_plugins_hover_switches_popup
+  reason: Delivering a Plugins hover while View is open did not select the Plugins top-level menu (mode=mouse-move, point=(485,237), hitResolved=yes, hitIndex=4, selectedAfterWait=5, expectedPluginsIndex=4, pointerSwitches=2).
+
+## .build/codex-runs/commands_broad_after_nav_menu_waits_20260703.run-all.json
+total=778 passed=775 failed=1 skipped=2 exitCode= durationMs=
+FAILED: cmd_pane_navigationView_path_region_keyboard_activation_enters_edit_mode
+  reason: Navigation view did not expose native composition debug state after Enter activation IME start; editMode=0 focusTarget=0 host=0x0 input=0x0 focus=0xc1b19a8 nativeInput=0 caret=0 composition=0 textLength=0 compRange=0-0 debugEnter=0/0/0 debugExit=0 debugAbort='' debugExitReason='' debugExitAccepted=0.
+
+## .build/codex-runs/commands_broad_after_nav_menu_waits_rerun2_20260703.run-all.json
+total=778 passed=775 failed=1 skipped=2 exitCode= durationMs=
+FAILED: cmd_preferences_dialog_keyboard_long_run_list_scrolling_stays_bounded
+  reason: Preferences category tree host should not churn repainting during Keyboard list scrolling chunk 4; render count moved from 2 to 4.
+
+## .build/codex-runs/runall_commands_navigationView_prefix_after_nav_menu_waits_20260703.run-all.json
+total=16 passed=16 failed=0 skipped=0 exitCode= durationMs=
+
+## .build/codex-runs/runall_commands_menuBar_prefix_after_nav_menu_waits_20260703.run-all.json
+total=17 passed=17 failed=0 skipped=0 exitCode= durationMs=

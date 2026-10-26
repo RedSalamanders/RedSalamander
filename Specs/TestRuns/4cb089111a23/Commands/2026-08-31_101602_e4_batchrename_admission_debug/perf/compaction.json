@@ -1,0 +1,17 @@
+{
+  "schema": "red-salamander.perf-jsonl-compaction.v1",
+  "source": {
+    "run_id": "20260831T081222Z-95224-fd9df41501e34f63999d77690a33648b",
+    "relative_path": "artifacts/selftest/last_run/perf/perf_metrics.jsonl",
+    "bytes": 2443984,
+    "rows": 6632,
+    "sha256": "9e50bee7278f5e05d7f87da87d096e8920c8b35e8e35d0d358196e68faf51df3"
+  },
+  "selection": {
+    "predicate": "metric == batchrename.admit.us OR metric starts with batchrename.admission.",
+    "ordering": "original",
+    "retained_rows": 92,
+    "retained_bytes": 35068,
+    "retained_sha256": "52a100f0c3abaddabe220b255a4c806f68df533ec2e445645190593da8a0ddf3"
+  }
+}

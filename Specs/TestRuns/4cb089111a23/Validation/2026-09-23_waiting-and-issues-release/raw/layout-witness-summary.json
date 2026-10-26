@@ -1,0 +1,14 @@
+{
+  "transition_observations": 48,
+  "minimum_frames": 8,
+  "static_waiting_observations": 36,
+  "all_fit": true,
+  "native_dpi": [
+    96,
+    144
+  ],
+  "width_dip": [
+    480,
+    760
+  ]
+}

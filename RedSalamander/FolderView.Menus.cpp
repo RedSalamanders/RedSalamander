@@ -270,6 +270,7 @@ void RemoveOverlaySampleSubmenu(HMENU menu, UINT sampleErrorCommandId) noexcept
         case CmdPaste: return L"cmd/pane/clipboardPaste";
         case CmdRefresh: return L"cmd/pane/refresh";
         case IDM_PANE_CREATE_DIR: return L"cmd/pane/createDirectory";
+        case IDM_PANE_CLEANUP_LEFTOVERS: return L"cmd/pane/cleanUpLeftovers";
         case IDM_PANE_EDIT_NEW: return L"cmd/pane/editNew";
         case CmdProperties: return L"cmd/pane/openProperties";
     }
@@ -290,14 +291,18 @@ void RemoveOverlaySampleSubmenu(HMENU menu, UINT sampleErrorCommandId) noexcept
         case CmdCopy:
         case CmdArtifactInspect:
         case CmdArtifactReveal:
+        case CmdArtifactOpenLocation:
         case CmdProperties: return true;
         default: return false;
     }
 }
 
-void AppendArtifactContextMenu(HMENU menu, const std::shared_ptr<const FileOperationArtifacts::Projection>& projection) noexcept
+// The artifact submenu: the focused Possible row's own actions, and (I35 R7.5) the leftover cleanup
+// command whenever the listing has any Possible row, even when the focused row is ordinary.
+void AppendArtifactContextMenu(HMENU menu, const std::shared_ptr<const FileOperationArtifacts::Projection>& projection, bool anyPossibleRow) noexcept
 {
-    if (! menu || ! projection || projection->classification == FileOperationArtifacts::Classification::Ordinary)
+    const bool focusedPossible = projection && projection->classification != FileOperationArtifacts::Classification::Ordinary;
+    if (! menu || (! focusedPossible && ! anyPossibleRow))
     {
         return;
     }
@@ -312,13 +317,25 @@ void AppendArtifactContextMenu(HMENU menu, const std::shared_ptr<const FileOpera
         const std::wstring text = LoadStringResource(nullptr, stringId);
         return ! text.empty() && AppendMenuW(artifactMenu.get(), MF_STRING, commandId, text.c_str()) != FALSE;
     };
-    if (projection->capabilities.inspect)
+    if (focusedPossible && projection->capabilities.inspect)
     {
         static_cast<void>(appendCommand(CmdArtifactInspect, IDS_FILEOPS_ARTIFACT_ACTION_INSPECT));
     }
-    if (projection->capabilities.reveal)
+    if (focusedPossible && projection->capabilities.reveal)
     {
         static_cast<void>(appendCommand(CmdArtifactReveal, IDS_FILEOPS_ARTIFACT_ACTION_REVEAL));
+    }
+    if (focusedPossible && projection->capabilities.openLocation)
+    {
+        static_cast<void>(appendCommand(CmdArtifactOpenLocation, IDS_FILEOPS_ARTIFACT_ACTION_OPEN_LOCATION));
+    }
+    if (anyPossibleRow || focusedPossible)
+    {
+        if (GetMenuItemCount(artifactMenu.get()) > 0)
+        {
+            static_cast<void>(AppendMenuW(artifactMenu.get(), MF_SEPARATOR, 0u, nullptr));
+        }
+        static_cast<void>(appendCommand(IDM_PANE_CLEANUP_LEFTOVERS, IDS_CMD_CLEANUP_LEFTOVERS));
     }
     if (GetMenuItemCount(artifactMenu.get()) <= 0)
     {
@@ -489,7 +506,7 @@ void FolderView::OnContextMenu(POINT screenPt, const bool keyboardInvocation)
         allowItemTarget && _focusedIndex < _items.size() ? std::optional<std::wstring>{_items[_focusedIndex].displayName} : std::nullopt;
 
     UpdateContextMenuState(menu, allowItemTarget);
-    AppendArtifactContextMenu(menu, allowItemTarget ? GetFocusedArtifactProjection() : nullptr);
+    AppendArtifactContextMenu(menu, allowItemTarget ? GetFocusedArtifactProjection() : nullptr, allowItemTarget && HasPossibleArtifactRows());
     if (! IsOverlaySampleEnabled())
     {
         RemoveOverlaySampleSubmenu(menu, CmdOverlaySampleError);

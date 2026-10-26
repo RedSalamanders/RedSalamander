@@ -1,0 +1,213 @@
+{
+    "run_started_utc": "2026-10-09T04:33:19.951Z",
+    "duration_ms": 210869,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "cmd_viewer_space_",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261009T043247Z-43392-04750d6952ad420d956801bc8582e7d6\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 209693,
+            "passed": 31,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "cmd_viewer_space_",
+            "cases": [
+                {
+                    "name": "cmd_viewer_space_context_menu_uses_delivered_anchor",
+                    "status": "passed",
+                    "duration_ms": 366,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_hover_uses_delivered_point",
+                    "status": "passed",
+                    "duration_ms": 260,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_renderer_device_context_ready_resize_close",
+                    "status": "passed",
+                    "duration_ms": 209,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_renderer_recovers_from_forced_device_loss",
+                    "status": "passed",
+                    "duration_ms": 271,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_hover_does_not_rebuild_static_cache",
+                    "status": "passed",
+                    "duration_ms": 77058,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_dense_files_exposes_more_than_legacy_topk",
+                    "status": "passed",
+                    "duration_ms": 529,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_synthetic_bucket_metrics_match_root_bytes",
+                    "status": "passed",
+                    "duration_ms": 5317,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_adaptive_scan_budget_tracks_window_area",
+                    "status": "passed",
+                    "duration_ms": 519,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_effective_threads_drive_spinners",
+                    "status": "passed",
+                    "duration_ms": 1492,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_large_sibling_folders_expose_nested_detail",
+                    "status": "passed",
+                    "duration_ms": 1126,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_hit_grid_matches_linear",
+                    "status": "passed",
+                    "duration_ms": 1014,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_unmoved_relayout_keeps_grid_hit_testing",
+                    "status": "passed",
+                    "duration_ms": 996,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_parallel_scan_serial_golden",
+                    "status": "passed",
+                    "duration_ms": 3617,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_cancel_teardown_stress",
+                    "status": "passed",
+                    "duration_ms": 4783,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_cache_skips_or_caps_large_snapshot",
+                    "status": "passed",
+                    "duration_ms": 1510,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_cache_hit_restores_header_counts",
+                    "status": "passed",
+                    "duration_ms": 1990,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_explorer_analyst_exact_nested_detail",
+                    "status": "passed",
+                    "duration_ms": 12723,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_cache_restore_is_sliced",
+                    "status": "passed",
+                    "duration_ms": 1873,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_cache_aggregate_byte_cap",
+                    "status": "passed",
+                    "duration_ms": 2359,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_cache_offsets_reject_invalid_extent",
+                    "status": "passed",
+                    "duration_ms": 3573,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_refresh_preserves_display_until_adoption",
+                    "status": "passed",
+                    "duration_ms": 1590,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_refresh_cancel_keeps_display",
+                    "status": "passed",
+                    "duration_ms": 2014,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_refresh_budget_requires_explicit_rebuild",
+                    "status": "passed",
+                    "duration_ms": 1572,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_deferred_rebuild_waits_for_disposal_capacity",
+                    "status": "passed",
+                    "duration_ms": 2235,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_close_does_not_wait_for_retired_model_disposal",
+                    "status": "passed",
+                    "duration_ms": 1685,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_setting_change_refreshes_locale",
+                    "status": "passed",
+                    "duration_ms": 188,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_idle_timer_stops",
+                    "status": "passed",
+                    "duration_ms": 1634,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_queue_storm_stays_bounded",
+                    "status": "passed",
+                    "duration_ms": 1611,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_memory_settles_after_close",
+                    "status": "passed",
+                    "duration_ms": 25127,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_layout_20k_visible_optin",
+                    "status": "passed",
+                    "duration_ms": 21143,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_viewer_space_layout_50k_visible_optin",
+                    "status": "passed",
+                    "duration_ms": 22063,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 31,
+    "failed": 0,
+    "skipped": 0
+}

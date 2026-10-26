@@ -1,0 +1,19 @@
+{
+  "path": "RedSalamander/FolderView.Enumeration.cpp",
+  "sources": [
+    {
+      "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+      "fileSha256": "84810cf5d8d19110b5701a746cf667a8a60df0b627af088735c1bfdd00d3dce1"
+    },
+    {
+      "source": "a20f6680dd5f82835a549f4c231e5666e4047eda",
+      "fileSha256": "84810cf5d8d19110b5701a746cf667a8a60df0b627af088735c1bfdd00d3dce1"
+    },
+    {
+      "source": "64403fe527c051871d066be01076097e5b6f62fd",
+      "fileSha256": "a84818627c5b2196a6de8f3d7ced84f8482de9da00782f1e0cbb992099078d8b"
+    }
+  ],
+  "originalTemporaryRetainedVectors": 2,
+  "correction": "Named backing vectors declared before their FolderView; the large fixture also declares the view after its backing vector. Factory views remain borrowed; production code unchanged."
+}

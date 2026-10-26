@@ -18,15 +18,25 @@ namespace
 constexpr int kStatusBarFocusLineHeightDip        = 2;
 constexpr int kStatusBarSecurityMinPartWidthDip   = 90;
 constexpr int kStatusBarSecurityMaxPartWidthDip   = 240;
+constexpr int kStatusBarDecisionMinPartWidthDip   = 120;
+constexpr int kStatusBarDecisionMaxPartWidthDip   = 360;
 constexpr wchar_t kStatusBarRenderResourcesProp[] = L"RedSalamander.StatusBar.RenderResources";
 using Common::WindowSizing::PixelToDip;
 
+// Left to right: selection (flexible), decision (only while a File Operations decision is pending),
+// security (only for an insecure connection), sort.
 struct StatusBarParts final
 {
     RECT selection{};
+    RECT decision{};
     RECT security{};
     RECT sort{};
 };
+
+[[nodiscard]] const std::wstring* GetStatusBarDecisionText(HWND hwnd) noexcept
+{
+    return reinterpret_cast<const std::wstring*>(GetPropW(hwnd, kStatusBarDecisionTextProp));
+}
 
 struct StatusBarRenderResources final : Common::Rendering::HwndRenderTargetResources
 {
@@ -163,7 +173,7 @@ void ApplyStatusBarTextTrimming(IDWriteTextFormat* format, IDWriteInlineObject* 
 }
 
 [[nodiscard]] HRESULT CreateStatusBarTextFormat(StatusBarRenderResources& resources,
-                                                const DxUi::Typography::TypographySpec& spec,
+                                                const DxUi::Typography::Spec& spec,
                                                 DWRITE_TEXT_ALIGNMENT alignment,
                                                 IDWriteTextFormat** outFormat) noexcept
 {
@@ -349,11 +359,26 @@ void InvalidateStatusBarDeviceResources(HWND hwnd, bool resetTypography) noexcep
         securityWidth      = std::clamp(securityWidth, 0, width - sortWidth);
     }
 
-    const LONG selectionRight = static_cast<LONG>(std::max(0, width - sortWidth - securityWidth));
-    const LONG securityRight  = static_cast<LONG>(std::max<int>(selectionRight, width - sortWidth));
+    int decisionWidth        = 0;
+    const auto* decisionText = GetStatusBarDecisionText(hwnd);
+    if (decisionText && ! decisionText->empty() && width > sortWidth + securityWidth)
+    {
+        const int paddingX = std::max(1, MulDiv(kStatusBarPaddingXDip, dpi, USER_DEFAULT_SCREEN_DPI));
+        const int textPx   = MeasureStatusBarSecurityTextWidthPx(hwnd, *decisionText);
+        const int desired  = textPx + 2 * paddingX;
+        const int minWidth = MulDiv(kStatusBarDecisionMinPartWidthDip, dpi, USER_DEFAULT_SCREEN_DPI);
+        const int maxWidth = MulDiv(kStatusBarDecisionMaxPartWidthDip, dpi, USER_DEFAULT_SCREEN_DPI);
+        decisionWidth      = std::clamp(desired, minWidth, maxWidth);
+        decisionWidth      = std::clamp(decisionWidth, 0, width - sortWidth - securityWidth);
+    }
+
+    const LONG selectionRight = static_cast<LONG>(std::max(0, width - sortWidth - securityWidth - decisionWidth));
+    const LONG decisionRight  = static_cast<LONG>(std::max(static_cast<int>(selectionRight), width - sortWidth - securityWidth));
+    const LONG securityRight  = static_cast<LONG>(std::max<int>(decisionRight, width - sortWidth));
 
     parts.selection = {client.left, client.top, selectionRight, client.bottom};
-    parts.security  = {selectionRight, client.top, securityRight, client.bottom};
+    parts.decision  = {selectionRight, client.top, decisionRight, client.bottom};
+    parts.security  = {decisionRight, client.top, securityRight, client.bottom};
     parts.sort      = {securityRight, client.top, client.right, client.bottom};
 
     if (outClientRect)
@@ -610,6 +635,31 @@ void PaintSortIndicatorGlyph(StatusBarRenderResources& resources, const RECT& rc
         }
     }
 
+    // I35 R8.9: the pending-decision segment stands out from the status text and is a click target.
+    const std::wstring* decisionText = GetStatusBarDecisionText(hwnd);
+    const RECT& partDecision         = parts.decision;
+    const bool showDecision          = decisionText && ! decisionText->empty() && partDecision.right > partDecision.left;
+    const bool decisionHot           = showDecision && GetPropW(hwnd, kStatusBarDecisionHotProp) != nullptr;
+    if (showDecision)
+    {
+        RECT decisionRect = partDecision;
+        decisionRect.top  = std::min(decisionRect.bottom, decisionRect.top + focusLinePx);
+        if (decisionRect.bottom > decisionRect.top)
+        {
+            const COLORREF decisionBg = theme.highContrast
+                                            ? theme.menu.selectionBg
+                                            : BlendColorRefWeightedTruncate(theme.menu.background, theme.menu.selectionBg, 1, decisionHot ? 2 : 3);
+            FillStatusBarRect(*resources, decisionRect, decisionBg);
+        }
+        RECT sepRect = partDecision;
+        sepRect.left = std::max(partDecision.left, partDecision.right - 1);
+        sepRect.top  = std::min(partDecision.bottom, partDecision.top + focusLinePx);
+        if (sepRect.right > sepRect.left && sepRect.bottom > sepRect.top)
+        {
+            FillStatusBarRect(*resources, sepRect, theme.menu.separator);
+        }
+    }
+
     if (has0)
     {
         RECT sepRect  = part0;
@@ -653,6 +703,16 @@ void PaintSortIndicatorGlyph(StatusBarRenderResources& resources, const RECT& rc
 
     DrawStatusBarText(*resources, *selectionText, rc0, resources->selectionFormat.get(), textColor);
 
+    if (showDecision)
+    {
+        RECT rcDecision  = partDecision;
+        rcDecision.left  = std::min(rcDecision.right, rcDecision.left + paddingX);
+        rcDecision.right = std::max(rcDecision.left, rcDecision.right - paddingX);
+        rcDecision.top   = std::min(rcDecision.bottom, rcDecision.top + focusLinePx);
+        DrawStatusBarText(
+            *resources, *decisionText, rcDecision, resources->securityFormat.get(), theme.highContrast ? theme.menu.selectionText : theme.menu.text);
+    }
+
     if (showSecurity)
     {
         DrawStatusBarText(*resources, *securityText, rc1, resources->securityFormat.get(), textColor);
@@ -690,10 +750,10 @@ bool StatusBarCanCustomPaint(HWND hwnd) noexcept
     return PtInRect(&rc, clientPt) != 0;
 }
 
-void UpdateStatusBarSortHot(HWND hwnd, POINT pt) noexcept
+void UpdateStatusBarPartHot(HWND hwnd, POINT pt, int part, const wchar_t* hotProp) noexcept
 {
-    const bool hotNow = IsPointInStatusBarPart(hwnd, kStatusBarPartSort, pt);
-    const bool hotWas = GetPropW(hwnd, kStatusBarSortHotProp) != nullptr;
+    const bool hotNow = IsPointInStatusBarPart(hwnd, part, pt);
+    const bool hotWas = GetPropW(hwnd, hotProp) != nullptr;
     if (hotNow == hotWas)
     {
         return;
@@ -701,13 +761,19 @@ void UpdateStatusBarSortHot(HWND hwnd, POINT pt) noexcept
 
     if (hotNow)
     {
-        SetPropW(hwnd, kStatusBarSortHotProp, reinterpret_cast<HANDLE>(1));
+        SetPropW(hwnd, hotProp, reinterpret_cast<HANDLE>(1));
     }
     else
     {
-        RemovePropW(hwnd, kStatusBarSortHotProp);
+        RemovePropW(hwnd, hotProp);
     }
     InvalidateRect(hwnd, nullptr, FALSE);
+}
+
+void UpdateStatusBarSortHot(HWND hwnd, POINT pt) noexcept
+{
+    UpdateStatusBarPartHot(hwnd, pt, kStatusBarPartSort, kStatusBarSortHotProp);
+    UpdateStatusBarPartHot(hwnd, pt, kStatusBarPartDecision, kStatusBarDecisionHotProp);
 }
 
 void TrackStatusBarMouseLeave(HWND hwnd) noexcept
@@ -748,7 +814,7 @@ LRESULT StatusBarOnSetCursor(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept
     POINT screenPt{GET_X_LPARAM(messagePos), GET_Y_LPARAM(messagePos)};
     if (ScreenToClient(hwnd, &screenPt) != FALSE)
     {
-        if (IsPointInStatusBarPart(hwnd, kStatusBarPartSort, screenPt))
+        if (IsPointInStatusBarPart(hwnd, kStatusBarPartSort, screenPt) || IsPointInStatusBarPart(hwnd, kStatusBarPartDecision, screenPt))
         {
             SetCursor(LoadCursorW(nullptr, IDC_HAND));
             return TRUE;
@@ -767,7 +833,9 @@ LRESULT StatusBarOnMouseMove(HWND hwnd, [[maybe_unused]] WPARAM wParam, LPARAM l
 
 LRESULT StatusBarOnMouseLeave(HWND hwnd, [[maybe_unused]] WPARAM wParam, [[maybe_unused]] LPARAM lParam) noexcept
 {
-    if (RemovePropW(hwnd, kStatusBarSortHotProp))
+    const bool sortWasHot     = RemovePropW(hwnd, kStatusBarSortHotProp) != nullptr;
+    const bool decisionWasHot = RemovePropW(hwnd, kStatusBarDecisionHotProp) != nullptr;
+    if (sortWasHot || decisionWasHot)
     {
         InvalidateRect(hwnd, nullptr, FALSE);
     }
@@ -806,7 +874,9 @@ LRESULT StatusBarOnLButtonUp(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept
     }
 
     const POINT clientPt{GET_X_LPARAM(lParam), GET_Y_LPARAM(lParam)};
-    if (! IsPointInStatusBarPart(hwnd, kStatusBarPartSort, clientPt))
+    const bool sortClicked     = IsPointInStatusBarPart(hwnd, kStatusBarPartSort, clientPt);
+    const bool decisionClicked = ! sortClicked && IsPointInStatusBarPart(hwnd, kStatusBarPartDecision, clientPt);
+    if (! sortClicked && ! decisionClicked)
     {
         return 0;
     }
@@ -814,8 +884,8 @@ LRESULT StatusBarOnLButtonUp(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept
     StatusBarSortClickNotification mouse{};
     mouse.hdr.hwndFrom = hwnd;
     mouse.hdr.idFrom   = static_cast<UINT_PTR>(GetDlgCtrlID(hwnd));
-    mouse.hdr.code     = kStatusBarSortClickNotification;
-    mouse.part         = kStatusBarPartSort;
+    mouse.hdr.code     = sortClicked ? kStatusBarSortClickNotification : kStatusBarDecisionClickNotification;
+    mouse.part         = sortClicked ? kStatusBarPartSort : kStatusBarPartDecision;
     mouse.clientPoint  = clientPt;
 
     if (const HWND parent = GetParent(hwnd))
@@ -829,6 +899,8 @@ LRESULT StatusBarOnLButtonUp(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept
 LRESULT StatusBarOnNcDestroy(HWND hwnd, WPARAM wParam, LPARAM lParam) noexcept
 {
     RemovePropW(hwnd, kStatusBarSortHotProp);
+    RemovePropW(hwnd, kStatusBarDecisionHotProp);
+    RemovePropW(hwnd, kStatusBarDecisionTextProp);
     RemovePropW(hwnd, kStatusBarOwnerProp);
     RemovePropW(hwnd, kStatusBarSelectionTextProp);
     RemovePropW(hwnd, kStatusBarSecurityTextProp);
@@ -878,6 +950,7 @@ bool GetStatusBarPartRect(HWND hwnd, int part, RECT& rect) noexcept
         case kStatusBarPartSelection: rect = parts.selection; break;
         case kStatusBarPartSecurity: rect = parts.security; break;
         case kStatusBarPartSort: rect = parts.sort; break;
+        case kStatusBarPartDecision: rect = parts.decision; break;
         default: return false;
     }
 
@@ -1104,7 +1177,8 @@ void FolderWindow::UpdatePaneStatusBar(Pane pane)
             const std::shared_ptr<const FileOperationArtifacts::Projection> projection = state.folderView.GetFocusedArtifactProjection();
             if (projection && projection->classification != FileOperationArtifacts::Classification::Ordinary)
             {
-                const std::wstring badge = LoadStringResource(nullptr, IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE);
+                const std::wstring badge = LoadStringResource(
+                    nullptr, projection->mayHoldOriginal ? IDS_FILEOPS_ARTIFACT_POSSIBLE_ORIGINAL_BADGE : IDS_FILEOPS_ARTIFACT_POSSIBLE_BADGE);
                 if (! badge.empty())
                 {
                     if (! state.statusSelectionText.empty())
@@ -1135,7 +1209,47 @@ void FolderWindow::UpdatePaneStatusBar(Pane pane)
     UpdateStatusBarParts(state.hStatusBar.get());
 }
 
+void FolderWindow::SetPaneStatusDecisionText(std::wstring_view text) noexcept
+{
+    // I35 R8.9: every pane's status bar shows the pending-decision segment, so it stays visible whichever
+    // pane is active and when one bar is hidden. The window text names the bar for UI Automation, which
+    // has no other provider for this window class.
+    for (PaneState* state : {&_leftPane, &_rightPane})
+    {
+        if (state->statusDecisionText == text)
+            continue;
+        state->statusDecisionText.assign(text);
+        if (! state->hStatusBar)
+            continue;
+        static_cast<void>(SetWindowTextW(state->hStatusBar.get(), state->statusDecisionText.c_str()));
+        if (state->statusDecisionText.empty())
+            RemovePropW(state->hStatusBar.get(), kStatusBarDecisionHotProp);
+        UpdateStatusBarParts(state->hStatusBar.get());
+    }
+}
+
 #ifdef ENABLE_TESTS
+bool FolderWindow::DebugClickPaneStatusBarDecision(Pane pane) noexcept
+{
+    const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
+    if (! state.hStatusBar || IsWindow(state.hStatusBar.get()) == FALSE)
+    {
+        return false;
+    }
+
+    RECT decisionRect{};
+    if (! GetStatusBarPartRect(state.hStatusBar.get(), kStatusBarPartDecision, decisionRect))
+    {
+        return false;
+    }
+
+    const int x = decisionRect.left + ((decisionRect.right - decisionRect.left) / 2);
+    const int y = decisionRect.top + ((decisionRect.bottom - decisionRect.top) / 2);
+    PostMessageW(state.hStatusBar.get(), WM_MOUSEMOVE, 0, MAKELPARAM(x, y));
+    PostMessageW(state.hStatusBar.get(), WM_LBUTTONUP, MK_LBUTTON, MAKELPARAM(x, y));
+    return true;
+}
+
 bool FolderWindow::DebugGetPaneStatusBarSnapshot(Pane pane, FolderWindowPaneStatusBarDebugSnapshot& out) const noexcept
 {
     const PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
@@ -1154,6 +1268,17 @@ bool FolderWindow::DebugGetPaneStatusBarSnapshot(Pane pane, FolderWindowPaneStat
     out.selectionText                = state.statusSelectionText;
     out.securityText                 = state.statusSecurityText;
     out.sortText                     = state.statusSortText;
+    out.decisionText                 = state.statusDecisionText;
+    if (RECT decisionRect{}; GetStatusBarPartRect(state.hStatusBar.get(), kStatusBarPartDecision, decisionRect))
+    {
+        out.decisionPartWidthPx = static_cast<int>(decisionRect.right - decisionRect.left);
+    }
+    std::array<wchar_t, 256> windowText{};
+    const int windowTextLength = GetWindowTextW(state.hStatusBar.get(), windowText.data(), static_cast<int>(windowText.size()));
+    if (windowTextLength > 0)
+    {
+        out.windowText.assign(windowText.data(), static_cast<size_t>(windowTextLength));
+    }
 
     wchar_t className[128]{};
     const int classLength = GetClassNameW(state.hStatusBar.get(), className, static_cast<int>(std::size(className)));

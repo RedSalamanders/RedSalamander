@@ -1,0 +1,33 @@
+{
+  "schema": "red-salamander.file-operations-capture-manifest.v1",
+  "capturedUtc": "2026-09-19T15:40:02Z",
+  "sourceBase": "103184ed3430dc60342fd4de342b5cc21fa22873",
+  "workspaceSnapshot": "bb6399d87d6a248d116aaf2f8898abf68edb16e354eaa659e36e0d954a3b154c",
+  "runId": "discovery-localization-candidate-capture",
+  "configuration": "Debug",
+  "platform": "x64",
+  "theme": "dark",
+  "language": "fr-FR",
+  "syntheticOperationData": true,
+  "activation": "SW_SHOWNOACTIVATE",
+  "images": [
+    {
+      "file": "discovery-open__480dip__fr-FR__144dpi.png",
+      "scenario": "discovery-open-long-paths",
+      "clientWidthDip": 480,
+      "dpi": 144,
+      "pixelWidth": 724,
+      "pixelHeight": 767,
+      "sha256": "635667bc24dcde7f8446e5ba07083a1a33dc1c8564e66a9a32de6a9e8c1547b0"
+    },
+    {
+      "file": "discovery-open__760dip__fr-FR__144dpi.png",
+      "scenario": "discovery-open-long-paths",
+      "clientWidthDip": 760,
+      "dpi": 144,
+      "pixelWidth": 1144,
+      "pixelHeight": 767,
+      "sha256": "282d226d94e78581abc48d64fb77bd1adf04c6b6997491b034c5b68e993ad73d"
+    }
+  ]
+}

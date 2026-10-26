@@ -1,0 +1,44 @@
+[
+  {
+    "file": "focused-spec-docs.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\final-documentation-validation\\focused-spec-docs.log",
+    "bytes": 4198,
+    "sha256": "e82047a91c8affda6490b7a313473591aca9df347948eb27daa9db9cb3e2ea87"
+  },
+  {
+    "file": "focused-spec-docs.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\final-documentation-validation\\focused-spec-docs.json",
+    "bytes": 313,
+    "sha256": "fd7cc560ef19942606e64befc2620c745de962659b2371e5cde7f52687b52119"
+  },
+  {
+    "file": "spec-inventory.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\final-documentation-validation\\spec-inventory.log",
+    "bytes": 339,
+    "sha256": "982d79c39160c522e56a6f6e559389384d49d1c748823f3db2d80c6d2c9a3d4e"
+  },
+  {
+    "file": "tool-inventory.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\final-documentation-validation\\tool-inventory.log",
+    "bytes": 51392,
+    "sha256": "41d623f4d69b258838009cd5fa7ce8d36943a8191734c285e3180cac229951b1"
+  },
+  {
+    "file": "archive-inventory.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\final-documentation-validation\\archive-inventory.log",
+    "bytes": 76,
+    "sha256": "c4dc1643b3824c2105ac7304a18ff3cde681f731658766334d9fabbecae62c21"
+  },
+  {
+    "file": "diff-check.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\final-documentation-validation\\diff-check.log",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "file": "validation-summary.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\final-documentation-validation\\validation-summary.json",
+    "bytes": 2259,
+    "sha256": "78bd5a8389985c517d722a787a6bc43880dcff5b627ab16d2e36321fc46ee242"
+  }
+]

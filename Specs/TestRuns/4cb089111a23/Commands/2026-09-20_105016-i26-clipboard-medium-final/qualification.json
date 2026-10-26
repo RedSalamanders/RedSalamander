@@ -1,0 +1,112 @@
+{
+  "runs": {
+    "clipboard-medium-baseline": {
+      "variant": "clipboard-medium-baseline",
+      "passed": 0,
+      "failed": 3,
+      "skipped": 0,
+      "source_snapshot": "089a77da26f856ad6d8559a610372fdd9dc73ba049162a16bf1fbeb750ca6314",
+      "build_receipt": "c10fc3a9884b13c06b9741bc140091edd21ac5b70e19fd27fa9d082b66881d67",
+      "selected_metric_counts": {},
+      "audit": {
+        "schema": "red-salamander.test-sandbox-disk-audit.v1",
+        "is_clean": true,
+        "issue_count": 0,
+        "test_root": "S:\\RedSalamander.Perf",
+        "run_id": "i26-clipboard-medium-baseline",
+        "allowed_run_ids": [
+          "i26-clipboard-medium-baseline"
+        ],
+        "issues": []
+      }
+    },
+    "clipboard-medium-candidate": {
+      "variant": "clipboard-medium-candidate",
+      "passed": 0,
+      "failed": 6,
+      "skipped": 0,
+      "source_snapshot": "ba65594884c434b46027ac4a5b4e3cce182d9a46450bf4c7a9b36aa4ebd1092e",
+      "build_receipt": "f14b850258d4d62ab4dab255fd06f8fc2f69636ab602529e04965df203184162",
+      "selected_metric_counts": {
+        "FileOps.Popup.Render.PreparedBackground": 1098,
+        "FileOps.Popup.Capture.LegacyContentPixels": 12,
+        "FileOps.Popup.Capture.CoveredContentPixels": 6,
+        "FileOps.Popup.PathAccess.RedrawBatchUs": 60,
+        "FileOps.Popup.Capture.DiscoveryProgressPixels": 12,
+        "FileOps.Popup.Capture.GraphLabelPixels": 15
+      },
+      "audit": {
+        "schema": "red-salamander.test-sandbox-disk-audit.v1",
+        "is_clean": true,
+        "issue_count": 0,
+        "test_root": "S:\\RedSalamander.Perf",
+        "run_id": "i26-clipboard-medium-candidate",
+        "allowed_run_ids": [
+          "i26-clipboard-medium-candidate"
+        ],
+        "issues": []
+      }
+    },
+    "clipboard-medium-corrected": {
+      "variant": "clipboard-medium-corrected",
+      "passed": 6,
+      "failed": 0,
+      "skipped": 0,
+      "source_snapshot": "002c2fd168c6fca57d78150b0eef8f131962d1a3f116948b9d071af8f009c005",
+      "build_receipt": "45f0df6ef3febc5e0abfc4c48eb6b7b45b26d71463738bd7534a53831b4533df",
+      "selected_metric_counts": {
+        "FileOps.Popup.Render.PreparedBackground": 1180,
+        "FileOps.Popup.Capture.LegacyContentPixels": 12,
+        "FileOps.Popup.Capture.CoveredContentPixels": 6,
+        "FileOps.Popup.PathAccess.RedrawBatchUs": 60,
+        "FileOps.Popup.Capture.DiscoveryProgressPixels": 12,
+        "FileOps.Popup.Capture.GraphLabelPixels": 15,
+        "FileOps.Popup.Capture.PathFocusPixels": 3
+      },
+      "audit": {
+        "schema": "red-salamander.test-sandbox-disk-audit.v1",
+        "is_clean": true,
+        "issue_count": 0,
+        "test_root": "S:\\RedSalamander.Perf",
+        "run_id": "i26-clipboard-medium-corrected",
+        "allowed_run_ids": [
+          "i26-clipboard-medium-corrected"
+        ],
+        "issues": []
+      }
+    },
+    "clipboard-medium-final": {
+      "variant": "clipboard-medium-final",
+      "passed": 30,
+      "failed": 0,
+      "skipped": 0,
+      "source_snapshot": "002c2fd168c6fca57d78150b0eef8f131962d1a3f116948b9d071af8f009c005",
+      "build_receipt": "e3d70ac1228ababf27363870de4c072ff169efadad06a47ebd6bf64329acbd8d",
+      "selected_metric_counts": {
+        "FileOps.Popup.Render.PreparedBackground": 2071,
+        "FileOps.Popup.Capture.LegacyContentPixels": 12,
+        "FileOps.Popup.Capture.CoveredContentPixels": 6,
+        "FileOps.Popup.PathAccess.RedrawBatchUs": 60,
+        "FileOps.Popup.Capture.DiscoveryProgressPixels": 12,
+        "FileOps.Popup.Capture.GraphLabelPixels": 15,
+        "FileOps.Popup.Capture.PathFocusPixels": 3,
+        "FileOps.Popup.ConflictRows.RedrawBatchUs": 45,
+        "FileOps.Popup.Capture.ConflictMetadataPixels": 18
+      },
+      "audit": {
+        "schema": "red-salamander.test-sandbox-disk-audit.v1",
+        "is_clean": true,
+        "issue_count": 0,
+        "test_root": "S:\\RedSalamander.Perf",
+        "run_id": "i26-clipboard-medium-final",
+        "allowed_run_ids": [
+          "i26-clipboard-medium-final"
+        ],
+        "issues": []
+      }
+    }
+  },
+  "original_failure": "2026-09-20_095955-i26-conflict-clean-final: 25/27, HTML Format 49344, 0x800401D3 in throughput repeats 2/3",
+  "scope": "Harness format/medium contract only. No product renderer, engine policy, DxUi API or pin changed.",
+  "note": "Early native attempts are confounded by a one-entry enumeration assertion. The independent owned-object probe reproduces the medium mismatch; its normalized variant rejects unsupported stream requests with identical retained bytes."
+}

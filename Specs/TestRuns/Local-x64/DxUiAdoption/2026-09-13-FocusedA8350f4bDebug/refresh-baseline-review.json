@@ -1,0 +1,38 @@
+{
+  "scope": "Matched thirteen-case context, ten repetitions before/after. Whole-case durations include setup and ten additional nominal 20 ms observation intervals; observed elapsed time can exceed the requested interval. These are not application Refresh latency or library resource measurements. The action/assertion suffix is byte-identical in Git.",
+  "runs": [
+    {
+      "source": "e9099fb751c3149f70b8e6104cdd980253936cea",
+      "protectedActionAndAssertionsUtf8Sha256": "e652465a3233f894d802a9eb7bf62a2e2473be416779070bffbb5f1770affc5d",
+      "caseDurationMs": [
+        125,
+        127,
+        123,
+        124,
+        128,
+        122,
+        125,
+        122,
+        125,
+        123
+      ]
+    },
+    {
+      "source": "a8350f4bf3e8d18cd666c720e2628167b4eb3af3",
+      "protectedActionAndAssertionsUtf8Sha256": "e652465a3233f894d802a9eb7bf62a2e2473be416779070bffbb5f1770affc5d",
+      "caseDurationMs": [
+        443,
+        436,
+        438,
+        434,
+        438,
+        438,
+        436,
+        435,
+        424,
+        437
+      ]
+    }
+  ],
+  "medianWholeCaseDeltaMs": 312.0
+}

@@ -1,0 +1,37 @@
+{
+  "schema": "red-salamander.perf-compaction-summary.v1",
+  "case": "File Operations P1.5 Inline F2 worker and interlock",
+  "machineHash": "4cb089111a23",
+  "build": "Debug",
+  "testEnabled": true,
+  "governedRunId": "20260823T002807Z-26200-d5c7f0baff1e43068ef7f564fb7b5a38",
+  "metricRunId": "2026-08-23_002824",
+  "buildAttestation": "fd95dad5bfc45aded7855ed9f7fc7eea53be3c047dc95e008092a2527d17806f",
+  "headCommit": "689c930ca4c1ab33c61b2f790d5667a47070f835",
+  "compaction": {
+    "originalSource": "perf_metrics.jsonl",
+    "originalSourceBytes": 321393,
+    "originalSourceSha256": "4f30855137d75ab6dc3a76957f82a4891e989b37596d626332a8b7425c898ad9",
+    "originalRowCount": 874,
+    "originalFirstTimestamp": "2026-08-23T00:28:24.42Z",
+    "originalLastTimestamp": "2026-08-23T00:28:26.419Z",
+    "retainedSourceBytes": 4880,
+    "retainedSourceSha256": "87700e741797732bf13a6185ef9fab96f4d97a9d0c8cd06427181f314239f663",
+    "retainedRowCount": 13,
+    "retainedRowsInOriginalOrder": true,
+    "retainedSource": "perf_metrics_claims.jsonl",
+    "retainedSourceRows": [328, 331, 394, 415, 478, 488, 610, 631, 634, 698, 716, 739, 841],
+    "retainedMetricPredicate": "P1.5 interlock preparation, overlap/cancellation wait, conditional rename execution, and self-test assertions"
+  },
+  "behavioralResult": {
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+  },
+  "claims": {
+    "workerExecution": "passed",
+    "queueBypassWithOverlapSerialization": "passed",
+    "cancelledWaiterNeverMutates": "passed",
+    "throughputImprovementClaimed": false
+  }
+}

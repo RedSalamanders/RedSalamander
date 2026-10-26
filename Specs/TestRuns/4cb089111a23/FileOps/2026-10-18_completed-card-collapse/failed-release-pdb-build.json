@@ -1,0 +1,13 @@
+{
+  "profile": "x64 Release",
+  "status": "FAILED",
+  "native_error": "C1090 PDB API code 23, RPC unavailable/invalid handle",
+  "log_sha256": "7d09a10a5f47af85bfaa9eee23ab5b514623164e27140ccf1293dbc5e00621f4",
+  "raw_log": "Z:\\RedSalamander.Perf\\evidence\\completed-card-collapse\\build-failures\\20261018T1700-release-pdb-rpc\\msbuild-20261018_190031_150-pid96444-8412adb8.log",
+  "errors": [
+    "C:\\Users\\eric\\.codex\\worktrees\\selection-shape-release\\RedSalamander\\Plugins\\FileSystemS3\\FileSystemS3.Menu.cpp(58,1): error C1090: PDB API call failed, error code '23': (0x000006BA) [C:\\Users\\eric\\.codex\\worktrees\\selection-shape-release\\RedSalamander\\Plugins\\FileSystemS3\\FileSystemS3.vcxproj]",
+    "C:\\Users\\eric\\.codex\\worktrees\\selection-shape-release\\RedSalamander\\PoC\\ls4\\ls4.cpp(354,1): error C1090: PDB API call failed, error code '23': (0x00000006) [C:\\Users\\eric\\.codex\\worktrees\\selection-shape-release\\RedSalamander\\PoC\\ls4\\ls4.vcxproj]",
+    "C:\\Users\\eric\\.codex\\worktrees\\selection-shape-release\\RedSalamander\\Tests\\TestSupport\\TestSupport.Tests.WindowScreenshot.cpp(220,1): error C1090: PDB API call failed, error code '23': (0x00000006) [C:\\Users\\eric\\.codex\\worktrees\\selection-shape-release\\RedSalamander\\Tests\\ViewerPETests\\ViewerPETests.vcxproj]"
+  ],
+  "qualification": "No successful receipt and no runtime qualification from this attempt. Unchanged-source retry follows after other compilation ended."
+}

@@ -1,0 +1,1154 @@
+diff --git a/Dependencies/DxUi.lock.json b/Dependencies/DxUi.lock.json
+index 1e40a6f5d..dec813793 100644
+--- a/Dependencies/DxUi.lock.json
++++ b/Dependencies/DxUi.lock.json
+@@ -1,6 +1,6 @@
+ {
+   "repository": "https://github.com/RedSalamanders/DxUi",
+-  "commit": "e5ebbb5c6046dd2cae5e32415cd7869cb7fad424",
++  "commit": "6c436c213ac0fac181b2faafd1daf6085bdedc23",
+   "apiRevision": 3,
+   "targets": [
+     "DxUi"
+diff --git a/Plugins/ViewerSpace/ViewerSpace.cpp b/Plugins/ViewerSpace/ViewerSpace.cpp
+index bbaab3a93..f8e0e2767 100644
+--- a/Plugins/ViewerSpace/ViewerSpace.cpp
++++ b/Plugins/ViewerSpace/ViewerSpace.cpp
+@@ -2489,7 +2489,6 @@ LRESULT ViewerSpace::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
+             Debug::Perf::EmitValue(L"viewer.space.model.directory_count", static_cast<uint64_t>(snapshot->realDirectoryCount));
+             Debug::Perf::EmitValue(L"viewer.space.model.file_candidate_count", static_cast<uint64_t>(snapshot->fileCandidateCount));
+             Debug::Perf::EmitValue(L"viewer.space.model.synthetic_count", static_cast<uint64_t>(snapshot->syntheticCount));
+-            Debug::Perf::EmitValue(L"viewer.space.queue.pending_bytes", snapshot->pendingQueueBytes);
+             return TRUE;
+         }
+         case WndMsg::kViewerSpaceDebugForceRendererFault:
+@@ -2691,6 +2690,7 @@ void ViewerSpace::OnNcActivate(HWND hwnd, bool windowActive) noexcept
+ void ViewerSpace::OnDestroy()
+ {
+     AbandonScanWorkers();
++    EmitQueueDiagnostics(false, true);
+     CancelScanCacheBuild();
+ #ifdef ENABLE_TESTS
+     _rendererFailureStage = kRendererDiscardDestroy;
+@@ -6138,9 +6138,23 @@ void ViewerSpace::StartScan(std::wstring_view rootPath, bool allowCache)
+     _debugPostUpdateInnerGenerationRejects.store(0u, std::memory_order_release);
+ #endif
+     _lastRectsByNode.clear();
+-    _pendingUpdatePostedCount.store(0u, std::memory_order_relaxed);
+-    _pendingUpdateCoalescedCount.store(0u, std::memory_order_relaxed);
+-    _pendingUpdateBytes.store(0u, std::memory_order_relaxed);
++    {
++        std::scoped_lock lock(_updateMutex);
++        _pendingUpdatePostedCount.store(0u, std::memory_order_relaxed);
++        _pendingUpdateCoalescedCount.store(0u, std::memory_order_relaxed);
++        _pendingUpdateBytes.store(0u, std::memory_order_relaxed);
++        _pendingUpdateAcceptedBytes.store(0u, std::memory_order_relaxed);
++        _pendingUpdatePeakBytes.store(0u, std::memory_order_relaxed);
++        _pendingUpdateLockHoldCount.store(0u, std::memory_order_relaxed);
++        _pendingUpdateLockHoldTotalUs.store(0u, std::memory_order_relaxed);
++        _pendingUpdateLockHoldMaxUs.store(0u, std::memory_order_relaxed);
++        _pendingUpdateDrainedCount.store(0u, std::memory_order_relaxed);
++        _pendingUpdateDrainCount.store(0u, std::memory_order_relaxed);
++        _pendingUpdateDrainTotalUs.store(0u, std::memory_order_relaxed);
++        _pendingUpdateDrainMaxUs.store(0u, std::memory_order_relaxed);
++        _lastQueueDiagnosticsEmitAt      = {};
++        _queueDiagnosticsTerminalEmitted = false;
++    }
+     InvalidateStaticTreemapCache();
+     _staticTreemapCache.hits         = 0u;
+     _staticTreemapCache.misses       = 0u;
+@@ -7852,13 +7866,28 @@ void ViewerSpace::PostUpdate(PendingUpdate&& update) noexcept
+     }
+ #endif
+ 
+-    const auto lockStartedAt = std::chrono::steady_clock::now();
+     const size_t updateBytes = EstimatePendingUpdateBytes(update);
+-    size_t pendingCount      = 0;
+     uint64_t pendingBytes    = 0u;
+     bool coalesced           = false;
+     {
+         std::scoped_lock lock(_updateMutex);
++        const auto lockAcquiredAt = std::chrono::steady_clock::now();
++        bool generationAccepted   = false;
++        auto recordLockHold       = wil::scope_exit([this, lockAcquiredAt, &generationAccepted]() noexcept
++        {
++            if (! generationAccepted)
++            {
++                return;
++            }
++            const uint64_t lockHoldUs = Debug::Perf::ElapsedUs(lockAcquiredAt);
++            SaturatingAtomicAdd(_pendingUpdateLockHoldCount, 1u);
++            SaturatingAtomicAdd(_pendingUpdateLockHoldTotalUs, lockHoldUs);
++            uint64_t observedLockHoldMaxUs = _pendingUpdateLockHoldMaxUs.load(std::memory_order_relaxed);
++            while (lockHoldUs > observedLockHoldMaxUs &&
++                   ! _pendingUpdateLockHoldMaxUs.compare_exchange_weak(observedLockHoldMaxUs, lockHoldUs, std::memory_order_relaxed, std::memory_order_relaxed))
++            {
++            }
++        });
+         if (update.generation != _scanGeneration.load(std::memory_order_acquire))
+         {
+ #ifdef ENABLE_TESTS
+@@ -7866,6 +7895,7 @@ void ViewerSpace::PostUpdate(PendingUpdate&& update) noexcept
+ #endif
+             return;
+         }
++        generationAccepted = true;
+         if (update.kind == PendingUpdate::Kind::UpdateSize || update.kind == PendingUpdate::Kind::Progress)
+         {
+             size_t examined = 0u;
+@@ -7899,18 +7929,21 @@ void ViewerSpace::PostUpdate(PendingUpdate&& update) noexcept
+             _pendingUpdates.emplace_back(std::move(update));
+             pendingBytes = _pendingUpdateBytes.fetch_add(static_cast<uint64_t>(updateBytes), std::memory_order_relaxed) + static_cast<uint64_t>(updateBytes);
+         }
+-        pendingCount = _pendingUpdates.size();
+-    }
+-
+-    _pendingUpdatePostedCount.fetch_add(1u, std::memory_order_relaxed);
+-    if (coalesced)
+-    {
+-        _pendingUpdateCoalescedCount.fetch_add(1u, std::memory_order_relaxed);
+-        Debug::Perf::EmitCounter(L"viewer.space.queue.coalesced_count");
++        if (coalesced || ! _pendingUpdates.empty())
++        {
++            SaturatingAtomicAdd(_pendingUpdatePostedCount, 1u);
++            SaturatingAtomicAdd(_pendingUpdateAcceptedBytes, static_cast<uint64_t>(updateBytes));
++            if (coalesced)
++            {
++                SaturatingAtomicAdd(_pendingUpdateCoalescedCount, 1u);
++            }
++        }
++        uint64_t observedQueuePeakBytes = _pendingUpdatePeakBytes.load(std::memory_order_relaxed);
++        while (pendingBytes > observedQueuePeakBytes &&
++               ! _pendingUpdatePeakBytes.compare_exchange_weak(observedQueuePeakBytes, pendingBytes, std::memory_order_relaxed, std::memory_order_relaxed))
++        {
++        }
+     }
+-    Debug::Perf::EmitCounter(L"viewer.space.queue.posted_count");
+-    Debug::Perf::EmitValue(L"viewer.space.queue.pending_bytes", pendingBytes);
+-    Debug::Perf::EmitDurationUs(L"viewer.space.queue.lock_hold_us", Debug::Perf::ElapsedUs(lockStartedAt), pendingCount, pendingBytes);
+ 
+     static constexpr uint64_t kPendingUpdateSoftBackpressureBytes = 16ull * 1024ull * 1024ull;
+     static constexpr uint64_t kPendingUpdateHardBackpressureBytes = 64ull * 1024ull * 1024ull;
+@@ -7928,6 +7961,104 @@ void ViewerSpace::PostUpdate(PendingUpdate&& update) noexcept
+     }
+ }
+ 
++bool ViewerSpace::IsQueueTerminalReady() noexcept
++{
++    if ((_overallState != ScanState::Done && _overallState != ScanState::Error && _overallState != ScanState::Canceled))
++    {
++        return false;
++    }
++    const Node* root = TryGetRealNode(_rootNodeId);
++    if (root == nullptr || (root->scanState != ScanState::Done && root->scanState != ScanState::Error && root->scanState != ScanState::Canceled))
++    {
++        return false;
++    }
++
++    ReapFinishedScanWorkers();
++    const auto isComplete = [](const ScanWorker& worker) noexcept
++    { return worker.done != nullptr ? worker.done->load(std::memory_order_acquire) : ! worker.thread.joinable(); };
++    if (! isComplete(_scanWorker))
++    {
++        return false;
++    }
++    for (const ScanWorker& worker : _retiredScanWorkers)
++    {
++        if (! isComplete(worker))
++        {
++            return false;
++        }
++    }
++
++    std::scoped_lock lock(_updateMutex);
++    return _pendingUpdates.empty() && _pendingUpdateBytes.load(std::memory_order_relaxed) == 0u;
++}
++
++void ViewerSpace::EmitQueueDiagnostics(bool terminalSnapshot, bool force) noexcept
++{
++    static constexpr auto kMinimumEmitInterval = std::chrono::milliseconds(250);
++    const auto now                             = std::chrono::steady_clock::now();
++    if (! force)
++    {
++        if (terminalSnapshot)
++        {
++            if (_queueDiagnosticsTerminalEmitted)
++            {
++                return;
++            }
++            _queueDiagnosticsTerminalEmitted = true;
++        }
++        else if (_lastQueueDiagnosticsEmitAt.time_since_epoch().count() != 0 && now - _lastQueueDiagnosticsEmitAt < kMinimumEmitInterval)
++        {
++            return;
++        }
++    }
++    _lastQueueDiagnosticsEmitAt = now;
++
++    // Counts, accepted bytes, and timing totals/maxima are cumulative since StartScan; pending_bytes is the current queue gauge. Legacy duration rows carry the
++    // exact max sample, not a percentile.
++    uint64_t postedCount      = 0u;
++    uint64_t coalescedCount   = 0u;
++    uint64_t pendingBytes     = 0u;
++    uint64_t pendingPeakBytes = 0u;
++    uint64_t acceptedBytes    = 0u;
++    uint64_t lockHoldCount    = 0u;
++    uint64_t lockHoldTotalUs  = 0u;
++    uint64_t lockHoldMaxUs    = 0u;
++    uint64_t drainedCount     = 0u;
++    uint64_t drainCount       = 0u;
++    uint64_t drainTotalUs     = 0u;
++    uint64_t drainMaxUs       = 0u;
++    {
++        std::scoped_lock lock(_updateMutex);
++        postedCount      = _pendingUpdatePostedCount.load(std::memory_order_relaxed);
++        coalescedCount   = _pendingUpdateCoalescedCount.load(std::memory_order_relaxed);
++        pendingBytes     = _pendingUpdateBytes.load(std::memory_order_relaxed);
++        pendingPeakBytes = _pendingUpdatePeakBytes.load(std::memory_order_relaxed);
++        acceptedBytes    = _pendingUpdateAcceptedBytes.load(std::memory_order_relaxed);
++        lockHoldCount    = _pendingUpdateLockHoldCount.load(std::memory_order_relaxed);
++        lockHoldTotalUs  = _pendingUpdateLockHoldTotalUs.load(std::memory_order_relaxed);
++        lockHoldMaxUs    = _pendingUpdateLockHoldMaxUs.load(std::memory_order_relaxed);
++        drainedCount     = _pendingUpdateDrainedCount.load(std::memory_order_relaxed);
++        drainCount       = _pendingUpdateDrainCount.load(std::memory_order_relaxed);
++        drainTotalUs     = _pendingUpdateDrainTotalUs.load(std::memory_order_relaxed);
++        drainMaxUs       = _pendingUpdateDrainMaxUs.load(std::memory_order_relaxed);
++    }
++
++    Debug::Perf::EmitValue(L"viewer.space.queue.posted_count", postedCount);
++    Debug::Perf::EmitValue(L"viewer.space.queue.coalesced_count", coalescedCount);
++    Debug::Perf::EmitValue(L"viewer.space.queue.pending_bytes", pendingBytes);
++    Debug::Perf::EmitValue(L"viewer.space.queue.pending_peak_bytes", pendingPeakBytes);
++    Debug::Perf::EmitValue(L"viewer.space.queue.posted_bytes", acceptedBytes);
++    Debug::Perf::EmitValue(L"viewer.space.queue.lock_hold_count", lockHoldCount);
++    Debug::Perf::EmitValue(L"viewer.space.queue.lock_hold_total_us", lockHoldTotalUs);
++    Debug::Perf::EmitValue(L"viewer.space.queue.lock_hold_max_us", lockHoldMaxUs);
++    Debug::Perf::Emit(L"viewer.space.queue.lock_hold_us", L"cumulative-max-since-start-scan", lockHoldMaxUs, lockHoldCount, lockHoldTotalUs, S_OK);
++    Debug::Perf::EmitValue(L"viewer.space.queue.drained_count", drainedCount);
++    Debug::Perf::EmitValue(L"viewer.space.queue.drain_count", drainCount);
++    Debug::Perf::EmitValue(L"viewer.space.queue.drain_total_us", drainTotalUs);
++    Debug::Perf::EmitValue(L"viewer.space.queue.drain_max_us", drainMaxUs);
++    Debug::Perf::Emit(L"viewer.space.queue.drain_us", L"cumulative-max-since-start-scan", drainMaxUs, drainCount, drainTotalUs, S_OK);
++}
++
+ void ViewerSpace::DrainUpdates() noexcept
+ {
+     static constexpr double kDrainBudgetSecondsWhileScanning = 0.002;
+@@ -8159,15 +8290,25 @@ void ViewerSpace::DrainUpdates() noexcept
+ 
+     if (processed == 0)
+     {
++        if (IsQueueTerminalReady())
++        {
++            EmitQueueDiagnostics(true, false);
++        }
+         return;
+     }
+ 
+     const uint64_t drainUs = Debug::Perf::ElapsedUs(drainStartedAt);
++    SaturatingAtomicAdd(_pendingUpdateDrainedCount, static_cast<uint64_t>(processed));
++    SaturatingAtomicAdd(_pendingUpdateDrainCount, 1u);
++    SaturatingAtomicAdd(_pendingUpdateDrainTotalUs, drainUs);
++    uint64_t observedDrainMaxUs = _pendingUpdateDrainMaxUs.load(std::memory_order_relaxed);
++    while (drainUs > observedDrainMaxUs &&
++           ! _pendingUpdateDrainMaxUs.compare_exchange_weak(observedDrainMaxUs, drainUs, std::memory_order_relaxed, std::memory_order_relaxed))
++    {
++    }
+ #ifdef ENABLE_TESTS
+     _lastDrainUs = drainUs;
+ #endif
+-    Debug::Perf::Emit(L"viewer.space.queue.drain_us", L"phase0-current", drainUs, processed, pendingBytesAfter, S_OK);
+-    Debug::Perf::EmitValue(L"viewer.space.queue.coalesced_count", _pendingUpdateCoalescedCount.load(std::memory_order_relaxed));
+ 
+     const ScanState previousOverallState = _overallState;
+ 
+@@ -8205,6 +8346,16 @@ void ViewerSpace::DrainUpdates() noexcept
+             _scanCompletedSinceSeconds = 0.0;
+         }
+     }
++
++    const bool terminalQueueSnapshot = _overallState == ScanState::Done || _overallState == ScanState::Error || _overallState == ScanState::Canceled;
++    if (terminalQueueSnapshot && IsQueueTerminalReady())
++    {
++        EmitQueueDiagnostics(true, false);
++    }
++    else
++    {
++        EmitQueueDiagnostics(false, false);
++    }
+     if (wasScanActive != isScanActiveNow)
+     {
+         _layoutDirty              = true;
+diff --git a/Plugins/ViewerSpace/ViewerSpace.h b/Plugins/ViewerSpace/ViewerSpace.h
+index 10fea15cd..b502bec7c 100644
+--- a/Plugins/ViewerSpace/ViewerSpace.h
++++ b/Plugins/ViewerSpace/ViewerSpace.h
+@@ -322,6 +322,8 @@ private:
+ 
+     void PostUpdate(PendingUpdate&& update) noexcept;
+     void DrainUpdates() noexcept;
++    void EmitQueueDiagnostics(bool terminalSnapshot, bool force) noexcept;
++    bool IsQueueTerminalReady() noexcept;
+     static size_t EstimatePendingUpdateBytes(const PendingUpdate& update) noexcept;
+     void ContinueScanCacheBuild() noexcept;
+     void CancelScanCacheBuild() noexcept;
+@@ -605,6 +607,17 @@ private:
+     std::atomic_uint64_t _pendingUpdatePostedCount{0};
+     std::atomic_uint64_t _pendingUpdateCoalescedCount{0};
+     std::atomic_uint64_t _pendingUpdateBytes{0};
++    std::atomic_uint64_t _pendingUpdateAcceptedBytes{0};
++    std::atomic_uint64_t _pendingUpdatePeakBytes{0};
++    std::atomic_uint64_t _pendingUpdateLockHoldCount{0};
++    std::atomic_uint64_t _pendingUpdateLockHoldTotalUs{0};
++    std::atomic_uint64_t _pendingUpdateLockHoldMaxUs{0};
++    std::atomic_uint64_t _pendingUpdateDrainedCount{0};
++    std::atomic_uint64_t _pendingUpdateDrainCount{0};
++    std::atomic_uint64_t _pendingUpdateDrainTotalUs{0};
++    std::atomic_uint64_t _pendingUpdateDrainMaxUs{0};
++    std::chrono::steady_clock::time_point _lastQueueDiagnosticsEmitAt{};
++    bool _queueDiagnosticsTerminalEmitted = false;
+     std::chrono::steady_clock::time_point _openStartedAt{};
+     bool _openToFirstPaintEmitted = false;
+ 
+diff --git a/RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp b/RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp
+index 9f29e99e8..7fd0336f5 100644
+--- a/RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp
++++ b/RedSalamander/SelfTest/Commands/Commands.Tests.Runner.cpp
+@@ -68,6 +68,7 @@ struct ForceWilTemplateInstantiations
+ #include "BatchRenameExecutionEngine.h"
+ #include "BatchRenameMenus.h"
+ #include "BatchRenameWindow.h"
++#include "Blake3Digest.h"
+ #include "ChangeCase.h"
+ #include "CommandDispatch.Debug.h"
+ #include "CommandPaletteWindow.h"
+diff --git a/RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp b/RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp
+index 57eb44a8d..d30603061 100644
+--- a/RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp
++++ b/RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp
+@@ -8543,7 +8543,8 @@ void CloseExistingStandaloneViewerWindows(std::wstring_view windowClassName) noe
+                                                        std::wstring_view windowClassName,
+                                                        const std::filesystem::path& samplePath,
+                                                        StandaloneViewerPointerProbe& out,
+-                                                       std::string_view configurationJsonUtf8 = {}) noexcept
++                                                       std::string_view configurationJsonUtf8 = {},
++                                                       wil::com_ptr<IViewer>* retainedViewer  = nullptr) noexcept
+ {
+     out                 = {};
+     out.windowClassName = std::wstring(windowClassName);
+@@ -8559,15 +8560,23 @@ void CloseExistingStandaloneViewerWindows(std::wstring_view windowClassName) noe
+     }
+ 
+     Common::Settings::Settings isolatedSettings{};
+-    const HRESULT createHr = ViewerPluginManager::GetInstance().CreateViewerInstance(pluginId, isolatedSettings, out.viewer);
+-    state.Require(SUCCEEDED(createHr) && out.viewer,
+-                  std::format(L"{}: failed to create viewer '{}'. hr=0x{:08X}", scenarioName, pluginId, static_cast<unsigned long>(createHr)));
+-    if (FAILED(createHr) || ! out.viewer)
++    const bool reuseRetainedViewer = retainedViewer && *retainedViewer;
++    if (reuseRetainedViewer)
+     {
+-        return false;
++        out.viewer = *retainedViewer;
++    }
++    else
++    {
++        const HRESULT createHr = ViewerPluginManager::GetInstance().CreateViewerInstance(pluginId, isolatedSettings, out.viewer);
++        state.Require(SUCCEEDED(createHr) && out.viewer,
++                      std::format(L"{}: failed to create viewer '{}'. hr=0x{:08X}", scenarioName, pluginId, static_cast<unsigned long>(createHr)));
++        if (FAILED(createHr) || ! out.viewer)
++        {
++            return false;
++        }
+     }
+ 
+-    if (! configurationJsonUtf8.empty())
++    if (! reuseRetainedViewer && ! configurationJsonUtf8.empty())
+     {
+         wil::com_ptr<IInformations> informations;
+         const HRESULT qiInfos = out.viewer->QueryInterface(__uuidof(IInformations), informations.put_void());
+@@ -8587,6 +8596,10 @@ void CloseExistingStandaloneViewerWindows(std::wstring_view windowClassName) noe
+             return false;
+         }
+     }
++    if (retainedViewer && ! reuseRetainedViewer)
++    {
++        *retainedViewer = out.viewer;
++    }
+ 
+     const std::wstring samplePathText = samplePath.wstring();
+     ViewerOpenContext context{.sizeBytes = sizeof(ViewerOpenContext)};
+@@ -19254,37 +19267,106 @@ struct FolderViewDummyPluginHandles
+     return SUCCEEDED(hr) && state.failure.empty();
+ }
+ 
+-[[nodiscard]] bool CreateViewerSpaceProgressivePerfFixture(CaseState& state, const std::filesystem::path& root) noexcept
++// Large deterministic perf fixtures are ephemeral and are read immediately by the scanner. Unlike
++// SelfTest::WriteBinaryFile, this local writer deliberately omits durable-media flushing so fixture
++// creation does not perform one FlushFileBuffers call per tiny file.
++[[nodiscard]] bool WriteEphemeralViewerSpacePerfFile(const std::filesystem::path& path, std::string_view contents) noexcept
+ {
+-    static constexpr size_t kTopDirectoryCount    = 20u;
+-    static constexpr size_t kNestedDirectoryCount = 5u;
+-    static constexpr size_t kFilesPerNestedFolder = 100u;
+-    static constexpr size_t kExpectedFileCount    = kTopDirectoryCount * kNestedDirectoryCount * kFilesPerNestedFolder;
+-    static constexpr size_t kExpectedFolderCount  = kTopDirectoryCount + (kTopDirectoryCount * kNestedDirectoryCount);
++    if (path.empty() || contents.size() > (std::numeric_limits<DWORD>::max)())
++    {
++        return false;
++    }
+ 
+-    state.Require(SelfTest::EnsureDirectory(root), L"Failed to create ViewerSpace progressive root.");
++    wil::unique_handle file(CreateFileW(path.c_str(), GENERIC_WRITE, FILE_SHARE_READ, nullptr, CREATE_NEW, FILE_ATTRIBUTE_NORMAL, nullptr));
++    if (! file)
++    {
++        return false;
++    }
++
++    DWORD written = 0u;
++    return WriteFile(file.get(), contents.data(), static_cast<DWORD>(contents.size()), &written, nullptr) != FALSE && written == contents.size();
++}
++
++[[nodiscard]] bool CreateViewerSpaceProgressivePerfFixture(CaseState& state,
++                                                           const std::filesystem::path& root,
++                                                           bool largeScenario                             = false,
++                                                           Common::Crypto::Blake3Digest* outFixtureDigest = nullptr) noexcept
++{
++    static constexpr size_t kSmallTopDirectoryCount    = 20u;
++    static constexpr size_t kSmallNestedDirectoryCount = 5u;
++    static constexpr size_t kSmallFilesPerNestedFolder = 100u;
++    static constexpr size_t kLargeTopDirectoryCount    = 100u;
++    static constexpr size_t kLargeNestedDirectoryCount = 4u;
++    static constexpr size_t kLargeFilesPerNestedFolder = 250u;
++    const size_t topDirectoryCount                     = largeScenario ? kLargeTopDirectoryCount : kSmallTopDirectoryCount;
++    const size_t nestedDirectoryCount                  = largeScenario ? kLargeNestedDirectoryCount : kSmallNestedDirectoryCount;
++    const size_t filesPerNestedFolder                  = largeScenario ? kLargeFilesPerNestedFolder : kSmallFilesPerNestedFolder;
++    const size_t expectedFileCount                     = topDirectoryCount * nestedDirectoryCount * filesPerNestedFolder;
++    const size_t expectedFolderCount                   = topDirectoryCount + (topDirectoryCount * nestedDirectoryCount);
++    const auto fixtureStartedAt                        = std::chrono::steady_clock::now();
++    const std::chrono::seconds generationBudget        = largeScenario ? std::chrono::seconds(120) : std::chrono::seconds::zero();
++    const auto generationDeadline =
++        generationBudget > std::chrono::seconds::zero() ? fixtureStartedAt + generationBudget : std::chrono::steady_clock::time_point::max();
++
++    std::error_code sandboxEc;
++    state.Require(Common::Testing::RequireSandboxedExposureTarget(root, sandboxEc),
++                  std::format(L"ViewerSpace perf fixture root is not an authorized sandbox descendant: '{}' (error {}).", root.native(), sandboxEc.value()));
++    if (! state.failure.empty())
++    {
++        return false;
++    }
++
++    state.Require(SelfTest::EnsureDirectory(root),
++                  largeScenario ? L"Failed to create ViewerSpace large progressive root." : L"Failed to create ViewerSpace progressive root.");
+ 
+     size_t fileCount   = 0u;
+     size_t folderCount = 0u;
+-    for (size_t top = 0; top < kTopDirectoryCount; ++top)
++    std::optional<Common::Crypto::Blake3Hasher> fixtureHasher;
++    if (outFixtureDigest != nullptr)
++    {
++        fixtureHasher.emplace();
++    }
++    static constexpr std::array<std::byte, 1u> kPathPayloadSeparator{{std::byte{0}}};
++    static constexpr std::array<std::byte, 1u> kFileSeparator{{std::byte{0xFF}}};
++    for (size_t top = 0; top < topDirectoryCount; ++top)
+     {
+         const std::filesystem::path topDir = root / std::format(L"dir_{:02}", top);
+         state.Require(SelfTest::EnsureDirectory(topDir), std::format(L"Failed to create '{}'.", topDir.native()));
+         ++folderCount;
+ 
+-        for (size_t nested = 0; nested < kNestedDirectoryCount; ++nested)
++        for (size_t nested = 0; nested < nestedDirectoryCount; ++nested)
+         {
+             const std::filesystem::path nestedDir = topDir / std::format(L"group_{:02}", nested);
+             state.Require(SelfTest::EnsureDirectory(nestedDir), std::format(L"Failed to create '{}'.", nestedDir.native()));
+             ++folderCount;
+ 
+-            for (size_t fileIndex = 0; fileIndex < kFilesPerNestedFolder; ++fileIndex)
++            for (size_t fileIndex = 0; fileIndex < filesPerNestedFolder; ++fileIndex)
+             {
+                 const std::filesystem::path filePath = nestedDir / std::format(L"file_{:03}.dat", fileIndex);
+                 const std::string payload(static_cast<size_t>(16u + ((top + nested + fileIndex) % 29u)), 'a');
+-                state.Require(SelfTest::WriteTextFile(filePath, payload), std::format(L"Failed to write '{}'.", filePath.native()));
++                if (fixtureHasher.has_value())
++                {
++                    const std::string relativeName = std::format("dir_{:02}/group_{:02}/file_{:03}.dat", top, nested, fileIndex);
++                    fixtureHasher.value().Update(std::as_bytes(std::span(relativeName.data(), relativeName.size())));
++                    fixtureHasher.value().Update(kPathPayloadSeparator);
++                    fixtureHasher.value().Update(std::as_bytes(std::span(payload.data(), payload.size())));
++                    fixtureHasher.value().Update(kFileSeparator);
++                }
++                state.Require(WriteEphemeralViewerSpacePerfFile(filePath, payload),
++                              std::format(L"Failed to write ephemeral perf fixture '{}'.", filePath.native()));
+                 ++fileCount;
+ 
++                if (generationBudget > std::chrono::seconds::zero() && (fileCount & 0x3Fu) == 0u && std::chrono::steady_clock::now() >= generationDeadline)
++                {
++                    state.Require(false,
++                                  std::format(L"ViewerSpace {} fixture exceeded its {}-second generation budget after {} of {} files.",
++                                              largeScenario ? L"large" : L"bounded",
++                                              generationBudget.count(),
++                                              fileCount,
++                                              expectedFileCount));
++                    return false;
++                }
++
+                 if (! state.failure.empty())
+                 {
+                     return false;
+@@ -19293,16 +19375,26 @@ struct FolderViewDummyPluginHandles
+         }
+     }
+ 
+-    state.Require(fileCount == kExpectedFileCount,
+-                  std::format(L"ViewerSpace progressive fixture file count mismatch: expected {}, got {}.", kExpectedFileCount, fileCount));
+-    state.Require(folderCount == kExpectedFolderCount,
+-                  std::format(L"ViewerSpace progressive fixture folder count mismatch: expected {}, got {}.", kExpectedFolderCount, folderCount));
++    state.Require(fileCount == expectedFileCount,
++                  std::format(L"ViewerSpace progressive fixture file count mismatch: expected {}, got {}.", expectedFileCount, fileCount));
++    state.Require(folderCount == expectedFolderCount,
++                  std::format(L"ViewerSpace progressive fixture folder count mismatch: expected {}, got {}.", expectedFolderCount, folderCount));
++    if (outFixtureDigest != nullptr && state.failure.empty())
++    {
++        *outFixtureDigest = fixtureHasher.value().Finalize();
++    }
+     return state.failure.empty();
+ }
+ 
+-[[nodiscard]] bool TestViewerSpacePerfSmallProgressive([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
++[[nodiscard]] bool TestViewerSpacePerfSmallProgressive([[maybe_unused]] HWND mainWindow, CaseState& state, bool largeScenario = false) noexcept
+ {
+     using namespace std::chrono_literals;
++    const size_t topDirectoryCount       = largeScenario ? 100u : 20u;
++    const size_t nestedDirectoryCount    = largeScenario ? 4u : 5u;
++    const size_t filesPerNestedFolder    = largeScenario ? 250u : 100u;
++    const size_t expectedFileCount       = topDirectoryCount * nestedDirectoryCount * filesPerNestedFolder;
++    const size_t expectedRealDirectories = 1u + topDirectoryCount + (topDirectoryCount * nestedDirectoryCount);
++    const std::wstring_view scenario     = largeScenario ? L"viewer_space_perf_large_optin" : L"viewer_space_perf_small_progressive";
+ 
+     const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
+     state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for ViewerSpace progressive perf test.");
+@@ -19311,21 +19403,34 @@ struct FolderViewDummyPluginHandles
+         return false;
+     }
+ 
+-    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"viewer_space_perf_small_progressive_{}", GetTickCount64());
+-    std::error_code ec;
+-    std::filesystem::remove_all(root, ec);
+-    state.Require(CreateViewerSpaceProgressivePerfFixture(state, root), L"Failed to create ViewerSpace progressive perf fixture.");
++    const std::filesystem::path root = suiteRoot / L"work" / std::format(L"{}_{}", scenario, GetTickCount64());
++    const auto fixtureStartedAt      = std::chrono::steady_clock::now();
++    state.Require(CreateViewerSpaceProgressivePerfFixture(state, root, largeScenario),
++                  L"Failed to create ViewerSpace progressive perf fixture within its budget.");
+     if (! state.failure.empty())
+     {
+         return false;
+     }
++    const uint64_t fixtureCreationUs                  = Debug::Perf::ElapsedUs(fixtureStartedAt);
++    const SelfTestProcessMemorySnapshot processBefore = SampleSelfTestProcessMemory();
++    SelfTestProcessMemorySnapshot processPeak         = processBefore;
++    const auto sampleProcessPeak                      = [&]() noexcept
++    {
++        const SelfTestProcessMemorySnapshot current = SampleSelfTestProcessMemory();
++        processPeak.workingSetBytes                 = std::max(processPeak.workingSetBytes, current.workingSetBytes);
++        processPeak.privateBytes                    = std::max(processPeak.privateBytes, current.privateBytes);
++    };
+ 
+     const std::uintmax_t metricScanOffset = FolderViewPerfMetricScanOffset();
+ 
+     StandaloneViewerPointerProbe probe{};
+-    state.Require(
+-        OpenStandaloneViewerForPointerProbe(state, L"ViewerSpace small progressive perf", L"builtin/viewer-space", L"RedSalamander.ViewerSpace", root, probe),
+-        L"Failed to open ViewerSpace for small progressive perf test.");
++    state.Require(OpenStandaloneViewerForPointerProbe(state,
++                                                      largeScenario ? L"ViewerSpace large progressive perf" : L"ViewerSpace small progressive perf",
++                                                      L"builtin/viewer-space",
++                                                      L"RedSalamander.ViewerSpace",
++                                                      root,
++                                                      probe),
++                  L"Failed to open ViewerSpace for progressive perf test.");
+     auto cleanup = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
+     if (! state.failure.empty())
+     {
+@@ -19334,9 +19439,14 @@ struct FolderViewDummyPluginHandles
+ 
+     WndMsg::ViewerSpacePerfDebugSnapshot firstPaint{};
+     const auto firstPaintStartedAt  = std::chrono::steady_clock::now();
+-    const bool firstPaintReady      = WaitForViewerSpacePerfSnapshot(probe.hwnd, firstPaint, [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept {
++    const bool firstPaintReady      = WaitForViewerSpacePerfSnapshot(probe.hwnd,
++                                                                     firstPaint,
++                                                                     [&](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
++    {
++        sampleProcessPeak();
+         return snapshot.hasRenderTarget && snapshot.lastPaintUs > 0u;
+-    }, SelfTest::Scale(5000ms));
++    },
++                                                                largeScenario ? 5000ms : SelfTest::Scale(5000ms));
+     const uint64_t firstPaintWaitUs = Debug::Perf::ElapsedUs(firstPaintStartedAt);
+     state.Require(firstPaintReady, L"ViewerSpace progressive perf test did not reach first paint.");
+ 
+@@ -19344,13 +19454,15 @@ struct FolderViewDummyPluginHandles
+     const auto settleStartedAt  = std::chrono::steady_clock::now();
+     const bool scanSettled      = WaitForViewerSpacePerfSnapshot(probe.hwnd,
+                                                                  settled,
+-                                                                 [](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
++                                                                 [&](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
+     {
++        sampleProcessPeak();
+         return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.realDirectoryCount >= 100u && snapshot.drawItemCount > 0u &&
+                snapshot.lastLayoutUs > 0u;
+     },
+-                                                            SelfTest::Scale(20000ms));
++                                                            largeScenario ? 45000ms : SelfTest::Scale(20000ms));
+     const uint64_t settleWaitUs = Debug::Perf::ElapsedUs(settleStartedAt);
++    sampleProcessPeak();
+     // Read the final snapshot after the wait; Require's arguments have no evaluation order.
+     state.Require(scanSettled,
+                   std::format(L"ViewerSpace progressive perf test did not settle. state={}, dirs={}, files={}, drawItems={}, layoutUs={}, "
+@@ -19363,11 +19475,48 @@ struct FolderViewDummyPluginHandles
+                               settled.pendingQueueCount,
+                               settled.pendingQueueBytes,
+                               settleWaitUs));
+-    state.Require(! scanSettled || (settled.realDirectoryCount == 121u && settled.fileCandidateCount == 10'000u),
+-                  std::format(L"ViewerSpace progressive perf test must retain all 121 directories and 10000 files. dirs={}, files={}.",
++    state.Require(! scanSettled || (settled.realDirectoryCount == expectedRealDirectories && settled.fileCandidateCount == expectedFileCount),
++                  std::format(L"ViewerSpace progressive perf test must retain all {} directories and {} files. dirs={}, files={}.",
++                              expectedRealDirectories,
++                              expectedFileCount,
+                               settled.realDirectoryCount,
+                               settled.fileCandidateCount));
+ 
++    // The baseline predates explicit resumable-layout/analysis state. Preserve the historical scanDone
++    // comparator above, then wait only for the final legacy layout and scan queue to settle.
++    WndMsg::ViewerSpacePerfDebugSnapshot baselineLayout{};
++    const auto layoutSettleStartedAt          = std::chrono::steady_clock::now();
++    const bool baselineLayoutSettled          = WaitForViewerSpacePerfSnapshot(probe.hwnd,
++                                                                               baselineLayout,
++                                                                               [&](const WndMsg::ViewerSpacePerfDebugSnapshot& snapshot) noexcept
++    {
++        sampleProcessPeak();
++        return snapshot.scanState == WndMsg::ViewerSpacePerfScanState::Done && snapshot.pendingQueueBytes == 0u && ! snapshot.layoutAnimationActive &&
++               snapshot.drawItemCount > 0u && snapshot.lastLayoutUs > 0u;
++    },
++                                                                      largeScenario ? 5000ms : SelfTest::Scale(5000ms));
++    const uint64_t baselineLayoutSettleWaitUs = Debug::Perf::ElapsedUs(layoutSettleStartedAt);
++    state.Require(baselineLayoutSettled, L"ViewerSpace baseline layout did not settle after scan completion.");
++
++    // Keep the historical layout-ready endpoint intact. This separate lifecycle witness confirms
++    // that the completed scan worker has returned before teardown releases the provider owner.
++    const auto workerCompletionStartedAt = std::chrono::steady_clock::now();
++    const auto workerCompletionDeadline  = workerCompletionStartedAt + SelfTest::Scale(1000ms);
++    while (FolderViewPerfMetricCountInRun(L"viewer.space.scan.worker_completed", metricScanOffset) == 0u &&
++           std::chrono::steady_clock::now() < workerCompletionDeadline)
++    {
++        PumpPendingMessages();
++        sampleProcessPeak();
++        std::this_thread::sleep_for(5ms);
++    }
++    const uint64_t workerCompletionWaitUs     = Debug::Perf::ElapsedUs(workerCompletionStartedAt);
++    const uint64_t workerCompletedBeforeClose = FolderViewPerfMetricCountInRun(L"viewer.space.scan.worker_completed", metricScanOffset);
++    state.Require(workerCompletedBeforeClose == 1u,
++                  std::format(L"ViewerSpace progressive perf worker did not complete exactly once before teardown; count={}", workerCompletedBeforeClose));
++
++    const SelfTestProcessMemorySnapshot processSettled = SampleSelfTestProcessMemory();
++    sampleProcessPeak();
++
+     struct MetricExpectation final
+     {
+         std::wstring_view metric;
+@@ -19401,15 +19550,18 @@ struct FolderViewDummyPluginHandles
+ 
+     std::wstring artifactText;
+     artifactText.append(L"{\n");
+-    artifactText.append(L"  \"scenario\": \"viewer_space_perf_small_progressive\",\n");
++    artifactText.append(std::format(L"  \"scenario\": \"{}\",\n", scenario));
+     artifactText.append(L"  \"fixture\": {\n");
+-    artifactText.append(L"    \"top_directories\": 20,\n");
+-    artifactText.append(L"    \"nested_directories_per_top\": 5,\n");
+-    artifactText.append(L"    \"files_per_nested_directory\": 100,\n");
+-    artifactText.append(L"    \"expected_files\": 10000\n");
++    artifactText.append(std::format(L"    \"top_directories\": {},\n", topDirectoryCount));
++    artifactText.append(std::format(L"    \"nested_directories_per_top\": {},\n", nestedDirectoryCount));
++    artifactText.append(std::format(L"    \"files_per_nested_directory\": {},\n", filesPerNestedFolder));
++    artifactText.append(std::format(L"    \"expected_files\": {}\n", expectedFileCount));
+     artifactText.append(L"  },\n");
++    artifactText.append(std::format(L"  \"fixture_creation_us\": {},\n", fixtureCreationUs));
+     artifactText.append(std::format(L"  \"first_paint_wait_us\": {},\n", firstPaintWaitUs));
+     artifactText.append(std::format(L"  \"settle_wait_us\": {},\n", settleWaitUs));
++    artifactText.append(std::format(L"  \"baseline_layout_settle_wait_us\": {},\n", baselineLayoutSettleWaitUs));
++    artifactText.append(std::format(L"  \"worker_completion_wait_us\": {},\n", workerCompletionWaitUs));
+     artifactText.append(std::format(L"  \"settled_before_deadline\": {},\n", scanSettled ? L"true" : L"false"));
+     artifactText.append(std::format(L"  \"renderer_mode\": {},\n", static_cast<unsigned int>(settled.rendererMode)));
+     artifactText.append(std::format(L"  \"scan_state\": {},\n", static_cast<unsigned int>(settled.scanState)));
+@@ -19425,19 +19577,86 @@ struct FolderViewDummyPluginHandles
+     artifactText.append(std::format(L"  \"last_layout_us\": {},\n", settled.lastLayoutUs));
+     artifactText.append(std::format(L"  \"last_drain_us\": {},\n", settled.lastDrainUs));
+     artifactText.append(std::format(L"  \"last_working_set_bytes\": {},\n", settled.lastWorkingSetBytes));
++    const HWND closedViewerWindow = probe.hwnd;
++    CleanupStandaloneViewerPointerProbe(probe);
++    cleanup.release();
++    const auto postCloseQuietStartedAt = std::chrono::steady_clock::now();
++    const auto postCloseQuietDeadline  = postCloseQuietStartedAt + 100ms;
++    while (std::chrono::steady_clock::now() < postCloseQuietDeadline)
++    {
++        PumpPendingMessages();
++        std::this_thread::sleep_for(5ms);
++    }
++    const uint64_t postCloseQuietUs                   = Debug::Perf::ElapsedUs(postCloseQuietStartedAt);
++    const SelfTestProcessMemorySnapshot processClosed = SampleSelfTestProcessMemory();
++    const uint64_t workerCompletedAfterClose          = FolderViewPerfMetricCountInRun(L"viewer.space.scan.worker_completed", metricScanOffset);
++    const uint64_t workerAbandonedAfterClose          = FolderViewPerfMetricCountInRun(L"viewer.space.scan.worker_abandoned", metricScanOffset);
++    const bool closedViewerWindowGone =
++        closedViewerWindow != nullptr && IsWindow(closedViewerWindow) == FALSE && FindStandaloneViewerWindowForSelfTest(probe.windowClassName) == nullptr;
++    const bool viewerComReleased       = ! probe.viewer;
++    const bool providerComReleased     = ! probe.fileSystem.fileSystem;
++    const bool providerModuleReleased  = ! probe.fileSystem.module;
++    const bool cleanupWitnessSatisfied = workerCompletedAfterClose == 1u && workerAbandonedAfterClose == 0u && closedViewerWindowGone && viewerComReleased &&
++                                         providerComReleased && providerModuleReleased;
++    state.Require(cleanupWitnessSatisfied,
++                  std::format(L"ViewerSpace progressive perf teardown witness failed: workerCompleted={} workerAbandonedEvents={} windowClosed={} "
++                              L"viewerComReleased={} providerComReleased={} providerModuleReleased={}",
++                              workerCompletedAfterClose,
++                              workerAbandonedAfterClose,
++                              closedViewerWindowGone ? 1 : 0,
++                              viewerComReleased ? 1 : 0,
++                              providerComReleased ? 1 : 0,
++                              providerModuleReleased ? 1 : 0));
++    artifactText.append(std::format(L"  \"post_close_quiet_us\": {},\n", postCloseQuietUs));
++    const auto emitProcessMemoryPhase = [scenario](std::wstring_view phase, const SelfTestProcessMemorySnapshot& memory) noexcept
++    {
++        const std::wstring detail = std::format(L"{}:{}", scenario, phase);
++        Debug::Perf::Emit(L"viewer.space.memory.process_phase", detail, 0u, memory.privateBytes, memory.workingSetBytes);
++    };
++    emitProcessMemoryPhase(L"before-open", processBefore);
++    emitProcessMemoryPhase(L"peak-while-open", processPeak);
++    emitProcessMemoryPhase(L"complete-ready", processSettled);
++    emitProcessMemoryPhase(L"closed-after-quiet", processClosed);
++    state.Require(processBefore.workingSetBytes > 0u && processBefore.privateBytes > 0u && processPeak.workingSetBytes > 0u && processPeak.privateBytes > 0u &&
++                      processSettled.workingSetBytes > 0u && processSettled.privateBytes > 0u && processClosed.workingSetBytes > 0u &&
++                      processClosed.privateBytes > 0u,
++                  L"ViewerSpace process memory phase samples were incomplete.");
++    artifactText.append(std::format(L"  \"process_memory\": {{\"beforeOpen\":{{\"workingSetBytes\":{},\"privateBytes\":{}}},\n"
++                                    L"                    \"peakWhileOpen\":{{\"workingSetBytes\":{},\"privateBytes\":{}}},\n"
++                                    L"                    \"completeReady\":{{\"workingSetBytes\":{},\"privateBytes\":{}}},\n"
++                                    L"                    \"closedAfterQuiet\":{{\"workingSetBytes\":{},\"privateBytes\":{}}}}},\n",
++                                    processBefore.workingSetBytes,
++                                    processBefore.privateBytes,
++                                    processPeak.workingSetBytes,
++                                    processPeak.privateBytes,
++                                    processSettled.workingSetBytes,
++                                    processSettled.privateBytes,
++                                    processClosed.workingSetBytes,
++                                    processClosed.privateBytes));
++    artifactText.append(std::format(L"  \"cleanup_witness\": {{\"readyKind\":\"legacy-layout\",\"scanWorkerCompletedCount\":{},"
++                                    L"\"scanWorkerAbandonedEventCount\":{},\"windowClosed\":{},\"viewerComReleased\":{},"
++                                    L"\"providerComReleased\":{},\"providerModuleReleased\":{},\"postCloseQuietUs\":{},"
++                                    L"\"satisfied\":{}}},\n",
++                                    workerCompletedAfterClose,
++                                    workerAbandonedAfterClose,
++                                    closedViewerWindowGone ? L"true" : L"false",
++                                    viewerComReleased ? L"true" : L"false",
++                                    providerComReleased ? L"true" : L"false",
++                                    providerModuleReleased ? L"true" : L"false",
++                                    postCloseQuietUs,
++                                    cleanupWitnessSatisfied ? L"true" : L"false"));
+     artifactText.append(L"  \"metric_presence\": [\n");
+     artifactText.append(metricPresenceJson);
+     artifactText.append(L"  ]\n");
+     artifactText.append(L"}\n");
+ 
+-    const std::filesystem::path artifactPath = SelfTest::GetPerfArtifactPath(L"viewer_space_perf_small_progressive_metrics.json");
+-    const bool artifactWriteOk               = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, artifactText);
+-    const bool artifactExists                = ! artifactPath.empty() && SelfTest::PathExists(artifactPath);
+-    SelfTest::AppendSuiteTrace(SelfTest::SelfTestSuite::Commands,
+-                               std::format(L"viewer_space_perf_small_progressive artifact path='{}' writeOk={} exists={}.",
+-                                           artifactPath.native(),
+-                                           artifactWriteOk ? 1 : 0,
+-                                           artifactExists ? 1 : 0));
++    const std::filesystem::path artifactPath =
++        SelfTest::GetPerfArtifactPath(largeScenario ? L"viewer_space_perf_large_optin_metrics.json" : L"viewer_space_perf_small_progressive_metrics.json");
++    const bool artifactWriteOk = ! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, artifactText);
++    const bool artifactExists  = ! artifactPath.empty() && SelfTest::PathExists(artifactPath);
++    SelfTest::AppendSuiteTrace(
++        SelfTest::SelfTestSuite::Commands,
++        std::format(L"{} artifact path='{}' writeOk={} exists={}.", scenario, artifactPath.native(), artifactWriteOk ? 1 : 0, artifactExists ? 1 : 0));
+     state.Require(artifactWriteOk && artifactExists, L"Failed to write ViewerSpace progressive perf artifact.");
+     return state.failure.empty();
+ }
+@@ -21064,6 +21283,355 @@ struct FolderViewDummyPluginHandles
+     return state.failure.empty();
+ }
+ 
++[[nodiscard]] bool TestViewerSpaceMemoryHeavyFourRootsImpl([[maybe_unused]] HWND mainWindow, CaseState& state, bool retainViewerForReference) noexcept
++{
++    using namespace std::chrono_literals;
++    if (! EnvironmentVariables::IsTruthyFlagSet(L"REDSALAMANDER_VIEWERSPACE_MEMORY_HEAVY"))
++    {
++        return state.Skip(L"Set REDSALAMANDER_VIEWERSPACE_MEMORY_HEAVY=1 for the opt-in four-root 100k memory benchmark.");
++    }
++
++    static constexpr size_t kRootCount           = 4u;
++    static constexpr size_t kExpectedFiles       = 100000u;
++    static constexpr size_t kExpectedDirectories = 501u;
++    static constexpr std::string_view kConfiguration =
++        R"({"topFilesPerDirectory":512,"scanThreads":8,"maxConcurrentScansPerVolume":1,"cacheEnabled":"1","cacheTtlSeconds":600,"cacheMaxEntries":4})";
++    const uint32_t effectiveScanThreads = 8u;
++    wil::com_ptr<IViewer> retainedViewer;
++    const auto releaseRetainedViewer = wil::scope_exit([&]() noexcept
++    {
++        if (retainedViewer)
++        {
++            static_cast<void>(retainedViewer->Close());
++            retainedViewer.reset();
++        }
++    });
++
++    const std::filesystem::path suiteRoot = SelfTest::GetTempRoot(SelfTest::SelfTestSuite::Commands);
++    state.Require(! suiteRoot.empty(), L"SelfTest temp root unavailable for four-root ViewerSpace memory benchmark.");
++    if (suiteRoot.empty())
++    {
++        return false;
++    }
++
++    const std::filesystem::path fixtureRoot = suiteRoot / L"work" / std::format(L"viewer_space_memory_heavy_{}", GetTickCount64());
++    std::error_code ec;
++    std::filesystem::remove_all(fixtureRoot, ec);
++    state.Require(SelfTest::EnsureDirectory(fixtureRoot), L"Failed to create four-root ViewerSpace benchmark fixture parent.");
++    if (! state.failure.empty())
++    {
++        return false;
++    }
++
++    std::array<std::filesystem::path, kRootCount> roots;
++    std::array<uint64_t, kRootCount> rootFixtureUs{};
++    std::array<Common::Crypto::Blake3Digest, kRootCount> rootFixtureDigests{};
++    const auto fixtureStartedAt = std::chrono::steady_clock::now();
++    for (size_t index = 0u; index < kRootCount; ++index)
++    {
++        roots[index]                    = fixtureRoot / std::format(L"root_{:02}", index);
++        const auto rootFixtureStartedAt = std::chrono::steady_clock::now();
++        state.Require(CreateViewerSpaceProgressivePerfFixture(state, roots[index], true, &rootFixtureDigests[index]),
++                      std::format(L"Failed to create exact 100k/501 memory root {} within the per-root setup guard.", index + 1u));
++        rootFixtureUs[index] = Debug::Perf::ElapsedUs(rootFixtureStartedAt);
++        if (index > 0u)
++        {
++            state.Require(rootFixtureDigests[index] == rootFixtureDigests[0],
++                          std::format(L"Root {} differs from root 1 in deterministic relative-path/content BLAKE3 digest.", index + 1u));
++        }
++        if (! state.failure.empty())
++        {
++            return false;
++        }
++    }
++    const uint64_t fixtureCreationUs = Debug::Perf::ElapsedUs(fixtureStartedAt);
++    const auto lifecycleStartedAt    = std::chrono::steady_clock::now();
++    const auto lifecycleDeadline     = std::chrono::steady_clock::now() + 360s;
++    const auto remaining             = [&](std::chrono::steady_clock::time_point deadline) noexcept
++    { return std::max(0ms, std::chrono::duration_cast<std::chrono::milliseconds>(deadline - std::chrono::steady_clock::now())); };
++    const std::uintmax_t metricScanOffset      = FolderViewPerfMetricScanOffset();
++    const SelfTestProcessMemorySnapshot before = SampleSelfTestProcessMemory();
++    SelfTestProcessMemorySnapshot peak         = before;
++    uint64_t expectedRootBytes                 = 0u;
++    std::vector<std::wstring> phaseRows;
++    phaseRows.reserve(6u * kRootCount);
++    const auto samplePhase = [&](size_t rootIndex, std::wstring_view phase, uint64_t rootBytes, uint64_t firstMeaningfulUs, uint64_t phaseUs) noexcept
++    {
++        const SelfTestProcessMemorySnapshot sample = SampleSelfTestProcessMemory();
++        peak.privateBytes                          = std::max(peak.privateBytes, sample.privateBytes);
++        peak.workingSetBytes                       = std::max(peak.workingSetBytes, sample.workingSetBytes);
++        Debug::Perf::Emit(
++            L"viewer.space.memory.process_phase", std::format(L"root{}:{}", rootIndex + 1u, phase), 0u, sample.privateBytes, sample.workingSetBytes);
++        phaseRows.push_back(std::format(
++            L"    {{\"root\":{},\"phase\":\"{}\",\"phaseUs\":{},\"privateBytes\":{},\"workingSetBytes\":{},\"rootBytes\":{},\"firstMeaningfulPaintUs\":{}}}",
++            rootIndex + 1u,
++            phase,
++            phaseUs,
++            sample.privateBytes,
++            sample.workingSetBytes,
++            rootBytes,
++            firstMeaningfulUs));
++    };
++    bool lifecycleOk = true;
++    for (size_t rootIndex = 0u; rootIndex < kRootCount && lifecycleOk; ++rootIndex)
++    {
++        const uint64_t cacheHitsBeforeSeed = FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset);
++        const auto seedStartedAt           = std::chrono::steady_clock::now();
++        StandaloneViewerPointerProbe probe{};
++        const bool openedWindow = OpenStandaloneViewerForPointerProbe(state,
++                                                                      std::format(L"ViewerSpace memory-heavy seed {}", rootIndex + 1u),
++                                                                      L"builtin/viewer-space",
++                                                                      L"RedSalamander.ViewerSpace",
++                                                                      roots[rootIndex],
++                                                                      probe,
++                                                                      kConfiguration,
++                                                                      retainViewerForReference ? std::addressof(retainedViewer) : nullptr);
++        auto cleanup            = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
++        state.Require(openedWindow, std::format(L"Failed opening four-root seed {}.", rootIndex + 1u));
++        if (! openedWindow || ! state.failure.empty())
++        {
++            lifecycleOk = false;
++            break;
++        }
++        WndMsg::ViewerSpacePerfDebugSnapshot seeded{};
++        const bool seedSettled = WaitForViewerSpacePerfSnapshot(probe.hwnd,
++                                                                seeded,
++                                                                [&](const WndMsg::ViewerSpacePerfDebugSnapshot& s) noexcept
++        {
++            const SelfTestProcessMemorySnapshot current = SampleSelfTestProcessMemory();
++            peak.privateBytes                           = std::max(peak.privateBytes, current.privateBytes);
++            peak.workingSetBytes                        = std::max(peak.workingSetBytes, current.workingSetBytes);
++            return s.scanState == WndMsg::ViewerSpacePerfScanState::Done && s.pendingQueueBytes == 0u && s.realDirectoryCount == kExpectedDirectories &&
++                   s.fileCandidateCount == kExpectedFiles && s.scanEffectiveThreads == 8u && s.rootTotalBytes > 0u && s.scanCacheSnapshotBytes > 0u &&
++                   s.drawItemCount > 0u && s.visibleTileCount > 0u && s.lastPaintUs > 0u;
++        },
++                                                                remaining(lifecycleDeadline));
++        state.Require(seedSettled, std::format(L"Root {} did not seed an exact cached 100k/501 completed map.", rootIndex + 1u));
++        if (! seedSettled)
++        {
++            lifecycleOk = false;
++            break;
++        }
++        if (rootIndex == 0u)
++        {
++            expectedRootBytes = seeded.rootTotalBytes;
++        }
++        state.Require(seeded.rootTotalBytes == expectedRootBytes &&
++                          FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset) == cacheHitsBeforeSeed,
++                      std::format(L"Root {} seed changed corpus bytes or unexpectedly hit cache.", rootIndex + 1u));
++        samplePhase(rootIndex, retainViewerForReference ? L"open-loaded" : L"seed-complete", seeded.rootTotalBytes, 0u, Debug::Perf::ElapsedUs(seedStartedAt));
++        const auto seedCloseStartedAt = std::chrono::steady_clock::now();
++        CleanupStandaloneViewerPointerProbe(probe);
++        cleanup.release();
++        const auto seedCloseDeadline = std::min(lifecycleDeadline, std::chrono::steady_clock::now() + 500ms);
++        while (std::chrono::steady_clock::now() < seedCloseDeadline)
++        {
++            PumpPendingMessages();
++            const auto current   = SampleSelfTestProcessMemory();
++            peak.privateBytes    = std::max(peak.privateBytes, current.privateBytes);
++            peak.workingSetBytes = std::max(peak.workingSetBytes, current.workingSetBytes);
++            std::this_thread::sleep_for(5ms);
++        }
++        samplePhase(rootIndex,
++                    retainViewerForReference ? L"seed-closed-object-retained" : L"seed-closed",
++                    seeded.rootTotalBytes,
++                    0u,
++                    Debug::Perf::ElapsedUs(seedCloseStartedAt));
++    }
++
++    for (size_t rootIndex = 0u; rootIndex < kRootCount && lifecycleOk; ++rootIndex)
++    {
++        const uint64_t cacheHitsBeforeOpen = FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset);
++        const auto cachedOpenStartedAt     = std::chrono::steady_clock::now();
++        StandaloneViewerPointerProbe probe{};
++        const bool openedWindow = OpenStandaloneViewerForPointerProbe(state,
++                                                                      std::format(L"ViewerSpace memory-heavy cached refresh {}", rootIndex + 1u),
++                                                                      L"builtin/viewer-space",
++                                                                      L"RedSalamander.ViewerSpace",
++                                                                      roots[rootIndex],
++                                                                      probe,
++                                                                      kConfiguration,
++                                                                      retainViewerForReference ? std::addressof(retainedViewer) : nullptr);
++        auto cleanup            = wil::scope_exit([&]() noexcept { CleanupStandaloneViewerPointerProbe(probe); });
++        state.Require(openedWindow, std::format(L"Failed opening cached root {}.", rootIndex + 1u));
++        if (! openedWindow || ! state.failure.empty())
++        {
++            lifecycleOk = false;
++            break;
++        }
++        WndMsg::ViewerSpacePerfDebugSnapshot cached{};
++        const bool cacheSettled = WaitForViewerSpacePerfSnapshot(probe.hwnd,
++                                                                 cached,
++                                                                 [&](const WndMsg::ViewerSpacePerfDebugSnapshot& s) noexcept
++        {
++            const SelfTestProcessMemorySnapshot current = SampleSelfTestProcessMemory();
++            peak.privateBytes                           = std::max(peak.privateBytes, current.privateBytes);
++            peak.workingSetBytes                        = std::max(peak.workingSetBytes, current.workingSetBytes);
++            return s.scanState == WndMsg::ViewerSpacePerfScanState::Done && s.pendingQueueBytes == 0u && s.realDirectoryCount == kExpectedDirectories &&
++                   s.fileCandidateCount == kExpectedFiles && s.rootTotalBytes == expectedRootBytes && s.drawItemCount > 0u && s.visibleTileCount > 0u &&
++                   s.lastPaintUs > 0u;
++        },
++                                                                 remaining(lifecycleDeadline));
++        const bool hitObserved  = FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset) == cacheHitsBeforeOpen + 1u;
++        state.Require(cacheSettled && hitObserved, std::format(L"Root {} did not restore its full-detail cached model exactly once.", rootIndex + 1u));
++        if (! cacheSettled || ! hitObserved)
++        {
++            lifecycleOk = false;
++            break;
++        }
++        samplePhase(rootIndex,
++                    retainViewerForReference ? L"reopened-cached" : L"cached-reopen",
++                    cached.rootTotalBytes,
++                    0u,
++                    Debug::Perf::ElapsedUs(cachedOpenStartedAt));
++        const uint64_t cacheHitsBeforeRefresh = FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset);
++        const auto refreshStartedAt           = std::chrono::steady_clock::now();
++        static_cast<void>(SendMessageW(probe.hwnd, WM_KEYDOWN, VK_F5, 0u));
++        WndMsg::ViewerSpacePerfDebugSnapshot refreshPending{};
++        const bool gotPending = SendMessageW(probe.hwnd, WndMsg::kViewerSpaceDebugGetPerfSnapshot, 0u, reinterpret_cast<LPARAM>(&refreshPending)) != FALSE;
++        state.Require(gotPending, std::format(L"Baseline root {} did not expose a post-F5 snapshot.", rootIndex + 1u));
++        if (retainViewerForReference && gotPending)
++        {
++            samplePhase(rootIndex, L"refresh-inflight", refreshPending.rootTotalBytes, 0u, 0u);
++            phaseRows.back().insert(phaseRows.back().size() - 1u, std::format(L",\"scanState\":{}", static_cast<unsigned int>(refreshPending.scanState)));
++        }
++        const bool refreshSettled    = WaitForViewerSpacePerfSnapshot(probe.hwnd,
++                                                                      refreshPending,
++                                                                      [&](const WndMsg::ViewerSpacePerfDebugSnapshot& s) noexcept
++        {
++            const SelfTestProcessMemorySnapshot current = SampleSelfTestProcessMemory();
++            peak.privateBytes                           = std::max(peak.privateBytes, current.privateBytes);
++            peak.workingSetBytes                        = std::max(peak.workingSetBytes, current.workingSetBytes);
++            return s.scanState == WndMsg::ViewerSpacePerfScanState::Done && s.pendingQueueBytes == 0u && s.realDirectoryCount == kExpectedDirectories &&
++                   s.fileCandidateCount == kExpectedFiles && s.scanEffectiveThreads == 8u && s.rootTotalBytes == expectedRootBytes &&
++                   s.scanCacheSnapshotBytes > 0u && s.drawItemCount > 0u && s.visibleTileCount > 0u && s.lastPaintUs > 0u;
++        },
++                                                                   remaining(lifecycleDeadline));
++        const bool noRefreshCacheHit = FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset) == cacheHitsBeforeRefresh;
++        state.Require(refreshSettled && noRefreshCacheHit, std::format(L"Root {} F5 did not complete a full uncached equal-detail scan.", rootIndex + 1u));
++        if (! refreshSettled || ! noRefreshCacheHit || ! lifecycleOk)
++        {
++            lifecycleOk = false;
++            CleanupStandaloneViewerPointerProbe(probe);
++            cleanup.release();
++            break;
++        }
++        samplePhase(rootIndex,
++                    retainViewerForReference ? L"refresh-done" : L"refresh-adopted",
++                    refreshPending.rootTotalBytes,
++                    0u,
++                    Debug::Perf::ElapsedUs(refreshStartedAt));
++        const auto refreshCloseStartedAt = std::chrono::steady_clock::now();
++        CleanupStandaloneViewerPointerProbe(probe);
++        cleanup.release();
++        const auto closeDeadline = std::min(lifecycleDeadline, std::chrono::steady_clock::now() + 500ms);
++        while (std::chrono::steady_clock::now() < closeDeadline)
++        {
++            PumpPendingMessages();
++            const auto current   = SampleSelfTestProcessMemory();
++            peak.privateBytes    = std::max(peak.privateBytes, current.privateBytes);
++            peak.workingSetBytes = std::max(peak.workingSetBytes, current.workingSetBytes);
++            std::this_thread::sleep_for(5ms);
++        }
++        samplePhase(rootIndex,
++                    retainViewerForReference ? L"refresh-closed-object-retained" : L"refresh-closed",
++                    expectedRootBytes,
++                    0u,
++                    Debug::Perf::ElapsedUs(refreshCloseStartedAt));
++    }
++
++    if (retainViewerForReference && retainedViewer)
++    {
++        static_cast<void>(retainedViewer->Close());
++        retainedViewer.reset();
++        const SelfTestProcessMemorySnapshot finalOwnerRelease = SampleSelfTestProcessMemory();
++        peak.privateBytes                                     = std::max(peak.privateBytes, finalOwnerRelease.privateBytes);
++        peak.workingSetBytes                                  = std::max(peak.workingSetBytes, finalOwnerRelease.workingSetBytes);
++        Debug::Perf::Emit(L"viewer.space.memory.process_phase", L"final-owner-release", 0u, finalOwnerRelease.privateBytes, finalOwnerRelease.workingSetBytes);
++        phaseRows.push_back(std::format(L"    "
++                                        L"{{\"root\":0,\"phase\":\"final-owner-release\",\"phaseUs\":0,\"privateBytes\":{},\"workingSetBytes\":{},"
++                                        L"\"rootBytes\":{},\"firstMeaningfulPaintUs\":0}}",
++                                        finalOwnerRelease.privateBytes,
++                                        finalOwnerRelease.workingSetBytes,
++                                        expectedRootBytes));
++    }
++
++    const SelfTestProcessMemorySnapshot after = SampleSelfTestProcessMemory();
++    state.Require(lifecycleOk && std::chrono::steady_clock::now() < lifecycleDeadline,
++                  L"Four-root ViewerSpace memory lifecycle exceeded its 360-second deadline or failed an exact-count/cache witness.");
++    state.Require(FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset) == kRootCount,
++                  L"Four-root memory qualification requires one confirmed cache hit per root and none during refresh.");
++    state.Require(before.privateBytes > 0u && peak.privateBytes > 0u && after.privateBytes > 0u && before.workingSetBytes > 0u && peak.workingSetBytes > 0u &&
++                      after.workingSetBytes > 0u,
++                  L"Four-root process memory samples were incomplete.");
++    std::wstring phaseJson;
++    for (size_t i = 0u; i < phaseRows.size(); ++i)
++    {
++        phaseJson.append(phaseRows[i]);
++        phaseJson.append(i + 1u < phaseRows.size() ? L",\n" : L"\n");
++    }
++    const std::wstring rootSetupJson = std::format(L"[{}, {}, {}, {}]", rootFixtureUs[0], rootFixtureUs[1], rootFixtureUs[2], rootFixtureUs[3]);
++    const auto digestText            = [](const Common::Crypto::Blake3Digest& digest)
++    {
++        std::wstring text;
++        text.reserve(digest.size() * 2u);
++        for (const std::byte value : digest)
++        {
++            text.append(std::format(L"{:02X}", std::to_integer<unsigned int>(value)));
++        }
++        return text;
++    };
++    const std::wstring rootDigestJson = std::format(L"[\"{}\",\"{}\",\"{}\",\"{}\"]",
++                                                    digestText(rootFixtureDigests[0]),
++                                                    digestText(rootFixtureDigests[1]),
++                                                    digestText(rootFixtureDigests[2]),
++                                                    digestText(rootFixtureDigests[3]));
++    std::wstring artifact =
++        std::format(L"{{\n  \"scenario\":\"{}\",\n"
++                    L"  \"rootSetupUs\":{},\"rootSetupPerRootUs\":{},\"lifecycleUs\":{},\"rootCount\":{},\"directoriesPerRoot\":{},\"filesPerRoot\":{},\n"
++                    L"  \"configuration\":\"topK512_threads8_volume1_cacheTTL600_entries4\",\n  \"effectiveScanThreads\":{},\n  "
++                    L"\"relativeRoots\":[\"root_00\",\"root_01\",\"root_02\",\"root_03\"],\n"
++                    L"  \"fixtureDigestAlgorithm\":\"BLAKE3(relative UTF-8 path, NUL, payload, FF)\",\n  \"rootFixtureDigests\":{},\n"
++                    L"  \"rootTotalBytes\":{},\"cacheHitCount\":{},\n"
++                    L"  \"processBefore\":{{\"workingSetBytes\":{},\"privateBytes\":{}}},\n"
++                    L"  \"processPeak\":{{\"workingSetBytes\":{},\"privateBytes\":{}}},\n"
++                    L"  \"processAfter\":{{\"workingSetBytes\":{},\"privateBytes\":{}}},\n  \"phases\":[\n{}  ]\n}}\n",
++                    retainViewerForReference ? L"viewer_space_memory_heavy_four_root_retained_reference" : L"viewer_space_memory_heavy_four_root_cache_refresh",
++                    fixtureCreationUs,
++                    rootSetupJson,
++                    Debug::Perf::ElapsedUs(lifecycleStartedAt),
++                    kRootCount,
++                    kExpectedDirectories,
++                    kExpectedFiles,
++                    effectiveScanThreads,
++                    rootDigestJson,
++                    expectedRootBytes,
++                    FolderViewPerfMetricCountInRun(L"viewer.space.scan.cache_hit", metricScanOffset),
++                    before.workingSetBytes,
++                    before.privateBytes,
++                    peak.workingSetBytes,
++                    peak.privateBytes,
++                    after.workingSetBytes,
++                    after.privateBytes,
++                    phaseJson);
++    const std::filesystem::path artifactPath =
++        SelfTest::GetPerfArtifactPath(retainViewerForReference ? L"viewer_space_memory_heavy_four_root_retained_reference_metrics.json"
++                                                               : L"viewer_space_memory_heavy_four_root_metrics.json");
++    state.Require(! artifactPath.empty() && SelfTest::WriteTextFile(artifactPath, artifact),
++                  L"Failed writing four-root ViewerSpace memory benchmark artifact.");
++    return state.failure.empty();
++}
++
++[[nodiscard]] bool TestViewerSpaceMemoryHeavyFourRootsOptIn(HWND mainWindow, CaseState& state) noexcept
++{
++    return TestViewerSpaceMemoryHeavyFourRootsImpl(mainWindow, state, false);
++}
++
++[[nodiscard]] bool TestViewerSpaceMemoryHeavyFourRootsRetainedReferenceOptIn(HWND mainWindow, CaseState& state) noexcept
++{
++    return TestViewerSpaceMemoryHeavyFourRootsImpl(mainWindow, state, true);
++}
++
+ [[nodiscard]] bool TestViewerSpaceMemorySettlesAfterClose([[maybe_unused]] HWND mainWindow, CaseState& state) noexcept
+ {
+     using namespace std::chrono_literals;
+@@ -21224,7 +21792,7 @@ struct FolderViewDummyPluginHandles
+         return state.Skip(L"Set REDSALAMANDER_VIEWERSPACE_LARGE_PERF=1 to run the opt-in ViewerSpace large perf scenario.");
+     }
+ 
+-    return TestViewerSpacePerfSmallProgressive(mainWindow, state);
++    return TestViewerSpacePerfSmallProgressive(mainWindow, state, true);
+ }
+ 
+ void AppendFolderViewScrollStepJson(std::wstring& out, const FolderViewScrollStepPerfRecord& record, std::wstring_view indent)
+@@ -27976,6 +28544,12 @@ void RunViewCommandsCommandsSelfTestCases(HWND mainWindow, const SelfTest::SelfT
+     SelfTest::RunCase(options, suite, L"cmd_viewer_space_queue_storm_stays_bounded", [=](CaseState& state) noexcept {
+         return TestViewerSpaceQueueStormStaysBounded(mainWindow, state);
+     });
++    SelfTest::RunCase(options, suite, L"cmd_viewer_space_memory_heavy_four_root_optin", [=](CaseState& state) noexcept {
++        return TestViewerSpaceMemoryHeavyFourRootsOptIn(mainWindow, state);
++    });
++    SelfTest::RunCase(options, suite, L"cmd_viewer_space_memory_heavy_four_root_retained_reference_optin", [=](CaseState& state) noexcept {
++        return TestViewerSpaceMemoryHeavyFourRootsRetainedReferenceOptIn(mainWindow, state);
++    });
+     SelfTest::RunCase(options, suite, L"cmd_viewer_space_memory_settles_after_close", [=](CaseState& state) noexcept {
+         return TestViewerSpaceMemorySettlesAfterClose(mainWindow, state);
+     });

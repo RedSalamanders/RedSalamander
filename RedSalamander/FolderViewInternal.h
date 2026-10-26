@@ -155,6 +155,7 @@ enum FolderCommands : UINT
     CmdMove                             = IDM_FOLDERVIEW_CONTEXT_MOVE,
     CmdArtifactInspect                  = IDM_FOLDERVIEW_CONTEXT_ARTIFACT_INSPECT,
     CmdArtifactReveal                   = IDM_FOLDERVIEW_CONTEXT_ARTIFACT_REVEAL,
+    CmdArtifactOpenLocation             = IDM_FOLDERVIEW_CONTEXT_ARTIFACT_OPEN_LOCATION,
     CmdOverlaySampleError               = IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_ERROR,
     CmdOverlaySampleWarning             = IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_WARNING,
     CmdOverlaySampleInformation         = IDM_FOLDERVIEW_CONTEXT_OVERLAY_SAMPLE_INFORMATION,

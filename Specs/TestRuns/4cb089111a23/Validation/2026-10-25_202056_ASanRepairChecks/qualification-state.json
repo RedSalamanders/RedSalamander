@@ -1,0 +1,24 @@
+{
+  "head": "4eba261d9122d16aa86762f48307b905716f2e38",
+  "repository": "E:\\RedSalamander.Perf\\integration-20261024",
+  "ownerPid": 9104,
+  "phase": "asan-repair-search-original-default-seed",
+  "outcome": "failed",
+  "updatedUtc": "2026-10-25T20:28:55.7186112Z",
+  "entries": [
+    {
+      "phase": "asan-repair-x64-ASan-Debug-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-25T20:16:03.7385871Z",
+      "finishedUtc": "2026-10-25T20:20:55.7426615Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\asan-repair-x64-ASan-Debug-build.log"
+    },
+    {
+      "phase": "asan-repair-search-original-default-seed",
+      "exitCode": 1,
+      "startedUtc": "2026-10-25T20:20:55.9502288Z",
+      "finishedUtc": "2026-10-25T20:28:55.6138784Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\asan-repair-search-original-default-seed.log"
+    }
+  ]
+}

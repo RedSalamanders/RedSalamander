@@ -1,0 +1,519 @@
+
+  ls1.cpp
+  dllmain.cpp
+  ViewerPETests.cpp
+  ls3.cpp
+  Common.cpp
+  Blake3Digest.cpp
+  LocalizationManager.cpp
+  MinimumOsVersion.cpp
+  RegistryUtils.cpp
+  PerfJsonl.cpp
+  PluginConfiguration.cpp
+  SettingsStore.cpp
+  ThemeDefinitionIo.cpp
+  ThemeExpression.cpp
+  DxUi.Accessibility.cpp
+  Main.cpp
+  TraceProvider.cpp
+  WslDistributionCatalog.cpp
+  dllmain.cpp
+  FlipSequentialDiscard.cpp
+  ls2.cpp
+  dllmain.cpp
+  dllmain.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  RedSalamanderMonitor-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\RedSalamanderMonitor-ja-JP.dll
+  Terminal-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\Terminal-fr-FR.dll
+  RedConfigure-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\RedConfigure-ja-JP.dll
+  ViewerText-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerText-fr-FR.dll
+  Terminal-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\Terminal-cs-CZ.dll
+  Terminal-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\Terminal-ja-JP.dll
+  RedSalamander-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\RedSalamander-fr-FR.dll
+  ViewerPE-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerPE-fr-FR.dll
+  FileSystemMicrosoftDrive-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemMicrosoftDrive-fr-FR.dll
+  FileSystemCurl-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemCurl-fr-FR.dll
+  RedSalamander-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\RedSalamander-ja-JP.dll
+  FileSystemMtp-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemMtp-fr-FR.dll
+  Terminal-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\Terminal-sk-SK.dll
+  ViewerSqlite-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerSqlite-fr-FR.dll
+  FileSystemDummy-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemDummy-fr-FR.dll
+  RedSalamanderMonitor-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\RedSalamanderMonitor-fr-FR.dll
+  LocalizationTests-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\LocalizationTests-fr-FR.dll
+  FileSystem-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystem-fr-FR.dll
+  FileSystemGoogleDrive-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemGoogleDrive-fr-FR.dll
+  ViewerSpace-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerSpace-fr-FR.dll
+  ViewerImgRaw-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerImgRaw-fr-FR.dll
+  FileSystemS3-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemS3-fr-FR.dll
+  FileSystem7z-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystem7z-fr-FR.dll
+  FileSystemMicrosoftDrive-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemMicrosoftDrive-ja-JP.dll
+  FileSystemCurl-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemCurl-ja-JP.dll
+  FileSystemCurl.ImapHelpers.cpp
+  ViewerVLC-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerVLC-fr-FR.dll
+  FileSystem7z-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystem7z-ja-JP.dll
+  FileSystem-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystem-ja-JP.dll
+  ViewerWeb-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerWeb-fr-FR.dll
+  FileSystemMtp-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemMtp-ja-JP.dll
+  FileSystemDummy-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemDummy-ja-JP.dll
+  ls3.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\ls3.exe
+  ViewerImgRaw-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerImgRaw-ja-JP.dll
+  ViewerVLC-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerVLC-ja-JP.dll
+  FileSystemMtp-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemMtp-cs-CZ.dll
+  FileSystemGoogleDrive-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemGoogleDrive-ja-JP.dll
+  ViewerPE-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerPE-ja-JP.dll
+  FileSystemS3-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemS3-ja-JP.dll
+  ViewerWeb-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerWeb-ja-JP.dll
+  ViewerText-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerText-ja-JP.dll
+  ViewerSpace-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerSpace-ja-JP.dll
+  ViewerSqlite-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerSqlite-ja-JP.dll
+  FileSystemCurl-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemCurl-cs-CZ.dll
+  FileSystem7z-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystem7z-sk-SK.dll
+  FileSystemMtp-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemMtp-sk-SK.dll
+  FileSystem-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystem-cs-CZ.dll
+  FileSystem-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystem-sk-SK.dll
+  FileSystem7z-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystem7z-cs-CZ.dll
+  FileSystemCurl-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemCurl-sk-SK.dll
+  ls1.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\ls1.exe
+  FileSystemDummy-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemDummy-cs-CZ.dll
+  FileSystemGoogleDrive-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemGoogleDrive-cs-CZ.dll
+  ls2.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\ls2.exe
+  FileSystemDummy-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemDummy-sk-SK.dll
+  FileSystemMicrosoftDrive-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemMicrosoftDrive-cs-CZ.dll
+  FileSystemMicrosoftDrive-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemMicrosoftDrive-sk-SK.dll
+  FileSystemGoogleDrive-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemGoogleDrive-sk-SK.dll
+  ViewerSpace-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerSpace-cs-CZ.dll
+  ViewerImgRaw-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerImgRaw-cs-CZ.dll
+  ViewerPE-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerPE-cs-CZ.dll
+  FileSystemS3-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemS3-cs-CZ.dll
+  FileSystemS3-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\FileSystemS3-sk-SK.dll
+  ViewerImgRaw-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerImgRaw-sk-SK.dll
+  ViewerSqlite-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerSqlite-sk-SK.dll
+  ViewerSqlite-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerSqlite-cs-CZ.dll
+  ViewerPE-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerPE-sk-SK.dll
+  ViewerSpace-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerSpace-sk-SK.dll
+  ViewerText-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerText-sk-SK.dll
+  ViewerText-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerText-cs-CZ.dll
+  ViewerVLC-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerVLC-sk-SK.dll
+  ViewerWeb-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerWeb-cs-CZ.dll
+  ViewerWeb-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerWeb-sk-SK.dll
+  FileSystem7z.cpp
+  ViewerVLC-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\ViewerVLC-cs-CZ.dll
+  RedSalamander-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\RedSalamander-sk-SK.dll
+  RedSalamanderMonitor-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\RedSalamanderMonitor-cs-CZ.dll
+  RedSalamander-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\RedSalamander-cs-CZ.dll
+  RedSalamanderMonitor-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\RedSalamanderMonitor-sk-SK.dll
+  FilesInformationGoogleDrive.cpp
+  FileSystemDummy.cpp
+  LocalizationTests-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\LocalizationTests-sk-SK.dll
+  FileSystemCurlTests.cpp
+  DxUi.cpp
+  RedConfigure-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\RedConfigure-sk-SK.dll
+  RedConfigure-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\RedConfigure-cs-CZ.dll
+  LocalizationTests-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Lang\LocalizationTests-cs-CZ.dll
+  FlipSequentialDiscard.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\FlipSequentialDiscard.exe
+  RedLauncher.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\RedLauncher.exe
+  Generating Code...
+  FileSystemGoogleDrive.cpp
+  Generating Code...
+  Generating Code...
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Common.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Common.exp
+  DxUi.ComboBox.cpp
+  FileSystemCurlTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\FileSystemCurlTests.exe
+  ViewerPETests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\ViewerPETests.exe
+  DxUi.Controls.cpp
+  FileSystemGoogleDrive.SelfTest.FakeDrive.cpp
+  Common.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Common.dll
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystem7z.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystem7z.exp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemDummy.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemDummy.exp
+  pch.cpp
+  LocalSearchIndexCore.cpp
+  dllmain.cpp
+  CrashHandlingTests.cpp
+  Document.cpp
+  LocalizationTests.cpp
+  SettingsSchemaTests.cpp
+  PluginContractTests.cpp
+  Factory.cpp
+  dllmain.cpp
+  ViewerSqlite.Engine.cpp
+  FileSystem7z.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystem7z.dll
+  Factory.cpp
+  dllmain.cpp
+  dllmain.cpp
+  dllmain.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  Main.cpp
+  FileSystemDummy.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemDummy.dll
+  Factory.cpp
+  Factory.cpp
+  CrashQuarantine.cpp
+  TraceProvider.cpp
+  FileSystemCurl.CopyMove.cpp
+  ViewerVLC.cpp
+  ViewerSqliteTests.cpp
+  EtwListener.cpp
+  Generating Code...
+  DxUi.FrameRuntime.cpp
+  FilesInformationMicrosoftDrive.cpp
+  FilesInformationMtp.cpp
+  SearchServiceBroker.cpp
+  SettingsSchemaParser.cpp
+  FileSystemPathIdentity.cpp
+  LocalizationTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\LocalizationTests.exe
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemGoogleDrive.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemGoogleDrive.exp
+  FileSystemRouteContract.cpp
+  FileSystemGoogleDrive.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemGoogleDrive.dll
+  Factory.cpp
+  SelfTestLatencyHooks.cpp
+  CrashHandler.cpp
+  RedSalamanderSearchService.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\RedSalamanderSearchService.exe
+  MonitorFileReader.cpp
+  DxUi.Grid.cpp
+  Generating Code...
+  FileSystemMicrosoftDrive.cpp
+  FileSystemCurl.DirectoryOps.cpp
+  FileSystemMtp.Core.cpp
+  Generating Code...
+  FileSystemPluginManager.cpp
+  Generating Code...
+  SqliteIndexStore.cpp
+  Generating Code...
+  PluginContractTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\PluginContractTests.exe
+  SettingsSchemaTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\SettingsSchemaTests.exe
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerVLC.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerVLC.exp
+  MonitorFileExporter.cpp
+  ViewerSqliteTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\ViewerSqliteTests.exe
+  ViewerVLC.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerVLC.dll
+  CrashQuarantine.TestStubs.cpp
+  FileSystemCurl.Imap.cpp
+  FilesInformationS3.cpp
+  DxUi.Menu.cpp
+  FileSystemMtp.Device.cpp
+  SearchTextHelpers.cpp
+  MonitorTest.cpp
+  FileSystemMicrosoftDrive.SelfTest.FakeGraph.cpp
+  PluginModuleLifecycle.cpp
+  Generating Code...
+  CrashHandlingTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\CrashHandlingTests.exe
+  ViewerPluginManager.cpp
+  FileSystemCurl.ImapHelpers.cpp
+  dllmain.cpp
+  Factory.cpp
+  Generating Code...
+  FileSystemMtp.FakeBackend.cpp
+  DxUi.NativeTextInput.cpp
+  FileSystemS3.Configuration.cpp
+  Generating Code...
+  MonitorTest.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\MonitorTest.exe
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemMicrosoftDrive.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemMicrosoftDrive.exp
+  FileSystemCurl.Shared.cpp
+  FileSystemMicrosoftDrive.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemMicrosoftDrive.dll
+  FileSystem.cpp
+  Generating Code...
+  FileSystemMtp.Shared.cpp
+  DxUi.PointerInput.cpp
+  FolderView.Enumeration.Access.cpp
+  DxUi.Scrollbar.cpp
+  FileSystemS3.Core.cpp
+  FileSystemCurl.SelfTest.Ftp.cpp
+  Generating Code...
+  FileSystem.DirectoryOps.cpp
+  DxUi.SingleLineTextEditing.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemMtp.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemMtp.exp
+  FileSystemMtp.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemMtp.dll
+  IconCache.cpp
+  FileSystem.FileOps.cpp
+  DxUi.TextStoreACP.cpp
+  FileSystemS3.Directory.cpp
+  Generating Code...
+  FolderIconEnumerationDuplicatePathPerfTest.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemCurl.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemCurl.exp
+  FileSystemCurl.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemCurl.dll
+  DxUi.TextInput.cpp
+  FileSystem.Menu.cpp
+  FolderIconEnumerationPerfTest.cpp
+  FolderViewColumnLayoutTests.cpp
+  FolderViewRefreshDuplicatePathPerfTest.cpp
+  FileSystemS3.DirectoryOps.cpp
+  FileSystem.Path.cpp
+  DxUi.Tree.cpp
+  PerformanceTests2.cpp
+  PluginManager.TestStubs.cpp
+  FileSystem.Search.cpp
+  Generating Code...
+  DxUi.Typeahead.cpp
+  FileSystemS3.DriveInfo.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\PerformanceTests2.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\PerformanceTests2.exp
+  PerformanceTests2.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\PerformanceTests2.dll
+  DxUi.Theme.cpp
+  FileSystem.Watch.cpp
+  FileSystemS3.IO.cpp
+  DxUi.WindowHost.cpp
+  Generating Code...
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystem.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystem.exp
+  FileSystem.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystem.dll
+  ls4.cpp
+  Generating Code...
+  FileSystemS3.Menu.cpp
+  ls4.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\ls4.exe
+  DxUi.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\DxUi.lib
+  dllmain.cpp
+  dllmain.cpp
+  Factory.cpp
+  dllmain.cpp
+  dllmain.cpp
+  AppTheme.cpp
+  PlaceholderValidation.cpp
+  dllmain.cpp
+  ColorTextView.cpp
+  Configuration.cpp
+  Document.cpp
+  EtwListener.cpp
+  MonitorFileReader.cpp
+  MonitorFileExporter.cpp
+  RedSalamanderMonitor.cpp
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  RcWriter.cpp
+  Main.cpp
+  RedConfigureApp.cpp
+  RedConfigurePagePresenters.cpp
+  RedConfigureRoot.cpp
+  RedConfigureSession.cpp
+  RedConfigureWorkflow.cpp
+  RedConfigureSplashScreen.cpp
+  RedConfigureTraceProvider.cpp
+  RedConfigureUiHelpers.cpp
+  ThemeCatalog.cpp
+  Factory.cpp
+  ThemePreviewModel.cpp
+  WorkspaceDiscovery.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  RcParser.cpp
+  FileSystemS3.S3.cpp
+  RcWriter.cpp
+  RedConfigureApp.cpp
+  ViewerPE.cpp
+  ViewerSqlite.Engine.cpp
+  ViewerWeb.cpp
+  ViewerText.Encoding.cpp
+  UiMetrics.cpp
+  ViewerImgRaw.Decode.cpp
+  ViewerSpace.cpp
+  Ghostty terminal runtime ready: mode=Product platform=x64 pairedRaw=cb84ae8fc116e2721d0e1b1d82396c8b898c5364ddb98faf47434ddc22048088 normalizedDiagnostic=a65a45989fb75954489538ff37a98e0722022c08798c5c0a0c2ab0d775dc2599
+  dllmain.cpp
+  Factory.cpp
+  RedConfigurePagePresenters.cpp
+  RedConfigure.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\RedConfigure.exe
+  FileSystemS3.S3Table.cpp
+  DxUiTests.cpp
+  ViewerSqlite.cpp
+  RedSalamanderMonitor.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\RedSalamanderMonitor.exe
+  ViewerText.MenuTheme.cpp
+  RedConfigureRoot.cpp
+  ViewerImgRaw.Export.cpp
+  dllmain.cpp
+  Generating Code...
+  Terminal.cpp
+  Generating Code...
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerPE.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerPE.exp
+  Generating Code...
+  ViewerPE.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerPE.dll
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerWeb.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerWeb.exp
+  ViewerWeb.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerWeb.dll
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerSpace.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerSpace.exp
+  ViewerSpace.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerSpace.dll
+  DxUiTests.Accessibility.cpp
+  Generating Code...
+  ViewerText.cpp
+  FileSystemS3.Shared.cpp
+  ViewerImgRaw.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerSqlite.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerSqlite.exp
+  ViewerSqlite.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerSqlite.dll
+  RedConfigureSession.cpp
+  TerminalAccessibility.cpp
+  DxUiTests.Animation.cpp
+  ViewerText.Text.cpp
+  TerminalInternal.cpp
+  Generating Code...
+  FileSystemS3.SelfTest.FakeS3.cpp
+  RedConfigureWorkflow.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerImgRaw.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerImgRaw.exp
+  ViewerImgRaw.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerImgRaw.dll
+  DxUiTests.ComboBox.cpp
+  TerminalKittyImagePipeline.cpp
+  ViewerText.Hex.cpp
+  RedConfigureTraceProvider.cpp
+  Generating Code...
+  TerminalCommandSurfaceModel.cpp
+  DxUiTests.Controls.cpp
+  RedConfigureUiHelpers.cpp
+  Generating Code...
+  TerminalRuntimeLoader.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerText.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerText.exp
+  ViewerText.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\ViewerText.dll
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemS3.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemS3.exp
+  ThemeCatalog.cpp
+  FileSystemS3.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\FileSystemS3.dll
+  DxUiTests.Gallery.cpp
+  TerminalSecurity.cpp
+  ThemePreviewModel.cpp
+  TerminalSession.cpp
+  DxUiTests.Grid.cpp
+  WorkspaceDiscovery.cpp
+  RedConfigureTests.cpp
+  TerminalVt.cpp
+  DxUiTests.Menu.cpp
+  Generating Code...
+  TerminalVtUpgradeTests.cpp
+  DxUiTests.MultilineText.cpp
+  RedConfigureTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\RedConfigureTests.exe
+  Generating Code...
+  DxUiTests.NewControls.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\Terminal.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\Terminal.exp
+  Terminal.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\Plugins\Terminal.dll
+  FileSystemPathIdentity.cpp
+  FileSystemRouteContract.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  SearchTextHelpers.cpp
+  AppDataPaths.cpp
+  AppTheme.cpp
+  CrashQuarantine.cpp
+  CrashHandler.cpp
+  D2DHdcPaint.cpp
+  ChangeCase.cpp
+  FileSystemRenameBatch.cpp
+  BatchRenameEngine.cpp
+  BatchRenameExecutionEngine.cpp
+  FileOperationArtifactRegistry.cpp
+  FileOperationMoveBreadcrumb.cpp
+  BatchRenameMenus.cpp
+  BatchRenameWindow.cpp
+  Commands.SelfTest.cpp
+  ConnectionProfileUtils.cpp
+  DirectoryInfoCache.cpp
+  FileSystemPluginManager.cpp
+  PluginModuleLifecycle.cpp
+  FunctionBar.cpp
+  FolderView.cpp
+  FolderView.DragDrop.cpp
+  FolderView.Enumeration.cpp
+  FolderView.ErrorOverlay.cpp
+  FileOperationConfirmation.cpp
+  FolderView.FileOps.cpp
+  FolderView.Icons.cpp
+  FolderView.Interaction.cpp
+  FolderView.Layout.cpp
+  DxUiTests.NativeTextInput.cpp
+  FolderView.Menus.cpp
+  FolderView.Rendering.cpp
+  FolderView.Selection.cpp
+  FolderWindow.cpp
+  FolderWindow.FileOperations.cpp
+  FolderWindow.FileOperations.Dialog.cpp
+  FolderWindow.FileOperations.IssuesPane.cpp
+  FolderWindow.FileOperations.Popup.cpp
+  FolderWindow.FileOperations.SelfTest.cpp
+  FolderWindow.FileOperations.State.cpp
+  FolderWindow.ItemProperties.cpp
+  FolderWindow.FileSystem.cpp
+  FolderWindow.Interaction.cpp
+  FolderWindow.Layout.cpp
+  FolderWindow.SelectionSize.cpp
+  FolderWindow.StatusBar.cpp
+  FolderWindow.Viewers.cpp
+  FolderWatcher.cpp
+  FileActionLauncher.cpp
+  FileActionResolver.cpp
+  ConnectionSecrets.cpp
+  ConnectionManagerWindow.cpp
+  ConnectionCredentialPromptDialog.cpp
+  WindowsHello.cpp
+  HostServices.cpp
+  IconCache.cpp
+  AlertOverlayWindow.cpp
+  ThemeCycleOverlayWindow.cpp
+  CommandRegistry.cpp
+  CommandVisuals.cpp
+  DxUiTests.ReadOnly.cpp
+  CommandPaletteWindow.cpp
+  FloatingTerminalWindow.cpp
+  CompareDirectoriesEngine.SelfTest.cpp
+  CompareDirectoriesEngine.cpp
+  FindFilesWindow.cpp
+  SearchFallbackEngine.cpp
+  CompareDirectoriesWindow.cpp
+  CompareDirectoriesWindow.Menu.cpp
+  CompareDirectoriesWindow.Options.cpp
+  CompareDirectoriesWindow.Progress.cpp
+  ManagePluginsDialog.cpp
+  MaskSyntax.cpp
+  NavigationView.cpp
+  SessionState.cpp
+  NavigationView.Breadcrumb.cpp
+  NavigationView.Edit.cpp
+  NavigationView.FullPathPopup.cpp
+  NavigationView.Interaction.cpp
+  NavigationView.Menus.cpp
+  NavigationView.Rendering.cpp
+  Preferences.cpp
+  Preferences.Dialog.cpp
+  Preferences.Internal.cpp
+  Preferences.Advanced.cpp
+  Preferences.Monitor.cpp
+  Preferences.CompareDirectories.cpp
+  Preferences.FileOperations.cpp
+  DxUiTests.Rendering.cpp
+  Preferences.FileActions.cpp
+  Preferences.HotPaths.cpp
+  Preferences.Editors.cpp
+  Preferences.UserMenu.cpp
+  Preferences.General.cpp
+  Preferences.Mouse.cpp
+  Preferences.Panes.cpp
+  Preferences.Plugins.cpp
+  Preferences.Plugin.Configuration.cpp
+  Preferences.Keyboard.cpp
+  Preferences.Themes.cpp
+  Preferences.Viewers.cpp
+  StartupMetrics.cpp
+  SettingsSchemaParser.cpp
+  SettingsHotReload.cpp
+  SettingsFileLauncher.cpp
+  ShortcutsWindow.cpp
+  RedSalamander.cpp
+  SettingsSchemaExport.cpp
+  UiMetrics.cpp
+  ThemedInputFrames.cpp
+  ShortcutDefaults.cpp
+  ShortcutManager.cpp
+  ShortcutCommandCatalog.cpp
+  TerminalHostSupport.cpp
+  ShortcutText.cpp
+  SelfTestCommon.cpp
+  SelfTestLatencyHooks.cpp
+  DxUiTests.TextField.cpp
+  SplashScreen.cpp
+  ViewerPluginManager.cpp
+  WSLDistro.cpp
+  FolderWindow.FileSystem.Commands.cpp
+  FolderWindow.FileSystem.Navigation.cpp
+  FolderWindow.FileOperations.State.Runtime.cpp
+  FolderWindow.FileOperations.State.Diagnostics.cpp
+  FolderWindow.FileOperations.State.Queue.cpp
+  DxUiTests.Theme.cpp
+  DxUiTests.Tooltip.cpp
+  DxUiTests.Tree.cpp
+  DxUiTests.WindowHost.cpp
+  Generating Code...
+  DxUiTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\DxUiTests.exe
+  RedSalamander.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Debug\RedSalamander.exe

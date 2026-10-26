@@ -100,7 +100,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\Plugins\FileSystemCurl\FileSystemCurl.ImapHelpers.cpp" />
-    <ClCompile Include="FileSystemCurlTests.cpp" />
+    <ClCompile Include="FileSystemCurl.Tests.Runner.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\Plugins\FileSystemCurl\FileSystemCurl.ImapHelpers.h" />

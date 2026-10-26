@@ -87,7 +87,7 @@ show a `PUT` with `x-amz-copy-source` and no `GET` of the source) and record the
 On `LT-PF5VDAGE` without `SeCreateSymbolicLinkPrivilege`, `FileSystem.dll`'s object-binding self-test
 failed at its first symlink fixture and returned early (`passed=105 failed=1`; I24 Task 3 now names
 that check and its cause on stderr, `f5ab7fe0`). `Riptide_SharedFileOpsSchedulerShutdownWaitsForBlockedWorker`
-(`RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Fairstream.cpp`) runs those
+(`RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Fairstream.cpp`) runs those
 self-tests in-process and failed as designed, and then the first case of **every later family** timed
 out (I22's record lists them; 12 failures and 81 "not reached" skips). The Riptide case's own failure
 path is clean: the module is released by RAII and the case returns `true`. The mechanism is therefore

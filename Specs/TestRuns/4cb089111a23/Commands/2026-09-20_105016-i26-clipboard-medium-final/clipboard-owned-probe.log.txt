@@ -1,0 +1,14 @@
+transfer=True broad=False retained=42 returnedAlias=False releaser=False medium=TYMED_HGLOBAL streamQuery=00000001
+transfer=True broad=True retained=42 returnedAlias=False releaser=False medium=TYMED_HGLOBAL streamQuery=00000000
+MethodInvocationException: C:\RedSalamander.Perf\evidence\i26-ui\clipboard-owned-probe.ps1:41
+Line |
+  41 |  … ad in @($false,$true)){[OwnedClipboardProbe]::Run($transfer,$broad)}}
+     |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Exception calling "Run" with "2" argument(s): "The method or operation is not implemented."
+
+MethodInvocationException: C:\RedSalamander.Perf\evidence\i26-ui\clipboard-owned-probe.ps1:41
+Line |
+  41 |  … ad in @($false,$true)){[OwnedClipboardProbe]::Run($transfer,$broad)}}
+     |                           ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Exception calling "Run" with "2" argument(s): "The method or operation is not implemented."
+

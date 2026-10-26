@@ -1,0 +1,12 @@
+[
+  {
+    "Case": "TestViewerDocumentationGallery",
+    "ExitCode": 0,
+    "ElapsedMs": 13910
+  },
+  {
+    "Case": "TestViewerSpaceLifecycleCaptures",
+    "ExitCode": 0,
+    "ElapsedMs": 5044
+  }
+]

@@ -123,7 +123,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="..\..\Plugins\ViewerSqlite\ViewerSqlite.Engine.cpp" />
-    <ClCompile Include="ViewerSqliteTests.cpp" />
+    <ClCompile Include="ViewerSqlite.Tests.Runner.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\Plugins\ViewerSqlite\ViewerSqlite.Engine.h" />

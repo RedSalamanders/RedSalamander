@@ -1,0 +1,62 @@
+[
+  {
+    "source": "Z:\\RedSalamander.Perf\\runs\\viewer-space-divider-captures-20261011T072848-7460-03\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\explorer-light.png",
+    "file": "explorer-light.png",
+    "sha256": "00868598234d1dcdf322c462fc4348eb08f2b956eb9f500bd66646ee3b967eec",
+    "bytes": 500438
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\runs\\viewer-space-divider-captures-20261011T072848-7460-03\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\analyst-dark.png",
+    "file": "analyst-dark.png",
+    "sha256": "0ca1be4a38e0f1bb8449c27a36761e7f3222c9cfdab37caa7e0f130b58bc127b",
+    "bytes": 391677
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\runs\\viewer-space-divider-captures-20261011T072848-7460-03\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\analyst-rainbow.png",
+    "file": "analyst-rainbow.png",
+    "sha256": "4072a1679428818ddf06ca676fe173d4cf4136f6b74f2ee84b0f8f8f32bc479c",
+    "bytes": 353088
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\runs\\viewer-space-divider-captures-20261011T072848-7460-03\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\analyst-high-contrast.png",
+    "file": "analyst-high-contrast.png",
+    "sha256": "aad94c6d638903a77e98e8d782c119363ae2511cc0a958221ef84519292cd5a3",
+    "bytes": 149388
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\runs\\viewer-space-divider-captures-20261011T072848-7460-03\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\explorer-narrow.png",
+    "file": "explorer-narrow.png",
+    "sha256": "9027e0492abef2a55f9b0259b92a3078070d1f2380cc5e39c84160b0322f6bef",
+    "bytes": 187102
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewer-space-panels-20261011\\captures-release-03\\results.json",
+    "file": "results.json",
+    "sha256": "8042bbb87f25789196e7af9c754e55e1279a0357a740a82fe57d8006f283ada8",
+    "bytes": 3845
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewer-space-panels-20261011\\captures-release-03\\native-results.json",
+    "file": "native-results.json",
+    "sha256": "823752fc6360def3b039c09e60e1bc843395fe67a6c0c6d7cd66ac5408da320c",
+    "bytes": 593
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\evidence\\viewer-space-panels-20261011\\captures-release-03\\trace.txt",
+    "file": "trace.txt",
+    "sha256": "c4e651ca231ac28b2f1fffd63df2cab2a9f45b7f144a4ac620e84b017e81ec49",
+    "bytes": 1304
+  },
+  {
+    "source": "Z:\\RedSalamander.Perf\\runs\\viewer-space-divider-captures-20261011T072848-7460-03\\artifacts\\selftest\\last_run\\perf\\viewer_space_captures\\provenance.json",
+    "file": "capture-provenance.json",
+    "sha256": "a74f4198668247161102f16804ab7355e312cf762cdf43970550374b3560a71a",
+    "bytes": 4848
+  },
+  {
+    "bytes": 60740,
+    "file": "build-receipt.json",
+    "sha256": "7a9414efc7732b780cdec24326c5683cd4f31957ea6fdd0d6474351cfdf853b6",
+    "source": "Z:\\src\\RedSalamander\\.build\\x64\\Release\\receipts\\32fdadefa934498ad3c78bcf7f1dcfda7a8cca221909b9bcbf4ee6259efaff43.json"
+  }
+]

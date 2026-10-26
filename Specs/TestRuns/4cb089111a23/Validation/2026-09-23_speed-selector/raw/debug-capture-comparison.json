@@ -1,0 +1,6072 @@
+[
+  {
+    "file": "01-empty__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "58a5544669ec2b58cd524b2da52894a97b346230ac240f9e05cf1135f15e4012",
+    "debugSha256": "3245ec7ef234eaf21ae32bf646f9bdbe551cd1f8f42e2a380252fa91bd03a60e",
+    "dimensions": [
+      724,
+      527
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "01-empty__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "60bf4494c83bac9583c8944c54786e994373d8a0695a61243cffd2932bac4d0a",
+    "debugSha256": "6157da884feb231437ec5483f78433cd48ca7607355c199ea164740061c6d953",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "02-preparing__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "eecee225d506d91130e7fea676a4e3e5a5cb96832877fd92638411672b6d118c",
+    "debugSha256": "fe8b2e78f672e95d3198a2f61be6e4ee170a8aa56f02ee4472f0a75ba13a71f6",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "02-preparing__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "c033588b5b113c8c5c6dcf33b6204c60157e4ad21db824fd7908804d3345c190",
+    "debugSha256": "d45759e6ee6ae6e8a8832eb411b02210f36c407f8f582e46fea6ea7e7e1217bf",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "03-awaiting-acceptance__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "eecee225d506d91130e7fea676a4e3e5a5cb96832877fd92638411672b6d118c",
+    "debugSha256": "fe8b2e78f672e95d3198a2f61be6e4ee170a8aa56f02ee4472f0a75ba13a71f6",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "03-awaiting-acceptance__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "c033588b5b113c8c5c6dcf33b6204c60157e4ad21db824fd7908804d3345c190",
+    "debugSha256": "d45759e6ee6ae6e8a8832eb411b02210f36c407f8f582e46fea6ea7e7e1217bf",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "04-queued-start-now__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "b49fcfc675c5dfa305ba26b4be15659be172e42cafd780b45049f0fe8fae792f",
+    "debugSha256": "96d9640cdb01b33a4bf4ca57a455c1ce04408c2ee4e489d6bb694b22810979fa",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "04-queued-start-now__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "81e0ae1fff705fcca71ca785d9572df3803d265f1b1ba6b59aa1cf0c835545f5",
+    "debugSha256": "6117179f36a10ab88bb8650a339844740908cfffeb4f70c7ee23af19e186fbbd",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "04-queued-start-now__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "58434c97ca6c24dea7415256a8e80e932043e0bfeb999406394a79dd2bb529a1",
+    "debugSha256": "dd9bc01a7f867413b54d7f4b21016b6639e463483b750dd73fa629f36bb64744",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "04-queued-start-now__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d543894e63ed2cd407b463a4c0eb83ebe5449cf21fed0c239378e67ddd4f6f74",
+    "debugSha256": "4d6444fbb8151309f03dfa41cec80f4dc5fa0efa2881df73cea5d6e56ab81abc",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "05-queued-overlap-no-start-now__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "7e27cb2966e8334243e45cb17cd5fa42c85e977813f0679361b29ff798d796ec",
+    "debugSha256": "7f53bba42dfbc7186bf56324ea4599e92ab8c27d53d7c3701d26d4fd0d4c01eb",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "05-queued-overlap-no-start-now__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "ce32c101d99b88ae6a9b71847a6a69b8e93fd0c27d2b091e396b93d04760c8c0",
+    "debugSha256": "cedca9e36610e750f6e5daee28ac7d902649184e5d0695d994384582017d3119",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "05-queued-overlap-no-start-now__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "64375d4810f3170ff166672f1762f5ceadeb775d513271ca0e3297aec8782953",
+    "debugSha256": "d9d911fc38e1d2e3683f5c2e76bd8ac14dd104fa8a2c46a878775843c58b6cbf",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "05-queued-overlap-no-start-now__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "3cb7195188968e5257cf355ae15c150ba2abef472ff13bea4abbb3d1453e210e",
+    "debugSha256": "d193fb09be1efa965f3356f305a9fc61ad189278adf512a7785aa926ce7d26a5",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "06-discovery-before-transfer__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "343a96027c07aa607dc11a09a25c64f642f9fd25249d6747afa66fafd7b06817",
+    "debugSha256": "3b7366e6d5ba10e2c62395f70977c5a781648eab8802acdb953dee88a9083a92",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "06-discovery-before-transfer__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "f243e5303348b987e28672721c836f1d6a671302b51f6818241f38da8cb9f4a0",
+    "debugSha256": "802b0925f0a5733b309743a0747baa1ceef8f3a1931e7713898ce1189786fe52",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "07-discovery-and-transfer__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "d8fc428b2c0a51a5a9e488fae8819aa1a6e00960f940c7a6e2dee3a0b8a4ce4a",
+    "debugSha256": "a455278cb37dc68cfc51530e42f1e2ff8690195f5a83bec346747560018869e9",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "07-discovery-and-transfer__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "dc80e0ecd627675eed62acfd946e0913b609b976ef1bbb32034848c0deb863ae",
+    "debugSha256": "e9c31aab4b322b6955166a08b82f875e664492323c70371de308c19d74ce2fc7",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "08-discovering-as-needed__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "0889651fff0e0ea0c1ca64cd3014abeaf7dbbe995fa317d41db587d3fff2c2ea",
+    "debugSha256": "9bb6e195c558d7ed911d9591c55866735de685f613c3211bcb2be96d57cc764d",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "08-discovering-as-needed__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "136840edfd101fff0491d220fd8179be852ab9c1fff9f2566868e9bed87c293f",
+    "debugSha256": "a65c311abe520159649b89a5f5c24e7578c218316e1fda0df06cacf39e3d4af9",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "09-copy-single-stream__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "fb340921ca218f54fdcb85836c0f242062e4909362b2238811f1368d4c09c5d9",
+    "debugSha256": "3e42965e30c6a365f2601d51cccd1755a2ec4ee21089e98064f395f13c18c90c",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "09-copy-single-stream__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "2f1e5fc9d0a9015aae4987bf675da29abcb9f5f72c10ca4db6caea360ee1e9a1",
+    "debugSha256": "6e3cc3eb6924153f355c7c0b472264b317295db47f7f358eaa5f320ec04e40f8",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "09-copy-single-stream__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "20e2d98aec0c8dbae39795619986d3f6fe1d019b0e45ceb91bd670ae52c8d8d4",
+    "debugSha256": "ff349d268c21f85a90656e874190dbf2d047e0115f97c7c481b337f837f0a15f",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "09-copy-single-stream__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "b3df18b9fad141b2b83b726e47163777e4206e2c6430da84ddaeb9f4f4a24e2d",
+    "debugSha256": "f141a3f93752cf0fb111b271335cfc1807c7034b3ff2f0c2c69e600aa642119f",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "9d32ba5a32cff8b53512ac8baaa56af4ab5470bf52665766d6252471a4c88fe1",
+    "debugSha256": "0713d1dec7274defd1fe4455588f3e6850eaf4e41ce6b63b6ccbbcf5b6d022b7",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d639df180faf6bc956f8e85bb2f752d2cc2c4f6d41ba6e2f4a5a430713796a99",
+    "debugSha256": "5229612247b39adf833185b2a088cd14d7bd1ab60a0f3b24b38d17665cb791fa",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "04dde5c4a71399690199682ee93d0a7c5ac520f68769ed42ce9bfcac23e2bcfe",
+    "debugSha256": "ee5d721d8acbe097ba66727f94755716d3302397bc602a808dec293a1fe24dea",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "50048be548092af7e29cc5501ea30e5cab36a8b52ecc167e2d1a1c254c0286f6",
+    "debugSha256": "ca2b1451d930171771bda3fa7a55b1e429bee4da1d8cbce0b8da09513a0a308b",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__high-contrast__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "6d36ef13bb49a41e53854450085c35ad350729d938269b8e6c8c284ebf3bb793",
+    "debugSha256": "4bc92f956b70943f7fbb15b8668e900c31fbad14cadce5e377f477dc8fa59073",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__high-contrast__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "4297d6f68617f09cfbc7566ef3cbcb29e2d1d449b25db42f8a1e23db022112a7",
+    "debugSha256": "aba3e072fef7b3c367fcf88217fa8f40d76b9251cea750df6c095ba44993392b",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__high-contrast__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "4025df9b6b3524d8eb10e6db27a8d2c96e4d20db18c59aa955c4393c3628b773",
+    "debugSha256": "67260737122903b334ffc0439ccf1cd1dbf8ca0fb16fc695fef49e8a51d723da",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__high-contrast__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "b830585e1ea1bc0dcd2f7a2651a391e790d85e1fb96dd915a76223ff5ccea75b",
+    "debugSha256": "0a34f9cba0aa0c0c38f6ebb6e9e0fb92e08909a861e09a638a2b43ba6a918621",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__light__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "54b23bdf0ca263a1a98d467120288c300a5e5d21c876db9cdb06c616cfdf37b6",
+    "debugSha256": "b43da27ab00a10f92316aed8ad79e37841df228bb33cf7250e59d5bc00545276",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__light__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "61cde1395734c4cd97cbcbb1dbc392381fd247f8813b24cab7f3dcbdc1e9eb1f",
+    "debugSha256": "c3aad8b5054f6b96fc09593420b61b37667d312eb23a8011a64cbb0b782f9d87",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__light__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "8f5858788dda414d034ec519cea44ab1a65cf62bf67ce4d01f1c4abdedab5158",
+    "debugSha256": "ca871f1fb223dcaaee70a4f7d675ce6ac90aae4e223c4d750763239f7a48ae65",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__light__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d7015d448f4ee9c53b8d7cdeeea88d970e0739d55da798fc644ab6a579db2a12",
+    "debugSha256": "a03e9b32387ce1d1380d4efc7dcdfa082bcff586f0040048506113b16f943d2f",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__rainbow__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "3cd5b57e50c706fda6b54943608497e0446a579f470c9fd875079610ba9b6f08",
+    "debugSha256": "7a74a56c72c05dbd7770beafbe0ba9164a32fb693405206ff8acca01851754f9",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__rainbow__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "a9c1fc63a9d9751f40430398c76ac8f0c9f1603baf9d0ee5db9f6d55abcfaa6e",
+    "debugSha256": "8ac30b9edca71c8c94112dc1e8587c21010be1a5ddf972f41222984bed4ea3d3",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__rainbow__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "0b46acfd5f6e6a99dac6f4dbf72fd83b7b91fb274c2cf0e101a9fe5e59431bf1",
+    "debugSha256": "f91f8b30040326fb7116836ae10962a6bbfc68a0b6eda2d23a193a2c6c9fa181",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "10-copy-four-streams__rainbow__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "4d50dcfe6b0af15d757561893214c053fe73c9a68a07a775701d3ab47461ab7f",
+    "debugSha256": "f216d7a1d1c9374715c0f69be24165f28a463a8d02a1a103af0d712d5c129cd0",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "100-speed-invalid__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "cc21e63874ef24f78c8985a8df39a959c00e37b36cf5aa7e4734e8d088f51e5b",
+    "debugSha256": "cc21e63874ef24f78c8985a8df39a959c00e37b36cf5aa7e4734e8d088f51e5b",
+    "dimensions": [
+      664,
+      365
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "100-speed-invalid__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "b503b39f7b6899db2d88103afea0fdd8ae79dd7944e0e8d12f00ae9eea778f9a",
+    "debugSha256": "b503b39f7b6899db2d88103afea0fdd8ae79dd7944e0e8d12f00ae9eea778f9a",
+    "dimensions": [
+      442,
+      244
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "101-speed-valid__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "5309f9832495a2b06b800057b29cbc15d23f78215c11d17ef71a96da5b1c7da5",
+    "debugSha256": "5309f9832495a2b06b800057b29cbc15d23f78215c11d17ef71a96da5b1c7da5",
+    "dimensions": [
+      664,
+      365
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "101-speed-valid__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "17c6d2aafcca56fe70190c906080f60628fc9cec9ce2b807a34649e1b427c9dd",
+    "debugSha256": "17c6d2aafcca56fe70190c906080f60628fc9cec9ce2b807a34649e1b427c9dd",
+    "dimensions": [
+      442,
+      244
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-0-narrow__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "c04189ec3dc0bfcb75c4c157e59156faccfc63d7eff5dc34bfeede40decad4e2",
+    "debugSha256": "c04189ec3dc0bfcb75c4c157e59156faccfc63d7eff5dc34bfeede40decad4e2",
+    "dimensions": [
+      720,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-0-narrow__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "7e7f1856697f497a2dd6ee46845c99b5b2d54207712a258cfcb9b324e6f310fd",
+    "debugSha256": "7e7f1856697f497a2dd6ee46845c99b5b2d54207712a258cfcb9b324e6f310fd",
+    "dimensions": [
+      480,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-0-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "24f2bcd407690b81fb52d63924733f0e6f3b38d2d8a70ffe9682674c33eea1f4",
+    "debugSha256": "24f2bcd407690b81fb52d63924733f0e6f3b38d2d8a70ffe9682674c33eea1f4",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-0-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "a007735cdb4c5f31565da07e4e332499673af901094cf925c7d6b077d02dfe0d",
+    "debugSha256": "a007735cdb4c5f31565da07e4e332499673af901094cf925c7d6b077d02dfe0d",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-0-short__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "ce2ebdc170d6b7cabb02eba7ba07f54e51e16924a31426bd3983392f3d1dd9d4",
+    "debugSha256": "ce2ebdc170d6b7cabb02eba7ba07f54e51e16924a31426bd3983392f3d1dd9d4",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-0-short__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d273d2511f8c3c9de88fe49a6e3a5a74f820b5e40ac33f2e8f8c81d3de43c082",
+    "debugSha256": "d273d2511f8c3c9de88fe49a6e3a5a74f820b5e40ac33f2e8f8c81d3de43c082",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-0__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "562ef20d39df9bd7ea12f680023159d664e849ae201afac943d1aef6cc3f69fc",
+    "debugSha256": "562ef20d39df9bd7ea12f680023159d664e849ae201afac943d1aef6cc3f69fc",
+    "dimensions": [
+      1380,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-0__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "cd32252706e7d8c9ffab6179f74f4a7a3cf34b24fbff5167f6425ae094f36f5d",
+    "debugSha256": "cd32252706e7d8c9ffab6179f74f4a7a3cf34b24fbff5167f6425ae094f36f5d",
+    "dimensions": [
+      920,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-1-narrow__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "ed7e8784a0503c39b584916ab74d429a8d6284b5ec29f21fda9b9384a5d339a6",
+    "debugSha256": "ed7e8784a0503c39b584916ab74d429a8d6284b5ec29f21fda9b9384a5d339a6",
+    "dimensions": [
+      720,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-1-narrow__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "c7d6f6bff44e5870059003d8aea6f2cdb347ec7f8bd9238eaed11639681c934a",
+    "debugSha256": "c7d6f6bff44e5870059003d8aea6f2cdb347ec7f8bd9238eaed11639681c934a",
+    "dimensions": [
+      480,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-1-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "659ae9914d9b8210dcf2c5455aa1748c30ea2dc98e3e6b4c9ce64ba0a560d6fa",
+    "debugSha256": "659ae9914d9b8210dcf2c5455aa1748c30ea2dc98e3e6b4c9ce64ba0a560d6fa",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-1-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "dbded5ef011e672ba3971443776966777d20b5301737347d49c280968b3f2a75",
+    "debugSha256": "dbded5ef011e672ba3971443776966777d20b5301737347d49c280968b3f2a75",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-1-short__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "84c2f3a18af3ebc2258419be278f436fcdfa832381a14bcebd06ff6aee5b6fc1",
+    "debugSha256": "84c2f3a18af3ebc2258419be278f436fcdfa832381a14bcebd06ff6aee5b6fc1",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-1-short__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "fadd883db33f7c10696b57aef64bc14b1466df75f66793c86bd7bfe09b79f2a8",
+    "debugSha256": "fadd883db33f7c10696b57aef64bc14b1466df75f66793c86bd7bfe09b79f2a8",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-1__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "8198b2e749335024cf71a60a01c12279839d55012635394cff661bc72bd2e724",
+    "debugSha256": "8198b2e749335024cf71a60a01c12279839d55012635394cff661bc72bd2e724",
+    "dimensions": [
+      1380,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-1__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "725a5636e643f64e3308ced138d3304d9b11cf71f04429c51284eba7dccc3c71",
+    "debugSha256": "725a5636e643f64e3308ced138d3304d9b11cf71f04429c51284eba7dccc3c71",
+    "dimensions": [
+      920,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-2-narrow__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "3cd6f127b519f081002b1ca6401f9fc000010881b061c60832a13a0607db0e2d",
+    "debugSha256": "3cd6f127b519f081002b1ca6401f9fc000010881b061c60832a13a0607db0e2d",
+    "dimensions": [
+      720,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-2-narrow__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "f2871610717ecda22a4b089d47e6e38f86c28cbeeae04680cf0dd5e8f9c3d5b9",
+    "debugSha256": "f2871610717ecda22a4b089d47e6e38f86c28cbeeae04680cf0dd5e8f9c3d5b9",
+    "dimensions": [
+      480,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-2-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "002b1c7e905f4f3d1e8c5696b80a2fd173f908fcc7ade99479dad48c6f2f4751",
+    "debugSha256": "002b1c7e905f4f3d1e8c5696b80a2fd173f908fcc7ade99479dad48c6f2f4751",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-2-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "2861ea6855f66edbaf399663c7fd433ac9f8d861e3034cedfda4a0ade4ff49c5",
+    "debugSha256": "2861ea6855f66edbaf399663c7fd433ac9f8d861e3034cedfda4a0ade4ff49c5",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-2-short__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "70045aabb69b6985fb0d221ee3a83dee01b97c050ccfbe3c570c14b6a09fdca6",
+    "debugSha256": "70045aabb69b6985fb0d221ee3a83dee01b97c050ccfbe3c570c14b6a09fdca6",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-2-short__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "f738abcfa90648bd9da5ba7bdf388038af2f70f1b5ec8c1c87e90ef27610ae5f",
+    "debugSha256": "f738abcfa90648bd9da5ba7bdf388038af2f70f1b5ec8c1c87e90ef27610ae5f",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-2__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "115b32b5396ae022fcc4066e9fc3ad28bbd7c196f39ac65b7547f4844465fde2",
+    "debugSha256": "115b32b5396ae022fcc4066e9fc3ad28bbd7c196f39ac65b7547f4844465fde2",
+    "dimensions": [
+      1380,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-2__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "67ebfff5ab0c544decc52ad80057e4055d80220ab0a82b9dee53ce7be8a828d4",
+    "debugSha256": "67ebfff5ab0c544decc52ad80057e4055d80220ab0a82b9dee53ce7be8a828d4",
+    "dimensions": [
+      920,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-3-narrow__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "389a48140d7d1cae3b6dd222a757718d5e207364e3a08c382949e43afa5c4fc7",
+    "debugSha256": "389a48140d7d1cae3b6dd222a757718d5e207364e3a08c382949e43afa5c4fc7",
+    "dimensions": [
+      720,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-3-narrow__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "0b37bf101f7333f699eff573dac16318b78f50f0155dffd4d8e059a1d7f4a5b1",
+    "debugSha256": "0b37bf101f7333f699eff573dac16318b78f50f0155dffd4d8e059a1d7f4a5b1",
+    "dimensions": [
+      480,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-3-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "04d4b561b7ff0e543a979ebc5ff136fe46cb7e07d4d64a5e948ad6be6ae5ae0d",
+    "debugSha256": "04d4b561b7ff0e543a979ebc5ff136fe46cb7e07d4d64a5e948ad6be6ae5ae0d",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-3-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "a038b0dcc951e2f73eca81de068e860e9c67229553a565e0a043c382d296c8a6",
+    "debugSha256": "a038b0dcc951e2f73eca81de068e860e9c67229553a565e0a043c382d296c8a6",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-3-short__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "d86e6700aeab4df411df07863c10f5798b36831f28fec5a8f8dd51fb0dbc98be",
+    "debugSha256": "d86e6700aeab4df411df07863c10f5798b36831f28fec5a8f8dd51fb0dbc98be",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-3-short__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "301390c13dd162a34d5aff98d7bbb8604a6bfd4a9a29b7e8d5210d33160bb0a0",
+    "debugSha256": "301390c13dd162a34d5aff98d7bbb8604a6bfd4a9a29b7e8d5210d33160bb0a0",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-3__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "452fff1584d1c5d71b7e64333cc71f57e21503140675f87c176a1b083a8202a7",
+    "debugSha256": "452fff1584d1c5d71b7e64333cc71f57e21503140675f87c176a1b083a8202a7",
+    "dimensions": [
+      1380,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-3__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "5d0c4cd95cbe477c075485256a555b331894a1e985a541040a3dad511c36d579",
+    "debugSha256": "5d0c4cd95cbe477c075485256a555b331894a1e985a541040a3dad511c36d579",
+    "dimensions": [
+      920,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-4-narrow__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "c0b9b4ab3ba9bde8cc8bf1fe9b77e80a1aed43c99e1be3e3c36b896e25a92820",
+    "debugSha256": "c0b9b4ab3ba9bde8cc8bf1fe9b77e80a1aed43c99e1be3e3c36b896e25a92820",
+    "dimensions": [
+      720,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-4-narrow__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "aa692281b0659b57ce603868c6972bf5f3794968eefebffa11eacbecd61c1b90",
+    "debugSha256": "aa692281b0659b57ce603868c6972bf5f3794968eefebffa11eacbecd61c1b90",
+    "dimensions": [
+      480,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-4-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "5f04cecf68577b6fae58517b3cf4978f7509482618b59b04f1b0b600665e980b",
+    "debugSha256": "5f04cecf68577b6fae58517b3cf4978f7509482618b59b04f1b0b600665e980b",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-4-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "95128ee3b8695d7ae3dea85fd32049625396fa2c6fc9dd0e4c25e8c2af915f32",
+    "debugSha256": "95128ee3b8695d7ae3dea85fd32049625396fa2c6fc9dd0e4c25e8c2af915f32",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-4-short__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "991acaebd6d8ae54dcaf7571c89beb4a0b7350df00ff31a5ca37fd1e24d43fac",
+    "debugSha256": "991acaebd6d8ae54dcaf7571c89beb4a0b7350df00ff31a5ca37fd1e24d43fac",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-4-short__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "0ac0121fbeaf29e82e5ffcedadeb4ea2990304e43b7ffb423f3459ebffd3c758",
+    "debugSha256": "0ac0121fbeaf29e82e5ffcedadeb4ea2990304e43b7ffb423f3459ebffd3c758",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-4__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "8b6c3458620c85e2800f29f5d05fcd5de5ac3122f072b1491a2255d30e46c054",
+    "debugSha256": "8b6c3458620c85e2800f29f5d05fcd5de5ac3122f072b1491a2255d30e46c054",
+    "dimensions": [
+      1380,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-4__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "a411fc2dbfb856d4c0629ea14e2aae2c44c51d1b6589e734f6504d507a719d06",
+    "debugSha256": "a411fc2dbfb856d4c0629ea14e2aae2c44c51d1b6589e734f6504d507a719d06",
+    "dimensions": [
+      920,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-5-narrow__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "cdda1788ea43545d46d654f99d9e79094729a5b03fe901a55a1e95103b352e3c",
+    "debugSha256": "cdda1788ea43545d46d654f99d9e79094729a5b03fe901a55a1e95103b352e3c",
+    "dimensions": [
+      720,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-5-narrow__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "ce8428ff22f0d56cdbce3b7b45e066d39fffcca3a409ee32547584ae2d46711f",
+    "debugSha256": "ce8428ff22f0d56cdbce3b7b45e066d39fffcca3a409ee32547584ae2d46711f",
+    "dimensions": [
+      480,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-5-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "3c3de65dddb72326a5c320d7bc5532f5f54390ce923e9b995f3992a82ee6ae69",
+    "debugSha256": "3c3de65dddb72326a5c320d7bc5532f5f54390ce923e9b995f3992a82ee6ae69",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-5-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "e31841a09a9d24199217f3623021391cdb0b9bb70ef586a3c6a6ed6b93ed76c7",
+    "debugSha256": "e31841a09a9d24199217f3623021391cdb0b9bb70ef586a3c6a6ed6b93ed76c7",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-5-short__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "991acaebd6d8ae54dcaf7571c89beb4a0b7350df00ff31a5ca37fd1e24d43fac",
+    "debugSha256": "991acaebd6d8ae54dcaf7571c89beb4a0b7350df00ff31a5ca37fd1e24d43fac",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-5-short__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "0ac0121fbeaf29e82e5ffcedadeb4ea2990304e43b7ffb423f3459ebffd3c758",
+    "debugSha256": "0ac0121fbeaf29e82e5ffcedadeb4ea2990304e43b7ffb423f3459ebffd3c758",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-5__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "40e7fd746f70d2ac58127334050e04a3d6e60bdedd481bb0ff72eeb92252cac1",
+    "debugSha256": "40e7fd746f70d2ac58127334050e04a3d6e60bdedd481bb0ff72eeb92252cac1",
+    "dimensions": [
+      1380,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-5__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "ef3867a1c04d9f8b47f14fca103e611f66dcd0f60b609b85f465389d4d32bbe2",
+    "debugSha256": "ef3867a1c04d9f8b47f14fca103e611f66dcd0f60b609b85f465389d4d32bbe2",
+    "dimensions": [
+      920,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-6-narrow__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "4b0377180a0bcc9ad716c3bf742a556bfa884cfd713d4e0c1162b87af9fe5e14",
+    "debugSha256": "4b0377180a0bcc9ad716c3bf742a556bfa884cfd713d4e0c1162b87af9fe5e14",
+    "dimensions": [
+      720,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-6-narrow__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "57b01121b275c1febcc569907f1a5a01a2ca3d1e0046a1eed8079df258807520",
+    "debugSha256": "57b01121b275c1febcc569907f1a5a01a2ca3d1e0046a1eed8079df258807520",
+    "dimensions": [
+      480,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-6-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "8e397db971ce5c0232d7b2914a59f434f1f1e7f568e2b3a3085a881dc83c5c3d",
+    "debugSha256": "8e397db971ce5c0232d7b2914a59f434f1f1e7f568e2b3a3085a881dc83c5c3d",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-6-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "3fe14a4d44620ebb0d0b40ec33d35f759da6b00fdb8d8ddebbae67728698e2ca",
+    "debugSha256": "3fe14a4d44620ebb0d0b40ec33d35f759da6b00fdb8d8ddebbae67728698e2ca",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-6-short__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "7025e8c28d88cddae9d325e97edf91bde68bb4efba967cbc06236e0f1dcd3936",
+    "debugSha256": "7025e8c28d88cddae9d325e97edf91bde68bb4efba967cbc06236e0f1dcd3936",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-6-short__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "4118f8ef0f7653f5ed1568fcbcdac85e00fbd03a2199ecf2384cb7db0f9479db",
+    "debugSha256": "4118f8ef0f7653f5ed1568fcbcdac85e00fbd03a2199ecf2384cb7db0f9479db",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-6__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "433ebf08a0cd890b45eb0d01a81da26808fce1afde4ca608b2c2dcd348964e16",
+    "debugSha256": "433ebf08a0cd890b45eb0d01a81da26808fce1afde4ca608b2c2dcd348964e16",
+    "dimensions": [
+      1380,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-6__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "52975a19720dd1fc9186845b75c9a1a249dc9843f62b5aee38343c673bfbdedb",
+    "debugSha256": "52975a19720dd1fc9186845b75c9a1a249dc9843f62b5aee38343c673bfbdedb",
+    "dimensions": [
+      920,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-7-narrow__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "c62366876566b2543a16b8d75bd9d72f01f726f4e77578dd070f43f39b2c0c56",
+    "debugSha256": "c62366876566b2543a16b8d75bd9d72f01f726f4e77578dd070f43f39b2c0c56",
+    "dimensions": [
+      720,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-7-narrow__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "72f9b624f340a955a1f54f2ab8e791c154c5c59b2d60b1e0fcace1319c0c8621",
+    "debugSha256": "72f9b624f340a955a1f54f2ab8e791c154c5c59b2d60b1e0fcace1319c0c8621",
+    "dimensions": [
+      480,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-7-short-scrolled__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "0a9a644b2fd788e00a5f09116542b4fb5e3c2272cd588aae63ef73e2456848b4",
+    "debugSha256": "0a9a644b2fd788e00a5f09116542b4fb5e3c2272cd588aae63ef73e2456848b4",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-7-short-scrolled__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "3b6e9d4318e808b45126fccfc5bac5e1b586028257af670abbcbbd4ea5d9068a",
+    "debugSha256": "3b6e9d4318e808b45126fccfc5bac5e1b586028257af670abbcbbd4ea5d9068a",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-7-short__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "7025e8c28d88cddae9d325e97edf91bde68bb4efba967cbc06236e0f1dcd3936",
+    "debugSha256": "7025e8c28d88cddae9d325e97edf91bde68bb4efba967cbc06236e0f1dcd3936",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-7-short__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "4118f8ef0f7653f5ed1568fcbcdac85e00fbd03a2199ecf2384cb7db0f9479db",
+    "debugSha256": "4118f8ef0f7653f5ed1568fcbcdac85e00fbd03a2199ecf2384cb7db0f9479db",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-7__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "b1494fa9d0ad811287a1db543fdacb903c8b46fe386e1361fcab4e1afbba0976",
+    "debugSha256": "b1494fa9d0ad811287a1db543fdacb903c8b46fe386e1361fcab4e1afbba0976",
+    "dimensions": [
+      1380,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-7__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "ffb951d6db1b229d494817ad2c11de144a2a721845e81bb52392aa1c66a10065",
+    "debugSha256": "ffb951d6db1b229d494817ad2c11de144a2a721845e81bb52392aa1c66a10065",
+    "dimensions": [
+      920,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-8-narrow__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "2e5fea26f2212336cad5e71f884039f2a5805a3db13573e414d2662933000f7e",
+    "debugSha256": "2e5fea26f2212336cad5e71f884039f2a5805a3db13573e414d2662933000f7e",
+    "dimensions": [
+      720,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-8-narrow__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "303733bd8f7262205052026c452fa4c4bbb353ee70ee66583ba25ce1668c597c",
+    "debugSha256": "303733bd8f7262205052026c452fa4c4bbb353ee70ee66583ba25ce1668c597c",
+    "dimensions": [
+      480,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-8-short__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "e2a03117e58fb8281bb620edb45064f790a90fd647c90c83cd53f35c8477dd27",
+    "debugSha256": "e2a03117e58fb8281bb620edb45064f790a90fd647c90c83cd53f35c8477dd27",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-8-short__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "e7996eba56416250d5e6d64e9d0395fd298e21b9a599d1a7ce1901d8cc72365a",
+    "debugSha256": "e7996eba56416250d5e6d64e9d0395fd298e21b9a599d1a7ce1901d8cc72365a",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-8__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "602724ff79f77314bc3597071ad8d8765be5584aea22ed48c27c9f8ac59e9989",
+    "debugSha256": "602724ff79f77314bc3597071ad8d8765be5584aea22ed48c27c9f8ac59e9989",
+    "dimensions": [
+      1380,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-8__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "9813b926b2cdff0f8d07da76f42601cf96a91d056132db7ee11a98aec58d056c",
+    "debugSha256": "9813b926b2cdff0f8d07da76f42601cf96a91d056132db7ee11a98aec58d056c",
+    "dimensions": [
+      920,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-9-narrow__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "ab47695a80f553f20da2d97cd7185474df004db5255b55062d978c1bb06cbb14",
+    "debugSha256": "ab47695a80f553f20da2d97cd7185474df004db5255b55062d978c1bb06cbb14",
+    "dimensions": [
+      720,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-9-narrow__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "5562ab6318ea615e9d94cde4c3909d9c7389ded66a09b8e69ca10a619c341766",
+    "debugSha256": "5562ab6318ea615e9d94cde4c3909d9c7389ded66a09b8e69ca10a619c341766",
+    "dimensions": [
+      480,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-9-short__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "1cb217560ce764e27bb1c1aec08684acfb8d7cb69386c6be745254d24537086b",
+    "debugSha256": "1cb217560ce764e27bb1c1aec08684acfb8d7cb69386c6be745254d24537086b",
+    "dimensions": [
+      720,
+      480
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-9-short__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "4320b89196f6656d754f7ec2dd0e1ba46ac2fb33edf011ed5fd6bd8153ac715c",
+    "debugSha256": "4320b89196f6656d754f7ec2dd0e1ba46ac2fb33edf011ed5fd6bd8153ac715c",
+    "dimensions": [
+      480,
+      320
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-9__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "0e632da8662554f4b05363f3636ebe89d63aa32bdff8d3c360cb8bbdb5c56575",
+    "debugSha256": "0e632da8662554f4b05363f3636ebe89d63aa32bdff8d3c360cb8bbdb5c56575",
+    "dimensions": [
+      1380,
+      930
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "102-confirmation-9__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "74db84ea489ac117baad0430269dd2368d217073f2ed46c5887cbab520c0a2b4",
+    "debugSha256": "74db84ea489ac117baad0430269dd2368d217073f2ed46c5887cbab520c0a2b4",
+    "dimensions": [
+      920,
+      601
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "103-issues-empty__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "9a03ec98146a2898bb319dd093cb7df3690c59bfce77217ae5e2ed4656debde8",
+    "debugSha256": "580dd9dd0b0742485c5c551fbe151408f521b072105ccaf9bfaa12ae97fc9a35",
+    "dimensions": [
+      1504,
+      977
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "103-issues-empty__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d6551469283cf46e4e179d84423c0748a603d4c3fe71612489ec3fb8c9aa18aa",
+    "debugSha256": "6d4fea661fee3af61f2b3214c2144c06672a0088c1cedca689d67257d391bf8e",
+    "dimensions": [
+      1002,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "104-issues-populated__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "ea8db74b5023f3c4b64e09431bf1aa51e2a7d4d2692b48f51af0aca02d471dc0",
+    "debugSha256": "230b5aa27f62b43ae42e9f3f14ada33339d739f4efb9c981868dc50ed4669774",
+    "dimensions": [
+      1504,
+      977
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "104-issues-populated__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "3075e0840c69b6ccc99a7a057575cf08a794a835fae1ea60724ec542bfc494cf",
+    "debugSha256": "418a24ef4d091f5f22d8de056d40b87112ed7f8234d8decb2b51da8f7acec1ea",
+    "dimensions": [
+      1002,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "105-issues-selected__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "7152889d5b6102f04456ffce705752e4bda0f97b7c0eca80e66cef52cf78514e",
+    "debugSha256": "da994d6e15d686657cf5ee17bd4b7ade53720db7155164ec3462ee243cee7825",
+    "dimensions": [
+      1504,
+      977
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "105-issues-selected__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "44e209e4ad2a10fc1ddbf32e0b2f27fc32543ffdc28c0415628cd34d675dad0f",
+    "debugSha256": "8b3fabaf008274ddd3e3cdf00d4e6a50493be0979097a387614cba36a32d0de0",
+    "dimensions": [
+      1002,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "106-issues-scrolled__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "501530ca60e6ec899408db66fffe9451a4ee7282e4ba8b8a204bfd565ea43c8e",
+    "debugSha256": "57419aa98554bc89e2535d150b67997643ce8a33412683bdf5d04c1d72a2e70b",
+    "dimensions": [
+      1504,
+      977
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "106-issues-scrolled__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "758c53e6f2b07f17a5d0d1b91717a8ccc17fc11437e6ff5cf16817355f341693",
+    "debugSha256": "2843994db2cd14f1c189d9f244fa3debb888df11f72dcef81d2f375705953ac5",
+    "dimensions": [
+      1002,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "107-destination-history__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "b49fcfc675c5dfa305ba26b4be15659be172e42cafd780b45049f0fe8fae792f",
+    "debugSha256": "96d9640cdb01b33a4bf4ca57a455c1ce04408c2ee4e489d6bb694b22810979fa",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "107-destination-history__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "releaseSha256": "42a33196b6f777fc0db4d6c196eebfdf32b83bd746bc9140aefa8e9d268f5df2",
+    "debugSha256": "42a33196b6f777fc0db4d6c196eebfdf32b83bd746bc9140aefa8e9d268f5df2",
+    "dimensions": [
+      714,
+      194
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "107-destination-history__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "81e0ae1fff705fcca71ca785d9572df3803d265f1b1ba6b59aa1cf0c835545f5",
+    "debugSha256": "6117179f36a10ab88bb8650a339844740908cfffeb4f70c7ee23af19e186fbbd",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "107-destination-history__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "releaseSha256": "3d0732af4008e5c220be6a74a59ab4ece935d104c9bcd9163ecb152d6f4726bd",
+    "debugSha256": "3d0732af4008e5c220be6a74a59ab4ece935d104c9bcd9163ecb152d6f4726bd",
+    "dimensions": [
+      476,
+      129
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "107-destination-history__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "58434c97ca6c24dea7415256a8e80e932043e0bfeb999406394a79dd2bb529a1",
+    "debugSha256": "dd9bc01a7f867413b54d7f4b21016b6639e463483b750dd73fa629f36bb64744",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "107-destination-history__dark__760dip__fr-FR__display1__144dpi__flyout.png",
+    "releaseSha256": "42a33196b6f777fc0db4d6c196eebfdf32b83bd746bc9140aefa8e9d268f5df2",
+    "debugSha256": "42a33196b6f777fc0db4d6c196eebfdf32b83bd746bc9140aefa8e9d268f5df2",
+    "dimensions": [
+      714,
+      194
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "107-destination-history__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d543894e63ed2cd407b463a4c0eb83ebe5449cf21fed0c239378e67ddd4f6f74",
+    "debugSha256": "4d6444fbb8151309f03dfa41cec80f4dc5fa0efa2881df73cea5d6e56ab81abc",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "107-destination-history__dark__760dip__fr-FR__display2__96dpi__flyout.png",
+    "releaseSha256": "3d0732af4008e5c220be6a74a59ab4ece935d104c9bcd9163ecb152d6f4726bd",
+    "debugSha256": "3d0732af4008e5c220be6a74a59ab4ece935d104c9bcd9163ecb152d6f4726bd",
+    "dimensions": [
+      476,
+      129
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "108-decision-long-french-paths__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "c207ce9165dda0de116321adc21dfa4acd0e6ce74a3fe9fca7a718f30e5d9a27",
+    "debugSha256": "8999bb27a78e4451e7fc5776637a051fde6cd6bb00c261f366f9979c77ff4e17",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "108-decision-long-french-paths__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "fe68fbe2197258e2cf34ce993eb35fa57fcb058ad710e63a5f89798d328a9b52",
+    "debugSha256": "ff32e21d7dfcaa849ecd3a0fff315aa986433fdec90ff5ddf82977305c51166c",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "108-decision-long-french-paths__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "1f0c4e0ad7f4834c59ac7881185fd68a75f48fed926978c6ee420317a573e1d0",
+    "debugSha256": "540e7cc000185d6d48d62bafa159568741d95fe7f0c928a1ba9c3fc21e57e409",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "108-decision-long-french-paths__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "67620b1f83a903d078647eaf7faa6df2522f4af17b396ac8b5ebce8a6be9efdc",
+    "debugSha256": "62bc7792a9f62a9968ad16e02ff36235a983ab3f6172a4747b7b477abf82cead",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "11-speed-limited__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "fc41339f08242b22b4843e0b4379ce3bf8d6223e5037577e43d8fefb8935fe3e",
+    "debugSha256": "6546f87f6151c21e950129df881e0f3958cb5f52dacf67e736b02073cba7e9b2",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "11-speed-limited__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "af67dcd0c4b38b208ecface35aedab4aaec6ee0ed9491f9892847b507a6c1afb",
+    "debugSha256": "5fa16c99e95165f0face8ebd22b0ba5ebdb041c980b3cbe979ee87da06b20b96",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "11-speed-limited__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "682f0de0785d77d6cede232d0549eac1a5d0188d78a06046041f4e0bba4aa7af",
+    "debugSha256": "a1f8be054a9f8bee611201773805be209bebedbf65bfb4ea2dd58c0176a29bc4",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "11-speed-limited__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "a8f51e488f506641a194ea057902cdc361adcbe9bcf0d31e5e911e9439f60a36",
+    "debugSha256": "8d08d31900ca46206cd64308af8b8c23582466ad04120f0bc902018954b14322",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "114-recovery-known-source-menu__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "1accbc3949a05fc77580f97a7532175daa4b696776735837defb5cc4b5963c9f",
+    "debugSha256": "563137b54920dc62914f7c1c6ed9c77e6629366be150b4d51f43b5957a39ea28",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "114-recovery-known-source-menu__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "releaseSha256": "f38677e9c54423ead43ee64f63912378d85fdbcbfde94c8d15df0d906b6a32c3",
+    "debugSha256": "f38677e9c54423ead43ee64f63912378d85fdbcbfde94c8d15df0d906b6a32c3",
+    "dimensions": [
+      470,
+      405
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "114-recovery-known-source-menu__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "b911a314b08f491d84fe4d2b618899fe5ca56841bc43b040ffb1053aff3da8bf",
+    "debugSha256": "2aa0e8d1cfa80f9771977d6a25f2ef011f500dd11d04ec6cbd94c6577ff80b03",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "114-recovery-known-source-menu__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "releaseSha256": "d1d3004ab1ec15f4573bc16bf7fc58ebb5b746edcc62b81c1a0555b43b0f13ee",
+    "debugSha256": "d1d3004ab1ec15f4573bc16bf7fc58ebb5b746edcc62b81c1a0555b43b0f13ee",
+    "dimensions": [
+      314,
+      270
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "115-recovery-unknown-source-menu__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "dca3b7600bbde92b8b4d9c1226e2734f6c8b034722439ccc30dd04f2c2717e98",
+    "debugSha256": "7461c24e68fd2796ef6e9db7aee4387c9e8b56b6033dbe780f9086d995804832",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "115-recovery-unknown-source-menu__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "releaseSha256": "b32397206dfa120e9420e8715bfeb6ea8ebc62a47f24084537902e8a2b0f2952",
+    "debugSha256": "b32397206dfa120e9420e8715bfeb6ea8ebc62a47f24084537902e8a2b0f2952",
+    "dimensions": [
+      308,
+      315
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "115-recovery-unknown-source-menu__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "5e8370f8a84041890ce1f0ef868376208b4ff08b3badb0444d9a321cf7eafdad",
+    "debugSha256": "d0a9995610fe7a4cdd17d05e0eebb672f1e1c7a7f159507eed4db64d23038ce8",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "115-recovery-unknown-source-menu__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "releaseSha256": "3d0ce139fac23a1a534fc3a16fb33afd769f3471886183fc5cd7bad0ebed328d",
+    "debugSha256": "3d0ce139fac23a1a534fc3a16fb33afd769f3471886183fc5cd7bad0ebed328d",
+    "dimensions": [
+      206,
+      210
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "116-footer-wrapped-summary__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "08a0b1f42c27478c345bdd448e76590019b35727326e6a7ad6d4d9b5dae097fe",
+    "debugSha256": "878abbc35b9087d76368cfb516901d09128892e3c9966586b1bb7c2e4ba4bd41",
+    "dimensions": [
+      724,
+      205
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "116-footer-wrapped-summary__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "5cccff4db1a44bd9449b32bef3aa57d5893c56386c2907ddb7ecd93de000f587",
+    "debugSha256": "e4fc160db3886de0d2fb11818c0ea2d0d3d40755f88bb5f2eb6739b716104797",
+    "dimensions": [
+      482,
+      138
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "116-footer-wrapped-summary__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "d72891566241b07c5a907be778861fb48a627b8b2c8e0f701141ba14ac738da1",
+    "debugSha256": "61222eb772fdd160653cfb31dbe1c636326f49867fc830edc67de3f7f9d39151",
+    "dimensions": [
+      1144,
+      191
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "116-footer-wrapped-summary__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "091158ff29094cf72ade9c6d34efc1848a1fd3b944df2f649c81ffbaf42e8c59",
+    "debugSha256": "37b4ef8d8f0d116a7397d9f6d2b5a7c5dec61a77ac36cbc72df53d22892a7f2c",
+    "dimensions": [
+      762,
+      128
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "117-expanded-wrapped-summary__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "6866751e2db3a5a8920d885e3a279842903fd2d5668bf5b6f037b846e605e55c",
+    "debugSha256": "bdf855482906da01072e03529994796e7e701fd94d311a655986f84ea04b29b2",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "117-expanded-wrapped-summary__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "118870c5b62e337325946bb23bde43cdee2861ce451a0c665241dd242fbc4c0b",
+    "debugSha256": "3716868baedc29c818f387fc3186430b11990df87db4744f71346df9790e5a9d",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "117-expanded-wrapped-summary__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "691c56129e582d5c19b76e722c40f6529b4cc51ab2b9a27ce072cc389bdf6b7d",
+    "debugSha256": "cc88ccbabc812d3f72d4d528d211526e79d2a7acf14f199712c580326837125b",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "117-expanded-wrapped-summary__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "5722800f7d414ab9a21ee6c22e195d388a0d994b75adc59099135e928f714a54",
+    "debugSha256": "b331116a3a07b2b3ed3ad07cf9027dc7715584a678aad47964599bdf06173b89",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "118-progress-long-filename__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "da6592cb3b6136ecfa6b62a07c5796f09f0c29e75d9ea77c9d1609a4730b9483",
+    "debugSha256": "ab665117f59772c119a35bf7a3fe2c4915e4cf234999f8225c2232d979392fb2",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "118-progress-long-filename__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "98ab58decc7ff4db978599b7a0fe3bc8f39a848d0590668b10c41481f7aab1e4",
+    "debugSha256": "cecd4efbc2a00285864b78bf9291a5f9f747f6e21af186426a60b2f757351a55",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "118-progress-long-filename__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "2215b20d7b384ba91e871619ae0e554cfa721f58017f2ce4ed8d31d92f3c035f",
+    "debugSha256": "ef7902a2eae9d3dbae7e7541992019f23703a3fcb0019742847a0170f335750a",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "118-progress-long-filename__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "6e8c65f0fecb7a538ad967dea5ec464afbfb58ae18546effdf257614cd1256a5",
+    "debugSha256": "528eaa37ab18984a57cf9dd00edaea2d513fcd83c478d6ee8ab94309ed055ea5",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "119-progress-unicode-filename__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "ca278888fb3230b937a4f3b65c18fe99f7e880639d9941fa976519afb9305ded",
+    "debugSha256": "536154be7e56be4af9e03843ab745b09aa7026e6ab3122210c1413bd17cbb531",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "119-progress-unicode-filename__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "5e0744a8020349f47e697804550673bbd937815946f2965c77b7b4dfd626be2d",
+    "debugSha256": "5555a13bb972a74e721420e047c6d2ec5cebc58cdea2673f8a5a54967ada62c2",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "119-progress-unicode-filename__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "41703095dff274dffb871af748e33c686545a48e565bdca66dbe0c031e2f1865",
+    "debugSha256": "44347e6d68a08bf80f5baf4698d1e20c78c46b216e61acb55f057de2a62c7048",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "119-progress-unicode-filename__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "a58f150f50becb390ad86efa484a05999e700a755731b7b973c3eac48b9f40d0",
+    "debugSha256": "0444952e1364dbb00581e02eae4f8fef968ae94d123b1abcb590a53e72d62f20",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "12-move__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "5a99161395468206103309422100f56926763db5917f8a3c2459eda78d1d72f9",
+    "debugSha256": "efa74240b3dece26a854b21183dc9e13cfc3828756ae49697fe3b82431d8d7cd",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "12-move__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "87feab57c634be49c24da3ff780f32e899ebf6e83e903e37fdda58396ac8b88d",
+    "debugSha256": "aa6e551c5071b5210a344e1757836ab83164a93ad9f13a16d45d762dbc66eef5",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "120-waiting-unknown-total__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "3f23f04de7e7cf690517e20b61e1c45d4bb84de9b05d6dd7f3ecf4a99222cdd4",
+    "debugSha256": "52e9e4fe216b57c43495d305defe1d2a0f9c97be2614011ae5106ed8c019de1b",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "120-waiting-unknown-total__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "a9104181b3a0e2c2a157a09bed81122b2f0487e6bea1d0572ca706e5ab77adf4",
+    "debugSha256": "dd013224a972c262f98e748b508d138386e8faed25c20651aafdccf16fe9aac1",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "120-waiting-unknown-total__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "aa734e7c005382084bb1efe6616add3b79aba49184dcc1dad70b46cd6ad5e6d3",
+    "debugSha256": "663554de3fdb4f638acf9e107a2d594beb6231fa4dbc0fcef94c2aa7f28d074e",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "120-waiting-unknown-total__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "020443d419491f9380956ed5085a5bac19baa8e7f9093c2a3d0b75b88009378d",
+    "debugSha256": "cc02dcc418cebef9b86213371c1d4b9dba25820df800cb486879f44b71412d7e",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "121-waiting-move-auto__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "6c25df8126601b74806a3326482c24f5ea2d2f888b50bde812b2222a31e7e975",
+    "debugSha256": "3a9e565210c045e9753aad9868051dd15d097cc0b2ce60b3918f22e3873ec1f8",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "121-waiting-move-auto__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d571f005422819b6bf9855fd5a12ee8f8c379fb6b377c811cb1f52977e4bdc2c",
+    "debugSha256": "ff5281c723873bf12d9acb5fbac4807a30f6f1aa05766008da6f235504898b94",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "121-waiting-move-auto__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "86f578a9bdbad38ac2c5bfb7a5997dd274b6dc609bddc63060b16ba275ac953a",
+    "debugSha256": "84df065cbaa5a13fb87108fbb0747e0764eed99bf149d1e9ce6229107800f6aa",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "121-waiting-move-auto__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "a1253d5bb3374e3c4605b3a883b33964e5394dd049f3049b63ba4652710e1761",
+    "debugSha256": "17c8374c550904a8524843fc24603a40f34c24e3e4c8926ce0a15cb681c422e3",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "122-waiting-retained-rows__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "fde6abc7d1d4c6152dab4d1ed4f2b43b070a4e1a9311a5530fe6b68fb868e9d8",
+    "debugSha256": "61acac259f2d8899e02a0ece9370794623db9c5b6d5e559d18b565713aba2419",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "122-waiting-retained-rows__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "5363b1c2ef5a4ebad889cfb81b8c9f98b7970695f331e04e31f3ef45676f4c56",
+    "debugSha256": "f29bbfe9a862ac9e06da0e857c0b1d6b8548aaffd6e9e2ea36e3b7ce9c552aed",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "122-waiting-retained-rows__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "54f4cd65f474877050cf405c080d417ad9f325a037b5646b69393b3cfe3cd8b0",
+    "debugSha256": "557a304261010b05835e3f71f2b24b355211186786258c02dfc7cf2a354b399a",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "122-waiting-retained-rows__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "8dee213e9ba7ea27481dba059b63fbee0c44c10aedc60a5744fe43f71d5568a2",
+    "debugSha256": "622d6abb7ec54165b7fa6a6080ef167f5fa7b7024195c05b9ac4b28917d2d0c8",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "123-issues-legacy-missing-facts__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "81c745e36639933977e87da53b6e318459d43b620f462d65518f1128efa61f75",
+    "debugSha256": "ff6e08d546691b94853ece07492d0f2719edd3f0486d6ad62d90b57be201e04e",
+    "dimensions": [
+      934,
+      977
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "123-issues-legacy-missing-facts__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "8436af4be501663d51914580cd44c95d07e0ab817bd47dc10d55c54137a06bb5",
+    "debugSha256": "e83b968f946ebb2d87b22a0b672d6de5785f2c0e3880ec371a0fc6064ddbadb1",
+    "dimensions": [
+      622,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "124-issues-accepted-pending__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "7735870b28fb0054a97c80187044c29ab45031b38768eb02da0ed6b6b8f661fb",
+    "debugSha256": "6a1b4dafb58e5337d598fd52c8fdd7915b4c37891de2ac64831eac867ac6d8f2",
+    "dimensions": [
+      934,
+      977
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "124-issues-accepted-pending__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "bb4d4d293294ee594f38c9f8a70fc76781e734ff97d5a9bfc373096b2be19e7e",
+    "debugSha256": "fc9213aaa16d64462a04e229f1b2ee843413ba1d3f4c409e2635f5702a40c943",
+    "dimensions": [
+      622,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "125-issues-failed-replacement__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "0966c9daacab4097cc5677d253038aeb9b9e3e43190e34d5e7b128bc32df58f4",
+    "debugSha256": "2f89a80293252640f6cce882b7ab314d31fd543a3398ed282c21be2970b84329",
+    "dimensions": [
+      934,
+      977
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "125-issues-failed-replacement__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d4ed8a20018ab22cf9d31445add3c20175cbe0f9ca9850e0c591dd381fbb8afc",
+    "debugSha256": "da9b4ad7692338f2c90780d3f833cc41494baec2fa6e7d745432a37826b5861c",
+    "dimensions": [
+      622,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "126-issues-partial-move__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "b3f002e80567e263a499b9e773e7458c81e1cad1cb80ba60a8c7045189bbe2c3",
+    "debugSha256": "6897ca6ec7dcc18a424735076ac908985609af73007b3df1edea07cdcfec5d55",
+    "dimensions": [
+      934,
+      977
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "126-issues-partial-move__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "749d30c958d5395ad0c8b643b7da8094dffd42eb4ee9d014d0abe21ed1ea1a14",
+    "debugSha256": "175a2dce6164021b057e938e6bb34af5a1cba39ea597817a62e20596768c6801",
+    "dimensions": [
+      622,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "127-issues-cached-scope__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "21def09a51a1298d505aeaa36dea12b71e8a9ecd0f1e34fb2b1635ecd2244577",
+    "debugSha256": "d76628acf87913a73698ce390b6d97af506846f712ba3b03c163f2f43003e266",
+    "dimensions": [
+      934,
+      977
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "127-issues-cached-scope__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "f5ab616cf85c687f60feae02f9fc79da638c958602d1a4f3d37b127702405b7f",
+    "debugSha256": "5907bd41ca47943a1a547fab8b98c12d62dead904450d76d8c2386518bbdc3f9",
+    "dimensions": [
+      622,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "128-issues-task-removed-selection__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "8524594eba67cfca8c0eed7dbbc7c1d8632a03a080b8f071db7e3cfc387dca0c",
+    "debugSha256": "600e68355c76e58b21d12e21c05aba5a1b06683a97b47a384fc513c33a165a66",
+    "dimensions": [
+      934,
+      977
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "128-issues-task-removed-selection__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "ba762e822295aa1073077617c544c4c438c11c20b4da35d808ae5498d1051029",
+    "debugSha256": "12a2836c4d00a07f9ab3a84880059066bb79d63affa5e8c8091347c28666f2ba",
+    "dimensions": [
+      622,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "129-issues-reappeared-identity__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "42b860d85e678ec51150c879e3bd42423084c4a085ce8f2b764a779c682d3c87",
+    "debugSha256": "1bbe82ecb469308c578701025b873c390013fa5f6025418e7405f636da9b9456",
+    "dimensions": [
+      934,
+      977
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "129-issues-reappeared-identity__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "330e4a51e31cbd9994e544785e5d521a7af2e2599ca684e3fe1187d1e8107bf2",
+    "debugSha256": "035eed77d6efd4c224bafdc41d0e6c229d2401bca60312085adc3a70a9fd5801",
+    "dimensions": [
+      622,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "13-delete__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "97beaafb2aa3b9ca30a8b1c26146f7f3e1d5ea1d75dfdd0f34d7166049d0b385",
+    "debugSha256": "f8b1986620735e4c6536881ce81ef219777343a5c92fe6d61e875b595baed4e0",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "13-delete__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "1e762c0dfd9ca82fb17c208bea5831285e47b84e3fb147a45e19edfb9df4ef33",
+    "debugSha256": "25407b3077d2a8b81f8a31818928bbd27f04fcbb580e80fee0bff3260301e17a",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "13-delete__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "21d53e426cbbacd340cc26ed2b5d05e41a83a51079e639fbc1498c4729f75d60",
+    "debugSha256": "d716a2d0414d5289df21cafd0cc844556c7f2085d7c2d99af714c894f383f7ad",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "13-delete__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "af478b9730bba0bac628deb70c78425ebe41c5c410cc1bb62caee7ff482bc50f",
+    "debugSha256": "6228caabc59a18aec13858de4876077d47e8223efebd9cdfdef6c83aa544ca05",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "130-issues-history-selected__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "9332d4181484b6a4dfe135473bc07dd60408a8748a0f3b9b80f3f7d6d55145c5",
+    "debugSha256": "ad36c91e0185ad705bb08d0c2ea187c5e8c2c14a4ba666b6a5dc750631697f1d",
+    "dimensions": [
+      934,
+      977
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "130-issues-history-selected__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "61de4d1efb4a7e0f333b2458296e462c1e2a4423f3e27660d80689498867a4c1",
+    "debugSha256": "8ddfdfb46041f75be5e8d20e1cd29b8825d304e9e5f3bd13f313aa686dffb385",
+    "dimensions": [
+      622,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "131-issues-history-evicted__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "95cc4227733902173e369974aba8502c99d9cbde432a06324b11feea57b1ceda",
+    "debugSha256": "e365dde0f327103df98536f8db337c6304f4b68438cdf948803db66d061ac2d1",
+    "dimensions": [
+      934,
+      977
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "131-issues-history-evicted__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "79744abb7dc766ef80a369b250d576653c38d65dab5a0e14dcfa017310f2d8d4",
+    "debugSha256": "a7edb49e91e1678c1ee2f9ff133923cb0dd412260f330e7e919f21f6dddae3f5",
+    "dimensions": [
+      622,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "132-issues-history-reintroduced__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "b7e66502c771d0f380108baeef13a7610de0f1425d09113cbdefa052ffbb430c",
+    "debugSha256": "2421223d55af05dc775cd8531615d295b31d69045fd2c1335297af37fa9d625e",
+    "dimensions": [
+      934,
+      977
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "132-issues-history-reintroduced__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "4dbc31ac10d3c74ea6ae95b87a58d0294f690f1ad6cd2adb8e5520c7084021f1",
+    "debugSha256": "c1cb15d73c64de64e9a4e0a079dece1b8f95a80c2c77c7a89b91ed9ac17c480d",
+    "dimensions": [
+      622,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "133-speed-limit-waiting__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "21d6e81b1e1cfe135ac3a36a73269110ab35e10d0699d45f38acec84879df591",
+    "debugSha256": "ac29c1420036bf974497cdbc5e49bdfbb8e29dc562fcbc8c6544278e7fb57bf0",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "133-speed-limit-waiting__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "f9fb57598ec85c8354577939c6ffb0f14bd03c191483fbd1c6abedb65ef62338",
+    "debugSha256": "4774fbfd658f7a325fabf1447514d20c446abfd40bb8f7a5ee2a1cb4b0b224ea",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "133-speed-limit-waiting__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "a83daadc3f04448932f37b270a59c3826fb4be00f503859ce2720f9595ef2894",
+    "debugSha256": "320c72cbdf2f683682aaafeaf7ead29b2d0bc157a69a43b6c0f3ba5f09a6eead",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "133-speed-limit-waiting__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "c3e083f601e20d36edf214cc98bf25910c48b9d08cba2a56b91b871599c2edb9",
+    "debugSha256": "47e4e09fb60cbb1f8ab4f0ae80b942d2fad18a2519ab54d98c7a27c7ca46d967",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "134-speed-limit-discovery__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "88913c47781e8b9501d494982f5692083124d9b753d8fa551b9772804e26d929",
+    "debugSha256": "a3e43ae86239507d7e5ba12b9a4b59b8d8652f0c13c4be5e1647bfa9b837581a",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "134-speed-limit-discovery__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "a322c90c71bcb11aea9fb338ed435f50e0cc873188bf7f831a9941c9bc11cc32",
+    "debugSha256": "99bb79ca94331bd3c7463d61ad5007273f49e61aeb750d2a2a7d997750b38f24",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "134-speed-limit-discovery__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "8987a992f624f3a854d96b5b7cada86dc89b20dbdf86af19f58a210571c51c96",
+    "debugSha256": "276c0921b776315189eec81bf613cf8b3afdf983d2daeb1db766c5e72035c649",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "134-speed-limit-discovery__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d094948ed89f06ecb62ff4a52ee4a0e285072af477ba35b3a615c66a7baa948f",
+    "debugSha256": "0b686615c091d7f76c0d0ec3eb5309da82515c059786f33775862d02df83a0f4",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "135-speed-limit-discovery-waiting__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "71cdf8152856e246389ea0c20eff8953e17064fc1a9f68baa0856a94a0731231",
+    "debugSha256": "d4e8c3409c09c0a48f103c5f3c685e8937c677cd5748f9ae144e62517bc9a05b",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "135-speed-limit-discovery-waiting__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d3b69b98cd7fc6b8eba60724364d74f931d5eea336ad79104b431e471dd6deae",
+    "debugSha256": "0494c83c370ab65e244d18cdbc88e9df77a38eddd97129682fc84422e4812bb0",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "135-speed-limit-discovery-waiting__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "910fc20937da2012f1b234de731f640637ccb6c828fcdaa8116ee22dd34dc72a",
+    "debugSha256": "7661ba547da77acd7424e3fcc3f12f4df96be053e148a3e8635e5cf614a21e12",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "135-speed-limit-discovery-waiting__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "45012711c5582b4417c17b5d740f174057aa4bfe9731312cea18b19391284041",
+    "debugSha256": "9f9b85d6a4a9b2a05e96a3887380964e0f5484499ef7d9414fd9dd3a7e0bf68c",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "14-paused__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "e3b6cb5eda339d0413fcd734265d77d2bbaad8a61ea65e41858e3337144e5c9c",
+    "debugSha256": "2ec80c7d0a2a45fd809cee20c4db9f5ce53ffb98c1c574e089fd5834ea442341",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "14-paused__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "3ae4df92dad7fef9ce5ae91761506476f37474f9e8c6c48b03f22d77a7ca535b",
+    "debugSha256": "4988fd9f48e0fc2b535983667cb17e8ea7467441f9c0f05691cf0e4ec7ac6521",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "14-paused__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "9d36462d20db81c2642f06ea2f60b8d7f9ae7e4e572ed99a00af8bb373c0c5f9",
+    "debugSha256": "0d701c465a227f131c8cf0d06f7b755b2c6a677ac44f1460d90e70536c7bd51e",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "14-paused__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "da5ba9598b4ed2edf386e0ae719b12f4aac572cd18c193da1fa64f2b0e52fe07",
+    "debugSha256": "b99f704786ec71ff96808d11826dc471f0cc26d9794614783682cab5f24e5e97",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "15-stopping__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "fb340921ca218f54fdcb85836c0f242062e4909362b2238811f1368d4c09c5d9",
+    "debugSha256": "3e42965e30c6a365f2601d51cccd1755a2ec4ee21089e98064f395f13c18c90c",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "15-stopping__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "2f1e5fc9d0a9015aae4987bf675da29abcb9f5f72c10ca4db6caea360ee1e9a1",
+    "debugSha256": "6e3cc3eb6924153f355c7c0b472264b317295db47f7f358eaa5f320ec04e40f8",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "16-callback-silence__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "fb340921ca218f54fdcb85836c0f242062e4909362b2238811f1368d4c09c5d9",
+    "debugSha256": "3e42965e30c6a365f2601d51cccd1755a2ec4ee21089e98064f395f13c18c90c",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "16-callback-silence__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "2f1e5fc9d0a9015aae4987bf675da29abcb9f5f72c10ca4db6caea360ee1e9a1",
+    "debugSha256": "6e3cc3eb6924153f355c7c0b472264b317295db47f7f358eaa5f320ec04e40f8",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "17-verifying__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "90ed3019fd9148cd848380d5271e5aa1974cefed9456ad6bc611386120b6cda6",
+    "debugSha256": "b276a4b232be71e0a0876f80f2eb69bdb731fb2cbd7edadee7ae82bc011694bb",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "17-verifying__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "9be1f2a526d8d13546d918b78a2870fe6cabd05047330fc3bd237e7b9f7f3b82",
+    "debugSha256": "26475498b9989e9e0b0eb030dcf13f6889f007dea66c8607271c87c7d496bc10",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "17-verifying__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "08c85dd55f2785d7720f2799d9104eb559c01921b514df1982b9d170b351bcbb",
+    "debugSha256": "5d7592e4bf21e66e02d8979bc41211143c38d666b9acd452c20f865d4314062e",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "17-verifying__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "753a844e97a46b6afba3a5ff9e4d23f8345021283dcd88ac9a5e2c25bad149bc",
+    "debugSha256": "1af1e2f29826e23f5e0c8bd64e1ae9903adb17debef53de9fb231fdc8bc859dd",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "18-completed__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "48ce0b2868e1c1cf034ea4d8f44b9ada5b01681383d2835ee7626b61ee11368b",
+    "debugSha256": "1534975d76e6cce6c162b8f1671f313f2413e0de94eecf855c1503972d41aa74",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "18-completed__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "2672ea7de4979b267c5ead77e64f9b4a656c01469367267c00016a2206cd1ff7",
+    "debugSha256": "505aac53722c0210ac893a652470909f47e9e5b2bbafd7fdcaa4734f510c737e",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "19-completed-verified__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "e9e9b7ca1c632d51b269df046c70738879d7f29b388956b9164f7e67cdbde464",
+    "debugSha256": "ffe59d6f10ae4802d22cd2122c1a584f7aca8c1da3d70f2c7acc084890f7623a",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "19-completed-verified__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "4ed04e6f4355b3526467c1bd44ed938e6acdef877e19172cb76167d7014c4c3e",
+    "debugSha256": "ffb0cae378e91b1d1897e13bce95a6cbd8d62f42e1a3b31d6ae6191f2869396a",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "20-partial-skipped__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "257d651210ffe103cd07d43ba0722aed447f7cb7a078ce9e6ddc3c2526737022",
+    "debugSha256": "e5c736da16ca887b4c0a17b79f91d1e8082b7fc20e78aad1f3c93601e96666a4",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "20-partial-skipped__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d61a2f291fdc44e2daf6465ab6be889c6ffdf0792989f6354b18f1ba790dc24a",
+    "debugSha256": "a9077787134b2050e3d5c64c7e7bbdb50f00502b21621e22f56aefb6406210f8",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "21-move-source-kept__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "1accbc3949a05fc77580f97a7532175daa4b696776735837defb5cc4b5963c9f",
+    "debugSha256": "563137b54920dc62914f7c1c6ed9c77e6629366be150b4d51f43b5957a39ea28",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "21-move-source-kept__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "b911a314b08f491d84fe4d2b618899fe5ca56841bc43b040ffb1053aff3da8bf",
+    "debugSha256": "2aa0e8d1cfa80f9771977d6a25f2ef011f500dd11d04ec6cbd94c6577ff80b03",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "22-clipboard-move-source-kept__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "1accbc3949a05fc77580f97a7532175daa4b696776735837defb5cc4b5963c9f",
+    "debugSha256": "563137b54920dc62914f7c1c6ed9c77e6629366be150b4d51f43b5957a39ea28",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "22-clipboard-move-source-kept__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "b911a314b08f491d84fe4d2b618899fe5ca56841bc43b040ffb1053aff3da8bf",
+    "debugSha256": "2aa0e8d1cfa80f9771977d6a25f2ef011f500dd11d04ec6cbd94c6577ff80b03",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "23-move-source-unknown__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "dca3b7600bbde92b8b4d9c1226e2734f6c8b034722439ccc30dd04f2c2717e98",
+    "debugSha256": "7461c24e68fd2796ef6e9db7aee4387c9e8b56b6033dbe780f9086d995804832",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "23-move-source-unknown__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "5e8370f8a84041890ce1f0ef868376208b4ff08b3badb0444d9a321cf7eafdad",
+    "debugSha256": "d0a9995610fe7a4cdd17d05e0eebb672f1e1c7a7f159507eed4db64d23038ce8",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "24-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "eca3ace93c6cb5aa73b1226a2caee06e5d007d75940acd9d019a768a2b381e59",
+    "debugSha256": "3397cef1316f2e6840f5846e055abfda73dc1633544850dc684412b7c9e7533f",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "24-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "8ff4dcd0157e782766cb819d12716aec80a0ec45ad59e47b16162019ed3d31ea",
+    "debugSha256": "754fff6fdb633671f62e7cc9c523516cbb5da67eaf8af47215fb460b34fd0c89",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "25-canceled-after-progress__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "98ee7c9c302d154cdf45af601dfb01b906475a99900e064dbaeec09072c998e9",
+    "debugSha256": "c474eaf09108ab557581bea71858a1910329a9a8dff389c6b25622b25fc9d159",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "25-canceled-after-progress__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "336e237c0b4cc67ecee7c4f1905f081400f41a2a00a3f21aea6cced3c7f1c1c4",
+    "debugSha256": "c2e4e8e587acdfdf58959b8c939e97e8b7588e82805fc8346c60668353e3c67b",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "26-interrupted-move__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "2a6e6669c7152885d54b861e129268e31b8f1163850407d412adbfec9f7d57bb",
+    "debugSha256": "09bfeabd4d173a6881a622bb1d05ade117bac088bc7e98764c2de15662c391d7",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "26-interrupted-move__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "dc6aab1eab80a03ac115eb50fcd8989599100b4cec70419fb4d5d6554ad240fc",
+    "debugSha256": "36748f70d709e3c493306db44adeb27c36e59251b7aeeed894b7ed7573af4f98",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "27-long-unicode-paths__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "4938b3647442c42f8f44c4591968cc4ebe2b7374d6ffa13525ac5138cabbaa39",
+    "debugSha256": "4b5ded741f261ca0b8037c3f108d3462dac5d429f8d37ba46fb2f51ad0109140",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "27-long-unicode-paths__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "e83118b0a27e906053ab9041a06332758403d5e39c61cd009bb72d30a1039b0f",
+    "debugSha256": "ca6a2cfd9c1156aba3d47f2efdf19a1d2e4f34b8db0e769c4c311c5efab4d2ac",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "27-long-unicode-paths__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "6e372f83f07ba37b0f2cb3069c1550f6b1db21b7c057b0edf85cc5be4ff976b1",
+    "debugSha256": "99197c92f289fa890d7c5ecee7960ffdce3d1ef7df3fa55c25388d0a5b632cf0",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "27-long-unicode-paths__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "3eea983b7f3906fbe5ce240a942b7d9a1c7ca773f7e27e2c3b0b50fcb69097ce",
+    "debugSha256": "a4f14205a0b085d0609fa191fd6ef44a35536ea32b779feadb6bdba5c31d43b1",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "28-compact-progress__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "b6581e4c91e93b652fb5f384fcac9f52a4cc14df806959f9c70a4e6624cb06cc",
+    "debugSha256": "693029d84ef705353716cd73f646a071df1762e58af71c69cd7b5dcc5501a13a",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "28-compact-progress__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "aaf3d678c7aa1b3052f3a5650823f741312bc46b67b09029c76c113e550a54b7",
+    "debugSha256": "6c06465d848aea95dbbf07df44e046de397833120626b405674433389f7226b2",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "29-footer-only__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "b8ae60fd2c072bfe05c5c1418ddf5cc3f2a21e24597f7789a752e963ae352b34",
+    "debugSha256": "4148b28dd882b3f7e4301a65e50cba95984bd3abbc437beb54b91702e7253109",
+    "dimensions": [
+      724,
+      191
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "29-footer-only__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "97fd66961c1bdc2bbfafc47e5d478f7dfb8ca7bb57aeb6450d10fa2deb6c4e7c",
+    "debugSha256": "27106af432d5e07bb78346876fbfa953a5ad070c4a8a8d5967a42a2e5efe32ee",
+    "dimensions": [
+      482,
+      128
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "30-running-and-queued__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "d9e0e2dc2cfd54f4a77ca6539d9a3af03b63f6c3079e12ed2b821dfcdb418607",
+    "debugSha256": "6e6c449d3ea14288ae0a37253d3be62c1c5fee884219d7baa7f2065a1a316e97",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "30-running-and-queued__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "eaa4a46dd470c78e990b6cd7677e63bb095ebbd63fdb0722cd6073976640d099",
+    "debugSha256": "b4765d04ad6efc74721b0499bdd2bc42c88be1035330cf5010c72ea245d95739",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "30-running-and-queued__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "f0a85787b19bf603b55321f5eace11e40fe832ba2dbe4ff4be63c32deedb4c3b",
+    "debugSha256": "1309e506413cb8d26ab9ecc9cf31f237352577d1775ffb27f571f4b044c13344",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "30-running-and-queued__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "a9bb216e24c36e704503f9227c07288930bcfec14a5b637283e1dfc077f55ce3",
+    "debugSha256": "905f898f54653a573005d0783d3a6161a501042d4db24bf20a6fa2f4af5f3360",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "31-completed-group-expanded__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "a91323e746adf988f4674442c0cf0829c8bf8b55d76aa563c1517f3847b5d58f",
+    "debugSha256": "0d4702cf55408fc52901ad0e4397da3b2a317ffdc8c55166c6bef740039c961a",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "31-completed-group-expanded__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "13ab302b92893b21e075fa426c8d11b9d7ee37d301703eb477121c648d41a785",
+    "debugSha256": "3f9c15190125164db7caf6767532c1ecd648c1db1a0e8cb80b19084ebf7e4586",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "31-completed-group-expanded__high-contrast__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "466a27de6b250df5117d735effa76c10e3107f76d51a3adf7beb105e6e0ff264",
+    "debugSha256": "eeef8991d11642b3339d54632e99951b4302eff75f18e724312dd7c24d9e35b4",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "31-completed-group-expanded__high-contrast__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "97b52b5fe54140e11866152126514935a8932f2a57f18046801e05bbdfd51570",
+    "debugSha256": "300493f76c2805d70107ac388e6f55a369dc8395a1172872d0618fe19be15f45",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "31-completed-group-expanded__light__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "c5fda5309bbaeef361f74fd2aa2c455f8bb0e6f1e876f7d7e53e0824983d137f",
+    "debugSha256": "a731be9e5d32936b474e8d9b1de06f9111e23bcec8dd754e94d457225d6c8202",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "31-completed-group-expanded__light__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "5ad35346dfd3d1853a25d8a77feb0b1c6c1f685232a66a16e1cc64561ef2c826",
+    "debugSha256": "48718a475a7ad2ca194b00f1c9e6b9beead1a5fbbacc3c87811ee1c815ea4e74",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "31-completed-group-expanded__rainbow__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "55e416641cad17fe6b1de7e737cc5d9ae1091e5fa3d2dba889aff5824bee5297",
+    "debugSha256": "985dc9643ce1c26fc049186919aa2434bc5f8211fa89fd26612cdd17deedb0bb",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "31-completed-group-expanded__rainbow__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "6c66252a47afd4a019e6e57cec4e3a7028297b73d2d5784d50476ee40e87b51d",
+    "debugSha256": "0af75f358f6e696bfc85890d7ea0c6fda69ce4fbaf86a6afd4cd91d8295b2d4c",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "32-completed-group-collapsed__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "a7290fbc9914fff6bc0918cdd873e52e5ddf32b0cd32c5e774a5b4de5edb4650",
+    "debugSha256": "f50789866e0f0414a46d0705c73906eb9f3c1722cafe7c5d892c68c4089493d9",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "32-completed-group-collapsed__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "f59328491a9ae4abe32467835aa0e421fbdceb0277553a83bea3aa920b4c7f49",
+    "debugSha256": "2d93eaab75ef5a9de10f12bcc8bce299e6f769e8926b88d681364b2c479fe9e3",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "3fbb6bc7be3cdf88d64ca7d0558a161bbcb175b041115435254d0cc1c8f10d11",
+    "debugSha256": "9e0b327a07c177e882881f02069a6db6bd1f44b47db04600544dd3899910c103",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d9a5ca76d6c69e9f19ad43cdebeaff8c21bf4812d2fff582b12fe56713ee7225",
+    "debugSha256": "98318072cb3ce1f8fbff053cddd92cb6b256b9e2c45a2748fb3462af99e2b273",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "7aed4b94bdb2f059eb756e0d6d78f518debb12787789b7f75f07e2a7d79ab6ac",
+    "debugSha256": "b0a4507271736c51b47e965620f5ecfe1d81ee9c10ae08e6f41a55221fad615b",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "82f45610bcfa114efa054f3ed65593fb2ef99e3f8a58f877200c4246bec483b9",
+    "debugSha256": "41935a522aea56fe0e6397ef293a26bd7154a3df8a2f41536680038d66a29abb",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__high-contrast__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "097d2d462e75b117ca94b62241b0115d11c841f1c058137089900cf5a387635e",
+    "debugSha256": "9a3220c8af9e54e379ae0f1f20f5da229d53475cb40144b0f53e6482c3ce5ba6",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__high-contrast__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "a0eb387e322ed378a13ad65096b8ee737e4907000490b6c863ead2798eb2e99a",
+    "debugSha256": "e5e7423e0b46959791d3dc0a058fd5077afbdf6e44caf6a71e5a6d55ea6db20e",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__high-contrast__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "c5a59b98213f426926c1c0db075be5193ad4321d947f240308b3bb6bf9bb0851",
+    "debugSha256": "dfaf93980d5a2220cdb1463c8f4a0408f864aa893b4a407c6d53e16ba153e4b0",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__high-contrast__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "ae9dfc15d26382a826ec4cff7fd5c4b847b503d2e2f3d467766e091c9e921720",
+    "debugSha256": "2fadbe24e53453f2c384edc8e09396e354218e87f18bfa259aa2be30c1e51f1e",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__light__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "5d440de1e19552d4b4ffe67f165d99a443cc49c8cc5c59b990722b02b9fd1700",
+    "debugSha256": "2413743d815178681c88747721b4bca84841793809ce9918039de29574c6b730",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__light__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "e1beb4dcbae073fee482849df45512634375b74ada7861410c4bb91a2bae616b",
+    "debugSha256": "8d63139ec25436c3fc3bd381143cebf699bac1a017a2394e3bf9e888fd0c2525",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__light__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "81332fb820b56b629f7af989333b585d79f6e25f54b064904e87f465f1071b4b",
+    "debugSha256": "6850b216cf246ffaee8fef703f156461e0330cb9ace64eb6810091ad62aa3103",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__light__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "2ce21e97462e63bd5e869d7ed5c3ec21d54abd8c44822958d5cd7f42be8dde5d",
+    "debugSha256": "6b6d6f105318742baa70a933bacc3e8beb3b03a9975aae428ce480ee3f6b13a7",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__rainbow__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "9d92e5656bc6ce03b7c82bdc36fd163ecf19b505eb3c438a5937a48bd44a494b",
+    "debugSha256": "02dcd7bfb87d15c8fd03be36c5f9d4201fa3044b8acbfb0b90bbea67fc5d892f",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__rainbow__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "e0a8237f5161eeb2daf91c88aac7ed3ffbe263937f9af28412fe3f2c1d016541",
+    "debugSha256": "a49be2bb5c4b500339c2e12fe82f8fdc25e52af3b0134b5aa660f91599cc6183",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__rainbow__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "6bb232052f963a343e15ceebd3e57902a4d1269838d8e53cbc48e8b3f27cfd47",
+    "debugSha256": "5ef186440613a49fd393147cce779416feee1ddf3096a0531767f7328376aeb3",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "33-decision-file-exists__rainbow__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "fce6b3e8f2af580d7460d931649abb2ef75ae1ab0dc00657364925f59e03db62",
+    "debugSha256": "6dd6af38c1f70a38447465e907dda87389f9f4cebdf43b8d299dc13c1e31dde8",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "34-decision-read-only-file__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "291832413d40c6f5a5b2f0d8ebb9803aa7c6fbd440bb80473f546b43359d4dbf",
+    "debugSha256": "36be80a26f0143a156eec4a53af16c0935f560d32268b86a08e88c417d751dbc",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "34-decision-read-only-file__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "69928f752ff212f6babb1c5c2c5536328ebbe317dfe17e3280b732a63b08a401",
+    "debugSha256": "a2cbeb7aee90008ec708e0240c66d2ff75542b1c2fd5bf5eee760c583bcf4576",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "35-decision-read-only-exists__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "6126f592ba5f043d9576e93a835b47eb35a60c74d4b9d5191f64a6038350dfef",
+    "debugSha256": "0b200387e84ed03611e5833f9bbd24dd6270cfd74ea64c0fcd06fd6026d2ed3d",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "35-decision-read-only-exists__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "41948a51a3618a714734e370b5d1ff32413f79989b1fe6c706accf48de768621",
+    "debugSha256": "aa54766705f3a0a0d2fd41de8730f5fce6be2e7133ef7bcaf25dfb138020d1e8",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "36-decision-type-mismatch__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "3544157fbb7f624a2a77184a7f2a3d76be9ce9bba2f989bdb93b7fbc2570965f",
+    "debugSha256": "d9afd071fee7f7d2a804b1f3bdef33edc22302e19b37e41e365badb69f5bd9eb",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "36-decision-type-mismatch__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "7f3ca27b394c7f41cee7b672084e83a6402caa1563936a379b095be87012cbd7",
+    "debugSha256": "7842bd3d744e71747bc0249dceeedf445facf7d8c096846eee60ebc90d6282b2",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "37-decision-destination-link__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "e49aa1c365c1359ea2b69e1b4b4f90c6499bbbf5d0e018d0d23ee33a2ca080e7",
+    "debugSha256": "5b71850670ecb50f223e87dd16eb6bd83270004ad3d361d3271becc3c5964482",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "37-decision-destination-link__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d42b84ebfaa9731148f9e2171205f59eb8cbedd67c37017bae2d95124b4d98b9",
+    "debugSha256": "d169ea376b75646fd97e4e2bda938f0ee036e84f223d2db133ff70f76bb2a60d",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "38-decision-name-not-representable__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "6b9119b3b2de1f1f4bfd3fa155572929c31423a8ab963ed01dbfa279c5b37c6a",
+    "debugSha256": "c2f236be6b4d60d71679b20bdd00b053c573a9dddcb1dda441a3284fec4fa2ba",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "38-decision-name-not-representable__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "77cc9a6f7480df792ce943c4d6723083e574b8f09fec1b056247e9627d34006e",
+    "debugSha256": "0b2a1f859cf98068598ac34345dcb39a2524811947574eeff1dbec9d77c93c8d",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "39-decision-target-conflict__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "c5f4dc3f1d0d31a5b0fa24bb6ac4bbc84f05511284cc0489a5ea035743d6e0b1",
+    "debugSha256": "94e68f0bacd2ec35a79e68fdae6a6dbc513cad71dd506e078be57c29369f9150",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "39-decision-target-conflict__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "914ff9bfce5194034e4c39848177015878443d940a81a95daa0b56166daaab93",
+    "debugSha256": "5f7b20ff71bf2b24cf963519cfaa640ddce542b962b00e43cf93961fb4b2ab0b",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "40-decision-sharing-violation__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "a501743656c749a6cfaf499f96abb02169880d5dfe41d404f19a934b1da8b8d6",
+    "debugSha256": "46f23453568979330ce88b9f749bc31eb373ffbdc14b1635ff8a914dfac3caba",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "40-decision-sharing-violation__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "6cb61f9cf3a9708bb2b97c78b02132dacf07be2c142a22db547b1a9bbbfb74f6",
+    "debugSha256": "2d16fd08186153bca9c9f24612cb3b2c43f9087f4fd341d184429564b0ebce38",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "41-decision-access-denied__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "07431be55989006506c6b28fed62effc990528d1cd260843ba186d85e20f806d",
+    "debugSha256": "3847ae999f563f5d0c26012ef9b18f233f35a88b8bcc4d3bf729ce46f53ada22",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "41-decision-access-denied__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "c65c27a9166d510382efbc1eb1ee13a80fbd3daf617e48a846bccd35e92b32b6",
+    "debugSha256": "6431fa4e71c2c5bffe2ea8154cbd82ba0bbdeea226ee082dbf1078c29dc69e5a",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "42-decision-disk-full__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "ee27d70ec2db095e4f47e7d83e73cd57435929b043f2b74d5f1ba3a631ef9220",
+    "debugSha256": "0561b9d704098bff4fe2956a2033427558e1c55c312b290bdd49affcdf53ad44",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "42-decision-disk-full__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d93d3022fc3b95b01c5c8f73d44410d2324e9eea6d13fe06fa469f2b5b46e095",
+    "debugSha256": "32f780d2b8c4531f81d691f45c5643e3be75ed069c3ae518c31ccfd9a60aae65",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "43-decision-path-too-long__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "514c04f56d56ddb3e146929a5a55fd8ecdbb67ce2e02133079a9760338748730",
+    "debugSha256": "cf20b633ec70dae35be43faf2ff6be41e034018d84343cd42e7c87aca94af5e9",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "43-decision-path-too-long__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "bcc124b86d8548aa8cfa198e96e4fe048fd303a3078d0282e8e5ea15e25fbde0",
+    "debugSha256": "6cb0a2ad87a2f13357b47753f1d3e998117d028b69b3c28bca8743bbffec5649",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "44-decision-recycle-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "04de51f7e81f3deda8c499fb441880eea4847f8a1604fbbcdbf9911a1ecd0f22",
+    "debugSha256": "b68d2d0965f86ae314f770111baa94ece947bee156fcc682ab049630763af934",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "44-decision-recycle-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "b510942a56e3f7b914484c009f695755d1c13491646f6bfd07e78bc959e24862",
+    "debugSha256": "93ac00d42db816d7c8d82a79649939314805cce6ee9be80d5805af379cad8229",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "45-decision-insufficient-space__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "afe337f3351b7c357fce2f97488e4b91fa9949cea5be4f857b7c3f0e1aa0e65a",
+    "debugSha256": "4fc49138dd29b5f9325f3ccccb4b2cb93e9b37435db0a0a1ea2954e6bb8b72ec",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "45-decision-insufficient-space__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "c111f83d6c316ab21a6aa18b1012d6ea532fb182e7e420eed2e5d1a58405cff0",
+    "debugSha256": "ccde9fe6e160953b2ed4a496fd0cbd146035807b490d7710ef038ac6fcab22f6",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "46-decision-space-unknown__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "1538ec05e6cfcdc8c5d8ee3e1da8d2402e77b461fc7d1955dde2b1f24d109855",
+    "debugSha256": "2ba0e8f0f6b723af28608cfe4b00b29e3a72f2a43a4fbbfd698d4029cc1cce2e",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "46-decision-space-unknown__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "673720937bc5e7ff1d442cf4b868827469ff19d3f787533b3330be95db9b289f",
+    "debugSha256": "194729edbe95c5c580b125663292e7e949be8fb23d3a8ba5505481b62519cbf1",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "47-decision-efs-plaintext__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "3bccf5f74335da5e6ecf1f4303ecc67296580ee7b1cd8ce42b11066f2602ce89",
+    "debugSha256": "bc400f9ddf842741fa11ee8e3a2ab2fd2ae813308e7b4743ac6819b7127242c5",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "47-decision-efs-plaintext__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "f5a187e5709b87852e7584f3a4541b123a9a702e59e2005a9eea136dd6570731",
+    "debugSha256": "a41fe02bb6adb61560a553097ee238e46ff1764fbc029af4735f377ed77e6a23",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "48-decision-sparse-inflation__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "e94d3f8c10f3a4bb53b6d71cfb264a9ac0a695a77501e35d72e17cb42774f78b",
+    "debugSha256": "b55859270c93a6bb7eabdd6dc435112ad741e43adc5ba4f1783e4b4697c6daee",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "48-decision-sparse-inflation__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "7640451343724a78d50b84e5882bdcee0bdd4fdede47dd4be3248bfe686b872e",
+    "debugSha256": "597c3b92bb4c949b17afda25aad1b8bf6ca58dda62900f948d88fe6f3602585e",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "49-decision-placeholder-hydration__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "3d1c0a8f0563a5f04c4c54580b782d8b51e09953d0d681e221d5f9cec759e323",
+    "debugSha256": "3d2bbbb971678f34dbab2cd643eb9e54021a656f2897e372dcfa31acfb8771b7",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "49-decision-placeholder-hydration__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "7a7824c7ccd6a09d20c74846b47cd18bf93e476991582b2f85dc52bf42411bac",
+    "debugSha256": "89dd237542b6b7d2ee037eba2be54c1134d1e7d950e563894c9c400099d7ff53",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "50-decision-metadata-loss__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "20562f220e285ddb56fd34ef03eeeb736dfe5a3b05125892b4aa971cde4924a4",
+    "debugSha256": "cffeb8e739e1ceaef055e9f0026078cd7de707ed015653fe0fbcdc2544a8eb6d",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "50-decision-metadata-loss__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "820a54a102069efdbfa2ffe0d572b9bd17947409d618ed1a17493ee45a7c5afe",
+    "debugSha256": "f1006f5ec97182e4d77867cd393868e7ccff4948fdb53eb18564c3dd25520dbf",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "51-decision-network-offline__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "f89f7f6c95f4d5f32a5ecee3125be947b3ff70ec24f4da8f32ebe10bd59520c7",
+    "debugSha256": "d40f9ed63733b790fd9b35e2fa47345f7569d72cf67fcb2a08dc3808cfffd55a",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "51-decision-network-offline__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "b87fd5f92ad336d92fd9b4ff691d6929ef816d783eb0f7aa00d57119940cb2e4",
+    "debugSha256": "3c19320083dce208bb430d97ea0db5e76672957d8edeec72f2608bde18107b6c",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "52-decision-unsupported-reparse__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "879c65ab4bf932ece9a77b2ee3cb8255d3d047d99172b77bc389bef8c9ff62d7",
+    "debugSha256": "10b16808de96fcfc562788664d454ceee15642e2aa440e5d8907b713f83a0619",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "52-decision-unsupported-reparse__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "83d361348a16140524ce449875a19c054a32667d82874e95495b4f000fcbd103",
+    "debugSha256": "ecad0f2080c901185331e00bc4ce5e67577acff597c1a77f843de2f4d665ab16",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "53-decision-same-host-overlap__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "d2f5f95dcc78dde5bb8aae52b96dd2b0800d15a90a23588108e050f235df7bea",
+    "debugSha256": "28574a695ad3bd4d679010c112f81fa57a79038b423a2790d1be5e4040c207a0",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "53-decision-same-host-overlap__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "130a38291594073df9b5f3e1af09f13b603c2a8faab134168b44cccf63264ef1",
+    "debugSha256": "b8ab302ded8395b72d95f97102055a40204b0adec47157625ead9639507b67dc",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "54-decision-same-host-live-output__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "a6efed45bf0c58c56f7cb4f4226963a0a406e13864ed6e659d04c467dbe89d19",
+    "debugSha256": "605d6e268cb0c9e2169e4d24ac27578e76fd0cf2941a5a88e71c680c202d62f1",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "54-decision-same-host-live-output__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "cc64c470fd1d8b262a15daa80edc2efb34a50c2f8098facb3deedf48a726a3b8",
+    "debugSha256": "18075d93a51a9478870b6019dea9ba04399e54f3f745097e3f8d0cc762741296",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "55-decision-permanent-delete__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "f70126e30f7abcc581607e79093e4d38c041ef7cc16658a7c972fc9384aca69a",
+    "debugSha256": "36d01a31b16223b3e2e3fa86d0a929ac443e8ec652f1fac46be889a386c9d2e1",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "55-decision-permanent-delete__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "713083a3de220c3fdb36d77bd804ee0fa253a30e9df4943bde50444c3fb86dbe",
+    "debugSha256": "69a3637d46d09efa79c5248d3437fd57177d38a3acced621a3819902e6fb2efa",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "55-decision-permanent-delete__high-contrast__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "04a722fc8ffcccfe5b540ee66327e70c667d4ab2ae9f6137fb9a82f3088d3f30",
+    "debugSha256": "7c02f2befdba6c58a23614585533c6448d0e8de0f49819a3d1ccf8f5c70bd9a8",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "55-decision-permanent-delete__high-contrast__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "2cc8d8389624881a47df69e1984552913bc110937a645aafcabb945d607b2ad9",
+    "debugSha256": "32ac13fc287d5c40d1c4c294d6b326fe5379c74f8220a552ff8632e63ff2face",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "55-decision-permanent-delete__light__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "4f19c37e49ef3b664d7d1bb64f291db64e68c57c0d0534bbfdd3d35589f539ef",
+    "debugSha256": "958ea808f8884d0c9fd44cb27d15b89e6bbfa2dd77f7606c7f145d8d6af3e6a1",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "55-decision-permanent-delete__light__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "9d13e9df4a0a40c53709cdc319d940044743b4d475e011a9e3f9fd59a6c4e277",
+    "debugSha256": "adfd85a0bd7de17186e9145645bb0c991b41f87e2db7f40ceb659b1ce0f2b79a",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "55-decision-permanent-delete__rainbow__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "e5acef7afe5e0e907e23962feaabcecea33b8785c96d1a23582554d125072fbb",
+    "debugSha256": "f2db99712ce86900339c980d3f1527a6167a01b31cb0c97c80302fe9633a824c",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "55-decision-permanent-delete__rainbow__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "420a1e0abe202f530564dce8d6cb3b5d0c1a2a9fb341c22de83a22e3894e6650",
+    "debugSha256": "e56d890b858a1b2d228e7e98646864e3553b761bbfafb85ec369337e128f65be",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "56-decision-unknown-error__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "8c3ecf299703e734d1e1d68759512825dcb3e236a1a8874dea0bbac706f09fac",
+    "debugSha256": "7ed4cff784b8991d31de01f2cc9f0f5db40cb2ff5f3347970e2a89b7d78342d4",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "56-decision-unknown-error__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "69a65001d96368e50b9683ab7ce7b1f95b52affff93ee58e36e4b2ffcc1196dc",
+    "debugSha256": "a8343fb3a34d5aae81d3657e93717766ba933a02c8609598d4687a1abb6ffa23",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "57-decision-metadata-loading__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "6724827d6c2e547de3f4cea329d75d7545cf0e0bf56cd8c5646dce83eae98431",
+    "debugSha256": "ea6839c211632dcc6d7c2ba91b7f191b8466c8656814f32a7df63ba4e7108212",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "57-decision-metadata-loading__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "33a226cb931ebe049dbe1bd66dce1b12f6d688a72cd28b9a21ecea7d7704849a",
+    "debugSha256": "0c5f4a4b5953441fd6dfb8628e3d99f518a3861d8b212efee9c02264119e1844",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "58-decision-replacement-withheld__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "f1fc29eb00dd5ed36fc7785de43b5aae37d9bc94dd770f8d350f5e9fc928f5f4",
+    "debugSha256": "739458e6e928c54250b4360136c6e3e8f9693a90ae7c319812548c3d6c049c99",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "58-decision-replacement-withheld__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "7a808c9c5a282944c525d45b20f5acc1b3603a749d00a3eb4fda103e6fe67d7a",
+    "debugSha256": "25c77fb84f80177e6914748f6700cbcefc90652ddc16e7beabfa17c2566ab228",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "59-decision-retry-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "97e2dcc50cee9a65f992007c5df9975740fd5b1f34e7ca316e7b63bead886a64",
+    "debugSha256": "0d09065f4bc22c8dc0746fd34f05444baee5498e6556b344afbea68a6d4fc59e",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "59-decision-retry-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "e0ee384b3b9b4f9846b2721b3eb9cf1bfa36fcb6066a412e9c1f9f08019d53b9",
+    "debugSha256": "2baa420b24d7dc9139c56b1946f4a8813981e4bc8d38f0523957cf2e79001639",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "60-decision-apply-to-all-checked__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "35362e899fd7023b9e2428d1bd483f647dc9acea1c1991c71b8d442230da8265",
+    "debugSha256": "ee0d2fc75bcae867edde92e202e4daa58a6ad277f5dca94b4dac85a4a59a4a00",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "60-decision-apply-to-all-checked__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "bd28c9a3ec8914fddeede7a561bf793370add06205877dfa89b7211f9d107855",
+    "debugSha256": "f7c9404ff8511a04347d3f57090ce0bf8dd0b6001c285745f7ec5bc111904d0b",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "61-compare-scanning__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "16a4fdd9fbf26d092b42e2ebcef387c5264d8bb16870c61e228fdc9528fa841e",
+    "debugSha256": "ba1273879ea58757954d9da4032813271ac0d13922e9777c3a024ffce61f4935",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "61-compare-scanning__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "a2bf087cfd4038d9b9f137cf4ec50343da1bea3572f51f164a3f7695fa3287d3",
+    "debugSha256": "f090e10ae667ab13d6345f6e579b97c02ddd75da27692e09cf628c64e0dd6e38",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "62-change-case-enumerating__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "965df1a0b805ecb5fccd00a5b5532af5aae9a04a3e2b2f23cf36a8cd9b47a2e2",
+    "debugSha256": "8362df24ffbb56220b9a5fbc924a670ec7575947280966811c4741360257f454",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "62-change-case-enumerating__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "a9c249b0f3faeb583f80fccd406760c7e48100dbb86470ed26ab8d941b4f436b",
+    "debugSha256": "d4bd7b3ff6eefd7abdf4caf5bb283184ef4cc8f231a54ada8cf6dba653d6b915",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "63-change-attributes-applying__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "f1938ddd951880e174ef696410098c694a4effe652d92d01baed8a7d271f90b7",
+    "debugSha256": "382ad2ed132d632da1b235a0b67983e586e10765453c8a686010346ae1594263",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "63-change-attributes-applying__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "7f338b4becbc5c6e93048317e831aa50d665bcf68cea3dd41bbeacc57a7e8a09",
+    "debugSha256": "b6c143b7e5989c7abada7e8b7ba64e89cee72037243b0fd4f21d44d2af780d48",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "64-file-list-rendering__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "3ac63a25d46c0a486cad9cb38cdfb9f2bd2f9d762c60a48ebf3feafc8e652fde",
+    "debugSha256": "342bd059181d8e5bc6f486751b121fb825a9a2ac3958e9b49c3c0623ed737572",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "64-file-list-rendering__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "3f803c761e92781ee60f254b6da6e0ce0203b904637eac7ae0cfc78cf3990c95",
+    "debugSha256": "6c2a3fe9d55e767f16e7f0cf65ba4b2bd67f894bc1a9c05788f2d1b22dc4768b",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "65-verification-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "91fd3806ee3773ff152ed79eb8fbf0830ee1cf51bc59095693f3751afbcc9d35",
+    "debugSha256": "f729988d8eaab627c228ff471b0215b5fde04d78234ecf46a6a5c178e7e04b45",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "65-verification-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "99a4a2f7286487db6695c64c3c742737b3adedb7ea1fc8b615702b38a31c8636",
+    "debugSha256": "28c0af92ad392e71ed47bdf8c84626fa71092ae2350fb2590453fb3c87ba83a2",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "66-verification-unavailable__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "ba2a58c001ae67e7b804ca358ae2674b807ae3e9e364f720b841e66e16ba97a3",
+    "debugSha256": "20857b44aecc84d7bde9c03ccaa5b18868af10e0e2e81fae28572868b02b4e08",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "66-verification-unavailable__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "861e15c426af0e51d71ecfc2049e8eed2b899315ba99ca97515d45c0269616e9",
+    "debugSha256": "79c0a990ca9c744167b16d3479bea4830d80ccd633186115648c6b139d9d3c33",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "67-verification-canceled__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "bf303de515a9a5a96c24e01016ba5ce14c6f2ca65a9fcbf8684b254babb6fed6",
+    "debugSha256": "c42401eb3bae14923b5def9eb1776070066d3447ff17c8f9317b68b804a90284",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "67-verification-canceled__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "fe41fad1b0f5a4e2adf17745c21dd06846ee93536ba1dbfb55748bfdc6360784",
+    "debugSha256": "92405731b9c90d1f2f6db1cf6664674f4abc92a19bce7b7376395fbaf5be575d",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "68-zero-byte-items__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "f8c4a29d3fca277561eac4475b3aff9ac5404485ec6f69976c38960742bd0fcb",
+    "debugSha256": "54747d7f6c96a0862f66f1e68572f5d304a914736fd65865e3906342c036b1da",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "68-zero-byte-items__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "b43c5d56177e7712d8b8a9e72ebe5688363ca4043d510df9acd73279bec14a57",
+    "debugSha256": "bf05e482df2f644aeb22279e929b129f21984a2a228009622f6446d6d89e2bfc",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "69-all-items-skipped__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "22666ead08439ebc43175b46c61292e80531b1bf42abcccb8853b6bcc4bbc4b5",
+    "debugSha256": "64b4fbb58b3d2dbf22e01a121e721af86bc53d2b8ea1db61c092bfe2edd314c9",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "69-all-items-skipped__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "ecc175a205db03c5262735036d2973027253221baea8a391ffff9f86e4f6ecf0",
+    "debugSha256": "e36cb8f8fdeadb3891f3aa98db50dabb1c3d7659b1f38bd7b6d02267c2d72bbb",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "70-queue-paused__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "a0d93cacfbc3898f3335eb5541f967fe870296aaa3e61d6df102ae7506c5c66c",
+    "debugSha256": "34ccf91a9031c856bee533be83dc18f0566d003482844e2ac14fa1b904a17d9d",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "70-queue-paused__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "7ef632a1547717058918fad568f0a7ad6c2efa995e5f032d8cf672988cb74a63",
+    "debugSha256": "52524eae4948b18bd32c0c8a5c142cea6c206586195e755a1f2fb78d701e9cec",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "70-queue-paused__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "5ef14c79d5e238dae4406cd5eaf618446fd1ce0122530d1b1d46d0b23037108e",
+    "debugSha256": "f8c0104b0066a461f6f2a7b77c857a71aa837e1f03292d44995abe06df40f822",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "70-queue-paused__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "6664d41efa0c318894b31ed3785a2495da96e07d6252a6d5c977bcd910791153",
+    "debugSha256": "ea72eed2575f640966a6039add4a0d0339ce501df7f50c2403851f115ec70953",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "71-waiting-for-other-task__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "54686b143947f3dcb31dc01f3ad97fee779a085069ffcec96882ef70fe53f739",
+    "debugSha256": "bbf89e87d67a411f3e694522cbd9f7ed2bbb9da9a96ebb8546a1da6631393a3c",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "71-waiting-for-other-task__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "e74a65ba4a2f70bf1320632f6a90feb60dad0b464e3a8fd89ba149dc8d6f8b2a",
+    "debugSha256": "1ec2b2f69928ac48161b8230e9ba9ae51d0d5c964fcd1d441e77db8f3cc3ca18",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "71-waiting-for-other-task__dark__760dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "671c8f128f4464f15abadccb9ff63bf444981d92ac7efd04cde38470f9b63d32",
+    "debugSha256": "e326366511392e221294fe7adc1202a00b1de95e3e6d3021e289396bbdf92839",
+    "dimensions": [
+      1144,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "71-waiting-for-other-task__dark__760dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "b0621f6df579a2376824c91cb85d455607f81be61d5bf292caf2f1f9b263520d",
+    "debugSha256": "ab6b6e9372238775e9ed8187aaf1405248433c9ba93441c5a0bb8e779d04b787",
+    "dimensions": [
+      762,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "72-automatic-concurrency__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "fb2479544eed2c9d619643ffce2d41d812aba90fecadfd4f04b9125f03e77b3d",
+    "debugSha256": "ef7d250000c591599286bf4dd7ad8842e8cf43971826775487034c26548f661f",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "72-automatic-concurrency__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "1a634ec096a77ccabf9e9b2276bdc55903e7bbb0e0f829def73a428d3fc7d63e",
+    "debugSha256": "095066b03c2fd399ce794e13cb96649db8ee428b1e5948e0cd2fce3c3e65628d",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "73-compact-density__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "b6581e4c91e93b652fb5f384fcac9f52a4cc14df806959f9c70a4e6624cb06cc",
+    "debugSha256": "693029d84ef705353716cd73f646a071df1762e58af71c69cd7b5dcc5501a13a",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "73-compact-density__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "aaf3d678c7aa1b3052f3a5650823f741312bc46b67b09029c76c113e550a54b7",
+    "debugSha256": "6c06465d848aea95dbbf07df44e046de397833120626b405674433389f7226b2",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "74-sixteen-streams__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "e7e147bb4c7d2357726c43450b2f5bcb51a124ebb3090d814c23e58b0d8c3a78",
+    "debugSha256": "c25cdd523f1a9bdd14ba97ee7caf8e3254ded18cc252b847f48b0b6ca87e54c7",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "74-sixteen-streams__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "abebbb08a09f844eb79dfa8d5396149bef652153317a262e156c9b9edcc653e1",
+    "debugSha256": "b7e6176987c81cd886f326aa610b047db39204b9ccd55b81f9bd79a5433d93b7",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "75-compare-content__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "7813de9796922b391aa822f289a3dff648a666266f876098c6fde9279980deff",
+    "debugSha256": "12029d04e6a10020d4bfcbb84df5f5f6d2f36e9a0bcc1552c964fcad65a47aec",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "75-compare-content__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "e041b1120e61ae896dd2d6334f911d454a2d5d1cb22d1276df01593591c944b3",
+    "debugSha256": "40b2fee5e54b38a7f235a4c66f7835b32ccbbb1dd23b84a3e7efc63c9aa8ef31",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "76-compare-scan-and-content__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "7813de9796922b391aa822f289a3dff648a666266f876098c6fde9279980deff",
+    "debugSha256": "12029d04e6a10020d4bfcbb84df5f5f6d2f36e9a0bcc1552c964fcad65a47aec",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "76-compare-scan-and-content__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "e041b1120e61ae896dd2d6334f911d454a2d5d1cb22d1276df01593591c944b3",
+    "debugSha256": "40b2fee5e54b38a7f235a4c66f7835b32ccbbb1dd23b84a3e7efc63c9aa8ef31",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "77-change-case-renaming__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "7de8009cc458de603aedc84d659bef01ec6209d2650e24dc8e7e5b7a6e9f9eaa",
+    "debugSha256": "0c3cfa7bf85798d86a32058d2ef3dc0259b1a2356e7410f99d2b01ed41653bbc",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "77-change-case-renaming__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "6b9f7166cfb9b4f068449dbd10ea511959cbfe3f4d9ffd423c1dc8f801dcb61a",
+    "debugSha256": "b1327f234d42851b85c0293452684f49c67194733cc1568615848543756fd3f6",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "78-change-attributes-enumerating__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "d3657e0a12f77501b4f4c144657b5c986221871fb63f02d0a92f05de35415c5d",
+    "debugSha256": "17447131cc00be0c5ca8defff812bb1c7a3827c5ea4d572da7e6f24f50133d3d",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "78-change-attributes-enumerating__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "9ef87478d362d6759f71d1749194e07c8ebec380148e5fd073f43c080e4351a2",
+    "debugSha256": "fc744d3c3e0912841ef3ce3f811f3670deda9a6e2f9b8990c7346043e08da62f",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "79-file-list-collecting__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "8c34a2bb745f0fef7160b6543af3f81136e7131840ea3aa6c5b5e768d9521a32",
+    "debugSha256": "1aa65fde899fe3c2699b02d86b65dd68e7d903de0b48ea8de6b2d7f46a93c47c",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "79-file-list-collecting__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "2c662e4997321f4819a45e772dafde66a6e6bba0b7f93e7dce07ce4e25d3f488",
+    "debugSha256": "dd09ef94c35c9bcc8f293ba28004487e83582b4cffb9bb07cf0ef67caca53a6e",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "80-file-list-writing__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "8c34a2bb745f0fef7160b6543af3f81136e7131840ea3aa6c5b5e768d9521a32",
+    "debugSha256": "1aa65fde899fe3c2699b02d86b65dd68e7d903de0b48ea8de6b2d7f46a93c47c",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "80-file-list-writing__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "2c662e4997321f4819a45e772dafde66a6e6bba0b7f93e7dce07ce4e25d3f488",
+    "debugSha256": "dd09ef94c35c9bcc8f293ba28004487e83582b4cffb9bb07cf0ef67caca53a6e",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "81-compare-done__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "d3ff06d1422c4f5f07d81f59c4463f1a34cd7f69050f367c907a818a293c498b",
+    "debugSha256": "2533a4d681ecb0b9945ac2ade82d3e9784a122f66c5526a618a72c1f2c2eb162",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "81-compare-done__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "55fdc971bd6610f088044afc4bc47bcee5dedd094c52a590cdaa0d42ba1d6ca5",
+    "debugSha256": "905625e0eb5eee35a564285d0d11ae99bb0bbfa813252945d380d3f82ae35669",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "82-compare-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "30cb7ecfb6ba534865c257b9631267e27669da770762d4890f2f2f4110ae144b",
+    "debugSha256": "a1ffa5634ce7643031eab3bb51f728b55ee44f66f8d8636ee7739e7b56669eeb",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "82-compare-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "f970aae4f33702fcd7416cf7a2cdb34c013619e2fd0804d5ff840ce49932229b",
+    "debugSha256": "c1002d68f4acedc08e01b03899c971e6f33a7a08bd8dcbee2dc05b361fad5433",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "83-compare-canceled__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "739efe38ce777ee15c1cb003128ffb9d2628e9faafb7948a12c5f8d72bd111e0",
+    "debugSha256": "a94575417d44c4b53f6aacfb6417c196e3df6e19c8cc75d606750fe24067e97b",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "83-compare-canceled__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "82af0087cbefc315b0fe3b4c0cf55633197fee95bb0bab9c353853400012f0aa",
+    "debugSha256": "80f333e20412415b8dcca29acdbe46fc33f3422817879bd6ceecf52c3da43c2e",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "84-change-case-done__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "ec258ea71a9d30b149993b1d01d717b951d91c3a4816ae6ec6be2ed14020c547",
+    "debugSha256": "47f77ef1e29cedaf0912f12f81b3ce744e74682f32acadf9b5f7b2b793c5a28d",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "84-change-case-done__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "2962b1b8e48f9ee67f75fc4bc82170125edfa725f2fabb356dd72ef7663131aa",
+    "debugSha256": "f9378ef1885c47827eda5b49a60614e3082479f4f4f0ae76a2c6ee4a4ab346c1",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "85-change-case-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "b4e5593b4b952cf853fe05c3193d4d8867f01fdb2f3c68d0646c8e0aec08397c",
+    "debugSha256": "746fd6c94cdafdaccd025fc43436668487e83cce0c1516640bd26243fea9c6fc",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "85-change-case-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "a47006f0131f00774e19a8ba55b62eae14b21a85d1607f562cf95cd99c6efd12",
+    "debugSha256": "cce811bf82ed4735f742875cf41ccef2480ce021f81dc540bd29500ba04b00c7",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "86-change-case-canceled__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "63ea74c3596ae1a1e1f599afc08f53ff0a705d55293ca2950dad4ccc0d7f5981",
+    "debugSha256": "7afd67f32d6e5d48a9f3aec893307bfe6f977c4952cfd5ba313a7221db5eb6d6",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "86-change-case-canceled__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "6eb2a811103df1316cfd5ba64095787bd4c49e1ca679b91b85bdc2b71ce54d9b",
+    "debugSha256": "a2df802de188e8ef1367b4595f076cf268d510f10bf01b4be742ac651fe76bfa",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "87-change-attributes-done__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "6d1218dd2b63d20307a333eaec8b2b58aceb6270a9f2fa852a332b123eadde3d",
+    "debugSha256": "e4f73dc127114bded2248c51a902ee41131ff290d70bc1c6b82e2f5409768c15",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "87-change-attributes-done__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "f274ef2fbce3821d221cf8bce923a9129ca1b2cc3b66cfb3aaf0c9129ea71cdb",
+    "debugSha256": "794b625be3c98254adde8e4e21a70aafd6170efaef8bbcb081570632df9a6430",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "88-change-attributes-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "e4e007b67aa7ccafd1d84d914564e778f2d82653003f0726f90244ee181e291a",
+    "debugSha256": "5b54abdf35f3f046a03dd3bc9f9b5ed7359e79cc08b211d331081a5465d3f66e",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "88-change-attributes-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "f32d62f5508021eb3450ee9022aca85a5a18f8b92da76b56db90e7832de77146",
+    "debugSha256": "a9a56bcd240ba5140e7c54fb08a80e86713983b46990b904e852ad73e47ae049",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "89-change-attributes-canceled__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "3f34361f8a54191775bd5249d8a4f7d3eb0c1ea432afe971b7dfa47b4ee64ff0",
+    "debugSha256": "1a56ceade1ef778d00c1d39bb064b3e8b922f2a1166748a25d668b5fc5da53da",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "89-change-attributes-canceled__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "4ced61bdb5cc611eb9237df44bf905f6a0ca9845a9e4e350209fd6893efaf477",
+    "debugSha256": "37a4c57dd98bc265327fca5db3baf020e84013fe4fdd121952cae85f90bcdea5",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "90-file-list-done__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "6e879b6c7301d7ff4025252e16a91388e345511b4f608399d2f1f6df8dd455d1",
+    "debugSha256": "fb4cd803558eb5d5167d8c075e4603f221811ebcc8905dc50969b7b4179419cc",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "90-file-list-done__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "690f32588789261cb48c82d8dfa0f25b3876e8f7d6f4d6f2185e34d5f6cb0546",
+    "debugSha256": "8d7cdd4babc05499caf22ecfa99c7322e461bb539d50888dd849bc4404f1b721",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "91-file-list-failed__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "0983e9e601696ae5ee765339de7a4c69083621785d7f511ee63b30571dc1c7fa",
+    "debugSha256": "ee73a36f7b9d63c7ade4302762ecb51912d066d3538eb063e6fe320b6d29062e",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "91-file-list-failed__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "47d0c58f4411bb12397c81d04333096ceda2bd1e5e160b112218aff05d05d3d0",
+    "debugSha256": "011b50200c5685193b94032332f836afe9dfc5a8b62c74801b60b851c08ba071",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "92-file-list-canceled__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "ad567013504d50feaf7aa88f29915b8ee16e7bb518e8ec41ba4f20f32b392c41",
+    "debugSha256": "b2e3510b0e8aa8a545a6e3c5240e1c362512f05604a2a0ec3c1c3f3b0e528800",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "92-file-list-canceled__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "797c7ea9f47db25f7ed79342ea4a59dad7ee46ad27e10a4905a93299547a4391",
+    "debugSha256": "e97c59a08360fdbf702c38feb66f6e2a915200cb4d2582d83f5bd28f45be71b7",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "93-menu-options__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "9d32ba5a32cff8b53512ac8baaa56af4ab5470bf52665766d6252471a4c88fe1",
+    "debugSha256": "0713d1dec7274defd1fe4455588f3e6850eaf4e41ce6b63b6ccbbcf5b6d022b7",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "93-menu-options__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "releaseSha256": "2c4565a6e8d3d978f992464affdfe61e3f58e4ef7c864b1594c2419d7051502d",
+    "debugSha256": "2c4565a6e8d3d978f992464affdfe61e3f58e4ef7c864b1594c2419d7051502d",
+    "dimensions": [
+      458,
+      194
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "93-menu-options__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d639df180faf6bc956f8e85bb2f752d2cc2c4f6d41ba6e2f4a5a430713796a99",
+    "debugSha256": "5229612247b39adf833185b2a088cd14d7bd1ab60a0f3b24b38d17665cb791fa",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "93-menu-options__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "releaseSha256": "6d31c814c946ec587cd05aff7096872024228efb700f66e326a0cdb8cc08c16b",
+    "debugSha256": "6d31c814c946ec587cd05aff7096872024228efb700f66e326a0cdb8cc08c16b",
+    "dimensions": [
+      305,
+      129
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "94-menu-queue__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "9d32ba5a32cff8b53512ac8baaa56af4ab5470bf52665766d6252471a4c88fe1",
+    "debugSha256": "0713d1dec7274defd1fe4455588f3e6850eaf4e41ce6b63b6ccbbcf5b6d022b7",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "94-menu-queue__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "releaseSha256": "a8c7f5e1d1713c6640b054814fdbfc797ed3622ee5f7163031efeea4e9f1173b",
+    "debugSha256": "a8c7f5e1d1713c6640b054814fdbfc797ed3622ee5f7163031efeea4e9f1173b",
+    "dimensions": [
+      252,
+      135
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "94-menu-queue__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d639df180faf6bc956f8e85bb2f752d2cc2c4f6d41ba6e2f4a5a430713796a99",
+    "debugSha256": "5229612247b39adf833185b2a088cd14d7bd1ab60a0f3b24b38d17665cb791fa",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "94-menu-queue__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "releaseSha256": "98b29b6d79d1c1462e9721ae9570d6ddb06d4d1ea15b747d0adc1db5be56fa97",
+    "debugSha256": "98b29b6d79d1c1462e9721ae9570d6ddb06d4d1ea15b747d0adc1db5be56fa97",
+    "dimensions": [
+      168,
+      90
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "95-menu-completed-more__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "257d651210ffe103cd07d43ba0722aed447f7cb7a078ce9e6ddc3c2526737022",
+    "debugSha256": "e5c736da16ca887b4c0a17b79f91d1e8082b7fc20e78aad1f3c93601e96666a4",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "95-menu-completed-more__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "releaseSha256": "cf3d023ce61205f48000cb029dc9ef768cc9b0b6f74b0073af7957394dc3725a",
+    "debugSha256": "cf3d023ce61205f48000cb029dc9ef768cc9b0b6f74b0073af7957394dc3725a",
+    "dimensions": [
+      308,
+      270
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "95-menu-completed-more__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d61a2f291fdc44e2daf6465ab6be889c6ffdf0792989f6354b18f1ba790dc24a",
+    "debugSha256": "a9077787134b2050e3d5c64c7e7bbdb50f00502b21621e22f56aefb6406210f8",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "95-menu-completed-more__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "releaseSha256": "ddeddd657eef221bd73f6775135609de3cc2ec973539cc90562f3543af210acb",
+    "debugSha256": "ddeddd657eef221bd73f6775135609de3cc2ec973539cc90562f3543af210acb",
+    "dimensions": [
+      206,
+      180
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "96-menu-speed__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "9d32ba5a32cff8b53512ac8baaa56af4ab5470bf52665766d6252471a4c88fe1",
+    "debugSha256": "0713d1dec7274defd1fe4455588f3e6850eaf4e41ce6b63b6ccbbcf5b6d022b7",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "96-menu-speed__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "releaseSha256": "7da22853ad76031d6fb7d5f38f1825d4407cedbe0a92faa52577383a5d07a5cd",
+    "debugSha256": "7da22853ad76031d6fb7d5f38f1825d4407cedbe0a92faa52577383a5d07a5cd",
+    "dimensions": [
+      249,
+      432
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "96-menu-speed__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d639df180faf6bc956f8e85bb2f752d2cc2c4f6d41ba6e2f4a5a430713796a99",
+    "debugSha256": "5229612247b39adf833185b2a088cd14d7bd1ab60a0f3b24b38d17665cb791fa",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "96-menu-speed__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "releaseSha256": "b767094d344c2a9868b3594b076b5aa45a2a61eb92600e39d93df14c3ad6edd6",
+    "debugSha256": "b767094d344c2a9868b3594b076b5aa45a2a61eb92600e39d93df14c3ad6edd6",
+    "dimensions": [
+      166,
+      288
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "97-menu-conflict-more__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "3fbb6bc7be3cdf88d64ca7d0558a161bbcb175b041115435254d0cc1c8f10d11",
+    "debugSha256": "9e0b327a07c177e882881f02069a6db6bd1f44b47db04600544dd3899910c103",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "97-menu-conflict-more__dark__480dip__fr-FR__display1__144dpi__flyout.png",
+    "releaseSha256": "0fcdc5e11d0c797e02786d020c01145ddb64caad1d90f916bba4326900a46c2b",
+    "debugSha256": "0fcdc5e11d0c797e02786d020c01145ddb64caad1d90f916bba4326900a46c2b",
+    "dimensions": [
+      222,
+      90
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "97-menu-conflict-more__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "d9a5ca76d6c69e9f19ad43cdebeaff8c21bf4812d2fff582b12fe56713ee7225",
+    "debugSha256": "98318072cb3ce1f8fbff053cddd92cb6b256b9e2c45a2748fb3462af99e2b273",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "97-menu-conflict-more__dark__480dip__fr-FR__display2__96dpi__flyout.png",
+    "releaseSha256": "cc5808927d87c221867b33250b689cd205437b0a5353dc6fa0ab149bfa386c0f",
+    "debugSha256": "cc5808927d87c221867b33250b689cd205437b0a5353dc6fa0ab149bfa386c0f",
+    "dimensions": [
+      148,
+      60
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "98-renderer-failure__dark__480dip__fr-FR__display1__144dpi.png",
+    "releaseSha256": "a4002dcb198ec49a81d6811197d3f7c78069b8bda89cc0c88a044baa4acfd700",
+    "debugSha256": "bd0a4a96fa1b4771b4e84e12bb8b89fdccb396375f7deb20e595ce205b6f67c1",
+    "dimensions": [
+      724,
+      1127
+    ],
+    "changedBounds": [
+      13,
+      10,
+      37,
+      34
+    ]
+  },
+  {
+    "file": "98-renderer-failure__dark__480dip__fr-FR__display2__96dpi.png",
+    "releaseSha256": "c87e911a99a3c5a5652095299cd241a23b65b824ef51c29bc266fa3989e9e600",
+    "debugSha256": "b7b4ec1ee42f1eabd9707300767f19c9020c595d41fbe142c8533ea51f9eb260",
+    "dimensions": [
+      482,
+      633
+    ],
+    "changedBounds": [
+      9,
+      7,
+      25,
+      23
+    ]
+  },
+  {
+    "file": "99-speed-custom__dark__fr-FR__display1__144dpi.png",
+    "releaseSha256": "1a6801c5bfde178dcba37c6f5633d0d30c2744eb95e80e22b42104830f5913f8",
+    "debugSha256": "1a6801c5bfde178dcba37c6f5633d0d30c2744eb95e80e22b42104830f5913f8",
+    "dimensions": [
+      664,
+      365
+    ],
+    "changedBounds": null
+  },
+  {
+    "file": "99-speed-custom__dark__fr-FR__display2__96dpi.png",
+    "releaseSha256": "3536255c9e857f58b533bb022bf2db58c6cbc3e6af2b3962014d35afa6ef0cf3",
+    "debugSha256": "3536255c9e857f58b533bb022bf2db58c6cbc3e6af2b3962014d35afa6ef0cf3",
+    "dimensions": [
+      442,
+      244
+    ],
+    "changedBounds": null
+  }
+]

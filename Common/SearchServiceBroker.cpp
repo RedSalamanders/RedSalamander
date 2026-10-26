@@ -1,6 +1,7 @@
 #include "SearchServiceBroker.h"
 
 #include "Helpers.h"
+#include "SearchTextHelpers.h"
 #include "SqliteIndexStore.h"
 
 #include <algorithm>
@@ -10,6 +11,8 @@
 #include <filesystem>
 #include <iterator>
 #include <limits>
+#include <optional>
+#include <regex>
 #include <span>
 #include <string_view>
 #include <thread>
@@ -37,11 +40,11 @@ constexpr DWORD kClientControlOperationTimeoutMs    = 30'000u;
 constexpr DWORD kClientQueryOperationTimeoutMs      = 10u * 60u * 1'000u;
 constexpr size_t kMaxClientBufferedCandidates       = 65'536u;
 constexpr uint64_t kMaxClientBufferedCandidateBytes = 64ull * 1024ull * 1024ull;
-constexpr DWORD kDefaultMissingPipeRetryWindowMs = 250u;
-constexpr DWORD kMaxMissingPipeRetryWindowMs     = 30'000u;
-constexpr uint64_t kIdleMaintenanceGraceMs      = 1'000u;
-constexpr wchar_t kStartupWarmupDelayMsEnvVar[] = L"REDSALAMANDER_SEARCH_SERVICE_STARTUP_WARMUP_DELAY_MS";
-constexpr wchar_t kServerFrameTimeoutMsEnvVar[] = L"REDSALAMANDER_SEARCH_SERVICE_SERVER_FRAME_TIMEOUT_MS";
+constexpr DWORD kDefaultMissingPipeRetryWindowMs    = 250u;
+constexpr DWORD kMaxMissingPipeRetryWindowMs        = 30'000u;
+constexpr uint64_t kIdleMaintenanceGraceMs          = 1'000u;
+constexpr wchar_t kStartupWarmupDelayMsEnvVar[]     = L"REDSALAMANDER_SEARCH_SERVICE_STARTUP_WARMUP_DELAY_MS";
+constexpr wchar_t kServerFrameTimeoutMsEnvVar[]     = L"REDSALAMANDER_SEARCH_SERVICE_SERVER_FRAME_TIMEOUT_MS";
 
 struct StartupWarmupCancelContext final
 {
@@ -65,15 +68,15 @@ struct ServerIoContext final
 
 enum class MessageType : uint32_t
 {
-    StatusRequest  = 1u,
-    StatusResponse = 2u,
-    QueryRequest   = 3u,
-    QueryProgress  = 4u,
-    QueryBatch     = 5u,
-    QueryComplete  = 6u,
-    RebuildRequest = 7u,
-    Ack            = 8u,
-    Error          = 9u,
+    StatusRequest   = 1u,
+    StatusResponse  = 2u,
+    QueryRequest    = 3u,
+    QueryProgress   = 4u,
+    QueryBatch      = 5u,
+    QueryComplete   = 6u,
+    RebuildRequest  = 7u,
+    Ack             = 8u,
+    Error           = 9u,
     CompactRequest  = 10u,
     ShutdownRequest = 11u,
 };
@@ -503,28 +506,29 @@ struct ServerQueryContext final
     uint32_t requestNameMode                      = FILESYSTEM_SEARCH_NAME_DISABLED;
     const std::wstring* rootPath                  = nullptr;
     const std::wstring* namePattern               = nullptr;
+    bool* sentIndexedProgress                     = nullptr;
 };
 
 struct ServerCandidateBatchState final
 {
-    HANDLE pipe                                   = nullptr;
-    uint32_t protocolVersion                      = kProtocolVersion;
-    const ServerIoContext* ioContext              = nullptr;
-    uint32_t disconnectAfterBatches               = 0u;
-    uint32_t batchesSent                          = 0u;
-    uint32_t handledRequests                      = 0u;
-    const ServerOptions* options                  = nullptr;
-    size_t payloadBytes                           = sizeof(CandidateBatchHeader);
-    bool sentIndexedProgress                      = false;
-    LocalSearchIndexCore::QueryStats* stats       = nullptr;
-    uint32_t warningFlags                         = FILESYSTEM_SEARCH_WARNING_NONE;
-    uint32_t requestFlags                         = FILESYSTEM_SEARCH_NONE;
-    uint32_t requestNameMode                      = FILESYSTEM_SEARCH_NAME_DISABLED;
+    HANDLE pipe                             = nullptr;
+    uint32_t protocolVersion                = kProtocolVersion;
+    const ServerIoContext* ioContext        = nullptr;
+    uint32_t disconnectAfterBatches         = 0u;
+    uint32_t batchesSent                    = 0u;
+    uint32_t handledRequests                = 0u;
+    const ServerOptions* options            = nullptr;
+    size_t payloadBytes                     = sizeof(CandidateBatchHeader);
+    bool sentIndexedProgress                = false;
+    LocalSearchIndexCore::QueryStats* stats = nullptr;
+    uint32_t warningFlags                   = FILESYSTEM_SEARCH_WARNING_NONE;
+    uint32_t requestFlags                   = FILESYSTEM_SEARCH_NONE;
+    uint32_t requestNameMode                = FILESYSTEM_SEARCH_NAME_DISABLED;
     std::wstring rootPath;
     std::wstring namePattern;
 #if defined(RS_SEARCH_TEST_HOOKS)
-    ServerTestHook testHook           = ServerTestHook::None;
-    bool testHookConsumed             = false;
+    ServerTestHook testHook = ServerTestHook::None;
+    bool testHookConsumed   = false;
 #endif
     std::unordered_map<std::wstring, bool> clientDirectoryAccessCache;
     std::vector<LocalSearchIndexCore::Candidate> bufferedCandidates;
@@ -773,8 +777,8 @@ HRESULT DecodeQueryBatchPayload(std::span<const std::byte> payloadBytes, std::ve
                                                                        const ServerMaintenanceState* maintenanceState) noexcept
 {
     const LocalSearchIndexCore::FallbackReason persistentFallbackReason = ClassifyPersistentStoreFallbackReason(storeInfo);
-    const bool staleReadyRuntime = repositoryStatus.storeState == LocalSearchIndexCore::StoreState::Ready &&
-                                   persistentFallbackReason != LocalSearchIndexCore::FallbackReason::None;
+    const bool staleReadyRuntime =
+        repositoryStatus.storeState == LocalSearchIndexCore::StoreState::Ready && persistentFallbackReason != LocalSearchIndexCore::FallbackReason::None;
     if (repositoryStatus.storeState != LocalSearchIndexCore::StoreState::Unknown && ! staleReadyRuntime)
     {
         return repositoryStatus.storeState;
@@ -1332,7 +1336,7 @@ enum class RepositoryStoreOverlayResult : uint8_t
 };
 
 [[nodiscard]] RepositoryStoreOverlayResult OverlayFresherRepositoryStoreInfo(LocalSearchIndexCore::PersistentStoreInfo& storeInfo,
-                                                                               LocalSearchIndexCore::Repository* repository) noexcept
+                                                                             LocalSearchIndexCore::Repository* repository) noexcept
 {
     if (repository == nullptr || storeInfo.kind != LocalSearchIndexCore::PersistentStoreKind::Sqlite)
     {
@@ -1532,8 +1536,10 @@ HRESULT RunQueuedAutomaticMaintenance(const ServerOptions& options, ServerMainte
     }
 }
 
-HRESULT ConnectClientPipeForName(
-    std::wstring_view requestedPipeName, DWORD missingPipeRetryWindowMs, wil::unique_handle& outPipe, ClientIoContext* context = nullptr) noexcept
+HRESULT ConnectClientPipeForName(std::wstring_view requestedPipeName,
+                                 DWORD missingPipeRetryWindowMs,
+                                 wil::unique_handle& outPipe,
+                                 ClientIoContext* context = nullptr) noexcept
 {
     const std::wstring pipeName         = BuildPipeName(requestedPipeName);
     const ULONGLONG deadline            = ::GetTickCount64() + 750u;
@@ -1912,6 +1918,10 @@ HRESULT STDMETHODCALLTYPE StreamServerQueryProgress(const LocalSearchIndexCore::
     {
         return hr;
     }
+    if (progress->phase == FILESYSTEM_SEARCH_PHASE_ENUMERATING && context.sentIndexedProgress != nullptr)
+    {
+        *context.sentIndexedProgress = true;
+    }
 
     if (context.options != nullptr && context.rootPath != nullptr && context.namePattern != nullptr)
     {
@@ -1967,6 +1977,13 @@ HRESULT FlushServerCandidates(ServerCandidateBatchState& state) noexcept
         progress.scannedDirectories = state.stats->directoryCount;
         progress.scannedFiles       = state.stats->fileCount;
         progress.candidateFiles     = state.stats->candidateCount;
+        progress.warningFlags       = QueryStateWarningFlags(state);
+        progress.storeState =
+            state.stats->usedLiveScanFallback ? ResolveFallbackStoreState(state.stats->fallbackReason) : LocalSearchIndexCore::StoreState::Ready;
+        progress.syncPhase          = state.stats->usedLiveScanFallback ? LocalSearchIndexCore::SyncPhase::Idle : LocalSearchIndexCore::SyncPhase::Watching;
+        progress.queryExecutionMode = state.stats->queryExecutionMode;
+        progress.fallbackReason     = state.stats->fallbackReason;
+        progress.activeRoot         = state.rootPath;
 
         const HRESULT progressHr = SendProgress(state.pipe, state.protocolVersion, progress, state.ioContext);
         if (FAILED(progressHr))
@@ -2334,12 +2351,10 @@ HRESULT ConnectClientPipe(wil::unique_handle& outPipe, ClientIoContext* context 
 {
     switch (lastError)
     {
-    case ERROR_ACCESS_DENIED:
-    case ERROR_FILE_NOT_FOUND:
-    case ERROR_PATH_NOT_FOUND:
-        return true;
-    default:
-        return false;
+        case ERROR_ACCESS_DENIED:
+        case ERROR_FILE_NOT_FOUND:
+        case ERROR_PATH_NOT_FOUND: return true;
+        default: return false;
     }
 }
 
@@ -2353,13 +2368,10 @@ HRESULT ConnectClientPipe(wil::unique_handle& outPipe, ClientIoContext* context 
 
     switch (state.testHook)
     {
-    case ServerTestHook::None:
-        return S_OK;
-    case ServerTestHook::FailClientAuthImpersonationOnce:
-        state.testHookConsumed = true;
-        return HRESULT_FROM_WIN32(ERROR_CANNOT_IMPERSONATE);
-    case ServerTestHook::RejectMarkedRoot:
-    case ServerTestHook::FailMarkedClientDirectoryOpenBadNetPath: return S_OK;
+        case ServerTestHook::None: return S_OK;
+        case ServerTestHook::FailClientAuthImpersonationOnce: state.testHookConsumed = true; return HRESULT_FROM_WIN32(ERROR_CANNOT_IMPERSONATE);
+        case ServerTestHook::RejectMarkedRoot:
+        case ServerTestHook::FailMarkedClientDirectoryOpenBadNetPath: return S_OK;
     }
 
     return E_INVALIDARG;
@@ -2385,16 +2397,11 @@ HRESULT ConnectClientPipe(wil::unique_handle& outPipe, ClientIoContext* context 
         return testHookHr;
     }
 
-    if (state.testHook == ServerTestHook::FailMarkedClientDirectoryOpenBadNetPath &&
-        path.find(L"transient-auth") != std::wstring::npos)
+    if (state.testHook == ServerTestHook::FailMarkedClientDirectoryOpenBadNetPath && path.find(L"transient-auth") != std::wstring::npos)
     {
         state.clientDirectoryAccessCache.emplace(cacheKey, false);
-        Debug::Perf::Emit(L"search.service.authorization.transient_parent_failures",
-                          L"shape=ERROR_BAD_NETPATH",
-                          0u,
-                          1u,
-                          0u,
-                          HRESULT_FROM_WIN32(ERROR_BAD_NETPATH));
+        Debug::Perf::Emit(
+            L"search.service.authorization.transient_parent_failures", L"shape=ERROR_BAD_NETPATH", 0u, 1u, 0u, HRESULT_FROM_WIN32(ERROR_BAD_NETPATH));
         ::SetLastError(ERROR_BAD_NETPATH);
         const DWORD loggedError = Debug::ErrorWithLastError(L"SearchServiceBroker: transient client directory authorization open failed for '{}'", path);
         return HRESULT_FROM_WIN32(loggedError != ERROR_SUCCESS ? loggedError : ERROR_BAD_NETPATH);
@@ -2412,9 +2419,9 @@ HRESULT ConnectClientPipe(wil::unique_handle& outPipe, ClientIoContext* context 
                                                      FILE_LIST_DIRECTORY | FILE_READ_ATTRIBUTES,
                                                      FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
                                                      nullptr,
-                                                      OPEN_EXISTING,
-                                                      FILE_FLAG_BACKUP_SEMANTICS,
-                                                      nullptr));
+                                                     OPEN_EXISTING,
+                                                     FILE_FLAG_BACKUP_SEMANTICS,
+                                                     nullptr));
     if (! directoryHandle)
     {
         const DWORD lastError = ::GetLastError();
@@ -2505,13 +2512,8 @@ HRESULT ConnectClientPipe(wil::unique_handle& outPipe, ClientIoContext* context 
     const bool isDirectory    = (attributes & FILE_ATTRIBUTE_DIRECTORY) != 0u;
     const DWORD desiredAccess = FILE_READ_ATTRIBUTES | (isDirectory ? static_cast<DWORD>(FILE_LIST_DIRECTORY) : static_cast<DWORD>(FILE_READ_DATA));
     const DWORD flags         = isDirectory ? FILE_FLAG_BACKUP_SEMANTICS : FILE_ATTRIBUTE_NORMAL;
-    wil::unique_handle pathHandle(::CreateFileW(path.c_str(),
-                                                desiredAccess,
-                                                FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE,
-                                                nullptr,
-                                                OPEN_EXISTING,
-                                                flags,
-                                                nullptr));
+    wil::unique_handle pathHandle(
+        ::CreateFileW(path.c_str(), desiredAccess, FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, nullptr, OPEN_EXISTING, flags, nullptr));
     if (! pathHandle)
     {
         return HRESULT_FROM_WIN32(::GetLastError());
@@ -2647,7 +2649,7 @@ HRESULT ConnectClientPipe(wil::unique_handle& outPipe, ClientIoContext* context 
             return HRESULT_FROM_WIN32(error);
         }
 
-        lastMissingError = error;
+        lastMissingError        = error;
         std::wstring parentPath = ParentPathForAuthorization(authorizationPath);
         if (parentPath.empty() || OrdinalString::EqualsNoCase(parentPath, authorizationPath))
         {
@@ -2916,6 +2918,7 @@ HRESULT HandleQueryRequest(SessionContext& session, std::span<const std::byte> p
         .testHook = session.options.testHook,
 #endif
     };
+    queryContext.sentIndexedProgress  = &batchState.sentIndexedProgress;
     const auto buildCompletionDetails = [&]() noexcept
     {
         return ServerEventDetails{
@@ -2944,6 +2947,48 @@ HRESULT HandleQueryRequest(SessionContext& session, std::span<const std::byte> p
             .activeRoot         = plan.rootPath.c_str(),
         };
     };
+    // The plan borrows the expression only during this synchronous request. Compile
+    // once here: the wire request cannot carry the plugin's cached regex object.
+    std::optional<std::wregex> nameRegex;
+    if (plan.nameMode == FILESYSTEM_SEARCH_NAME_REGEX)
+    {
+        std::wstring rejectReason;
+        bool valid = SearchTextHelpers::ValidateRegexPatternSafety(plan.namePattern, rejectReason);
+        if (valid)
+        {
+            try
+            {
+                const auto flags = plan.matchCaseName ? std::regex_constants::ECMAScript : (std::regex_constants::ECMAScript | std::regex_constants::icase);
+                nameRegex.emplace(plan.namePattern, flags);
+                plan.compiledNameRegex = &nameRegex.value();
+            }
+            catch (const std::regex_error&)
+            {
+                // A malformed client pattern is a rejected request at this noexcept boundary.
+                valid = false;
+            }
+        }
+        if (! valid)
+        {
+            stats.warningFlags = FILESYSTEM_SEARCH_WARNING_REGEX_REJECTED;
+            QueryProgress rejected{};
+            rejected.phase           = FILESYSTEM_SEARCH_PHASE_COMPLETED;
+            rejected.warningFlags    = stats.warningFlags;
+            rejected.statusHint      = E_INVALIDARG;
+            rejected.currentPath     = plan.rootPath;
+            const HRESULT progressHr = SendProgress(session.pipe.get(), session.options.protocolVersion, rejected, &session.ioContext);
+            if (FAILED(progressHr))
+            {
+                return progressHr;
+            }
+            ServerEventDetails completeDetails = buildCompletionDetails();
+            completeDetails.storeState         = static_cast<uint32_t>(LocalSearchIndexCore::StoreState::Unknown);
+            completeDetails.syncPhase          = static_cast<uint32_t>(LocalSearchIndexCore::SyncPhase::Idle);
+            NotifyServerEvent(session.options, SEARCH_SERVICE_SERVER_EVENT_QUERY_COMPLETED, E_INVALIDARG, session.handledRequests, &completeDetails);
+            return SendQueryComplete(session.pipe.get(), session.options.protocolVersion, E_INVALIDARG, stats, &session.ioContext);
+        }
+    }
+
     HRESULT hr = session.options.persistentStoreKind == LocalSearchIndexCore::PersistentStoreKind::Sqlite
                      ? session.repository->EnumerateNoWait(
                            plan, &ServerCancelCheck, &queryContext, &StreamServerCandidate, &batchState, &stats, &StreamServerQueryProgress, &queryContext)
@@ -3887,7 +3932,7 @@ HRESULT RequestShutdown(std::wstring_view pipeName, uint32_t timeoutMs) noexcept
 
         wil::unique_handle pipe;
         const DWORD connectRetryMs = (std::min)(static_cast<DWORD>(timeoutMs), kDefaultMissingPipeRetryWindowMs);
-        HRESULT hr = ConnectClientPipeForName(pipeName, connectRetryMs, pipe);
+        HRESULT hr                 = ConnectClientPipeForName(pipeName, connectRetryMs, pipe);
         if (FAILED(hr))
         {
             return hr;
@@ -3977,14 +4022,15 @@ HRESULT RunServer(const ServerOptions& options, HANDLE stopEvent, ServerRunResul
         }
         const LocalSearchIndexCore::PersistentStoreInfo storeInfo = LocalSearchIndexCore::GetPersistentStoreInfo(repositoryOptions);
 
-        Debug::Info(L"SearchServiceBroker: server start pipe='{}' storage='{}' protocol={} allowRebuild={} allowShutdown={} maxRequests={} disconnectAfterBatches={}",
-                    effectiveOptions.pipeName,
-                    effectiveOptions.storageRootDirectory,
-                    effectiveOptions.protocolVersion,
-                    effectiveOptions.allowRebuildRequests,
-                    effectiveOptions.allowShutdownRequests,
-                    effectiveOptions.maxRequestsBeforeExit,
-                    effectiveOptions.disconnectAfterBatches);
+        Debug::Info(
+            L"SearchServiceBroker: server start pipe='{}' storage='{}' protocol={} allowRebuild={} allowShutdown={} maxRequests={} disconnectAfterBatches={}",
+            effectiveOptions.pipeName,
+            effectiveOptions.storageRootDirectory,
+            effectiveOptions.protocolVersion,
+            effectiveOptions.allowRebuildRequests,
+            effectiveOptions.allowShutdownRequests,
+            effectiveOptions.maxRequestsBeforeExit,
+            effectiveOptions.disconnectAfterBatches);
         Debug::Info(L"SearchServiceBroker: server store backend='{}' root='{}' primary='{}' checkpoint={} compaction={}",
                     LocalSearchIndexCore::GetPersistentStoreKindText(storeInfo.kind),
                     storeInfo.rootDirectory,

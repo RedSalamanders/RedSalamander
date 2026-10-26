@@ -7,10 +7,12 @@ function Read-RSDxUiUpdateLock {
     param([Parameter(Mandatory)][string]$LockFile)
 
     $pin = Get-Content -LiteralPath $LockFile -Raw | ConvertFrom-Json
+    # The lock's apiRevision is what the product adopted; restore compares it with the revision the pinned source reports.
     if ($pin.repository -cne 'https://github.com/RedSalamanders/DxUi' -or
-        $pin.commit -cnotmatch '^[0-9a-f]{40}$' -or $pin.apiRevision -ne 2 -or
+        $pin.commit -cnotmatch '^[0-9a-f]{40}$' -or
+        -not ($pin.apiRevision -is [int] -or $pin.apiRevision -is [long]) -or $pin.apiRevision -lt 1 -or
         @($pin.targets).Count -ne 1 -or $pin.targets[0] -cne 'DxUi') {
-        throw "DxUi lock is not the canonical API-revision-2 DxUi target: $LockFile"
+        throw "DxUi lock is not the canonical DxUi target with a positive integer API revision: $LockFile"
     }
     return $pin
 }
@@ -104,6 +106,7 @@ function Invoke-RSDxUiUpdate {
     }
     Set-RSDxUiLockCommit -LockFile $lockFile -Commit $candidate.Candidate
     Write-Host "DxUi pin updated: $($candidate.Current.Substring(0, 12)) -> $($candidate.Candidate.Substring(0, 12))." -ForegroundColor Yellow
+    Write-Host 'apiRevision in the lock is unchanged. A candidate that reports another API revision fails at restore until the product is adapted to its change notes and the lock is updated.' -ForegroundColor Yellow
 
     if ($UpdateOnly) {
         Write-Host 'Product validation skipped by -UpdateOnly; retain external validation evidence with this branch.' -ForegroundColor Yellow

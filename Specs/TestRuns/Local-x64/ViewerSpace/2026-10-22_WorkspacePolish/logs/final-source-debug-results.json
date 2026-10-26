@@ -1,0 +1,62 @@
+{
+  "viewerSpaceSha256": "8C52A00C0864AAB5C81565D7DC198D6C78BB7F7FDE97E84C52FD1D5823389FAF",
+  "profile": "Debug",
+  "checkout": "D:\\RedSalamander",
+  "results": [
+    {
+      "exitCode": 0,
+      "log": "final-source-debug-analysis-1.txt",
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "iteration": 1
+    },
+    {
+      "exitCode": 0,
+      "log": "final-source-debug-analysis-2.txt",
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "iteration": 2
+    },
+    {
+      "exitCode": 0,
+      "log": "final-source-debug-analysis-3.txt",
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "iteration": 3
+    },
+    {
+      "exitCode": 0,
+      "case": "TestViewerSpaceLifecycleCaptures",
+      "log": "final-source-debug-TestViewerSpaceLifecycleCaptures.txt"
+    },
+    {
+      "exitCode": 0,
+      "case": "TestViewerSpaceDesktopObservationContracts",
+      "log": "final-source-debug-TestViewerSpaceDesktopObservationContracts.txt"
+    },
+    {
+      "exitCode": 0,
+      "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+      "log": "final-source-debug-TestViewerSpaceAnalysisAllowsAmbientDesktopChanges.txt"
+    },
+    {
+      "exitCode": 0,
+      "case": "TestViewerSpaceListingValidation",
+      "log": "final-source-debug-TestViewerSpaceListingValidation.txt"
+    },
+    {
+      "exitCode": 0,
+      "case": "TestViewerSpaceBoundedHostileProviderScanning",
+      "log": "final-source-debug-TestViewerSpaceBoundedHostileProviderScanning.txt"
+    },
+    {
+      "exitCode": 0,
+      "case": "TestViewerSpaceBlockedProviderCloseAndPostUpdateRace",
+      "log": "final-source-debug-TestViewerSpaceBlockedProviderCloseAndPostUpdateRace.txt"
+    },
+    {
+      "exitCode": 0,
+      "case": "TestViewerSpaceDirectorySummaryProtocol",
+      "log": "final-source-debug-TestViewerSpaceDirectorySummaryProtocol.txt"
+    }
+  ],
+  "exeSha256": "D380372AB64CA13F3DEC5AF5B899898686B385E4D4113F1693FC94592A2BA03D",
+  "receiptId": "ceb899c971aa0968691dfdcb6999c5d6cbcb9095b779b793c0adb734fdddb9e8"
+}

@@ -1,0 +1,134 @@
+{
+  "run_id": "20260908T200723Z-69288-1db8a2860de7474ebbc2f9164aa99216",
+  "tested_snapshot_id": "018041afc4cea6efb7d4b0575f7857b4f2c52ff335058c2095bc85ffb01915a1",
+  "closeout_snapshot_id": "7bdc42c25389d5dbde407a7fc4f21c1394dd54489d1fa552f4e20c10db685df7",
+  "git_head": "3dcf7ab167211451882f2c50e202aec68a5a4318",
+  "base": "3dcf7ab167211451882f2c50e202aec68a5a4318",
+  "verdict": "PASSED",
+  "scope": "All snapshot file records outside the five exact closeout Markdown paths are identical, including source, tooling, normative specs, and index identities. TestRuns evidence is excluded by the canonical snapshot policy.",
+  "changed_paths": [
+    "Specs/Plans/Done/Operation_ReviewFollowup_FOTerminalFocus_2026-08-19.md",
+    "Specs/Plans/WIP/Operation_FileOperations_LaterFeatures_2026-09-05.md",
+    "Specs/Plans/WIP/Operation_ReviewFollowup_FOTerminalFocus_2026-08-19.md",
+    "Specs/Plans/WIP/README.md",
+    "Specs/Plans/WIP/UI_ConfirmationPreferencesAndOperationOutcomes_2026-09-08.md"
+  ],
+  "unchanged_file_records": 35,
+  "differences": [
+    {
+      "path": "Specs/Plans/Done/Operation_ReviewFollowup_FOTerminalFocus_2026-08-19.md",
+      "tested": null,
+      "closeout": {
+        "path": "Specs/Plans/Done/Operation_ReviewFollowup_FOTerminalFocus_2026-08-19.md",
+        "status": "untracked",
+        "base_sha256": null,
+        "base_mode": null,
+        "index_sha256": null,
+        "index_mode": null,
+        "worktree_sha256": "3066ed3d6ac9d1179c86a6064178b9c1d85172c103d1448775323d6807528a1b",
+        "worktree_size_bytes": 20890,
+        "old_path": null
+      }
+    },
+    {
+      "path": "Specs/Plans/WIP/Operation_FileOperations_LaterFeatures_2026-09-05.md",
+      "tested": {
+        "base_mode": "100644",
+        "base_sha256": "e71d47a751aeac5d3736b57f60c4b1282197b8d6149c939004ba15eb5d6c01a6",
+        "index_mode": "100644",
+        "index_sha256": "e71d47a751aeac5d3736b57f60c4b1282197b8d6149c939004ba15eb5d6c01a6",
+        "old_path": null,
+        "path": "Specs/Plans/WIP/Operation_FileOperations_LaterFeatures_2026-09-05.md",
+        "status": "modified",
+        "worktree_sha256": "f0590c126205660d4e6105dc8596aa9dff1a94b3a09dd2c3f18d58dc510b436d",
+        "worktree_size_bytes": 20104
+      },
+      "closeout": {
+        "path": "Specs/Plans/WIP/Operation_FileOperations_LaterFeatures_2026-09-05.md",
+        "status": "modified",
+        "base_sha256": "e71d47a751aeac5d3736b57f60c4b1282197b8d6149c939004ba15eb5d6c01a6",
+        "base_mode": "100644",
+        "index_sha256": "e71d47a751aeac5d3736b57f60c4b1282197b8d6149c939004ba15eb5d6c01a6",
+        "index_mode": "100644",
+        "worktree_sha256": "d37ce91cac646e394cb3bb3c7997c7348e12c22ce7fa4a8bc4168e074400ac8f",
+        "worktree_size_bytes": 19997,
+        "old_path": null
+      }
+    },
+    {
+      "path": "Specs/Plans/WIP/Operation_ReviewFollowup_FOTerminalFocus_2026-08-19.md",
+      "tested": {
+        "base_mode": "100644",
+        "base_sha256": "8aef66c2bd73cc8484448c21bf6e03c50f4b77050546265547f0129e659aef4e",
+        "index_mode": "100644",
+        "index_sha256": "8aef66c2bd73cc8484448c21bf6e03c50f4b77050546265547f0129e659aef4e",
+        "old_path": null,
+        "path": "Specs/Plans/WIP/Operation_ReviewFollowup_FOTerminalFocus_2026-08-19.md",
+        "status": "modified",
+        "worktree_sha256": "189dacc6d8f153bb557dd3b49a2c027f98501e9c5aa8c363a8470c86a52c0eed",
+        "worktree_size_bytes": 18729
+      },
+      "closeout": {
+        "path": "Specs/Plans/WIP/Operation_ReviewFollowup_FOTerminalFocus_2026-08-19.md",
+        "status": "deleted",
+        "base_sha256": "8aef66c2bd73cc8484448c21bf6e03c50f4b77050546265547f0129e659aef4e",
+        "base_mode": "100644",
+        "index_sha256": "8aef66c2bd73cc8484448c21bf6e03c50f4b77050546265547f0129e659aef4e",
+        "index_mode": "100644",
+        "worktree_sha256": null,
+        "worktree_size_bytes": null,
+        "old_path": null
+      }
+    },
+    {
+      "path": "Specs/Plans/WIP/README.md",
+      "tested": {
+        "base_mode": "100644",
+        "base_sha256": "a781b5825851089afcf07aee7e0c8da8aa9012a0e523b661278c8f9d96eeba00",
+        "index_mode": "100644",
+        "index_sha256": "a781b5825851089afcf07aee7e0c8da8aa9012a0e523b661278c8f9d96eeba00",
+        "old_path": null,
+        "path": "Specs/Plans/WIP/README.md",
+        "status": "modified",
+        "worktree_sha256": "4caa97dbe36ca64cea913869b08c79dc1d51bda44834ef379cd673282e66ccd5",
+        "worktree_size_bytes": 24428
+      },
+      "closeout": {
+        "path": "Specs/Plans/WIP/README.md",
+        "status": "modified",
+        "base_sha256": "a781b5825851089afcf07aee7e0c8da8aa9012a0e523b661278c8f9d96eeba00",
+        "base_mode": "100644",
+        "index_sha256": "a781b5825851089afcf07aee7e0c8da8aa9012a0e523b661278c8f9d96eeba00",
+        "index_mode": "100644",
+        "worktree_sha256": "c6d62acaac2a939ad49ad4d72e9dd4e3c318feedb1737e4428b0a8e9cbb196e2",
+        "worktree_size_bytes": 23487,
+        "old_path": null
+      }
+    },
+    {
+      "path": "Specs/Plans/WIP/UI_ConfirmationPreferencesAndOperationOutcomes_2026-09-08.md",
+      "tested": {
+        "base_mode": null,
+        "base_sha256": null,
+        "index_mode": null,
+        "index_sha256": null,
+        "old_path": null,
+        "path": "Specs/Plans/WIP/UI_ConfirmationPreferencesAndOperationOutcomes_2026-09-08.md",
+        "status": "untracked",
+        "worktree_sha256": "831261ecd253916aed8cf37b472a0b967aa5a1524d7c369304c8d13d90d27ce2",
+        "worktree_size_bytes": 69732
+      },
+      "closeout": {
+        "path": "Specs/Plans/WIP/UI_ConfirmationPreferencesAndOperationOutcomes_2026-09-08.md",
+        "status": "untracked",
+        "base_sha256": null,
+        "base_mode": null,
+        "index_sha256": null,
+        "index_mode": null,
+        "worktree_sha256": "bdbec2c10105670201010db7446b2c49d6fbd848b46c2ea9bca50714dd6aab72",
+        "worktree_size_bytes": 69770,
+        "old_path": null
+      }
+    }
+  ]
+}

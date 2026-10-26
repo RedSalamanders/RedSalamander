@@ -98,7 +98,7 @@ $ApplyLegacySandboxCleanup = $false
         $runner | Should Match '\$resultArtifactPath\s*=\s*\$null'
         $runner | Should Match '(?s)\$resultArtifactPath\s*=\s*\$jsonPath.+?-CandidateArtifact\s+@\(\$resultArtifactPath\)'
         $runner | Should Not Match '-CandidateArtifact\s+\$jsonCandidates'
-        $selfTestCommon = Get-Content -LiteralPath (Join-Path $repoRoot 'RedSalamander\SelfTest\Common\SelfTestCommon.cpp') -Raw
+        $selfTestCommon = Get-Content -LiteralPath (Join-Path $repoRoot 'RedSalamander\SelfTest\Common\Common.Tests.Runner.cpp') -Raw
         $selfTestCommon | Should Match '"skip_class", CaseSkipClassName\(testCase\)'
         $selfTestCommon | Should Match 'return "declared-capability"'
         $selfTestCommon | Should Match 'return "unexpected"'
@@ -120,6 +120,124 @@ $ApplyLegacySandboxCleanup = $false
         $deployment | Should Match '''-Configuration'', \$Configuration, ''-Platform'', \$Platform'
         $deployment | Should Match 'Invoke-RSTargetedBuildForDeploymentTest -Platform \$selectedPlatform -Configuration \$selectedConfiguration'
     }
+
+It 'binds post-writer fingerprints to the restored receipt and matches seeded Resume construction' {
+    $runnerPath=Join-Path $repoRoot 'Tools/Run-AllTests.ps1'
+    $runnerText=[IO.File]::ReadAllText($runnerPath)
+    $tokens=$null;$errors=$null
+    $runnerAst=[Management.Automation.Language.Parser]::ParseFile($runnerPath,[ref]$tokens,[ref]$errors)
+    @($errors).Count | Should Be 0
+    $builders=@($runnerAst.FindAll({param($node)
+        $node -is [Management.Automation.Language.FunctionDefinitionAst] -and
+        $node.Name -ceq 'New-RSRunnerEntryFingerprintRecord'
+    },$false))
+    $mutators=@($runnerAst.FindAll({param($node)
+        $node -is [Management.Automation.Language.ForEachStatementAst] -and
+        $node.Variable.VariablePath.UserPath -ceq 'artifactMutator'
+    },$false))
+    $builders.Count | Should Be 1
+    $mutators.Count | Should Be 1
+    $statements=@($mutators[0].Body.Statements)
+    $restore=@($statements | Where-Object {
+        $_ -is [Management.Automation.Language.AssignmentStatementAst] -and
+        $_.Left -is [Management.Automation.Language.VariableExpressionAst] -and
+        $_.Left.VariablePath.UserPath -ceq 'receipt' -and
+        $_.Right.Extent.Text -ceq '$restoredReceipt'
+    })
+    $publish=@($statements | Where-Object {
+        $_ -is [Management.Automation.Language.AssignmentStatementAst] -and
+        $_.Left -is [Management.Automation.Language.VariableExpressionAst] -and
+        $_.Left.VariablePath.UserPath -ceq 'entryFingerprintRecord'
+    })
+    # Runner setup lives inside its outer try, not EndBlock's direct statements.
+    $initialBindings=@($runnerAst.FindAll({param($node)
+        $node -is [Management.Automation.Language.AssignmentStatementAst] -and
+        $node.Left -is [Management.Automation.Language.VariableExpressionAst] -and
+        $node.Left.VariablePath.UserPath -ceq 'buildReceiptBindingDigest'
+    },$false) | Where-Object { $_.Extent.StartOffset -lt $builders[0].Extent.StartOffset })
+    $restore.Count | Should Be 1
+    $publish.Count | Should Be 1
+    $initialBindings.Count | Should Be 1
+    # The actual contiguous post-reattest transition ends at fingerprint
+    # construction, before later IO/state publication. No production text edits.
+    $transitionText=$runnerText.Substring($restore[0].Extent.StartOffset,
+        $publish[0].Extent.EndOffset-$restore[0].Extent.StartOffset)
+    foreach ($configurationFixture in @('Debug','Release')) {
+        foreach ($changedReceiptFixture in @($true,$false)) {
+            & {
+                param($Checkout,$BuilderText,$TransitionText,$InitialBindingText,$Profile,$ChangeReceipt)
+                Import-Module (Join-Path $Checkout 'Tools/Modules/Testing/ValidationFingerprint.psm1') -Scope Local -ErrorAction Stop
+                . ([scriptblock]::Create($BuilderText))
+                $Platform='x64';$Configuration=$Profile
+                $initialWorkspaceSnapshot=[pscustomobject]@{snapshot_id=('b'*64)}
+                $runnerDependencyDigests=@{'tools/run-all-tests.ps1'= ('5'*64)}
+                $quarantineDigest='6'*64;$failureClassificationEnabled=$false
+                $entry=[pscustomobject][ordered]@{
+                    id='selftest.commands';display_name='Commands';kind='SelfTest'
+                    path=('.build/x64/'+$Profile+'/RedSalamander.exe');arguments=@('--commands-selftest')
+                    working_directory='.';result_contract_id='result.commands'
+                    impact_tags=@('test.commands');input_sets=@('source.commands');artifact_ids=@('artifact.profile')
+                    artifact_read_ids=@('artifact.profile');artifact_write_ids=@();produces_artifact_ids=@()
+                    invalidates_receipt_scopes=@();cache_policy='ExactArtifact';environment_inputs=@('env.profile')
+                    coverage_contract=[pscustomobject]@{suite='selftest.commands';family='Commands';exact_cases=@();repeat=1;order_identity='commands.default'}
+                    outcome_contract=[pscustomobject]@{pass_required_cases=@('selected');static_skip_cases=@();capability_bound_skip_cases=@();forbidden_skip_classes=@('unclassified')}
+                    order_contract='broad-same-process';resource_classes=@('artifact-read-only')
+                    estimated_duration_key='duration.commands';requires_interactive_desktop=$false
+                }
+                $testPlan=@([pscustomobject]@{Id='selftest.commands'})
+                $validationPlan=[pscustomobject]@{plan_digest=('7'*64);coverage_plan_digest=('a'*64);entries=@($entry)}
+                # Fingerprint metadata fixtures follow ValidationFingerprint.Tests;
+                # they are not fake build receipts offered as runtime attestation.
+                $receipt=[pscustomobject][ordered]@{
+                    receipt_id=('c'*64);source_snapshot_id=('b'*64);platform='x64';configuration=$Profile
+                    target='Build';tests_enabled=$true;toolchain_identity_digest=('d'*64);vcpkg_identity_digest=('e'*64)
+                    ghostty_runtime_identity=('f'*64);project_graph_digest=('1'*64);runtime_dependency_digest=('2'*64)
+                    outputs=@([pscustomobject]@{id='artifact.app';role='executable';relative_path=('.build/x64/'+$Profile+'/RedSalamander.exe');size_bytes=1;sha256=('3'*64);runtime_closure=@()})
+                }
+                $restoredReceipt=$receipt
+                if ($ChangeReceipt) {
+                    $restoredReceipt=$receipt.PSObject.Copy()
+                    $restoredReceipt.receipt_id='9'*64
+                    $restoredReceipt.outputs=@([pscustomobject]@{id='artifact.app';role='executable';relative_path=('.build/x64/'+$Profile+'/RedSalamander.exe');size_bytes=2;sha256=('4'*64);runtime_closure=@()})
+                }
+                $artifactEpoch=0L
+                . ([scriptblock]::Create($InitialBindingText))
+                $initialDigest=$buildReceiptBindingDigest
+                [void](New-RSRunnerEntryFingerprintRecord -ExecutionEntries $testPlan -PortablePlan $validationPlan)
+                # StartMutation has already advanced the production epoch before
+                # the captured transition. This metadata-only cut point follows real byte
+                # verification in production; no build IO is exercised here.
+                $artifactEpoch=1L
+                . ([scriptblock]::Create($TransitionText))
+                $postWriter=$entryFingerprintRecord
+                $restoredDigest=Get-RSValidationBuildReceiptBindingDigest -BuildReceipt $restoredReceipt
+                if ($ChangeReceipt) { $restoredDigest | Should Not Be $initialDigest }
+                else { $restoredDigest | Should Be $initialDigest }
+                $postWriter.build_receipt_id | Should Be $restoredReceipt.receipt_id
+                $postWriter.artifact_epoch | Should Be 1
+                $postWriter.entries.Count | Should Be 1
+                # Independent normal caller omits the optional cached binding,
+                # so canonical code recomputes it from the restored receipt.
+                $expected=Get-RSValidationEntryFingerprint -EntryContract $entry `
+                    -CoveragePlanDigest $validationPlan.coverage_plan_digest -WorkspaceSnapshot $initialWorkspaceSnapshot `
+                    -BuildReceipt $restoredReceipt -InputSetDigests @{'source.commands'=$initialWorkspaceSnapshot.snapshot_id} `
+                    -RunnerDependencyDigests $runnerDependencyDigests -CapabilityInputs @{'env.profile'=($Platform+'|'+$Configuration)} `
+                    -QuarantineDigest $quarantineDigest -ClassificationMode disabled -ArtifactEpoch 1
+                $postWriter.entries[0].component_digests.build_artifact | Should Be $expected.ComponentDigests.build_artifact
+                $postWriter.entries[0].fingerprint | Should Be $expected.Fingerprint
+                $testPlan[0].EntryFingerprintComponents.build_artifact | Should Be $expected.ComponentDigests.build_artifact
+                # Exact Resume seeds the validated terminal epoch, then computes
+                # the normal initial receipt binding. Exercise that same initial
+                # statement and real production builder with unchanged metadata.
+                $receipt=$restoredReceipt;$artifactEpoch=1L
+                . ([scriptblock]::Create($InitialBindingText))
+                $resumeConstruction=New-RSRunnerEntryFingerprintRecord -ExecutionEntries $testPlan -PortablePlan $validationPlan
+                $resumeConstruction.entries[0].fingerprint | Should Be $postWriter.entries[0].fingerprint
+                $resumeConstruction.entries[0].component_digests.build_artifact | Should Be $postWriter.entries[0].component_digests.build_artifact
+            } $repoRoot $builders[0].Extent.Text $transitionText $initialBindings[0].Extent.Text $configurationFixture $changedReceiptFixture
+        }
+    }
+}
 }
 
 Describe 'Run-AllTests plan helper' {
@@ -127,14 +245,108 @@ Describe 'Run-AllTests plan helper' {
         Import-Module $helperModule -Force -ErrorAction Stop
     }
 
-    It 'leases the desktop only for the exact interactive documentation case' {
-        foreach ($case in @('', 'FileOps_VisualGallery', 'FileOps_VisualGalleryInteraction', 'fileops_visualgalleryinteraction', 'FileOps_VisualGalleryInteraction*')) {
+    It 'admits only the exact static product gallery without activation or a desktop lease' {
+        foreach ($case in @('cmd_product_documentation_gallery', 'cmd_product_documentation_gallery*', 'CMD_PRODUCT_DOCUMENTATION_GALLERY',
+                'cmd_product_documentation_gallery ', 'cmd_product_documentation_gallery,cmd_other', '')) {
+            $plan = @(Get-RSTestRunPlan -Suite Commands -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
+                -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
+            $exact = $case -ceq 'cmd_product_documentation_gallery'
+            $plan.Count | Should Be 1
+            $plan[0].RequiresInteractiveDesktop | Should Be (-not $exact)
+            ($plan[0].Arguments -contains '--selftest-no-activate') | Should Be $exact
+        }
+        foreach ($proof in @('SelfTestFlakyProofCase', 'SelfTestOrderProofCase')) {
+            $arguments = @{Suite='Commands'; RepoRoot=$repoRoot; Platform='x64'; Configuration='Debug';
+                RedSalamanderExePath=(Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe'); CaseFilter='cmd_product_documentation_gallery'}
+            $arguments[$proof] = 'cmd_product_documentation_gallery'
+            $entry = @(Get-RSTestRunPlan @arguments)[0]
+            $entry.RequiresInteractiveDesktop | Should Be $true
+        }
+    }
+
+    It 'serializes FileOps foreground and UIA checks while activation stays exact opt-in' {
+        foreach ($case in @('', 'FileOps_VisualGallery', 'FileOps_AdmissionBaseline', 'FileOpsFamily_SafetyRemediationContracts',
+                'Phase6_', 'FileOps_VisualGalleryInteraction', 'fileops_visualgalleryinteraction', 'FileOps_VisualGalleryInteraction*',
+                'FileOpsFamily_DiscoveryScope', 'DiscoveryScope_', 'DiscoveryScope_FolderLiveProgress*',
+                'DiscoveryScope_MultipleFoldersLiveProgress*', 'discoveryscope_folderliveprogress',
+                'discoveryscope_multiplefoldersliveprogress', 'DiscoveryScope_FolderLiveProgress ',
+                ' DiscoveryScope_MultipleFoldersLiveProgress', 'DiscoveryScope_FolderLiveProgressUnknown',
+                'DiscoveryScope_FolderLiveProgress,DiscoveryScope_MultipleFoldersLiveProgress',
+                'fileops_repeatdecisioncontracts', 'FileOps_RepeatDecisionContracts*', 'FileOps_RepeatDecisionContracts ',
+                'FileOps_RepeatDecisionContracts,DiscoveryScope_FolderLiveProgress',
+                'fileops_reviewremediationcontracts', 'FileOps_ReviewRemediationContracts*', 'FileOps_CrossRootLocalCopy ', 'FileOps_SmallFileCopyCost*', 'FileOps_SelectionShapeLocal*', 'fileops_selectionshapesmb', 'FileOps_SelectionShapeLocal,FileOps_SelectionShapeSmb')) {
             $plan = @(Get-RSTestRunPlan -Suite FileOps -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
                 -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
             $interactive = $case -eq 'FileOps_VisualGalleryInteraction'
             $plan.Count | Should Be 1
-            $plan[0].RequiresInteractiveDesktop | Should Be $interactive
+            $plan[0].RequiresInteractiveDesktop | Should Be $true
+            ($plan[0].ResourceClasses -contains 'interactive-desktop') | Should Be $true
+            ($plan[0].EnvironmentInputs -contains 'env.interactive-desktop') | Should Be $true
             ($plan[0].Arguments -contains '--selftest-no-activate') | Should Be (-not $interactive)
+        }
+    }
+
+    It 'admits only exact reviewed FileOps progress and callback witnesses without a desktop lease or activation' {
+        foreach ($case in @('DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb')) {
+            $plan = @(Get-RSTestRunPlan -Suite FileOps -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
+                -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
+            $plan.Count | Should Be 1
+            $plan[0].RequiresInteractiveDesktop | Should Be $false
+            ($plan[0].ResourceClasses -contains 'interactive-desktop') | Should Be $false
+            ($plan[0].EnvironmentInputs -contains 'env.interactive-desktop') | Should Be $false
+            ($plan[0].Arguments -contains '--selftest-no-activate') | Should Be $true
+            ($plan[0].Arguments -contains "--selftest-case=$case") | Should Be $true
+        }
+    }
+
+    It 'retains the FileOps desktop lease for broad suites and proof injections using an exact owned-witness name' {
+        foreach ($case in @('DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb')) {
+            foreach ($suite in @('All', 'CI', 'Full')) {
+                $plan = @(Get-RSTestRunPlan -Suite $suite -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
+                    -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
+                $fileOps = @($plan | Where-Object Name -eq 'FileOperations')
+                $fileOps.Count | Should Be 1
+                $fileOps[0].RequiresInteractiveDesktop | Should Be $true
+                ($fileOps[0].ResourceClasses -contains 'interactive-desktop') | Should Be $true
+                ($fileOps[0].EnvironmentInputs -contains 'env.interactive-desktop') | Should Be $true
+                ($fileOps[0].Arguments -contains '--selftest-no-activate') | Should Be $true
+            }
+            foreach ($proof in @('SelfTestFlakyProofCase', 'SelfTestOrderProofCase')) {
+                $arguments = @{ Suite = 'FileOps'; RepoRoot = $repoRoot; Platform = 'x64'; Configuration = 'Debug'
+                    RedSalamanderExePath = (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe'); CaseFilter = $case }
+                $arguments[$proof] = $case
+                $plan = @(Get-RSTestRunPlan @arguments)
+                $plan[0].RequiresInteractiveDesktop | Should Be $true
+                ($plan[0].Arguments -contains '--selftest-no-activate') | Should Be $true
+            }
+        }
+    }
+
+    It 'preserves exact owned-witness activation and desktop markers in quarantine repair' {
+        foreach ($case in @('DiscoveryScope_FolderLiveProgress', 'DiscoveryScope_MultipleFoldersLiveProgress', 'FileOps_RepeatDecisionContracts', 'FileOps_ReviewRemediationContracts', 'FileOps_CrossRootLocalCopy', 'FileOps_SmallFileCopyCost', 'FileOps_SelectionShapeLocal', 'FileOps_SelectionShapeSmb')) {
+            foreach ($suite in @('FileOps', 'Full')) {
+                $plan = @(Get-RSTestRunPlan -Suite $suite -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
+                    -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $case)
+                $status = [pscustomobject]@{
+                    IsValid = $true; HasBlockingEntries = $true
+                    ActiveEntries = @([pscustomobject]@{
+                        harness = 'FileOperations'; name = $case; owner = 'fileops-owner'
+                        opened = '2026-10-14'; expires = '2026-10-21'
+                        issue = 'Specs/Testing/Testing_SelfTests.md'
+                        root_cause_hypothesis = 'Owned real-copy presentation witness failed.'
+                        fix_or_replace_plan = 'Repair the copy-to-painted-progress path.'
+                    })
+                    InvalidEntries = @(); Errors = @()
+                }
+                $repair = Get-RSTestQuarantineRepairPlan -QuarantineStatus $status -TestPlan $plan `
+                    -HarnessCaseMap @{ FileOperations = @($case) }
+                $repair.IsValid | Should Be $true
+                @($repair.Attempts).Count | Should Be 1
+                $repair.Attempts[0].requires_interactive_desktop | Should Be ($suite -eq 'Full')
+                ($repair.Attempts[0].resource_classes -contains 'interactive-desktop') | Should Be ($suite -eq 'Full')
+                ($repair.Attempts[0].environment_inputs -contains 'env.interactive-desktop') | Should Be ($suite -eq 'Full')
+                ($repair.Attempts[0].arguments -contains '--selftest-no-activate') | Should Be $true
+            }
         }
     }
 
@@ -163,7 +375,7 @@ Describe 'Run-AllTests plan helper' {
         $commands = $plan | Where-Object Name -eq 'Commands' | Select-Object -First 1
         Assert-RSEqual -Actual $commands.RequiresInteractiveDesktop -Expected $true -Message 'Commands requires the real foreground/focus isolation boundary.'
         foreach ($entry in @($plan | Where-Object Name -ne 'Commands')) {
-            Assert-RSEqual -Actual $entry.RequiresInteractiveDesktop -Expected $false -Message "$($entry.Name) should run outside the interactive desktop mutex."
+            Assert-RSEqual -Actual $entry.RequiresInteractiveDesktop -Expected ($entry.Name -eq 'FileOperations') -Message "$($entry.Name) desktop serialization must stay independent of activation."
             Assert-RSEqual -Actual ($entry.Arguments -contains '--selftest-no-activate') -Expected $true -Message "$($entry.Name) should reject focus stealing."
         }
     }
@@ -283,6 +495,105 @@ Describe 'Run-AllTests plan helper' {
         }
     }
 
+    It 'builds a validation plan for an empty selection instead of failing parameter binding' {
+        # Pester 3 "Should Not Throw" passes even when the block throws under PowerShell 7, so capture explicitly.
+        $captured = $null
+        $plan = $null
+        try {
+            $plan = New-RSValidationPlan -RepoRoot $repoRoot -RequestedSuite FileOps -Entries @() `
+                -ValidationMode Fresh -CoverageScope filtered
+        } catch {
+            $captured = $_.Exception.Message
+        }
+        $captured | Should BeNullOrEmpty
+        @($plan.entries).Count | Should Be 0
+        $plan.coverage_scope | Should Be 'filtered'
+    }
+
+    It 'finishes NOT_EVALUATED with exit 2 when every selected entry is pending the interactive desktop' {
+        $evidenceName = "pending-interactive-$([guid]::NewGuid().ToString('N')).json"
+        $output = @(& pwsh -NoLogo -NoProfile -File (Join-Path $repoRoot 'Tools\Run-AllTests.ps1') `
+                -Suite FileOps -CaseFilter FileOps_AdmissionBaseline -NonInteractive `
+                -ExplainPlan -ExplainPlanPath $evidenceName 2>&1 | ForEach-Object { [string]$_ })
+        $exitCode = $LASTEXITCODE
+        $text = $output -join "`n"
+        $exitCode | Should Be 2
+        $text | Should Not Match 'empty array'
+        $text | Should Match 'PENDING_INTERACTIVE \(1\): FileOperations'
+        $text | Should Match 'Shadow validation plan:'
+        $explainPath = [regex]::Match($text, '(?m)^Decision:\s*(.+?)\s*$').Groups[1].Value
+        try {
+            Test-Path -LiteralPath $explainPath -PathType Leaf | Should Be $true
+            $decision = Get-Content -LiteralPath $explainPath -Raw | ConvertFrom-Json
+            @($decision.entries).Count | Should Be 0
+        } finally {
+            if (-not [string]::IsNullOrWhiteSpace($explainPath) -and (Split-Path -Leaf $explainPath) -eq $evidenceName) {
+                Remove-Item -LiteralPath $explainPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    It 'executes both real non-interactive selection branches with empty and nonempty desktop-pending lists' {
+        $runner = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Run-AllTests.ps1') -Raw
+        foreach ($branch in @(
+                @{ Pending = 'explainPending'; Entries = 'explainEntries'; End = '    $coverageScope = if' },
+                @{ Pending = 'interactivePending'; Entries = 'testPlan'; End = '$requiredPlanArtifactPaths = @(' }
+            )) {
+            $pendingIndex = $runner.IndexOf("`$$($branch.Pending) = @(", [StringComparison]::Ordinal)
+            $start = $runner.LastIndexOf('if ($NonInteractive) {', $pendingIndex, [StringComparison]::Ordinal)
+            $end = $runner.IndexOf($branch.End, $pendingIndex, [StringComparison]::Ordinal)
+            $pendingIndex | Should BeGreaterThan -1
+            $start | Should BeGreaterThan -1
+            $end | Should BeGreaterThan $start
+            $invokeBranch = [scriptblock]::Create(
+                "param(`$NonInteractive, `$$($branch.Entries))`nSet-StrictMode -Version Latest`n" +
+                $runner.Substring($start, $end - $start) +
+                "`n[pscustomobject]@{ RetainedCount = @(`$$($branch.Entries)).Count }")
+            foreach ($selection in @(
+                    @{ Case = 'FileOps_AdmissionBaseline'; Pending = 1; Retained = 0 },
+                    @{ Case = 'DiscoveryScope_FolderLiveProgress'; Pending = 0; Retained = 1 },
+                    @{ Case = 'DiscoveryScope_MultipleFoldersLiveProgress'; Pending = 0; Retained = 1 }
+                )) {
+                $plan = @(Get-RSTestRunPlan -Suite FileOps -RepoRoot $repoRoot -Platform x64 -Configuration Debug `
+                    -RedSalamanderExePath (Join-Path $repoRoot '.build\x64\Debug\RedSalamander.exe') -CaseFilter $selection.Case)
+                $output = @(& $invokeBranch $true $plan 6>&1)
+                $text = ($output | ForEach-Object { [string]$_ }) -join "`n"
+                $text | Should Match "PENDING_INTERACTIVE \($($selection.Pending)\):"
+                if ($selection.Pending -gt 0) { $text | Should Match 'FileOperations' }
+                $output[-1].RetainedCount | Should Be $selection.Retained
+            }
+        }
+    }
+
+    It 'explains an exact non-interactive folder-progress selection with no desktop-pending entries' {
+        $evidenceName = "no-pending-interactive-$([guid]::NewGuid().ToString('N')).json"
+        $output = @(& pwsh -NoLogo -NoProfile -File (Join-Path $repoRoot 'Tools\Run-AllTests.ps1') `
+                -Suite FileOps -CaseFilter DiscoveryScope_FolderLiveProgress -NonInteractive `
+                -ExplainPlan -ExplainPlanPath $evidenceName 2>&1 | ForEach-Object { [string]$_ })
+        $exitCode = $LASTEXITCODE
+        $text = $output -join "`n"
+        $exitCode | Should Be 2
+        $text | Should Match 'PENDING_INTERACTIVE \(0\):'
+        $text | Should Match 'Shadow validation plan:'
+        $explainPath = [regex]::Match($text, '(?m)^Decision:\s*(.+?)\s*$').Groups[1].Value
+        try {
+            Test-Path -LiteralPath $explainPath -PathType Leaf | Should Be $true
+            $decision = Get-Content -LiteralPath $explainPath -Raw | ConvertFrom-Json
+            @($decision.entries).Count | Should Be 1
+            $decision.entries[0].id | Should Be 'selftest.file-operations'
+        } finally {
+            if (-not [string]::IsNullOrWhiteSpace($explainPath) -and (Split-Path -Leaf $explainPath) -eq $evidenceName) {
+                Remove-Item -LiteralPath $explainPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+    }
+
+    It 'reports an all-pending non-interactive run as NOT_EVALUATED rather than PASSED' {
+        $runner = Get-Content -LiteralPath (Join-Path $repoRoot 'Tools\Run-AllTests.ps1') -Raw
+        $runner | Should Match '(?s)elseif \(\$overallExitCode -eq 0 -and \$testPlan\.Count -eq 0\) \{[^}]*''NOT_EVALUATED''[^}]*\} elseif \(\$overallExitCode -eq 0\) \{\s*''PASSED'''
+        $runner | Should Match 'every selected entry requires the interactive desktop'
+    }
+
     It 'keeps governed Commands family metadata equal to the native coordinator and emits a family-process plan' {
         $families = @(Get-RSCommandsSelfTestFamilies)
         @($families.name | Sort-Object -Unique).Count | Should Be $families.Count
@@ -291,7 +602,7 @@ Describe 'Run-AllTests plan helper' {
             Test-Path -LiteralPath (Join-Path $repoRoot $family.source) -PathType Leaf | Should Be $true
         }
 
-        $commandsSource = Get-Content -LiteralPath (Join-Path $repoRoot 'RedSalamander\SelfTest\Commands\Commands.SelfTest.cpp') -Raw
+        $commandsSource = Get-Content -LiteralPath (Join-Path $repoRoot 'RedSalamander\SelfTest\Commands\Commands.Tests.Runner.cpp') -Raw
         $tableMatch = [regex]::Match($commandsSource, 'kCommandsSelfTestFamilies\{(?<body>[\s\S]*?)\};')
         $tableMatch.Success | Should Be $true
         $nativeNames = @([regex]::Matches($tableMatch.Groups['body'].Value, 'L"(?<name>[a-z0-9-]+)"') | ForEach-Object { $_.Groups['name'].Value })
@@ -428,13 +739,11 @@ Describe 'Run-AllTests plan helper' {
                 'ViewerSqliteTests.Noninteractive',
                 'ViewerSqliteTests.Interactive',
                 'FileSystemCurlTests',
-                'MonitorTest',
                 'LocalizationTests',
                 'RedConfigureTests',
                 'PluginContractTests',
                 'SettingsSchemaTests',
                 'CrashHandlingTests',
-                'RedSalamanderMonitorEtwLatency',
                 'PerformanceTests2',
                 'ToolsPesterTests',
                 'VcpkgMergeSynthetic'
@@ -444,22 +753,12 @@ Describe 'Run-AllTests plan helper' {
         $performance = $plan | Where-Object { $_.Name -eq 'PerformanceTests2' } | Select-Object -First 1
         Assert-RSEqual -Actual $performance.Kind -Expected 'CppUnitTest' -Message 'PerformanceTests2 should run through vstest.'
         Assert-RSEqual -Actual ($performance.Path -like '*\.build\x64\Debug\PerformanceTests2.dll') -Expected $true -Message 'PerformanceTests2 should target the built DLL.'
-
-        $monitorLatency = $plan | Where-Object { $_.Name -eq 'RedSalamanderMonitorEtwLatency' } | Select-Object -First 1
-        Assert-RSEqual -Actual $monitorLatency.Kind -Expected 'Executable' -Message 'Monitor ETW latency drill should run as a focused executable test.'
-        Assert-RSEqual -Actual ($monitorLatency.Path -like '*\.build\x64\Debug\RedSalamanderMonitor.exe') -Expected $true -Message 'Monitor ETW latency drill should target the built monitor executable.'
-        Assert-RSSequenceEqual `
-            -Actual @($monitorLatency.Arguments) `
-            -Expected @('--chrome-selftest', '--wait-instance', '--perf', '--monitor-etw-burst-mode=latency', '--monitor-etw-burst-count=60', '--monitor-etw-burst-size=260') `
-            -Message 'Monitor ETW latency drill should replay the scenario-gated perf command.'
-        Assert-RSEqual -Actual $monitorLatency.RequiresInteractiveDesktop -Expected $true -Message 'Monitor ETW latency should own the interactive desktop only while it executes.'
-
         $interactiveNames = @($plan |
                 Where-Object RequiresInteractiveDesktop |
                 ForEach-Object Name)
         Assert-RSSequenceEqual `
             -Actual $interactiveNames `
-            -Expected @('Commands', 'ViewerPETests.Interactive', 'ViewerSqliteTests.Interactive', 'RedSalamanderMonitorEtwLatency') `
+            -Expected @('Commands', 'FileOperations', 'ViewerPETests.Interactive', 'ViewerSqliteTests.Interactive') `
             -Message 'Full should serialize only focus-sensitive or desktop-global entries.'
 
         $pester = $plan | Where-Object { $_.Name -eq 'ToolsPesterTests' } | Select-Object -First 1
@@ -507,7 +806,6 @@ Describe 'Run-AllTests plan helper' {
                 'FileSystemCurlTests',
                 'ViewerPETests.Noninteractive',
                 'ViewerSqliteTests.Noninteractive',
-                'MonitorTest',
                 'LocalizationTests',
                 'RedConfigureTests',
                 'PluginContractTests',
@@ -562,7 +860,6 @@ Describe 'Run-AllTests plan helper' {
                 'ViewerSqliteTests.Interactive',
                 'ViewerPETests.TestViewerTextFindPromptUsesDxUiHostAndClosesCleanly',
                 'ViewerPETests.TestViewerTextGotoPromptUsesDxUiHostAndClosesCleanly',
-                'MonitorTest',
                 'LocalizationTests',
                 'RedConfigureTests',
                 'PluginContractTests',
@@ -591,7 +888,7 @@ Describe 'Run-AllTests plan helper' {
 
         foreach ($name in @('CompareDirectories', 'FileOperations')) {
             $entry = $plan | Where-Object Name -eq $name | Select-Object -First 1
-            Assert-RSEqual -Actual $entry.RequiresInteractiveDesktop -Expected $false -Message "$name should not own the interactive desktop."
+            Assert-RSEqual -Actual $entry.RequiresInteractiveDesktop -Expected ($name -eq 'FileOperations') -Message "$name desktop serialization must stay independent of activation."
             Assert-RSEqual -Actual ($entry.Arguments -contains '--selftest-no-activate') -Expected $true -Message "$name should reject focus stealing."
         }
         foreach ($name in @('ViewerPETests.Noninteractive', 'ViewerSqliteTests.Noninteractive')) {
@@ -614,7 +911,7 @@ Describe 'Run-AllTests plan helper' {
         Assert-RSEqual `
             -Actual @($plan | Where-Object { $_.Name -eq 'RedSalamanderMonitorEtwLatency' }).Count `
             -Expected 0 `
-            -Message 'Monitor ETW latency should remain Full-only.'
+            -Message 'Viewer tests belong to the independent RedMonitor project.'
 
         $workflow = Get-Content -Path (Join-Path $repoRoot '.github\workflows\ci.yml') -Raw
         # The native matrix is one fromJSON expression: the pull-request branch first, then the push branch.
@@ -676,21 +973,110 @@ Describe 'Run-AllTests plan helper' {
                 return $process
             }
             function Close-RSContainedProcess { param($Process) $closed.Add($Process) }
+            $ownedDisk = @{ Value = [pscustomobject]@{ Status = 'Skipped'; Reason = "not-elevated:`r`n  fixture reason" } }
+            function Get-RSRunAllTestsOwnedVirtualDisk { return $ownedDisk.Value }
 
-            $entry = [pscustomobject]@{ Path = 'fixture.exe'; WorkingDirectory = $TestDrive }
-            foreach ($attempt in 1..2) {
-                Invoke-RSSelfTestProcess -Entry $entry -Arguments @(
-                    '--fileops-selftest', '--selftest-case=R4A19_DiscoveryProviderControls') | Should Be 17
+            # An ambient (possibly forged) mount hand-off never reaches any child.
+            $vhdxNames = @('REDSALAMANDER_TEST_OWNED_VHDX_MOUNT', 'REDSALAMANDER_TEST_OWNED_VHDX_VOLUME', 'REDSALAMANDER_TEST_OWNED_VHDX_UNAVAILABLE')
+            $callerMount = [Environment]::GetEnvironmentVariable($vhdxNames[0], 'Process')
+            [Environment]::SetEnvironmentVariable($vhdxNames[0], 'D:\', 'Process')
+            try {
+                $entry = [pscustomobject]@{ Path = 'fixture.exe'; WorkingDirectory = $TestDrive }
+                foreach ($attempt in 1..2) {
+                    Invoke-RSSelfTestProcess -Entry $entry -Arguments @(
+                        '--fileops-selftest', '--selftest-case=R4A19_DiscoveryProviderControls') | Should Be 17
+                }
+                Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--compare-selftest') | Should Be 17
+                $ownedDisk.Value = [pscustomobject]@{
+                    Status = 'Mounted'; MountPath = 'C:\owned\mount'; VolumeGuidPath = '\\?\Volume{00000000-5a4d-4e2b-9c11-7e57c1ea0f00}\'
+                }
+                Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--fileops-selftest') | Should Be 17
+            } finally {
+                [Environment]::SetEnvironmentVariable($vhdxNames[0], $callerMount, 'Process')
             }
-            Invoke-RSSelfTestProcess -Entry $entry -Arguments @('--compare-selftest') | Should Be 17
-            $profiles.Count | Should Be 2
-            $children.Count | Should Be 3
-            $closed.Count | Should Be 3
+            $profiles.Count | Should Be 3
+            $children.Count | Should Be 4
+            $closed.Count | Should Be 4
             $profiles[0] | Should Not Be $profiles[1]
             $children[0].EnvironmentVariables['LOCALAPPDATA'] | Should Be $profiles[0]
             $children[1].EnvironmentVariables['LOCALAPPDATA'] | Should Be $profiles[1]
             $children[2].EnvironmentVariables['LOCALAPPDATA'] | Should Be $callerLocalData
             [Environment]::GetEnvironmentVariable('LOCALAPPDATA', 'Process') | Should Be $callerLocalData
+            foreach ($index in 0..1) {
+                $children[$index].EnvironmentVariables.ContainsKey($vhdxNames[0]) | Should Be $false
+                $children[$index].EnvironmentVariables.ContainsKey($vhdxNames[1]) | Should Be $false
+                $children[$index].EnvironmentVariables[$vhdxNames[2]] | Should Be 'not-elevated: fixture reason'
+            }
+            foreach ($name in $vhdxNames) {
+                $children[2].EnvironmentVariables.ContainsKey($name) | Should Be $false
+            }
+            $children[3].EnvironmentVariables[$vhdxNames[0]] | Should Be 'C:\owned\mount'
+            $children[3].EnvironmentVariables[$vhdxNames[1]] | Should Be '\\?\Volume{00000000-5a4d-4e2b-9c11-7e57c1ea0f00}\'
+            $children[3].EnvironmentVariables.ContainsKey($vhdxNames[2]) | Should Be $false
+        }
+    }
+
+    It 'keeps the detached test-owned VHDX with the run unless FileOps passed' {
+        $tokens = $null
+        $errors = $null
+        $runnerPath = Join-Path $repoRoot 'Tools/Run-AllTests.ps1'
+        $ast = [System.Management.Automation.Language.Parser]::ParseFile($runnerPath, [ref]$tokens, [ref]$errors)
+        @($errors).Count | Should Be 0
+        $function = $ast.Find({ param($node)
+            $node -is [System.Management.Automation.Language.FunctionDefinitionAst] -and
+            $node.Name -eq 'Complete-RSRunAllTestsOwnedVirtualDisk'
+        }, $true)
+        ($null -ne $function) | Should Be $true
+
+        # The runner's finally block hands this function the FileOps outcome, which a FileOps
+        # suite records before its classification retries.
+        $runner = [IO.File]::ReadAllText($runnerPath)
+        $runner | Should Match 'Complete-RSRunAllTestsOwnedVirtualDisk -OwnedVirtualDisk \$script:rsTestOwnedVirtualDisk `\r?\n\s+-FileOpsSuitePassed \$script:rsFileOpsSuitePassed'
+        $runner | Should Match "\`$script:rsFileOpsSuitePassed = \`$script:rsFileOpsSuitePassed -ne \`$false -and \`$suiteResult\.ExitCode -eq 0"
+        $runner | Should Not Match 'Remove-RSTestOwnedVirtualDiskMount `\r?\n\s+-ReceiptPath \$script:'
+
+        & {
+            . ([scriptblock]::Create($function.Extent.Text))
+            $calls = [Collections.Generic.List[object]]::new()
+            $failNext = @{ Value = $false }
+            function Remove-RSTestOwnedVirtualDiskMount {
+                param($ReceiptPath, $RunRoot, [switch]$RetainImage)
+                $calls.Add([pscustomobject]@{ ReceiptPath = $ReceiptPath; RunRoot = $RunRoot; RetainImage = [bool]$RetainImage })
+                if ($failNext.Value) { throw 'injected teardown failure' }
+            }
+            $mounted = [pscustomobject]@{
+                Status = 'Mounted'; ReceiptPath = 'C:\T\runs\R\artifacts\test-owned-vhdx\f7-admission-baseline.receipt.json'
+                RunRoot = 'C:\T\runs\R'; VhdxPath = 'C:\T\runs\R\scratch\test-owned-vhdx\f7-admission-baseline\disk.vhdx'
+            }
+
+            Complete-RSRunAllTestsOwnedVirtualDisk -OwnedVirtualDisk $null -FileOpsSuitePassed $false
+            Complete-RSRunAllTestsOwnedVirtualDisk -OwnedVirtualDisk ([pscustomobject]@{ Status = 'Skipped'; Reason = 'x' }) -FileOpsSuitePassed $false
+            $calls.Count | Should Be 0
+
+            foreach ($case in @(
+                    @{ Passed = $true; Retain = $false },
+                    @{ Passed = $false; Retain = $true },
+                    @{ Passed = $null; Retain = $true })) {
+                $calls.Clear()
+                Complete-RSRunAllTestsOwnedVirtualDisk -OwnedVirtualDisk $mounted -FileOpsSuitePassed $case.Passed 6>$null
+                $calls.Count | Should Be 1
+                $calls[0].ReceiptPath | Should Be $mounted.ReceiptPath
+                $calls[0].RunRoot | Should Be $mounted.RunRoot
+                $calls[0].RetainImage | Should Be $case.Retain
+            }
+
+            # A failed teardown warns and never escapes the runner's finally block.
+            $calls.Clear()
+            $failNext.Value = $true
+            $outcome = @{ Failure = $null; Warnings = @() }
+            try {
+                $outcome.Warnings = @(Complete-RSRunAllTestsOwnedVirtualDisk -OwnedVirtualDisk $mounted -FileOpsSuitePassed $true 3>&1)
+            } catch {
+                $outcome.Failure = $_.Exception.Message
+            }
+            $outcome.Failure | Should Be $null
+            $calls.Count | Should Be 1
+            ($outcome.Warnings -join ' ') | Should Match 'injected teardown failure'
         }
     }
 
@@ -807,14 +1193,14 @@ Describe 'Run-AllTests plan helper' {
         Assert-RSEqual -Actual $ciBuild.ContainsKey('MaxCpuCount') -Expected $false -Message 'Suite CI should retain the build host worker policy.'
 
         $allEnvironment = Get-RSBuildEnvironmentOverrides -Suite 'All'
-        Assert-RSEqual -Actual $allEnvironment.ContainsKey('RSBuildEnableTests') -Expected $false -Message 'Suite All should not force monitor-specific test hooks.'
+        Assert-RSEqual -Actual $allEnvironment.ContainsKey('RSBuildEnableTests') -Expected $false -Message 'Suite All should retain the selected profile test surface.'
 
         $ciEnvironment = Get-RSBuildEnvironmentOverrides -Suite 'CI'
-        Assert-RSEqual -Actual $ciEnvironment.ContainsKey('RSBuildEnableTests') -Expected $false -Message 'Suite CI should match the artifact-only GitHub gate and not force monitor-specific test hooks.'
+        Assert-RSEqual -Actual $ciEnvironment.ContainsKey('RSBuildEnableTests') -Expected $false -Message 'Suite CI should match the artifact-only GitHub gate and retain its selected test surface.'
         Assert-RSEqual -Actual $ciEnvironment.ContainsKey('RSBuildCompilerDebugInformation') -Expected $false -Message 'Suite CI should retain the normal compiler PDB policy.'
 
         $fullEnvironment = Get-RSBuildEnvironmentOverrides -Suite 'Full'
-        Assert-RSEqual -Actual $fullEnvironment['RSBuildEnableTests'] -Expected 'true' -Message 'Suite Full should build Monitor with selftest hooks for executable monitor drills.'
+        Assert-RSEqual -Actual $fullEnvironment['RSBuildEnableTests'] -Expected 'true' -Message 'Suite Full should enable the application and standalone native test surfaces.'
         Assert-RSEqual -Actual $fullEnvironment['RSBuildCompilerDebugInformation'] -Expected 'Embedded' -Message 'Suite Full should avoid process-global compiler-PDB contention across worktrees.'
     }
 
@@ -922,13 +1308,16 @@ Describe 'Run-AllTests plan helper' {
     }
 
     It 'keeps tooling Pester in the exact selected drive-owned sandbox' {
-        $externalRoot = Get-RSToolingPesterSandboxRoot `
-            -RepoRoot $repoRoot `
-            -PrimaryTestRoot $env:REDSALAMANDER_TEST_ROOT
-        Assert-RSEqual `
-            -Actual $externalRoot `
-            -Expected $env:REDSALAMANDER_TEST_ROOT `
-            -Message 'Pester and native suites must share X:\RedSalamander.Perf.'
+        $expectedRoot = ConvertTo-RSFullPath -Path $env:REDSALAMANDER_TEST_ROOT
+        foreach ($requestedRoot in @($expectedRoot, $expectedRoot.Replace('\', '/'))) {
+            $externalRoot = Get-RSToolingPesterSandboxRoot `
+                -RepoRoot $repoRoot `
+                -PrimaryTestRoot $requestedRoot
+            Assert-RSEqual `
+                -Actual $externalRoot `
+                -Expected $expectedRoot `
+                -Message 'Pester and native suites must share canonical X:\RedSalamander.Perf.'
+        }
     }
 
     It 'removes only the exact auxiliary tooling Pester run directory' {
@@ -1181,7 +1570,7 @@ Describe 'Run-AllTests plan helper' {
             -FailFast `
             -CaseFilter 'OneCase'
 
-        foreach ($entry in @($plan | Where-Object { $_.Kind -ne 'SelfTest' -and $_.Name -ne 'RedSalamanderMonitorEtwLatency' })) {
+        foreach ($entry in @($plan | Where-Object { $_.Kind -ne 'SelfTest' })) {
             $argumentText = @($entry.Arguments) -join ' '
             if ($argumentText -match 'selftest') {
                 throw "$($entry.Name) should not receive self-test-only arguments, but got '$argumentText'."
@@ -1983,4 +2372,47 @@ Describe 'Commands family runtime membership' -Tag RequiresBuildToolchain {
             -Message 'Commands family union must exactly equal broad native membership.'
     }
 
+}
+
+Describe 'Administrative sandbox cleanup live-owner protection' {
+    Import-Module $helperModule -Force
+
+    It 'refuses Apply for live runner and harness owners and returns a failed status' {
+        $testRoot = Get-RSTestSandboxRoot -RepoRoot $repoRoot
+        $cleanupScript = Join-Path $repoRoot 'Tools/Clean-TestSandbox.ps1'
+        $runIds = @(
+            ('20261019T000000Z-{0}-{1}' -f $PID, [guid]::NewGuid().ToString('N')),
+            ('cleanup-live-{0}-{1}' -f $PID, [DateTime]::UtcNow.Ticks)
+        )
+        try {
+            foreach ($runId in $runIds) {
+                $runRoot = Assert-RSTestSandboxContainedPath -TestRoot $testRoot -Path (Join-Path (Join-Path $testRoot 'runs') $runId) -RequireDescendant
+                [void][IO.Directory]::CreateDirectory($runRoot)
+                [IO.File]::WriteAllText((Join-Path $runRoot 'evidence.txt'), 'keep live evidence')
+                $result = @(& $cleanupScript -RunId $runId -TestRoot $testRoot -Apply -Confirm:$false -WarningAction SilentlyContinue)
+                $result.Count | Should Be 1
+                $result[0].Status | Should Be 'Failed'
+                $result[0].Error | Should Match 'live owner'
+                $LASTEXITCODE | Should Be 1
+                [IO.File]::ReadAllText((Join-Path $runRoot 'evidence.txt')) | Should Be 'keep live evidence'
+            }
+        } finally {
+            foreach ($runId in $runIds) { Remove-RSTestSandboxExactRunDirectory -TestRoot $testRoot -RunId $runId }
+        }
+    }
+
+    It 'keeps WhatIf non-destructive for an explicitly selected manual run' {
+        $testRoot = Get-RSTestSandboxRoot -RepoRoot $repoRoot
+        $runId = 'cleanup-whatif-' + [guid]::NewGuid().ToString('N')
+        $runRoot = Assert-RSTestSandboxContainedPath -TestRoot $testRoot -Path (Join-Path (Join-Path $testRoot 'runs') $runId) -RequireDescendant
+        try {
+            [void][IO.Directory]::CreateDirectory($runRoot)
+            [IO.File]::WriteAllText((Join-Path $runRoot 'evidence.txt'), 'keep preview evidence')
+            $result = @(& (Join-Path $repoRoot 'Tools/Clean-TestSandbox.ps1') -RunId $runId -TestRoot $testRoot -Apply -WhatIf)
+            $result[0].Status | Should Be 'Skipped'
+            [IO.File]::ReadAllText((Join-Path $runRoot 'evidence.txt')) | Should Be 'keep preview evidence'
+        } finally {
+            Remove-RSTestSandboxExactRunDirectory -TestRoot $testRoot -RunId $runId
+        }
+    }
 }

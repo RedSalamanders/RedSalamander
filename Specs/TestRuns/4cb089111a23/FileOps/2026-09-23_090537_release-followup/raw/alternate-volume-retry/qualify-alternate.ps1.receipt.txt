@@ -1,0 +1,36 @@
+$ErrorActionPreference = 'Stop'
+$repo = 'C:/RsI26Final'
+$evidence = 'C:/RedSalamander.Perf/evidence/i26-ui/release-fileops-20260923/alternate-volume-retry'
+Set-Location -LiteralPath $repo
+$expectedHead = 'ccebd5af68eb45f2e9deed64a7063780e71eb1ce'
+if ((& git rev-parse HEAD).Trim() -ne $expectedHead) { throw 'Qualification source changed.' }
+if ((& git status --porcelain).Count -gt 0) { throw 'Qualification requires the clean recorded checkout.' }
+
+# Use the repository's CI integration, only in this child process. No user-wide import.
+$env:VCPKG_ROOT = 'C:/RsI26Vcpkg'
+$env:VcpkgRoot = $env:VCPKG_ROOT
+$env:VCPKG_DEFAULT_TRIPLET = 'x64-windows'
+$env:VCPKG_INSTALLED_DIR = "$repo/.build/vcpkg_installed/x64"
+$installed = "$env:VCPKG_INSTALLED_DIR/x64-windows"
+$env:ForceImportBeforeCppTargets = "$env:VCPKG_ROOT/scripts/buildsystems/msbuild/vcpkg.props"
+$env:ForceImportAfterCppTargets = "$env:VCPKG_ROOT/scripts/buildsystems/msbuild/vcpkg.targets"
+$env:VcpkgConfiguration = 'Release'
+$env:VcpkgManifestInstall = 'false'
+$env:VcpkgXUseBuiltInApplocalDeps = 'false'
+$env:VCPkgLocalAppDataDisabled = 'true'
+$env:CL = "/I`"$installed/include`" $env:CL"
+$env:LINK = "/LIBPATH:`"$installed/lib`" /LIBPATH:`"$installed/lib/manual-link`" $env:LINK"
+$env:Path = "$installed/bin;$env:Path"
+$env:RSBuildEnableTests = 'true'
+
+
+$env:REDSALAMANDER_TEST_ALTERNATE_ROOT = 'C:/RedSalamander.Perf'
+Import-Module ./Tools/Modules/Testing/TestRunPlan.psm1 -Force
+$plan = @(Get-RSTestRunPlan -Suite FileOps -RepoRoot $repo -Platform x64 -Configuration Release -RedSalamanderExePath "$repo/.build/x64/Release/RedSalamander.exe")
+$plan | Select-Object Id,Kind,RequiresInteractiveDesktop | ConvertTo-Json -Depth 6 | Set-Content "$evidence/plan.json"
+if ($plan.Count -ne 1 -or @($plan | Where-Object RequiresInteractiveDesktop).Count -ne 0) { throw 'Refusing a changed or foreground-dependent FileOps plan.' }
+& ./Tools/Run-AllTests.ps1 -Suite FileOps -CaseFilter R4A19_DiscoveryIndependentVolumes -SelfTestRepeat 3 -Configuration Release -Platform x64 -SkipBuild -AllowAlternateVolumeTestRoot -TestRoot E:/RedSalamander.Perf *> "$evidence/fileops.log"
+$testExit = $LASTEXITCODE
+Set-Content "$evidence/exit.txt" $testExit
+Get-Content "$evidence/fileops.log" -Tail 35
+exit $testExit

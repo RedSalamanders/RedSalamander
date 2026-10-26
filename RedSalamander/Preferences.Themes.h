@@ -7,10 +7,10 @@
 #include "Preferences.h"
 #include <DxUi/DxUi.h>
 
-class ThemesPane final : public DxUi::IDxGridDelegate
+class ThemesPane final : public DxUi::IGridDelegate
 {
 public:
-    using DxUi::IDxGridDelegate::OnGridSelectionChanged;
+    using DxUi::IGridDelegate::OnGridSelectionChanged;
 
     ThemesPane();
     ~ThemesPane();

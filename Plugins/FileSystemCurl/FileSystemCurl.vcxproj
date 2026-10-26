@@ -133,7 +133,7 @@
     <ClCompile Include="FileSystemCurl.Imap.cpp" />
     <ClCompile Include="FileSystemCurl.ImapHelpers.cpp" />
     <ClCompile Include="FileSystemCurl.Shared.cpp" />
-    <ClCompile Include="FileSystemCurl.SelfTest.Ftp.cpp" />
+    <ClCompile Include="FileSystemCurl.Tests.Ftp.cpp" />
     <ClInclude Include="FileSystemCurl.h" />
     <ClInclude Include="FileSystemCurl.ImapHelpers.h" />
     <ClInclude Include="FileSystemCurl.Internal.h" />

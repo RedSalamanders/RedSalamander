@@ -1,0 +1,5 @@
+{
+  "original_sha256": "225DD9C7DDE2941B2F54785F4750D7F71CE6FFDE11090346CECA16C11C244F67",
+  "normalized_sha256": "9023EE0A24649A597F45D4475799AC4C1A6625D424843C85C1E85EA61D46C5C6",
+  "policy": "Only CRLF-to-LF conversion of Git patch transport; source lines unchanged. The original transport is preserved. Index-only validation passed without changing the index or working tree."
+}

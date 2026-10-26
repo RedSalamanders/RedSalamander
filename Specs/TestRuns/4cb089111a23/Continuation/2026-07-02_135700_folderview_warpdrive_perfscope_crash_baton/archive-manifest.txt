@@ -1,0 +1,15 @@
+.\Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\CONTINUATION.md`t4233
+.\Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\crash-sidecars\red-salamander-crashes-manifest.txt`t1650
+.\Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\crash-sidecars\RedSalamander-20260702-100018-p73832.txt`t1897
+.\Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\crash-sidecars\RedSalamander-20260702-125817-p33336.txt`t3829
+.\Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\git-branch.txt`t28
+.\Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\git-diff-stat.txt`t541
+.\Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\git-head.txt`t42
+.\Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\git-status-short.txt`t70410
+.\Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.snapshot.post-status.md`t239151
+.\Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\patches\unstaged-focused-diff.patch`t12524
+.\Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\run-artifacts\commands_broad_after_perfscope_20260702.log`t3223422
+.\Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\run-artifacts\folder_column_widths_audit_after_perfscope_20260702.log`t3179585
+.\Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\run-artifacts\folderview_prefix_after_perfscope_20260702.log`t3236348
+.\Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\run-artifacts\msbuild-20260702_134221_182.log`t10032
+.\Specs\TestRuns\4cb089111a23\Continuation\2026-07-02_135700_folderview_warpdrive_perfscope_crash_baton\run-artifacts\preferences_reverse_keyboard_focused_after_perfscope_20260702.log`t3236398

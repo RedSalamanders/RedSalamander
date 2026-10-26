@@ -1,0 +1,10 @@
+{"metric":"build.diagnostics.summary.ms","sample":1,"iterations":10,"lines":560,"elapsed_ms":94.9073,"warning_count":1,"error_count":0}
+{"metric":"build.diagnostics.summary.ms","sample":2,"iterations":10,"lines":560,"elapsed_ms":104.825,"warning_count":1,"error_count":0}
+{"metric":"build.diagnostics.summary.ms","sample":3,"iterations":10,"lines":560,"elapsed_ms":103.1838,"warning_count":1,"error_count":0}
+{"metric":"build.diagnostics.summary.ms","sample":4,"iterations":10,"lines":560,"elapsed_ms":124.5436,"warning_count":1,"error_count":0}
+{"metric":"build.diagnostics.summary.ms","sample":5,"iterations":10,"lines":560,"elapsed_ms":108.3167,"warning_count":1,"error_count":0}
+{"metric":"build.diagnostics.colors.ms","sample":1,"iterations":10,"lines":560,"elapsed_ms":249.685,"warning_count":1,"error_count":0}
+{"metric":"build.diagnostics.colors.ms","sample":2,"iterations":10,"lines":560,"elapsed_ms":275.3375,"warning_count":1,"error_count":0}
+{"metric":"build.diagnostics.colors.ms","sample":3,"iterations":10,"lines":560,"elapsed_ms":285.2911,"warning_count":1,"error_count":0}
+{"metric":"build.diagnostics.colors.ms","sample":4,"iterations":10,"lines":560,"elapsed_ms":303.9325,"warning_count":1,"error_count":0}
+{"metric":"build.diagnostics.colors.ms","sample":5,"iterations":10,"lines":560,"elapsed_ms":275.9045,"warning_count":1,"error_count":0}

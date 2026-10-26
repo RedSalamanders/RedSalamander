@@ -1,0 +1,11 @@
+{
+  "sourcePath": "C:/RedSalamander.Perf/evidence/i26-ui/fileops-family-settled-20260921/commands/throughput-disclosure/repeat-1/path-keyboard-focused__480dip__fr-FR__144dpi.png",
+  "sha256": "7FB492C3792D3F64B356DFB7065BC21BB685BC49A75B7037D4F6B89E8AF86A0D",
+  "scenario": "path-keyboard-focused",
+  "locale": "fr-FR",
+  "dpi": 144,
+  "requestedWidthDip": 480,
+  "capture": "Deterministic Commands harness, directed foreground warning/desktop lease; actual application capture",
+  "buildReceipt": "75525f9f6a1bb0166721fcafe4774c9459f44d4c7e180988b26ffb859aa772b4",
+  "review": "Full French path tooltip and contrasting focus outline inspected; does not establish other widths or physical DPIs."
+}

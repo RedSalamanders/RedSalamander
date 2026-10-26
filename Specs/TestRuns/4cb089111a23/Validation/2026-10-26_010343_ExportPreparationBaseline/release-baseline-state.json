@@ -1,0 +1,24 @@
+{
+  "head": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+  "ownerPid": 54796,
+  "phase": "complete",
+  "outcome": "passed-baseline-only",
+  "updatedUtc": "2026-10-26T01:29:59.2002098Z",
+  "entries": [
+    {
+      "phase": "export-prepare-baseline-x64-Release-build",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T01:23:36.4174730Z",
+      "finishedUtc": "2026-10-26T01:29:42.3652701Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\export-prepare-baseline-x64-Release-build.log"
+    },
+    {
+      "phase": "export-prepare-baseline-Release-probes",
+      "exitCode": 0,
+      "startedUtc": "2026-10-26T01:29:42.5825550Z",
+      "finishedUtc": "2026-10-26T01:29:59.1022984Z",
+      "log": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\export-prepare-baseline-Release-probes.log"
+    }
+  ],
+  "qualification": false
+}

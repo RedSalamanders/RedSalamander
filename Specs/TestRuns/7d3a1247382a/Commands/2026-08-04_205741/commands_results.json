@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-08-04T18:57:39.830Z",
+    "suite": "Commands",
+    "artifact_root": "C:\\Users\\PVB\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands",
+    "duration_ms": 752,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target",
+            "status": "passed",
+            "duration_ms": 726,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 1
+}

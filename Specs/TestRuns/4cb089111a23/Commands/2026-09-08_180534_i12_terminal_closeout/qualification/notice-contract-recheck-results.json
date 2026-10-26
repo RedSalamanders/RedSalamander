@@ -1,0 +1,666 @@
+[
+  {
+    "Describe": "Run-AllTests runner source contracts",
+    "Name": "rejects an executable outside the selected profile before acquiring its artifact lock",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests runner source contracts",
+    "Name": "restores Startrail module commands after nested build and Pester scope boundaries",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests runner source contracts",
+    "Name": "binds Resume fingerprints to the validated origin terminal artifact epoch",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests runner source contracts",
+    "Name": "requires an exact suite match and routes every entry through a normalized terminal result",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests runner source contracts",
+    "Name": "suspends the selected receipt and isolates profile inputs before any artifact writer",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "keeps Suite All scoped to the three in-product self-test suites",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "assigns unique stable IDs and schema-complete metadata to every CI and Full entry",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "schedules the isolated artifact mutator first and re-fingerprints a verified epoch before artifact readers",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "keeps display labels out of plan identity while binding behavior coverage and policy",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "constructs the artifact-writer contract for each supported Full profile without a Debug sibling path",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "separates stable coverage identity from truthful invocation mode",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "maps each terminal state to its documented distinct process exit in subprocesses",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "keeps governed Commands family metadata equal to the native coordinator and emits a family-process plan",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "rejects missing and duplicate stable IDs",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "passes repeat and shuffle controls to in-product selftests",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "passes explicit injected classifier proof hooks to in-product selftests",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "formats fractional timeout multipliers with invariant decimal separators",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "forwards seeded shuffle to all explicit-order self-test suites",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "adds standalone, CppUnitTest, Pester, and fast script tests for Suite Full",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "defines Suite CI as the GitHub Actions gate through the unified runner",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "keeps the session-wide desktop mutex inside marked entry execution only",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "imports the contained-process API it calls directly",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "builds Invoke-Pester parameters for Pester 3 and newer parameter sets",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "passes named build parameters to the build script",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "uses the unified test sandbox root when locating runner artifacts",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "rejects conflicting legacy and unified test roots",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "creates tooling Pester scratch directories under the unified TestSandbox run root",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "keeps tooling Pester in the exact selected drive-owned sandbox",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "removes only the exact auxiliary tooling Pester run directory",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "keeps the cleanup command inside one exact selected-root run",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "audits TestSandbox disk state for stale runs and unexpected children",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "sweeps stale TestSandbox run directories whose owner process is dead",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "audits runner-owned siblings with the same live-owner policy as stale cleanup",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "does not pass self-test-only options to standalone executables or scripts",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "builds runner-native case-list arguments from self-test entries only",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "threads optional perf budget gates into native self-test entries only",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "classifies pass-on-rerun standalone failures as blocking flaky results",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "classifies fail-again failures as blocking regressions",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "routes broad self-test isolated-pass evidence to blocking isolation suspect instead of flaky",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "classifies isolated-pass self-test failures as blocking flaky only after shuffle triage passes",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "classifies failed shuffle triage as a blocking regression and preserves the seed in summaries",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "keeps focused self-test filters on shuffle triage instead of falling back to entry retry",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "accepts only reviewed unexpired quarantine entries and keeps them blocking",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "treats an absent default quarantine ledger as the canonical empty state",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "keeps malformed and active entries in an explicit quarantine ledger blocking",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "rejects anonymous expired or malformed quarantine entries",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "builds quarantine repair attempts only for matching harness adapters",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "rejects quarantine entries that do not match a runnable harness adapter",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "rejects self-test quarantine entries whose case name is absent from the adapter case list",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "detects self-test result coverage drift from runner-listed names",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "builds an aggregate runner artifact that preserves every suite summary",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "builds per-case history JSONL and a slow-case dashboard from aggregate summaries",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Run-AllTests plan helper",
+    "Name": "formats a GitHub step summary with blocking classification and quarantine repair evidence",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Commands family runtime membership",
+    "Name": "partitions the broad native inventory into an exact non-overlapping family union",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "classifies every tracked or non-ignored file in the current Tools tree",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "rejects an unclassified top-level file even when a broad rule would match it",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "rejects an unclassified nested file outside reviewed directory rules",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "fails when a derived module consumer is missing from usedBy",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "rejects stale explicit paths",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "ignores tracked files deleted from the working tree during an in-progress move",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "requires an explicit naming policy for reviewed public non-Verb-Noun entrypoints",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "requires explicit prerequisites metadata on entries and directory rules",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "requires retention policy for compatibility records",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "requires every non-null replacement to be an exact existing Tools path",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "rejects historical entries without a reviewed manual entry point",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "rejects unreviewed and missing historical manual entry-point paths",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "rejects a reviewed manual root whose inventory entry is not a historical command",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "allows reviewed manual roots to retain themselves and exposes the resolved closure",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "uses a reviewed nested rule when exactly one rule matches",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "renders a useful Markdown file inventory",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Tools inventory contract",
+    "Name": "documents the command contract and supports Validate as an alias",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Name": "keeps the checked-in inventory reconciled with the Tools tree",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Name": "keeps active private implementation modules below Tools Modules",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Name": "limits internal root compatibility loaders to explicit module replacements",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Name": "documents every public command and compatibility loader completely",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Name": "requires canonical replacements and explicit retention policy for compatibility surfaces",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Name": "keeps every historical file reachable from a reviewed manual command root",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Name": "keeps active executable tooling covered by at least one current test contract",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Name": "keeps the README top-level and module maps in exact filesystem parity",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Name": "keeps current Terminal helper export and consumer contracts live in the current profile",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Name": "keeps destructive support commands within their documented static safety boundaries",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Name": "uses psm1 modules with explicit reviewed exports",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  },
+  {
+    "Describe": "Repository tooling governance",
+    "Name": "records every reviewed public naming exception in the inventory",
+    "Result": "Passed",
+    "Passed": true,
+    "FailureMessage": "",
+    "StackTrace": ""
+  }
+]

@@ -1,0 +1,250 @@
+{
+    "run_started_utc": "2026-09-05T12:56:54.698Z",
+    "suite": "FileOperations",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-curl-delete-bounds-release-diagnostics-20260905\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 8094,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 27,
+    "failureMessage": "C0 Curl native safety test failed; see FileOps.Curl metrics for the exact route.",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1203,
+            "repeat_index": 1
+        },
+        {
+            "name": "C0_CurlDeleteTraversalBounds",
+            "status": "failed",
+            "duration_ms": 6860,
+            "repeat_index": 1,
+            "reason": "C0 Curl native safety test failed; see FileOps.Curl metrics for the exact route."
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 31,
+            "repeat_index": 1
+        },
+        {
+            "name": "Setup",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 2,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "C0_CurlDeleteTraversalBounds",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 2,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 2,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Setup",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 3,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "C0_CurlDeleteTraversalBounds",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 3,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 3,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Setup",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 4,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "C0_CurlDeleteTraversalBounds",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 4,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 4,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Setup",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 5,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "C0_CurlDeleteTraversalBounds",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 5,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 5,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Setup",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 6,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "C0_CurlDeleteTraversalBounds",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 6,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 6,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Setup",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 7,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "C0_CurlDeleteTraversalBounds",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 7,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 7,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Setup",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 8,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "C0_CurlDeleteTraversalBounds",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 8,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 8,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Setup",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 9,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "C0_CurlDeleteTraversalBounds",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 9,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 9,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Setup",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 10,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "C0_CurlDeleteTraversalBounds",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 10,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "skipped",
+            "duration_ms": 0,
+            "repeat_index": 10,
+            "skip_class": "unexpected",
+            "reason": "not executed (suite stopped early)"
+        }
+    ],
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 10
+}

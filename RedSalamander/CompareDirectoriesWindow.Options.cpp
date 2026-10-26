@@ -173,11 +173,8 @@ void ConfigureCompareOptionsTextFormat(IDWriteTextFormat* format, DWRITE_WORD_WR
     static_cast<void>(format->SetTextAlignment(DWRITE_TEXT_ALIGNMENT_LEADING));
 }
 
-[[nodiscard]] bool CreateCompareOptionsTextFormat(IDWriteFactory* factory,
-                                                  const DxUi::Typography::TypographySpec& spec,
-                                                  DWRITE_FONT_STYLE style,
-                                                  DWRITE_WORD_WRAPPING wrapping,
-                                                  IDWriteTextFormat** outFormat) noexcept
+[[nodiscard]] bool CreateCompareOptionsTextFormat(
+    IDWriteFactory* factory, const DxUi::Typography::Spec& spec, DWRITE_FONT_STYLE style, DWRITE_WORD_WRAPPING wrapping, IDWriteTextFormat** outFormat) noexcept
 {
     if (! factory || ! outFormat)
     {

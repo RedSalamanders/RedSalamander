@@ -1,0 +1,88 @@
+[
+  {
+    "file": "before__480dip__fr-FR__144dpi.png",
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-paths-baseline\\commands\\conflict-comparison\\conflict-comparison__480dip__fr-FR__144dpi.png",
+    "sha256": "a68bad1530f4904da4692e129b98fc6979b7b45de7d4f0365fdedb8520f94776",
+    "source_snapshot": "2839c6bdb5762dcec56324657f8462a55dd58ee86deec0ddd2294a9ded190939",
+    "build_receipt": "fe6c009118e02ae2e01d3c9d686650342d6b8735ae13a0d98bd13ce90094d9af",
+    "kind": "application-test-harness",
+    "width_dip": 480,
+    "dpi": 144,
+    "locale": "fr-FR"
+  },
+  {
+    "file": "before__640dip__fr-FR__144dpi.png",
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-paths-baseline\\commands\\conflict-comparison\\conflict-comparison__640dip__fr-FR__144dpi.png",
+    "sha256": "60a6d63b9cdca0f194cd157aa5fb193639312fddf805f8867443260a8d95a78f",
+    "source_snapshot": "2839c6bdb5762dcec56324657f8462a55dd58ee86deec0ddd2294a9ded190939",
+    "build_receipt": "fe6c009118e02ae2e01d3c9d686650342d6b8735ae13a0d98bd13ce90094d9af",
+    "kind": "application-test-harness",
+    "width_dip": 640,
+    "dpi": 144,
+    "locale": "fr-FR"
+  },
+  {
+    "file": "before__760dip__fr-FR__144dpi.png",
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-paths-baseline\\commands\\conflict-comparison\\conflict-comparison__760dip__fr-FR__144dpi.png",
+    "sha256": "2f045b3195fc240718a79eba9ef01f1d85fcc7de6157fcd64c99e71eb982ff52",
+    "source_snapshot": "2839c6bdb5762dcec56324657f8462a55dd58ee86deec0ddd2294a9ded190939",
+    "build_receipt": "fe6c009118e02ae2e01d3c9d686650342d6b8735ae13a0d98bd13ce90094d9af",
+    "kind": "application-test-harness",
+    "width_dip": 760,
+    "dpi": 144,
+    "locale": "fr-FR"
+  },
+  {
+    "file": "after__480dip__fr-FR__144dpi.png",
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-paths-final\\commands\\conflict-comparison\\conflict-comparison__480dip__fr-FR__144dpi.png",
+    "sha256": "0b161279f14f6136113f1164b2c42400cde5276b21543b653b525d9116cd7f00",
+    "source_snapshot": "0ee181f1960de7bfa151b8fea81cf1125fcc25c29e1d847cf95d86d1ee7860b4",
+    "build_receipt": "3ff178561c0bf9fea5500ff5435b176e7e8a77f82b601451d6da561474641b94",
+    "kind": "application-test-harness",
+    "width_dip": 480,
+    "dpi": 144,
+    "locale": "fr-FR"
+  },
+  {
+    "file": "after__640dip__fr-FR__144dpi.png",
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-paths-final\\commands\\conflict-comparison\\conflict-comparison__640dip__fr-FR__144dpi.png",
+    "sha256": "121c227ef88b4491500928d4691288e529f82d9ccf2fe7e0e7b902e28669dd87",
+    "source_snapshot": "0ee181f1960de7bfa151b8fea81cf1125fcc25c29e1d847cf95d86d1ee7860b4",
+    "build_receipt": "3ff178561c0bf9fea5500ff5435b176e7e8a77f82b601451d6da561474641b94",
+    "kind": "application-test-harness",
+    "width_dip": 640,
+    "dpi": 144,
+    "locale": "fr-FR"
+  },
+  {
+    "file": "after__760dip__fr-FR__144dpi.png",
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-paths-final\\commands\\conflict-comparison\\conflict-comparison__760dip__fr-FR__144dpi.png",
+    "sha256": "ae339769f1e74a8b86a1ab762a04c895319851c432133d42084278efb00b59d0",
+    "source_snapshot": "0ee181f1960de7bfa151b8fea81cf1125fcc25c29e1d847cf95d86d1ee7860b4",
+    "build_receipt": "3ff178561c0bf9fea5500ff5435b176e7e8a77f82b601451d6da561474641b94",
+    "kind": "application-test-harness",
+    "width_dip": 760,
+    "dpi": 144,
+    "locale": "fr-FR"
+  },
+  {
+    "file": "qualified-slash-provider.png",
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-paths-final\\commands\\conflict-comparison\\qualified-slash-provider.png",
+    "sha256": "9549d5a80b511b9b6d69f50359522681a514057de1b4c672e2783aa82f992458",
+    "source_snapshot": "0ee181f1960de7bfa151b8fea81cf1125fcc25c29e1d847cf95d86d1ee7860b4",
+    "build_receipt": "3ff178561c0bf9fea5500ff5435b176e7e8a77f82b601451d6da561474641b94",
+    "kind": "application-test-harness",
+    "dpi": 144,
+    "locale": "fr-FR"
+  },
+  {
+    "file": "unqualified-exact-path.png",
+    "source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\conflict-paths-final\\commands\\conflict-comparison\\unqualified-exact-path.png",
+    "sha256": "7c6c7b3d42e00f31d9714a09a388d19e3b9955b4872071f96bea8773d8bff5bc",
+    "source_snapshot": "0ee181f1960de7bfa151b8fea81cf1125fcc25c29e1d847cf95d86d1ee7860b4",
+    "build_receipt": "3ff178561c0bf9fea5500ff5435b176e7e8a77f82b601451d6da561474641b94",
+    "kind": "application-test-harness",
+    "dpi": 144,
+    "locale": "fr-FR"
+  }
+]

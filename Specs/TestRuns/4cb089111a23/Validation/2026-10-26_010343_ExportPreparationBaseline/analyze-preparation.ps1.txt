@@ -1,0 +1,32 @@
+param([Parameter(Mandatory)][string]$RecordsPath,[Parameter(Mandatory)][string]$OutputPath)
+$ErrorActionPreference='Stop'
+Set-StrictMode -Version Latest
+$records=@(Get-Content -LiteralPath $RecordsPath -Raw | ConvertFrom-Json)
+$measurements=[System.Collections.Generic.List[object]]::new()
+foreach ($record in $records) {
+    foreach ($metricsPath in @($record.metricsPaths)) {
+        $rows=@(Select-String -LiteralPath $metricsPath -Pattern '"metric":"viewer.space.export.prepare_us"' | ForEach-Object { $_.Line | ConvertFrom-Json })
+        $segments=[System.Collections.Generic.List[object]]::new()
+        $segment=[System.Collections.Generic.List[object]]::new()
+        $cursor=0
+        foreach ($row in $rows) {
+            if ($row.commit -ne $record.source) { throw 'Preparation metric source differs.' }
+            if ($segment.Count -and $row.value1 -le $cursor) { $segments.Add($segment.ToArray()); $segment=[System.Collections.Generic.List[object]]::new() }
+            $segment.Add($row)
+            $cursor=$row.value1
+        }
+        if ($segment.Count) { $segments.Add($segment.ToArray()) }
+        $summaries=[System.Collections.Generic.List[object]]::new()
+        $index=0
+        foreach ($group in $segments) {
+            $index++
+            $gaps=@(for ($i=1;$i -lt $group.Count;$i++) { ([datetime]$group[$i].timestamp-[datetime]$group[$i-1].timestamp).TotalMilliseconds })
+            $orderedGaps=@($gaps | Sort-Object)
+            $summaries.Add([pscustomobject]@{exportOrdinal=$index;turns=$group.Count;preparedRows=$group[-1].value1;workRows=($group | Measure-Object value0 -Sum).Sum;activePreparationUs=($group | Measure-Object durationUs -Sum).Sum;maxTurnUs=($group | Measure-Object durationUs -Maximum).Maximum;metricWallSpanMs=([datetime]$group[-1].timestamp-[datetime]$group[0].timestamp).TotalMilliseconds;medianTurnGapMs=if ($orderedGaps.Count) { $orderedGaps[[int][math]::Floor($orderedGaps.Count/2)] } else { 0 };maxTurnGapMs=if ($gaps.Count) { ($gaps | Measure-Object -Maximum).Maximum } else { 0 }})
+        }
+        $gate=@(Select-String -LiteralPath $record.log -Pattern '^\[INFO\] ViewerSpace export gate:.*elapsedUs=(\d+)' | ForEach-Object { $_.Matches[0].Groups[1].Value })
+        $measurements.Add([pscustomobject]@{runId=$record.runId;case=$record.case;source=$record.source;executableSha256=$record.executableSha256;pluginSha256=$record.pluginSha256;nativePassed=$record.passed;nativeGateElapsedUs=if ($gate.Count -eq 1) { [long]$gate[0] } else { $null };metricsPath=$metricsPath;metricsSha256=(Get-FileHash -LiteralPath $metricsPath).Hash.ToLowerInvariant();metricRowCount=$rows.Count;exports=$summaries.ToArray()})
+    }
+}
+[ordered]@{schema='viewer-space-export-preparation-analysis-v1';qualification=$false;method='Exact export prepare metric rows split when the frozen row cursor restarts. Wall span uses recorded UTC metric timestamps; native gate elapsed uses its original steady clock. Capture itself has observer cost.';records=$measurements.ToArray()} | ConvertTo-Json -Depth 9 | Set-Content -LiteralPath $OutputPath
+$measurements | Select-Object runId,case,nativeGateElapsedUs,@{n='exports';e={$_.exports.Count}} | ConvertTo-Json -Compress

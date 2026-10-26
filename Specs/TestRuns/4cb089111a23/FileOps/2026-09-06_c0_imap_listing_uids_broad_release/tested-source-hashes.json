@@ -1,0 +1,15 @@
+{
+  "run_id": "c0-imap-uids-candidate-release-20260906-r3",
+  "schema": "red-salamander.tested-source-hashes.v1",
+  "receipt_id": "ecd372340dc4af1b6efca7cf7faa982498643f482e0adf131e69ad43b403f919",
+  "source_snapshot_id": "d9db83c242fe06b43cacf73aeaf76719dcd46cb4698b5bfec484630eabd4803a",
+  "git_head": "6f3686d4fcc634c5974b83ed76e9a593158be793",
+  "files": [
+    {"path":"Plugins/FileSystemCurl/FileSystemCurl.Imap.cpp","bytes":168943,"sha256":"052d89ae36eef02cd8a8816aee7d4f1c60d8dc9ec019dbd9b06077b0760a05f0"},
+    {"path":"RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp","bytes":720702,"sha256":"d22262786bc7bc6b84d3c81d4a887b0fad6235c94e99629c4a0834f9a93218c0"},
+    {"path":"Specs/Core/Core_SharedHelpers.md","bytes":35025,"sha256":"8fa8fc7c5ffdfc9b089f7501a381041023e6893a452e11de9ea16542a9285770"},
+    {"path":"Specs/FileSystem/FileSystem_Imap.md","bytes":17531,"sha256":"4898de4b52999aa8c079a424919de4d334b44b723af3fe12eb7a05e84db5fac9"},
+    {"path":"Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md","bytes":57961,"sha256":"3f999dc5b7ff760fdb2a1478a545815a99ba3f8acd786a92c0b248b0bdb6add4"},
+    {"path":"Specs/Testing/Testing_PerformanceValidation.md","bytes":116204,"sha256":"c522bb6c6eb1514bb420d866b3376c0f5ddac04527dc4a1ae125bc9689caa421"}
+  ]
+}

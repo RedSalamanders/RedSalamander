@@ -1,0 +1,8 @@
+{
+  "evidence_files": 253,
+  "evidence_index_matches_working_bytes": true,
+  "source_files": 81,
+  "source_hash_mismatches": [],
+  "git_head": "a4b506d53b92d716a923199ba436463f95a6e375",
+  "scope": "Byte integrity after staging; formal snapshot changes caused by Git metadata are not a Resume"
+}

@@ -92,20 +92,24 @@ struct FileOperationsDxPage
 
     Label* advancedHeader = nullptr;
     FileOperationsToggleCardDx autoDismissSuccess{};
+    FileOperationsToggleCardDx showInformationalNotes{};
+    FileOperationsToggleCardDx mirrorDecisionsInPane{};
     FileOperationsEditCardDx bridgeBuffer{};
     FileOperationsNoteCardDx pluginHint{};
 
     void Detach() noexcept
     {
-        verificationHeader = nullptr;
-        verifyAfterCopy    = {};
-        bandwidthHeader    = nullptr;
-        bandwidthPreset    = {};
-        customBandwidth    = {};
-        advancedHeader     = nullptr;
-        autoDismissSuccess = {};
-        bridgeBuffer       = {};
-        pluginHint         = {};
+        verificationHeader     = nullptr;
+        verifyAfterCopy        = {};
+        bandwidthHeader        = nullptr;
+        bandwidthPreset        = {};
+        customBandwidth        = {};
+        advancedHeader         = nullptr;
+        autoDismissSuccess     = {};
+        showInformationalNotes = {};
+        mirrorDecisionsInPane  = {};
+        bridgeBuffer           = {};
+        pluginHint             = {};
     }
 };
 
@@ -438,6 +442,86 @@ bool FileOperationsPane::EnsureDxHosts(HWND parent, PreferencesDialogState& stat
         Refresh(host, *dialogState);
     });
 
+    // I35 R5.3: display-only switch for informational notes; recording never depends on it.
+    dxState->page.showInformationalNotes.card  = root->AddChild<CardPanel>();
+    dxState->page.showInformationalNotes.title = root->AddChild<Label>();
+    dxState->page.showInformationalNotes.title->SetFontRole(FontRole::Body);
+    dxState->page.showInformationalNotes.description = root->AddChild<Label>();
+    dxState->page.showInformationalNotes.description->SetFontRole(FontRole::Small);
+    dxState->page.showInformationalNotes.description->SetMultiline(true);
+    dxState->page.showInformationalNotes.toggle = root->AddChild<Toggle>();
+    dxState->page.showInformationalNotes.title->SetMnemonicTarget(dxState->page.showInformationalNotes.toggle);
+    dxState->page.showInformationalNotes.toggle->SetStateLabels(LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF),
+                                                                LoadStringResource(nullptr, IDS_PREFS_COMMON_ON));
+    dxState->page.showInformationalNotes.toggle->SetOnToggled([this, host = parent](bool checked) noexcept
+    {
+        if (! host || IsWindow(host) == FALSE)
+        {
+            return;
+        }
+
+        auto* dialogState = PrefsUi::GetDialogState(host);
+        if (! dialogState)
+        {
+            return;
+        }
+
+        auto* fileOperations = EnsureWorkingFileOperationsSettings(dialogState->workingSettings);
+        if (! fileOperations)
+        {
+            return;
+        }
+
+        if (fileOperations->showInformationalNotes != checked)
+        {
+            fileOperations->showInformationalNotes = checked;
+            MaybeResetWorkingFileOperationsSettingsIfEmpty(dialogState->workingSettings);
+            SetDirty(GetParent(host), *dialogState);
+        }
+
+        Refresh(host, *dialogState);
+    });
+
+    // I35 R8.11: the decision mirror over the pane (default on); the card always keeps the question.
+    dxState->page.mirrorDecisionsInPane.card  = root->AddChild<CardPanel>();
+    dxState->page.mirrorDecisionsInPane.title = root->AddChild<Label>();
+    dxState->page.mirrorDecisionsInPane.title->SetFontRole(FontRole::Body);
+    dxState->page.mirrorDecisionsInPane.description = root->AddChild<Label>();
+    dxState->page.mirrorDecisionsInPane.description->SetFontRole(FontRole::Small);
+    dxState->page.mirrorDecisionsInPane.description->SetMultiline(true);
+    dxState->page.mirrorDecisionsInPane.toggle = root->AddChild<Toggle>();
+    dxState->page.mirrorDecisionsInPane.title->SetMnemonicTarget(dxState->page.mirrorDecisionsInPane.toggle);
+    dxState->page.mirrorDecisionsInPane.toggle->SetStateLabels(LoadStringResource(nullptr, IDS_PREFS_COMMON_OFF),
+                                                               LoadStringResource(nullptr, IDS_PREFS_COMMON_ON));
+    dxState->page.mirrorDecisionsInPane.toggle->SetOnToggled([this, host = parent](bool checked) noexcept
+    {
+        if (! host || IsWindow(host) == FALSE)
+        {
+            return;
+        }
+
+        auto* dialogState = PrefsUi::GetDialogState(host);
+        if (! dialogState)
+        {
+            return;
+        }
+
+        auto* fileOperations = EnsureWorkingFileOperationsSettings(dialogState->workingSettings);
+        if (! fileOperations)
+        {
+            return;
+        }
+
+        if (fileOperations->mirrorDecisionsInPane != checked)
+        {
+            fileOperations->mirrorDecisionsInPane = checked;
+            MaybeResetWorkingFileOperationsSettingsIfEmpty(dialogState->workingSettings);
+            SetDirty(GetParent(host), *dialogState);
+        }
+
+        Refresh(host, *dialogState);
+    });
+
     dxState->page.bridgeBuffer.card  = root->AddChild<CardPanel>();
     dxState->page.bridgeBuffer.title = root->AddChild<Label>();
     dxState->page.bridgeBuffer.title->SetFontRole(FontRole::Body);
@@ -563,6 +647,14 @@ void FileOperationsPane::SyncDxControlsFromState(const PreferencesDialogState& s
     page.autoDismissSuccess.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_AUTODISMISS_DESC));
     page.autoDismissSuccess.toggle->SetChecked(fileOperations.autoDismissSuccess);
     page.autoDismissSuccess.toggle->SetEnabled(true);
+    page.showInformationalNotes.title->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_SHOW_NOTES_TITLE));
+    page.showInformationalNotes.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_SHOW_NOTES_DESC));
+    page.showInformationalNotes.toggle->SetChecked(fileOperations.showInformationalNotes);
+    page.showInformationalNotes.toggle->SetEnabled(true);
+    page.mirrorDecisionsInPane.title->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_MIRROR_DECISIONS_TITLE));
+    page.mirrorDecisionsInPane.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_MIRROR_DECISIONS_DESC));
+    page.mirrorDecisionsInPane.toggle->SetChecked(fileOperations.mirrorDecisionsInPane);
+    page.mirrorDecisionsInPane.toggle->SetEnabled(true);
 
     page.bridgeBuffer.title->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BRIDGE_BUFFER_TITLE));
     page.bridgeBuffer.description->SetText(LoadStringResource(nullptr, IDS_PREFS_FILEOPS_BRIDGE_BUFFER_DESC));
@@ -749,6 +841,8 @@ void FileOperationsPane::LayoutDxPage(
     hideComboCard(page.bandwidthPreset);
     hideEditCard(page.customBandwidth);
     hideToggleCard(page.autoDismissSuccess);
+    hideToggleCard(page.showInformationalNotes);
+    hideToggleCard(page.mirrorDecisionsInPane);
     hideEditCard(page.bridgeBuffer);
     hideNoteCard(page.pluginHint);
 
@@ -882,6 +976,8 @@ void FileOperationsPane::LayoutDxPage(
 
     layoutHeader(page.advancedHeader);
     layoutToggleCard(page.autoDismissSuccess);
+    layoutToggleCard(page.showInformationalNotes);
+    layoutToggleCard(page.mirrorDecisionsInPane);
     layoutEditCard(page.bridgeBuffer);
     layoutNoteCard(page.pluginHint);
 
@@ -963,6 +1059,14 @@ PreferencesFileOperationsDebugFocusTarget FileOperationsPane::DebugGetFocusTarge
     if (page.autoDismissSuccess.toggle == focused)
     {
         return PreferencesFileOperationsDebugFocusTarget::AutoDismissSuccessToggle;
+    }
+    if (page.showInformationalNotes.toggle == focused)
+    {
+        return PreferencesFileOperationsDebugFocusTarget::ShowInformationalNotesToggle;
+    }
+    if (page.mirrorDecisionsInPane.toggle == focused)
+    {
+        return PreferencesFileOperationsDebugFocusTarget::MirrorDecisionsInPaneToggle;
     }
     if (page.bridgeBuffer.edit == focused)
     {

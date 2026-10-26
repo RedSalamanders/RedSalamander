@@ -7,12 +7,12 @@
 #include <winsock2.h>
 
 #include "BatchRenameWindow.h"
+#include "Common.Tests.Runner.h"
 #include "DxUiThemePalette.h"
 #include "FolderWindow.FileOperationsInternal.h"
 #include "FolderWindowInternal.h"
 #include "HostServices.h"
 #include "NavigationLocation.h"
-#include "SelfTestCommon.h"
 
 #include <netioapi.h>
 #include <shlwapi.h>
@@ -50,10 +50,10 @@ constexpr UINT_PTR kPreviewPaneRefreshTimerId = 0x7250;
     return RegisterClassW(&wc) != 0 || GetLastError() == ERROR_CLASS_ALREADY_EXISTS;
 }
 
-LRESULT OnHostServicesMessage(UINT msg, WPARAM wp, LPARAM lp) noexcept
+LRESULT OnHostServicesMessage(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp) noexcept
 {
     LRESULT result = 0;
-    if (TryHandleHostServicesWindowMessage(msg, wp, lp, result))
+    if (TryHandleHostServicesWindowMessage(hwnd, msg, wp, lp, result))
     {
         return result;
     }
@@ -940,10 +940,44 @@ void FolderWindow::SetPaneEnumerationCompletedCallback(Pane pane, FolderView::En
     InstallFolderViewEnumerationCompletedCallback(pane);
 }
 
+#ifdef ENABLE_TESTS
+void FolderWindow::SetPaneEnumerationSettledCallback(Pane pane, FolderView::EnumerationSettledCallback callback)
+{
+    PaneState& state                 = pane == Pane::Left ? _leftPane : _rightPane;
+    state.enumerationSettledCallback = std::move(callback);
+    InstallFolderViewEnumerationCompletedCallback(pane);
+}
+#endif
+
 void FolderWindow::InstallFolderViewEnumerationCompletedCallback(Pane pane)
 {
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     state.folderView.SetEnumerationCompletedCallback([this, pane](const std::filesystem::path& folder) { OnFolderViewEnumerationCompleted(pane, folder); });
+    // A pending conflict inspection is the only production settlement listener; without one
+    // the ordinary path keeps no listener.
+    auto inspection = _fileOperations ? _fileOperations->GetConflictInspectionEnumerationCallback(pane) : FolderView::EnumerationSettledCallback{};
+#ifdef ENABLE_TESTS
+    if (state.enumerationSettledCallback)
+    {
+        state.folderView.SetEnumerationSettledCallback([external = state.enumerationSettledCallback, inspection = std::move(inspection)](
+                                                           const FolderView::InspectionVisit& visit, const std::filesystem::path& folder, HRESULT status)
+        {
+            external(visit, folder, status);
+            // The inspection callable checks its weak owner lifetime and original visit
+            // after the self-test callback, which may navigate or destroy the owner.
+            if (inspection)
+                inspection(visit, folder, status);
+        });
+        return;
+    }
+#endif
+    state.folderView.SetEnumerationSettledCallback(std::move(inspection));
+}
+
+void FolderWindow::EndPaneConflictInspection(Pane pane) noexcept
+{
+    if (_fileOperations)
+        _fileOperations->CancelConflictInspectionForPane(pane);
 }
 
 void FolderWindow::OnFolderViewEnumerationCompleted(Pane pane, const std::filesystem::path& folder)
@@ -1092,6 +1126,15 @@ void FolderWindow::Destroy()
         SelfTest::AppendSelfTestTrace(L"FolderWindow::Destroy: begin");
     }
 #endif
+    // Neither the application FolderWindow nor a linked secondary one may keep a pointer to this one.
+    SetApplicationExitFolderWindow(nullptr);
+    for (FolderWindow* linked : std::exchange(_exitLinkedFolderWindows, {}))
+    {
+        if (linked)
+        {
+            linked->_applicationExitFolderWindow = nullptr;
+        }
+    }
     ShutdownFileOperations();
 
     CancelSelectionSizeComputation(Pane::Left);
@@ -1328,6 +1371,7 @@ LRESULT FolderWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WndMsg::kFileOperationBatchRenameArtifactPrompt: return OnFileOperationBatchRenameArtifactPrompt(wp, lp);
         case WndMsg::kFileOperationClipboardMoveReady: return OnFileOperationClipboardMoveReady(wp, lp);
         case WndMsg::kFileOperationPresentationChanged: OnFileOperationPresentationChanged(); return 0;
+        case WndMsg::kFileOperationsDeferredCloseSettled: OnFileOperationsDeferredCloseSettled(); return 0;
 #ifdef ENABLE_TESTS
         case WndMsg::kFileOperationShutdownForSelfTest:
             if (_fileOperations)
@@ -1339,6 +1383,10 @@ LRESULT FolderWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
             }
             ReleaseFileOpsBatchRenameBeforeExecutionPauseForSelfTest();
             SetFileOpsBatchRenameBeforeExecutionPauseForSelfTest(false);
+            ReleaseFileOpsBatchRenameBeforeMutationPauseForSelfTest();
+            SetFileOpsBatchRenameBeforeMutationPauseForSelfTest(false);
+            SetFileOpsBatchRenameReceiptFaultForSelfTest(FileOpsBatchRenameReceiptFaultForSelfTest::None);
+            SetFileOpsRecycleDeleteReceiptFaultForSelfTest(FileOpsRecycleDeleteReceiptFaultForSelfTest::None);
             HostBeginPromptShutdown();
             ShutdownFileOperations();
             _debugFileOperationStateRetainedDuringNestedPromptShutdown = static_cast<bool>(_fileOperations);
@@ -1352,16 +1400,17 @@ LRESULT FolderWindow::WndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
         case WndMsg::kMakeFileListCompleted: return OnMakeFileListCompleted(lp);
         case WndMsg::kFolderWindowCloseOpenedFilesDialog: CloseOpenedFilesDialog(); return 0;
         case WndMsg::kFolderWindowCloseSharedDirectoriesDialog: CloseSharedDirectoriesDialog(); return 0;
-        case WndMsg::kHostShowAlert: return OnHostServicesMessage(msg, wp, lp);
-        case WndMsg::kHostClearAlert: return OnHostServicesMessage(msg, wp, lp);
-        case WndMsg::kHostShowPrompt: return OnHostServicesMessage(msg, wp, lp);
-        case WndMsg::kHostShowConnectionManager: return OnHostServicesMessage(msg, wp, lp);
-        case WndMsg::kHostGetConnectionJsonUtf8: return OnHostServicesMessage(msg, wp, lp);
-        case WndMsg::kHostGetConnectionSecret: return OnHostServicesMessage(msg, wp, lp);
-        case WndMsg::kHostPromptConnectionSecret: return OnHostServicesMessage(msg, wp, lp);
-        case WndMsg::kHostClearCachedConnectionSecret: return OnHostServicesMessage(msg, wp, lp);
-        case WndMsg::kHostUpgradeFtpAnonymousToPassword: return OnHostServicesMessage(msg, wp, lp);
-        case WndMsg::kHostExecuteInPane: return OnHostServicesMessage(msg, wp, lp);
+        case WndMsg::kFolderWindowCloseLeftoverCleanupDialog: CloseLeftoverCleanupDialog(); return 0;
+        case WndMsg::kHostShowAlert: return OnHostServicesMessage(hwnd, msg, wp, lp);
+        case WndMsg::kHostClearAlert: return OnHostServicesMessage(hwnd, msg, wp, lp);
+        case WndMsg::kHostShowPrompt: return OnHostServicesMessage(hwnd, msg, wp, lp);
+        case WndMsg::kHostShowConnectionManager: return OnHostServicesMessage(hwnd, msg, wp, lp);
+        case WndMsg::kHostGetConnectionJsonUtf8: return OnHostServicesMessage(hwnd, msg, wp, lp);
+        case WndMsg::kHostGetConnectionSecret: return OnHostServicesMessage(hwnd, msg, wp, lp);
+        case WndMsg::kHostPromptConnectionSecret: return OnHostServicesMessage(hwnd, msg, wp, lp);
+        case WndMsg::kHostClearCachedConnectionSecret: return OnHostServicesMessage(hwnd, msg, wp, lp);
+        case WndMsg::kHostUpgradeFtpAnonymousToPassword: return OnHostServicesMessage(hwnd, msg, wp, lp);
+        case WndMsg::kHostExecuteInPane: return OnHostServicesMessage(hwnd, msg, wp, lp);
     }
 
     return DefWindowProcW(hwnd, msg, wp, lp);
@@ -1500,6 +1549,14 @@ LRESULT FolderWindow::OnNotify(LPARAM data)
             _showSortMenuCallback(pane, screenPoint);
             return 0;
         }
+    }
+
+    // I35 R8.9: the pending-decision segment opens File Operations through the explicit View command
+    // (its activation rules unchanged).
+    if (header && header->code == kStatusBarDecisionClickNotification && (header->idFrom == kLeftStatusBarId || header->idFrom == kRightStatusBarId))
+    {
+        CommandShowFileOperations();
+        return 0;
     }
 
     if (! _hWnd)
@@ -1778,6 +1835,7 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             SetPropW(state.hStatusBar.get(), kStatusBarSecurityTextProp, reinterpret_cast<HANDLE>(&state.statusSecurityText));
             SetPropW(state.hStatusBar.get(), kStatusBarSortTextProp, reinterpret_cast<HANDLE>(&state.statusSortText));
             SetPropW(state.hStatusBar.get(), kStatusBarFocusHueProp, reinterpret_cast<HANDLE>(&state.statusFocusHueDegrees));
+            SetPropW(state.hStatusBar.get(), kStatusBarDecisionTextProp, reinterpret_cast<HANDLE>(&state.statusDecisionText));
         }
 
         const int previewTabsWidth   = std::max(0L, previewTabsRect.right - previewTabsRect.left);
@@ -1906,7 +1964,9 @@ bool FolderWindow::OnCreate(HWND hwnd) noexcept
             state.folderView.SetViewFileRequestCallback([this, pane](const FolderView::ViewFileRequest& request)
             { return TryViewFileWithViewer(pane, request); });
             state.folderView.SetFileOperationRequestCallback([this, pane](FolderView::FileOperationRequest request) noexcept -> HRESULT
-            { return StartFileOperationFromFolderView(pane, std::move(request)); });
+            { return FolderViewFileOperationRequestResult(StartFileOperationFromFolderView(pane, std::move(request))); });
+            state.folderView.SetFileOperationRefusalCallback([this, pane](FileSystemOperation operation) noexcept
+            { return RefuseFileOperationForPendingExit(pane, operation); });
             state.folderView.SetPropertiesRequestCallback([this, pane](std::filesystem::path path) noexcept -> HRESULT
             { return ShowItemPropertiesFromFolderView(pane, std::move(path)); });
             state.folderView.SetBatchRenameRequestCallback([this, pane](std::filesystem::path targetPath, bool isDirectoryRoot)
@@ -2225,6 +2285,10 @@ void FolderWindow::OnDestroy()
 #endif
     CancelPendingPreviewPaneRefresh();
     _networkChangeSubscription.reset();
+    // I35 R7.5: the leftover listing's subfolder walk stops (and its window closes) with the panes; a
+    // walk still blocked in a canceled read is waited for here, never on an ordinary close.
+    CloseLeftoverCleanupDialog();
+    SweepRetiredLeftoverCleanupDialogs(true);
 
     ShutdownViewers();
 #ifdef ENABLE_TESTS
@@ -2333,6 +2397,10 @@ void FolderWindow::OnDestroy()
 void FolderWindow::CommandRename(Pane pane)
 {
     SetActivePane(pane);
+    if (RefuseFileOperationForPendingExit(pane, FILESYSTEM_RENAME))
+    {
+        return;
+    }
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
     if (state.folderView.GetSelectedPaths().size() > 1u)
     {
@@ -2532,7 +2600,7 @@ bool FolderWindow::RevealBatchRenamePathInPane(const Pane pane, const std::files
 void FolderWindow::CommandBatchRename(Pane pane, std::optional<std::filesystem::path> rootOverride, std::vector<std::filesystem::path> initialPathsOverride)
 {
     SetActivePane(pane);
-    if (! _settings)
+    if (! _settings || RefuseFileOperationForPendingExit(pane, FILESYSTEM_RENAME))
     {
         return;
     }
@@ -2561,6 +2629,11 @@ void FolderWindow::CommandBatchRename(Pane pane, std::optional<std::filesystem::
         if (taskIdOut)
         {
             *taskIdOut = 0u;
+        }
+        static_assert(BatchRenamePaneContext::kStartRefusedForPendingExit == kFileOperationRefusedForPendingExit);
+        if (RefuseFileOperationForPendingExit(pane, FILESYSTEM_RENAME))
+        {
+            return BatchRenamePaneContext::kStartRefusedForPendingExit;
         }
         EnsureFileOperations();
         if (! _fileOperations || ! fileSystem || ! request.onCompleted || ! request.pathIdentity.has_value())

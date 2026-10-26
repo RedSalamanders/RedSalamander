@@ -1,0 +1,25 @@
+{
+  "embeddedImages": [
+    {
+      "image": "docs/res/file-operations-popup.png",
+      "sha256": "6a819ac4771c023bae7e8a24074c8d00f6b022157baf2eec41039e91efe80db2",
+      "matchesNativeArchive": true,
+      "visualReview": "readable synthetic paths, no personal data or redaction labels",
+      "currentSurface": true
+    },
+    {
+      "image": "docs/res/file-operations-issues.png",
+      "sha256": "f4022e2e3e13578c614dfc702b22724210e6db182456a47a26125ac68c60417d",
+      "matchesNativeArchive": true,
+      "visualReview": "readable synthetic paths, no personal data or redaction labels",
+      "currentSurface": true
+    }
+  ],
+  "correctCardFacts": 124,
+  "documentationCaptures": 2,
+  "existingCardCaptures": 132,
+  "policyScope": "all published screenshots across every feature",
+  "captureAndNormativeSourcesUnchanged": true,
+  "qualification": "focused x64 Debug only",
+  "firstFailedAttemptRetained": true
+}

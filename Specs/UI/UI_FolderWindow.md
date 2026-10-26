@@ -33,6 +33,7 @@ Some features embed a `FolderWindow` but require additional host integration (e.
 
 - **Pane callbacks**: path changed, enumeration completed, and per-item details text provider.
 - **Selection helpers**: apply selection based on display-name predicates.
+- **Application exit link**: `SetApplicationExitFolderWindow` links a scoped window's `FolderWindow` to the application `FolderWindow`, so an accepted "Cancel all and exit" refuses the scoped window's file operations too (see `Specs/FileSystem/FileSystem_FileOperations.md`). The link also registers the scoped window's engine with the application `FolderWindow`, whose exit consent counts, whose "Cancel all and exit" cancels, and whose deferred close waits for every linked engine; a linked engine going quiet resumes that deferred close, and unlinking (or `Destroy`) removes it. Compare Directories sets it on create and clears it on destroy. A scoped window that owns an engine handles `WM_CLOSE` through its own `FolderWindow::ConfirmCancelAllFileOperations`, which on a linked `FolderWindow` asks to cancel that window's work and close the window ("Close Window"), defers that window's close until its engine is quiet and, while it is pending, refuses new work in that window with a "Close Window" pane alert (`IDS_FMT_PANE_FILEOP_REFUSED_CLOSE_PENDING`). Once the application close has committed (`HostIsPromptShutdown`), the scoped window closes without asking.
 - **Informational tasks**: create/update/dismiss read-only task cards in the File Operations popup for background work that is not a file operation (see `Specs/FileSystem/FileSystem_FileOperations.md`).
 
 ## File System Plugin (v2)
@@ -226,7 +227,7 @@ FolderWindow responsibilities:
   Ordinary paints retain all resources; size or device-loss invalidation releases the brush before its target
   while retaining the D2D factory, and HWND teardown releases the complete surface-owned resource aggregate.
 - Every command must expose a localized short display resource via the `IDS_CMD_SHORT_BASE + IDS_CMD_*` convention. Examples: `Make Directory` -> `MakeDir`, `User Menu` -> `UsrMenu`, `Sort by Time` -> `ByTime`.
-- Resource ids `20000..21999` are reserved for command short labels.
+- Resource ids `20000..22999` are reserved for command short labels (every command display id is below 3000).
 - Short labels should be concise enough for the function bar target width; the command registry self-test guards that every command has a non-empty short label and that representative labels match the expected compact text.
 - Full command display names remain the source for menus, Preferences, and shortcut lists. The function bar may fall back to the full display name only for unknown/custom command IDs.
 
@@ -268,6 +269,12 @@ Each pane optionally shows a status bar at the bottom. It is a distinct control 
   - When the pane is **unsorted**, the indicator shows a small placeholder glyph (localized via resources) rather than disappearing.
     - Resource: `IDS_STATUS_SORT_INDICATOR`
   - When the window is too narrow, the left part truncates with an ellipsis but the right indicator remains visible.
+- **Decision part** (I35 S5, R8.9): while any File Operations decision of this window's engine is pending,
+  both panes' status bars show a segment between the left part and the security/sort parts:
+  `IDS_FMT_FILEOPS_DECISION_PENDING` (`{0:L} decision(s) pending — click to open`). It is shown whichever
+  pane is active, whether or not the decision mirror covers a pane, with the mirror setting off and with
+  the File Operations popup closed; it disappears once no decision is pending. Its width follows its text
+  (120-360 DIP) and the left part gives way first.
 
 Example (wide):
 
@@ -305,6 +312,13 @@ Example (narrow):
 - The pane sort popup displays the configured shortcuts for None, Name, Extension, Time, and Size in the shared right-aligned accelerator column. Attributes leaves that column empty when it has no configured shortcut.
 - The popup also exposes a **Thumbnail size** discrete slider with four stops: Small `48 DIP`, Medium `64 DIP`, Large `96 DIP`, and Extra Large `128 DIP`. Each stop is a progressively larger graphical thumbnail tile rather than an identical dot, so the available sizes are understandable without labels. Pressing a stop starts an animated thumb movement and previews its localized size label. While the left button remains down, horizontal pointer movement updates the preview with graphical feedback; releasing commits the nearest stop. Track clicks remain direct, the drag clamps to the first/last stop outside the track, reduced-motion mode applies the new state without animation, and keyboard arrow/Home/End behavior remains available. The slider targets the pane whose status-bar sort region opened the popup, updates only that pane, and keeps left/right pane sizes independent.
 - Hovering the sort indicator shows a tooltip indicating it is clickable.
+- The decision part paints a highlighted background (stronger while hovered, the selection colors in high
+  contrast) with a hand cursor. Clicking it raises `kStatusBarDecisionClickNotification` to the Folder
+  window, which runs the explicit View command (**Show File Operations**, `CommandShowFileOperations`):
+  the popup opens with the pending card, under that command's activation rules. The status bar window
+  text is set to the segment text (empty otherwise), so UI Automation names the bar with the pending
+  decision; the bar has no other provider. When the user hides both status bars the segment is not
+  visible; the popup's `Needs attention` footer count and its taskbar state still report the decision.
 - Status bar visibility is persisted per pane.
 
 ## Pane View Options

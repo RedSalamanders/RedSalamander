@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-10-18T18:48:29.347Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261018T184751Z-92896-fcc24c4321ec4857838c70c148416822\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 1531,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1266,
+            "repeat_index": 1
+        },
+        {
+            "name": "FileOps_SameProviderBridgeDestinationStorage",
+            "status": "passed",
+            "duration_ms": 172,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 93,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

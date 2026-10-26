@@ -1,0 +1,94 @@
+RunApplication: InitInstance begin
+InitInstance: begin
+InitInstance: RegisterClassExW ok
+OnMainWindowCreate: begin
+OnMainWindowCreate: folder window created
+FolderWindow::SetSettings: begin
+FolderWindow::SetSettings: settings assigned
+FolderWindow::SetSettings: left navigation set
+FolderWindow::SetSettings: right navigation set
+OnMainWindowCreate: folder settings pointer set
+FolderWindow::SetShortcutManager: begin
+FolderWindow::SetShortcutManager: shortcut pointer assigned
+FolderWindow::SetShortcutManager: function bar set
+FolderWindow::SetShortcutManager: left folder view set
+FolderWindow::SetShortcutManager: right folder view set
+OnMainWindowCreate: shortcut manager set
+OnMainWindowCreate: function bar visibility set
+OnMainWindowCreate: layout adjusted
+OnMainWindowCreate: theme applied
+OnMainWindowCreate: base folder settings applied
+OnMainWindowCreate: left folder path skipped for selftest
+OnMainWindowCreate: right folder path skipped for selftest
+OnMainWindowCreate: command selftest dispatch processed
+InitInstance: UpdateWindow skipped for selftest
+CommandsSelfTest: begin
+CommandsSelfTest: calling CommandsSelfTest::Run
+CommandsSelfTest::Run: entry
+CommandsSelfTest: begin
+CommandsSelfTest::Run: entry
+CommandsSelfTest: begin
+CommandsSelfTest: PASS
+CommandsSelfTest: isolated execution order count=6 repeat=1 shuffleSeed=none
+FolderView::ProcessEnumerationResult: after sort focusedIndex=0 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_refresh_filter_0c46f143-ccbd-483a-9021-3e0c3d90ad68'
+FolderView::RequestRefreshFromCache: generation=41 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_refresh_filter_0c46f143-ccbd-483a-9021-3e0c3d90ad68'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=0 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_refresh_filter_0c46f143-ccbd-483a-9021-3e0c3d90ad68'
+FolderView::RequestRefreshFromCache: generation=42 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_refresh_filter_0c46f143-ccbd-483a-9021-3e0c3d90ad68'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=0 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_refresh_filter_0c46f143-ccbd-483a-9021-3e0c3d90ad68'
+FolderView::RequestRefreshFromCache: generation=43 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_refresh_filter_0c46f143-ccbd-483a-9021-3e0c3d90ad68'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=0 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_refresh_filter_0c46f143-ccbd-483a-9021-3e0c3d90ad68'
+FolderView::RequestRefreshFromCache: generation=44 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_refresh_filter_0c46f143-ccbd-483a-9021-3e0c3d90ad68'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=0 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_refresh_filter_0c46f143-ccbd-483a-9021-3e0c3d90ad68'
+FolderView::RequestRefreshFromCache: generation=45 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_refresh_filter_0c46f143-ccbd-483a-9021-3e0c3d90ad68'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=1 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_refresh_filter_0c46f143-ccbd-483a-9021-3e0c3d90ad68'
+FolderView::RequestRefreshFromCache: generation=46 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_refresh_filter_0c46f143-ccbd-483a-9021-3e0c3d90ad68'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=1 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_refresh_filter_0c46f143-ccbd-483a-9021-3e0c3d90ad68'
+FolderView::ProcessEnumerationResult: failed payload status
+FolderView::ProcessEnumerationResult: after sort focusedIndex=0 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::RequestRefreshFromCache: generation=54 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=0 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::RequestRefreshFromCache: generation=55 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=1 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::RequestRefreshFromCache: generation=56 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=0 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::RequestRefreshFromCache: generation=57 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=1 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::RequestRefreshFromCache: generation=58 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=1 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::RequestRefreshFromCache: generation=59 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=1 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::RequestRefreshFromCache: generation=60 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=1 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::RequestRefreshFromCache: generation=61 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=1 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::RequestRefreshFromCache: generation=62 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=1 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::RequestRefreshFromCache: generation=63 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=0 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::RequestRefreshFromCache: generation=64 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=0 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::RequestRefreshFromCache: generation=65 folder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+FolderView::ProcessEnumerationResult: after sort focusedIndex=0 displayedFolder='Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\selftest\last_run\commands\work\folderview_selection_visibility_cc6ec9e3-012c-45f0-a777-90ea469f9460'
+CommandsSelfTest: PASS
+CommandsSelfTest: PASS
+CommandsSelfTest: end: exit_code=0
+ViewerPluginManager::Unload: plugin shutdown begin id='builtin/terminal'
+ViewerPluginManager::Unload: plugin shutdown complete id='builtin/terminal'
+ViewerPluginManager::UnloadAll: unload complete id='builtin/terminal'
+ViewerPluginManager::UnloadAll: unload begin id='builtin/viewer-space' path='Z:\src\RedSalamander\.build\x64\Release\Plugins\ViewerSpace.dll'
+ViewerPluginManager::Unload: plugin shutdown begin id='builtin/viewer-space'
+ViewerPluginManager::Unload: plugin shutdown complete id='builtin/viewer-space'
+ViewerPluginManager::UnloadAll: unload complete id='builtin/viewer-space'
+ViewerPluginManager::UnloadAll: unload begin id='builtin/viewer-imgraw' path='Z:\src\RedSalamander\.build\x64\Release\Plugins\ViewerImgRaw.dll'
+ViewerPluginManager::Unload: plugin shutdown begin id='builtin/viewer-imgraw'
+ViewerPluginManager::Unload: plugin shutdown complete id='builtin/viewer-imgraw'
+ViewerPluginManager::UnloadAll: unload complete id='builtin/viewer-imgraw'
+OnMainWindowDestroy: viewer plugin shutdown complete
+OnMainWindowDestroy: session state cleared
+OnMainWindowDestroy: selftest monitor shutdown complete
+OnMainWindowDestroy: PostQuitMessage: exit_code=0
+RunApplication: message loop exit=0
+Archive: Z:\RedSalamander.Perf\runs\20261020T114426Z-15160-307ce45265b349aca4184c5acdc6263d\artifacts\archive\4cb089111a23\Commands\2026-10-20_134518
+CommandsSelfTest::Run: entry
+CommandsSelfTest: begin
+CommandsSelfTest: PASS

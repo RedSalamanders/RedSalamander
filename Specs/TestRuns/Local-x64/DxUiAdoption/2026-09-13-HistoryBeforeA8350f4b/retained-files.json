@@ -1,0 +1,38 @@
+[
+  {
+    "file": "summaries.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-history-context\\summaries.json",
+    "bytes": 1247,
+    "sha256": "7e23232305e0672a2639b6e5f393ceb094ad15688f738959828c31a9c75d6e52"
+  },
+  {
+    "file": "history-context.log",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-history-context\\history-context.log",
+    "bytes": 2574,
+    "sha256": "6e16cc5f0e2bb5b4e2c40caf72ff13b51c3995845fece2fd16c89b3851d09ae8"
+  },
+  {
+    "file": "history-context-commands_results.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-history-context\\history-context\\final-results\\commands\\results.json",
+    "bytes": 26808,
+    "sha256": "d0a27525e5e3fb626c89db00a952214bb9314e09c15896f8fe9acb2508891580"
+  },
+  {
+    "file": "history-context-aggregate.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-history-context\\history-context\\final-results\\run-all-tests-results.json",
+    "bytes": 39180,
+    "sha256": "a1da77b54889c3a6eeb893a0e84d485c69f81298c5c94b5e58ecb805d8e95cde"
+  },
+  {
+    "file": "history-context-module-identities.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-history-context\\history-context-module-identities.json",
+    "bytes": 7241,
+    "sha256": "f3b6e1a6bf2633def622e88167a41fbec294e74155171b123f3135d139a4761f"
+  },
+  {
+    "file": "history-fixture-identities.json",
+    "source": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\a8350f4b-history-context\\history-fixture-identities.json",
+    "bytes": 3867,
+    "sha256": "1826a39e43aa247a56253defc9b5cffacd518871805474d04d452a1d613eb2cd"
+  }
+]

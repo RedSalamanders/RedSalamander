@@ -1,0 +1,28 @@
+[
+  {
+    "source": "f06f779fd45105d251c2761a82138e7c8215326e",
+    "configuration": "Debug",
+    "platform": "x64",
+    "group": "refresh-sequence",
+    "caseFilter": "cmd_pane_embedded_terminal_shell_exit_closes_only_its_tab,cmd_pane_embedded_terminal_tab_visibility_and_keyboard_target,cmd_pane_navigation_switch_pane_focus_keeps_navigation_shell_stable,cmd_pane_navigation_refresh_keeps_navigation_shell_stable",
+    "repeatCount": 10,
+    "runId": "20260913T100953Z-39304-082c576a1fd641a3a3e3fcb7f14609e3",
+    "startedUtc": "2026-09-13T10:09:52.1493125Z",
+    "completedUtc": "2026-09-13T10:10:59.9380607Z",
+    "exitCode": 0,
+    "noHostedCi": true
+  },
+  {
+    "source": "f06f779fd45105d251c2761a82138e7c8215326e",
+    "configuration": "Debug",
+    "platform": "x64",
+    "group": "drive-menu-sequence",
+    "caseFilter": "cmd_app_fullScreen,cmd_app_fullScreen_keeps_navigation_shell_stable,cmd_app_openDriveMenus,cmd_app_openDriveMenus_keeps_navigation_shell_stable",
+    "repeatCount": 10,
+    "runId": "20260913T101100Z-39304-10c768ee9ae049f5a51cec010a3b62ad",
+    "startedUtc": "2026-09-13T10:10:59.9417714Z",
+    "completedUtc": "2026-09-13T10:11:51.6952367Z",
+    "exitCode": 0,
+    "noHostedCi": true
+  }
+]

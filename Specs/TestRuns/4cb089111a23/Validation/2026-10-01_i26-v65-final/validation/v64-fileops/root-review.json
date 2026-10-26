@@ -1,0 +1,41 @@
+{
+  "schema": "i26-v64-fileops-full-root-review.v1",
+  "reviewer": "root",
+  "reviewUtc": "2026-10-01T09:34:52.6660945+00:00",
+  "status": "passed-recovered",
+  "nativeRerun": false,
+  "wholePlanComplete": false,
+  "runId": "20261001T090450Z-99932-e4fc6b4b30da433da94d58284796c674",
+  "terminalRecordsSha256": "ca87f6567dd836af84aba8d25ac9311a5d7191a3f21b25b1051d3b5c8a21b773",
+  "manifestSha256": "55b1d53c4e12b631dd66609d9d4390bc2dcc0eed50949bd636739793c4063730",
+  "sourceSnapshotId": "3ce4faf02bd5be620b8087fb1483fbf1d80caa35c795308957463b7084398a5e",
+  "runnerResultSha256": "a3ed012845ce9facbd67e50846d55b7bd7043c733cb81b359144e9d6915f23ae",
+  "nativeResultSha256": "9cbdebe40cf7dcd8259a1f4099f421612e4d2c737ecb839188c74a8983e03c7b",
+  "fileOpsResultSha256": "9a4f01c6a5d8fe5b1dc73fe084623955aa1da250a4fdd8d51e0dd5428b9a4de4",
+  "originalErrorSha256": "862688fd5d8dfeffc954c47f86952d24fcb6530d1ce8f168f6457b360fa360bd",
+  "qualificationSha256": "e40d3cfeb0070f6142ebaf4bdaf9021295a3e3bf1dc519ba57fff9bc32638356",
+  "offlineRecoveryScriptSha256": "7f1d8a16cbc92f48ffd90c859999e454eb33d7f64b07563ffb503100d87af7f6",
+  "counts": {
+    "total": 217,
+    "passed": 196,
+    "failed": 0,
+    "skipped": 21
+  },
+  "sandboxClean": true,
+  "rawPerfSha256": "d2327ec1b2533c146f89a63d064a3aa60bd7650659c0caf79ee2b9a22ece6294",
+  "rawTraceSha256": "407e538a433a9766422e66e928a316045507c34e25d38f4c89e0b1e236d083e1",
+  "timing": {
+    "r0eUs": 1266645,
+    "r0eLimitUs": 2000000,
+    "parseCount": 4096,
+    "admissionCount": 4096,
+    "rejectedUncontained": 1,
+    "providerCalls": 0,
+    "independentVolumesUs": 1172000,
+    "unchangedDerivedLimitUs": 1582200,
+    "overlap": 1
+  },
+  "skipScope": "18 remote profiles absent, two 7z cases owned by Compare, one Release-only Debug-export skip with actual V55 Debug pass.",
+  "postprocessing": "Original wrapper read absent native aggregate case_filter. Unfiltered scope is established by runner field, plan and exact argv. Original wrapper/error retained; corrected offline validator reads unchanged originals.",
+  "acceptanceEffect": "Unfiltered x64 Release FileOps passed. Original V58 Full remains FAILED; current repository Full and final resource pair remain required."
+}

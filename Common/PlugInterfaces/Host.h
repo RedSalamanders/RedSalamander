@@ -109,11 +109,15 @@ enum HostPromptResult : uint32_t
 // operation-specific icon, palette, title fallback, and affirmative label.
 enum HostPromptPresentation : uint32_t
 {
-    HOST_PROMPT_PRESENTATION_DEFAULT = 0,
-    HOST_PROMPT_PRESENTATION_COPY    = 1,
-    HOST_PROMPT_PRESENTATION_MOVE    = 2,
-    HOST_PROMPT_PRESENTATION_DELETE  = 3,
+    HOST_PROMPT_PRESENTATION_DEFAULT        = 0,
+    HOST_PROMPT_PRESENTATION_COPY           = 1,
+    HOST_PROMPT_PRESENTATION_MOVE           = 2,
+    HOST_PROMPT_PRESENTATION_DELETE         = 3,
     HOST_PROMPT_PRESENTATION_ARTIFACT_TOUCH = 4,
+    // Host-internal fail-closed answer of the possible-artifact touch guard. Labels: YES "Retry";
+    // OK, or NO together with YES and CANCEL, "Open location in File Explorer"; CANCEL, OK alone, or NO
+    // without CANCEL, "Close". No result grants a receipt.
+    HOST_PROMPT_PRESENTATION_ARTIFACT_BLOCKED = 5,
 };
 
 enum HostFileOperationLinkPolicy : uint32_t
@@ -130,10 +134,10 @@ enum HostFileOperationExecutionMode : uint32_t
 
 enum HostFileOperationVerificationAvailability : uint32_t
 {
-    HOST_FILE_OPERATION_VERIFICATION_SUPPORTED = 0,
-    HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED = 1,
+    HOST_FILE_OPERATION_VERIFICATION_SUPPORTED              = 0,
+    HOST_FILE_OPERATION_VERIFICATION_UNSUPPORTED            = 1,
     HOST_FILE_OPERATION_VERIFICATION_CHECK_DURING_OPERATION = 2,
-    HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE = 3,
+    HOST_FILE_OPERATION_VERIFICATION_NOT_APPLICABLE         = 3,
 };
 
 // Optional, operation-specific confirmation state. The caller owns this
@@ -364,6 +368,33 @@ interface __declspec(uuid("f15c66ea-fec2-46b1-a643-e06bf0db15c7")) __declspec(no
 {
     // Opens a viewer window using the provided plugin id and viewer-open context.
     virtual HRESULT STDMETHODCALLTYPE OpenViewer(const HostViewerOpenRequest* request) noexcept = 0;
+};
+
+enum HostViewerAction : uint32_t
+{
+    HOST_VIEWER_OPEN_OTHER_PANE = 1,
+    HOST_VIEWER_RECYCLE         = 2,
+    HOST_VIEWER_DELETE          = 3,
+    HOST_VIEWER_OPEN_FOCUS_PANE = 4,
+};
+
+struct HostViewerActionRequest
+{
+    uint32_t sizeBytes;
+    HostViewerAction action;
+    IFileSystem* fileSystem;             // Pinned source instance; caller-owned for this synchronous call.
+    const wchar_t* const* paths;         // Real provider paths, never synthesized aggregate names.
+    uint32_t pathCount;                  // 1..128; pane actions require exactly one directory path.
+    const wchar_t* focusItemDisplayName; // Optional leaf to reveal for either pane action; null for cleanup.
+    uint32_t reserved[8];
+};
+
+// Optional UI-thread service. The host binds the exact source instance to an existing pane;
+// absent/stale bindings fail closed. Removal always enters normal File Operations confirmation.
+// UUID: {5e077582-8ae2-4969-919a-01f6ee9d5794}
+interface __declspec(uuid("5e077582-8ae2-4969-919a-01f6ee9d5794")) __declspec(novtable) IHostViewerActions : public IUnknown
+{
+    virtual HRESULT STDMETHODCALLTYPE ExecuteViewerAction(const HostViewerActionRequest* request, uint64_t* taskId) noexcept = 0;
 };
 
 #pragma warning(pop)

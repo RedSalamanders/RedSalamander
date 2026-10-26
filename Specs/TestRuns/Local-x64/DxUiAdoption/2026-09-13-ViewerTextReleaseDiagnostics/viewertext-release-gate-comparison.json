@@ -1,0 +1,79 @@
+{
+  "beforeSource": "3a43186a3507ca48eb41e7ad8dec8585aed732f9",
+  "afterSource": "836f4f977ffb3e96894d90df8d5f7a8a7ca6a372",
+  "configuration": "Release",
+  "platform": "x64",
+  "identicalFixtureFiles": [
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.PluginConfig.cpp",
+      "bytes": 405168,
+      "sha256": "2d292446d6fa37bc9899103fec6ba533a75f4cbc86dad7296abe73caf51f1cfc"
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.Settings.cpp",
+      "bytes": 937197,
+      "sha256": "e62eb93fc3d9354f8edc0e289385868ae9b008646db08451cbe7c45bdf04fe24"
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp",
+      "bytes": 1530170,
+      "sha256": "d9541ab40d69cc6106eb4a2c4512966831383b875a0700371b5fc642f1771bbd"
+    }
+  ],
+  "cases": {
+    "before": [
+      {
+        "name": "pane_view_options_toggle_preview_pane_tabs_and_selection",
+        "status": "failed",
+        "reason": "Embedded preview should expose the focused alpha file text before reuse."
+      },
+      {
+        "name": "viewer_text_hex_byte_color_perf",
+        "status": "failed",
+        "reason": "ViewerText perf scenario 'off': initial hex snapshot did not reach the expected state."
+      },
+      {
+        "name": "viewer_text_diff_perf",
+        "status": "failed",
+        "reason": "ViewerText diff perf scenario 'large_multi_file_side_by_side': initial parsed diff snapshot did not arrive."
+      },
+      {
+        "name": "cmd_viewer_text_context_menu_uses_delivered_anchor",
+        "status": "failed",
+        "reason": "ViewerText did not render text before context-menu delivered-anchor test."
+      },
+      {
+        "name": "cmd_viewer_text_hover_uses_delivered_point",
+        "status": "failed",
+        "reason": "ViewerText did not render text before hover delivered-point test."
+      }
+    ],
+    "after": [
+      {
+        "name": "pane_view_options_toggle_preview_pane_tabs_and_selection",
+        "status": "passed",
+        "reason": null
+      },
+      {
+        "name": "viewer_text_hex_byte_color_perf",
+        "status": "passed",
+        "reason": null
+      },
+      {
+        "name": "viewer_text_diff_perf",
+        "status": "passed",
+        "reason": null
+      },
+      {
+        "name": "cmd_viewer_text_context_menu_uses_delivered_anchor",
+        "status": "passed",
+        "reason": null
+      },
+      {
+        "name": "cmd_viewer_text_hover_uses_delivered_point",
+        "status": "passed",
+        "reason": null
+      }
+    ]
+  }
+}

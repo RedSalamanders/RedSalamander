@@ -1,0 +1,63 @@
+{
+  "schema": "viewer-space.ordinary-current-run-provenance.v1",
+  "qualification_scope": "ordinary-current-x64-release-large-and-small-scan-comparison",
+  "sourceRunId": "20261009T230252Z-42520-815143f67c624f0ba6434e98110a5c03",
+  "side": "baseline",
+  "mode": "OrdinaryCurrent",
+  "caseFilter": "viewer_space_perf_",
+  "caseNames": [
+    "viewer_space_perf_small_progressive",
+    "viewer_space_perf_large_optin"
+  ],
+  "buildReceiptId": "935a4954a73b50d93f37a9df89f4f880aecf50ec4e5d55f7663ac0de13c8cf44",
+  "buildSourceSnapshotId": "3be7cc158093a805b7a0226e5a4bff7f9d33f792684b066ebe2b2125dea6984b",
+  "buildReceiptSha256": "a66f8102fe37d5c7ff56dac4fc764a2ce23aeb9f778fa274a877af9eb3cd1423",
+  "buildLogSourcePath": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander\\.build\\logs\\msbuild-20261010_003631_297-pid10532-59c6e0be.log",
+  "buildLogBytes": 37000,
+  "buildLogSha256": "aeb94db5578c840a4061518ffd39eeae52f43a1d0ed5c8a3d834522cb44cb0eb",
+  "workspaceSnapshotId": "3be7cc158093a805b7a0226e5a4bff7f9d33f792684b066ebe2b2125dea6984b",
+  "workspaceSnapshotSha256": "9186853bb35e69f9bb7db5656c2f43b89ed9cf278ddd3e7fc27d014f577bd8c1",
+  "rawSourceIndexPath": "raw-sources/20261009T230252Z-42520-815143f67c624f0ba6434e98110a5c03/source-index.json",
+  "rawMetricsSha256": "524496a63db9b7a8780425d8d957e1c1e42c1db96c5e3311f81efc2affb3c54f",
+  "rawMetricsBytes": 2455208,
+  "curatedFiles": {
+    "run-all-tests-results.json": {
+      "path": "curated/baseline/20261009T224729245Z-4221bb43-b2-p4/run-all-tests-results.json",
+      "bytes": 3269,
+      "sha256": "b072e9ecefb987211ae2bc944b4ddd7681e7ca6b5a21bbee39a0af992951c2df"
+    },
+    "workspace-final.json": {
+      "path": "curated/baseline/20261009T224729245Z-4221bb43-b2-p4/workspace-final.json",
+      "bytes": 2761,
+      "sha256": "9186853bb35e69f9bb7db5656c2f43b89ed9cf278ddd3e7fc27d014f577bd8c1"
+    },
+    "commands/results.json": {
+      "path": "curated/baseline/20261009T224729245Z-4221bb43-b2-p4/commands/results.json",
+      "bytes": 746,
+      "sha256": "ce93ede64a5fb3c72f6e745d88abd00488ecf0f5a84222353d186a5146549acd"
+    },
+    "perf/viewer_space_perf_small_progressive_metrics.json": {
+      "path": "curated/baseline/20261009T224729245Z-4221bb43-b2-p4/perf/viewer_space_perf_small_progressive_metrics.json",
+      "bytes": 1930,
+      "sha256": "cd9a8cd58eb71267d31018f61762e210abb4738532d48c01196e3e01e65927fa"
+    },
+    "perf/viewer_space_perf_large_optin_metrics.json": {
+      "path": "curated/baseline/20261009T224729245Z-4221bb43-b2-p4/perf/viewer_space_perf_large_optin_metrics.json",
+      "bytes": 1933,
+      "sha256": "250aef51dfa85433315db7f8c12771ee9f138c3e3d465a15f9a1453b1aad9f38"
+    }
+  },
+  "artifactFiles": {
+    "viewer_space_perf_small_progressive": {
+      "path": "curated/baseline/20261009T224729245Z-4221bb43-b2-p4/perf/viewer_space_perf_small_progressive_metrics.json",
+      "bytes": 1930,
+      "sha256": "cd9a8cd58eb71267d31018f61762e210abb4738532d48c01196e3e01e65927fa"
+    },
+    "viewer_space_perf_large_optin": {
+      "path": "curated/baseline/20261009T224729245Z-4221bb43-b2-p4/perf/viewer_space_perf_large_optin_metrics.json",
+      "bytes": 1933,
+      "sha256": "250aef51dfa85433315db7f8c12771ee9f138c3e3d465a15f9a1453b1aad9f38"
+    }
+  },
+  "qualificationStatus": "qualified"
+}

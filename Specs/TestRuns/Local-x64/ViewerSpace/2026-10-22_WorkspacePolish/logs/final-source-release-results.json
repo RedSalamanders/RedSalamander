@@ -1,0 +1,62 @@
+{
+  "exeSha256": "0F86733DCE55E0B1282255E2EEC3D708F95080703533A88793E7626B1AAF8D55",
+  "results": [
+    {
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "iteration": 1,
+      "log": "final-source-release-analysis-1.txt",
+      "exitCode": 0
+    },
+    {
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "iteration": 2,
+      "log": "final-source-release-analysis-2.txt",
+      "exitCode": 0
+    },
+    {
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "iteration": 3,
+      "log": "final-source-release-analysis-3.txt",
+      "exitCode": 0
+    },
+    {
+      "case": "TestViewerSpaceLifecycleCaptures",
+      "log": "final-source-release-TestViewerSpaceLifecycleCaptures.txt",
+      "exitCode": 0
+    },
+    {
+      "case": "TestViewerSpaceDesktopObservationContracts",
+      "log": "final-source-release-TestViewerSpaceDesktopObservationContracts.txt",
+      "exitCode": 0
+    },
+    {
+      "case": "TestViewerSpaceAnalysisAllowsAmbientDesktopChanges",
+      "log": "final-source-release-TestViewerSpaceAnalysisAllowsAmbientDesktopChanges.txt",
+      "exitCode": 0
+    },
+    {
+      "case": "TestViewerSpaceListingValidation",
+      "log": "final-source-release-TestViewerSpaceListingValidation.txt",
+      "exitCode": 0
+    },
+    {
+      "case": "TestViewerSpaceBoundedHostileProviderScanning",
+      "log": "final-source-release-TestViewerSpaceBoundedHostileProviderScanning.txt",
+      "exitCode": 0
+    },
+    {
+      "case": "TestViewerSpaceBlockedProviderCloseAndPostUpdateRace",
+      "log": "final-source-release-TestViewerSpaceBlockedProviderCloseAndPostUpdateRace.txt",
+      "exitCode": 0
+    },
+    {
+      "case": "TestViewerSpaceDirectorySummaryProtocol",
+      "log": "final-source-release-TestViewerSpaceDirectorySummaryProtocol.txt",
+      "exitCode": 0
+    }
+  ],
+  "checkout": "C:\\Users\\PVB\\.codex\\worktrees\\vs\\RedSalamander",
+  "receiptId": "087391f6c2bed292086b9edffbbe1beaeefa9007b1343c65bfee603a60a1b496",
+  "viewerSpaceSha256": "ECD5DA8BDBB567195690459CBDEC0432E0A250B6CE8F4254B1FEA6EFE130EC36",
+  "profile": "Release"
+}

@@ -1,0 +1,12 @@
+{
+  "source": "0dd0bd6d94699feec3844812fd02b32d3b4e63aa",
+  "configuration": "ASan Debug",
+  "platform": "x64",
+  "runId": "20260913T073509Z-90500-df01ab383e0146c193d8a2704df91787",
+  "caseFilter": "Phase6_LocalBandwidthThrottle",
+  "startedUtc": "2026-09-13T07:35:08.9334870Z",
+  "completedUtc": "2026-09-13T07:35:44.1523744Z",
+  "exitCode": 0,
+  "retained": "Z:\\RedSalamander.Perf\\evidence\\I19-20260909\\fileops-baseline-asan-master0dd-bandwidth",
+  "noHostedCi": true
+}

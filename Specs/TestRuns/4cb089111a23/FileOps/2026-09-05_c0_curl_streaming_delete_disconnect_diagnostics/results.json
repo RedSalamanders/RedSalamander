@@ -1,0 +1,113 @@
+{
+    "run_started_utc": "2026-09-05T10:46:26.677Z",
+    "duration_ms": 8503,
+    "fail_fast": true,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "C0_",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-curl-streaming-delete-diagnostics-debug-20260905\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 7860,
+            "passed": 9,
+            "failed": 1,
+            "skipped": 3,
+            "fail_fast": true,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "C0_",
+            "failureMessage": "C0 Curl native safety test failed; see FileOps.Curl metrics for the exact route.",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1329,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_GDriveCommittedCopyResponseLost",
+                    "status": "passed",
+                    "duration_ms": 312,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_GDriveCommittedDeleteResponseLost",
+                    "status": "passed",
+                    "duration_ms": 234,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_NativeCopyFailurePreservesKnownAxes",
+                    "status": "passed",
+                    "duration_ms": 313,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_MutationReceiptPrefixBoundary",
+                    "status": "passed",
+                    "duration_ms": 62,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlNativeDeleteGuards",
+                    "status": "passed",
+                    "duration_ms": 3266,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlCommittedMutationResponseLost",
+                    "status": "passed",
+                    "duration_ms": 797,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlHostCommittedDeleteResponseLost",
+                    "status": "passed",
+                    "duration_ms": 187,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlPartialTreeFailure",
+                    "status": "failed",
+                    "duration_ms": 1313,
+                    "repeat_index": 1,
+                    "reason": "C0 Curl native safety test failed; see FileOps.Curl metrics for the exact route."
+                },
+                {
+                    "name": "C0_CurlHostPartialTreeFailure",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "not reached (aborted due to failure)"
+                },
+                {
+                    "name": "C0_CurlNativeDeleteLateListing",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "not reached (aborted due to failure)"
+                },
+                {
+                    "name": "C0_CurlDeleteTraversalBounds",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "not reached (aborted due to failure)"
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 47,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 9,
+    "failed": 1,
+    "skipped": 3
+}

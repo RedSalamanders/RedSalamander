@@ -1,0 +1,68 @@
+{
+    "run_started_utc": "2026-10-18T20:05:33.961Z",
+    "suite": "FileOperations",
+    "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261018T200456Z-26568-eb065bfbd45d4951a427f6dd01ec6c51\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 31172,
+    "passed": 9,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1203,
+            "repeat_index": 1
+        },
+        {
+            "name": "FileOps_AlertOverlayModelessDecision",
+            "status": "passed",
+            "duration_ms": 172,
+            "repeat_index": 1
+        },
+        {
+            "name": "FileOps_DecisionMirror",
+            "status": "passed",
+            "duration_ms": 23719,
+            "repeat_index": 1
+        },
+        {
+            "name": "FileOps_DecisionMirrorSameHostOverlap",
+            "status": "passed",
+            "duration_ms": 265,
+            "repeat_index": 1
+        },
+        {
+            "name": "FileOps_DecisionMirrorIngressAnchor",
+            "status": "passed",
+            "duration_ms": 125,
+            "repeat_index": 1
+        },
+        {
+            "name": "FileOps_DecisionMirrorCompareWindow",
+            "status": "passed",
+            "duration_ms": 922,
+            "repeat_index": 1
+        },
+        {
+            "name": "FileOps_DecisionMirrorConsecutivePrompts",
+            "status": "passed",
+            "duration_ms": 2219,
+            "repeat_index": 1
+        },
+        {
+            "name": "FileOps_DecisionMirrorQueueOrder",
+            "status": "passed",
+            "duration_ms": 2453,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 78,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

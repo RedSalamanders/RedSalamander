@@ -1,5 +1,12 @@
 #include "NavigationViewInternal.h"
 
+#ifdef ENABLE_TESTS
+bool NavigationView::DebugSortEditSuggestNamesForSelfTest(std::vector<std::wstring>& names)
+{
+    return SortAndTrimEditSuggestNames(names);
+}
+#endif
+
 #include <DxUi/Typography.h>
 #include <windowsx.h>
 
@@ -138,7 +145,7 @@ void RestoreWndProcHook(HWND hwnd, const wchar_t* originalWndProcProp, const wch
     const HRESULT hr = DxUi::Typography::CreateTextFormat(
         dwriteFactory,
         usesFluentIcon ? DxUi::Typography::MakeUiIconSpec(iconSizeDip)
-                       : DxUi::Typography::TypographySpec{.familyName = L"Segoe UI Symbol", .weight = DWRITE_FONT_WEIGHT_NORMAL, .sizeDip = iconSizeDip},
+                       : DxUi::Typography::Spec{.familyName = L"Segoe UI Symbol", .weight = DWRITE_FONT_WEIGHT_NORMAL, .sizeDip = iconSizeDip},
         format.put(),
         L"");
     if (FAILED(hr) || ! format)
@@ -1069,8 +1076,7 @@ void NavigationView::UpdateEditSuggest()
             }
         }
 
-        std::sort(
-            items.begin(), items.end(), [](const EditSuggestItem& a, const EditSuggestItem& b) { return _wcsicmp(a.display.c_str(), b.display.c_str()) < 0; });
+        std::sort(items.begin(), items.end(), [](const EditSuggestItem& a, const EditSuggestItem& b) { return NaturalSort::Less(a.display, b.display); });
 
         if (items.size() > kEditSuggestMaxItems)
         {

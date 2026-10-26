@@ -1,0 +1,593 @@
+Microsoft (R) COFF/PE Dumper Version 14.51.36260.0
+Copyright (C) Microsoft Corporation.  All rights reserved.
+
+
+Dump of file .build\x64\Debug\Plugins\ViewerSpace.dll
+
+File Type: DLL
+
+  Section contains the following imports:
+
+    KERNEL32.dll
+             180CE3280 Import Address Table
+             180CE4B60 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                         359 GetVolumePathNameW
+                         55C SetEvent
+                         5C8 Sleep
+                         241 GetCurrentProcess
+                         245 GetCurrentThread
+                         5A7 SetThreadPriority
+                         335 GetThreadPriority
+                         31A GetSystemTimeAsFileTime
+                         33D GetTickCount64
+                         64C WideCharToMultiByte
+                         5F5 TrySubmitThreadpoolCallback
+                         1D4 FreeLibrary
+                         3F7 LoadLibraryW
+                         402 LocalFree
+                         3DB K32GetProcessMemoryInfo
+                         1BF FindStringOrdinal
+                         422 MulDiv
+                         308 GetStringTypeW
+                          86 CallbackMayRunLong
+                         264 GetEnvironmentVariableW
+                          B2 CompareStringOrdinal
+                         1D0 FormatMessageW
+                         2DD GetProcAddress
+                         1D6 FreeLibraryWhenCallbackReturns
+                         2A4 GetModuleHandleExW
+                         2A5 GetModuleHandleW
+                         2A0 GetModuleFileNameA
+                         246 GetCurrentThreadId
+                         242 GetCurrentProcessId
+                         108 CreateSemaphoreExW
+                          F5 CreateMutexExW
+                         443 OpenSemaphoreW
+                         626 WaitForSingleObjectEx
+                         2E4 GetProcessHeap
+                         273 GetFileInformationByHandleEx
+                          EA CreateHardLinkW
+                         41C MoveFileExW
+                          BF CopyFile2
+                          D1 CreateDirectoryExW
+                         141 DeviceIoControl
+                          25 AreFileApisANSI
+                          DC CreateFile2
+                         329 GetTempPathW
+                         56C SetFileTime
+                         566 SetFileInformationByHandle
+                         563 SetFileAttributesW
+                         285 GetFullPathNameW
+                         27C GetFinalPathNameByHandleW
+                         272 GetFileInformationByHandle
+                         26D GetFileAttributesExW
+                         270 GetFileAttributesW
+                         253 GetDiskFreeSpaceExW
+                         1B4 FindNextFileW
+                         1A3 FindFirstFileExW
+                         1A8 FindFirstFileW
+                         19D FindClose
+                          D4 CreateDirectoryW
+                         23A GetCurrentDirectoryW
+                         54F SetCurrentDirectoryW
+                         38F InitOnceComplete
+                         38E InitOnceBeginInitialize
+                         290 GetLocaleInfoEx
+                         1CF FormatMessageA
+                         5F3 TryAcquireSRWLockShared
+                         5F2 TryAcquireSRWLockExclusive
+                           1 AcquireSRWLockShared
+                         4EB ReleaseSRWLockShared
+                         61C VirtualQuery
+                         39A InitializeSListHead
+                         423 MultiByteToWideChar
+                         498 RaiseException
+                         301 GetStartupInfoW
+                         625 WaitForSingleObject
+                         4E6 ReleaseMutex
+                         4EC ReleaseSemaphore
+                         380 HeapFree
+                         37C HeapAlloc
+                         578 SetLastError
+                         28D GetLastError
+                         5B8 SetUnhandledExceptionFilter
+                         5CA SleepConditionVariableSRW
+                          9D CloseHandle
+                         44B OutputDebugStringW
+                         125 DebugBreak
+                         3B0 IsDebuggerPresent
+                         115 CreateThreadpoolWork
+                         5D0 SubmitThreadpoolWork
+                          AA CloseThreadpoolWork
+                         481 QueryPerformanceCounter
+                         482 QueryPerformanceFrequency
+                         364 GlobalAlloc
+                         373 GlobalSize
+                         376 GlobalUnlock
+                         10D CreateSymbolicLinkW
+                         142 DisableThreadLibraryCalls
+                         36F GlobalLock
+                         36B GlobalFree
+                         4EA ReleaseSRWLockExclusive
+                           0 AcquireSRWLockExclusive
+                         62D WakeAllConditionVariable
+                          D9 CreateEventW
+
+    USER32.dll
+             180CE3B10 Import Address Table
+             180CE53F0 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                         31E ScreenToClient
+                         1D1 GetSysColor
+                         276 LoadStringW
+                         1F6 GetWindowLongPtrW
+                         394 SetWindowLongPtrW
+                         337 SetClassLongPtrW
+                         19A GetParent
+                          45 CheckMenuRadioItem
+                           5 AdjustWindowRectExForDpi
+                         267 LoadCursorW
+                         15E GetDpiForWindow
+                         23B IsChild
+                         161 GetFocus
+                         32D SendMessageW
+                          FA EndPaint
+                         3CB TrackMouseEvent
+                         2BC PostMessageW
+                          AB DefWindowProcW
+                         3DD UnregisterClassW
+                         2EE RegisterClassExW
+                          7A CreateWindowExW
+                         255 IsWindow
+                         247 IsMenu
+                          B9 DestroyWindow
+                         3B1 ShowWindow
+                         398 SetWindowPos
+                         25C IsWindowVisible
+                         34E SetFocus
+                         121 GetActiveWindow
+                         172 GetKeyState
+                          ED EmptyClipboard
+                         13D GetClipboardData
+                         33A SetClipboardData
+                          50 CloseClipboard
+                         2AA OpenClipboard
+                         163 GetGUIThreadInfo
+                         205 GetWindowTextW
+                         317 RemovePropW
+                         373 SetPropW
+                         132 GetClassInfoW
+                         28D MapWindowPoints
+                         1FE GetWindowRect
+                         3AB ShowCaret
+                         20C HideCaret
+                          B2 DestroyCaret
+                          62 CreateCaret
+                         311 ReleaseDC
+                         14B GetDC
+                         193 GetMessageW
+                         15D GetDpiForSystem
+                         195 GetMonitorInfoW
+                         29C MonitorFromPoint
+                         147 GetCursor
+                         399 SetWindowRgn
+                         330 SetActiveWindow
+                         2A1 MsgWaitForMultipleObjectsEx
+                         128 GetAsyncKeyState
+                          40 CharUpperW
+                         2BD PostQuitMessage
+                         192 GetMessageTime
+                         2B8 PeekMessageW
+                          C1 DispatchMessageW
+                         3D2 TranslateMessage
+                         125 GetAncestor
+                         1E9 GetWindow
+                         206 GetWindowThreadProcessId
+                         138 GetClassNameW
+                         2C6 PtInRect
+                         408 WindowFromPoint
+                         14A GetCursorPos
+                         33F SetCursor
+                         1BF GetPropW
+                         162 GetForegroundWindow
+                         1D5 GetSystemMetrics
+                         310 ReleaseCapture
+                         332 SetCapture
+                         12C GetCapture
+                         243 IsIconic
+                         15A GetDoubleClickTime
+                         32C SendMessageTimeoutW
+                         190 GetMessageExtraInfo
+                         191 GetMessagePos
+                         30F RegisterWindowMessageW
+                         3C2 SystemParametersInfoW
+                         386 SetTimer
+                         25F KillTimer
+                         181 GetMenu
+                         35D SetMenu
+                         18E GetMenuStringW
+                          DB DrawMenuBar
+                         13A GetClientRect
+                         39D SetWindowTextW
+                          4E ClientToScreen
+                         334 SetCaretPos
+                          B6 DestroyMenu
+                          44 CheckMenuItem
+                          EE EnableMenuItem
+                         1D0 GetSubMenu
+                         188 GetMenuItemID
+                         187 GetMenuItemCount
+                         22C InsertMenuW
+                         315 RemoveMenu
+                          AF DeleteMenu
+                         18A GetMenuItemInfoW
+                         3EC UpdateWindow
+                         350 SetForegroundWindow
+                          12 BeginPaint
+                         230 InvalidateRect
+
+    GDI32.dll
+             180CE3140 Import Address Table
+             180CE4A20 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                          13 BitBlt
+                          5A CreateSolidBrush
+                         195 DeleteObject
+                          22 CombineRgn
+                          3B CreateEllipticRgn
+                          53 CreateRectRgn
+                         37C SelectObject
+                          31 CreateCompatibleDC
+                         192 DeleteDC
+                          37 CreateDIBSection
+
+    ADVAPI32.dll
+             180CE3000 Import Address Table
+             180CE48E0 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                         10D EventSetInformation
+                         114 EventWriteTransfer
+                         10C EventRegister
+
+    yyjson.dll
+             180CE46A0 Import Address Table
+             180CE5F80 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                          28 yyjson_read_opts
+
+    Common.dll
+             180CE3070 Import Address Table
+             180CE4950 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                          31 ?LoadMenuResource@Localization@@YAPEAUHMENU__@@PEAUHINSTANCE__@@I@Z
+                          53 ?WritePerfJsonl@detail@Debug@@YAXV?$basic_string_view@_WU?$char_traits@_W@std@@@std@@0_K11J@Z
+                          26 ?HasPerfJsonlOutput@detail@Debug@@YA_NXZ
+
+    MSVCP140D.dll
+             180CE36A0 Import Address Table
+             180CE4F80 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                         587 _Mtx_current_owns
+                         5BB _Thrd_hardware_concurrency
+                         553 _Cnd_broadcast
+                         55A _Cnd_signal
+                         556 _Cnd_do_broadcast_at_thread_exit
+                         55D _Cnd_wait
+                         5BC _Thrd_id
+                          6D ??0_Lockit@std@@QEAA@H@Z
+                         297 ?_Xout_of_range@std@@YAXPEBD@Z
+                         29A ?_Xruntime_error@std@@YAXPEBD@Z
+                         27B ?_Syserror_map@std@@YAPEBDH@Z
+                         28D ?_Winerror_map@std@@YAHH@Z
+                         585 _Mbrtowc
+                          6C ??0_Locinfo@std@@QEAA@PEBD@Z
+                          6B ??0_Locinfo@std@@QEAA@HPEBD@Z
+                          A4 ??1_Locinfo@std@@QEAA@XZ
+                         1E6 ?_Getname@_Locinfo@std@@QEBAPEBDXZ
+                         1E4 ?_Getlconv@_Locinfo@std@@QEBAPEBUlconv@@XZ
+                         1D3 ?_Getfalse@_Locinfo@std@@QEBAPEBDXZ
+                         1E9 ?_Gettrue@_Locinfo@std@@QEBAPEBDXZ
+                          B7 ??4?$_Yarn@D@std@@QEAAAEAV01@PEBD@Z
+                         2A7 ?c_str@?$_Yarn@D@std@@QEBAPEBDXZ
+                          AE ??2_Crt_new_delete@std@@SAPEAX_K@Z
+                          B2 ??3_Crt_new_delete@std@@SAXPEAX@Z
+                          75 ??0facet@locale@std@@IEAA@_K@Z
+                          AB ??1facet@locale@std@@MEAA@XZ
+                         24B ?_New_Locimp@_Locimp@locale@std@@CAPEAV123@_N@Z
+                         242 ?_Makeloc@_Locimp@locale@std@@CAPEAV123@AEBV_Locinfo@3@HPEAV123@PEBV23@@Z
+                         217 ?_Init@locale@std@@CAPEAV_Locimp@12@_N@Z
+                         1DD ?_Getgloballocale@locale@std@@CAPEAV_Locimp@12@XZ
+                          A5 ??1_Lockit@std@@QEAA@XZ
+                         1FA ?_Incref@facet@locale@std@@UEAAXXZ
+                         1A6 ?_Decref@facet@locale@std@@UEAAPEAV_Facet_base@3@XZ
+                         1F6 ?_Id_cnt@id@locale@std@@0HA
+                         3F1 ?id@?$numpunct@_W@std@@2V0locale@2@A
+                         3EF ?id@?$numpunct@D@std@@2V0locale@2@A
+                         294 ?_Xbad_function_call@std@@YAXXZ
+                         590 _Mtx_trylock
+                         527 ?uncaught_exceptions@std@@YAHXZ
+                         293 ?_Xbad_alloc@std@@YAXXZ
+                         296 ?_Xlength_error@std@@YAXPEBD@Z
+                         58D _Mtx_lock
+                         5BD _Thrd_join
+                         5B8 _Thrd_detach
+                         599 _Query_perf_frequency
+                         598 _Query_perf_counter
+                         2AC ?classic@locale@std@@SAAEBV12@XZ
+                         28B ?_W_Getmonths@_Locinfo@std@@QEBAPEBGXZ
+                         28A ?_W_Getdays@_Locinfo@std@@QEBAPEBGXZ
+                         1D0 ?_Getcvt@_Locinfo@std@@QEBA?AU_Cvtvec@@XZ
+                         27D ?_Throw_Cpp_error@std@@YAXH@Z
+                         591 _Mtx_unlock
+                         5C0 _Thrd_yield
+
+    MSVCP140D_ATOMIC_WAIT.dll
+             180CE38F0 Import Address Table
+             180CE51D0 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                           9 __std_atomic_wait_direct
+                           4 __std_atomic_notify_all_direct
+
+    MSVCP140_1D.dll
+             180CE3958 Import Address Table
+             180CE5238 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                           1 _Aligned_new_delete_resource
+
+    bcrypt.dll
+             180CE4138 Import Address Table
+             180CE5A18 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                          1F BCryptGenRandom
+
+    d2d1.dll
+             180CE4198 Import Address Table
+             180CE5A78 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                             Ordinal     1
+                             Ordinal     2
+
+    DWrite.dll
+             180CE30E0 Import Address Table
+             180CE49C0 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                           0 DWriteCreateFactory
+
+    d3d11.dll
+             180CE4200 Import Address Table
+             180CE5AE0 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                           6 D3D11CreateDevice
+
+    dcomp.dll
+             180CE4260 Import Address Table
+             180CE5B40 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                           5 DCompositionCreateDevice2
+
+    dwmapi.dll
+             180CE42C0 Import Address Table
+             180CE5BA0 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                          1B DwmSetWindowAttribute
+
+    api-ms-win-shcore-scaling-l1-1-1.dll
+             180CE40D8 Import Address Table
+             180CE59B8 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                           0 GetDpiForMonitor
+
+    IMM32.dll
+             180CE31F8 Import Address Table
+             180CE4AD8 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                          3B ImmGetContext
+                          39 ImmGetCompositionStringW
+                          77 ImmSetCompositionWindow
+                          72 ImmSetCandidateWindow
+                          6B ImmReleaseContext
+
+    UIAutomationCore.DLL
+             180CE3A58 Import Address Table
+             180CE5338 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                          60 UiaRaiseNotificationEvent
+                          5B UiaRaiseActiveTextPositionChangedEvent
+                          65 UiaReturnRawElementProvider
+                          4F UiaHostProviderFromHwnd
+                          3F UiaDisconnectProvider
+                          5E UiaRaiseAutomationPropertyChangedEvent
+                          5D UiaRaiseAutomationEvent
+                          61 UiaRaiseStructureChangedEvent
+                          3D UiaClientsAreListening
+                          62 UiaRaiseTextEditTextChangedEvent
+
+    VCRUNTIME140D.dll
+             180CE3F70 Import Address Table
+             180CE5850 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                          3A memchr
+                          31 __vcrt_LoadLibraryExW
+                          2F __vcrt_GetModuleHandleW
+                          2E __vcrt_GetModuleFileNameW
+                          25 __std_type_info_destroy_list
+                           9 __C_specific_handler_noexcept
+                          1B __current_exception
+                           8 __C_specific_handler
+                          18 __RTDynamicCast
+                          24 __std_type_info_compare
+                          36 _purecall
+                           1 _CxxThrowException
+                          22 __std_exception_destroy
+                          21 __std_exception_copy
+                          3E memset
+                          3D memmove
+                          3C memcpy
+                          3B memcmp
+                          1C __current_exception_context
+
+    VCRUNTIME140_1D.dll
+             180CE4078 Import Address Table
+             180CE5958 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                           0 __CxxFrameHandler4
+
+    ucrtbased.dll
+             180CE4398 Import Address Table
+             180CE5C78 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                          68 __stdio_common_vsprintf_s
+                         528 strcat_s
+                         52C strcpy_s
+                         175 _initterm_e
+                         174 _initterm
+                         205 _malloc_dbg
+                          A4 _cexit
+                          C1 _crt_at_quick_exit
+                          C2 _crt_atexit
+                          E5 _execute_onexit_table
+                         2B5 _register_onexit_function
+                         172 _initialize_onexit_table
+                         171 _initialize_narrow_environment
+                          B6 _configure_narrow_argv
+                         2C2 _seh_filter_dll
+                         11D _free_dbg
+                         4D8 malloc
+                          A1 _callnewh
+                           5 _CrtDbgReportW
+                         512 round
+                         4AB iswcntrl
+                         3D7 abs
+                         513 roundf
+                         556 towlower
+                         471 fma
+                         39C _wmakepath_s
+                         4B2 iswspace
+                         472 fmaf
+                         3B8 _wsplitpath_s
+                         4B6 labs
+                         470 floorf
+                         4F9 powf
+                         47B fmodf
+                         40E cbrtf
+                         4F8 pow
+                         4D6 lroundf
+                          9B _beginthreadex
+                         54B terminate
+                         57D wcstoull
+                         484 free
+                         525 sqrtf
+                         417 ceilf
+                         4D5 lround
+                         46F floor
+                         416 ceil
+                         524 sqrt
+                         520 sin
+                         459 fabs
+                         42D cos
+                         4BC llabs
+                          FC _fdtest
+                         1EA _ldtest
+                          D4 _dtest
+                          FA _fdsign
+                         1E8 _ldsign
+                          D2 _dsign
+                         529 strcmp
+                         56D wcsnlen
+                         561 wcscmp
+                          6A __stdio_common_vswprintf
+                           4 _CrtDbgReport
+                         564 wcscpy_s
+                         2BA _rotl
+                         3D6 abort
+                          30 ___lc_codepage_func
+                         557 towupper
+                          A3 _calloc_dbg
+                         531 strlen
+                         567 wcslen
+                          DF _errno
+                         177 _invalid_parameter_noinfo
+                         4EF nextafterf
+
+    ole32.dll
+             180CE4320 Import Address Table
+             180CE5C00 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                          91 CoUninitialize
+                          2B CoCreateInstance
+                          61 CoInitializeEx
+                          3F CoGetApartmentType
+
+    OLEAUT32.dll
+             180CE39B8 Import Address Table
+             180CE5298 Import Name Table
+                     0 time date stamp
+                     0 Index of first forwarder reference
+
+                             Ordinal    26
+                             Ordinal   411
+                             Ordinal     8
+                             Ordinal     9
+                             Ordinal    10
+                             Ordinal     4
+                             Ordinal    16
+                             Ordinal     6
+
+  Summary
+
+        1000 .00cfg
+        B000 .data
+        6000 .idata
+        4000 .msvcjmc
+       67000 .pdata
+      1D2000 .rdata
+       10000 .reloc
+        2000 .rsrc
+      72C000 .text
+      372000 .textbss
+        1000 .tls

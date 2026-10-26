@@ -1,0 +1,20 @@
+BaseCommit=1a5d838d0c18298d9e560e243e67b821a40fcf6a
+FrozenReviewCommit=3e84e87b717841e28e11e1fe7e5bc04b4e3a3e0d
+Command=git diff --name-status <base> <frozen> -- <classified-failure owners and inputs>
+RelevantPaths:
+  RedSalamander/SelfTest/Commands
+  RedSalamander/SelfTest/Common/SelfTestCommon.h
+  RedSalamander/Preferences.Plugins.cpp
+  Common/DxUi
+  Plugins/ViewerText
+  Tests/ViewerPETests
+  Tools/Run-AllTests.ps1
+  Tools/TestRunPlan.ps1
+  Tools/TestInventory.ps1
+  Tools/Tests/DocumentationDriftContracts.Tests.ps1
+  Tools/Tests/TestInventory.Tests.ps1
+  Specs/Reviews
+  Specs/Plans/WIP/UI_FileOperationsPopupUxRefinementPlan_2026-07-07.md
+  Specs/Plans/Done/UI_FileOperationsPopupUxRefinementPlan_2026-07-07.md
+DiffNameStatus:
+  <empty>

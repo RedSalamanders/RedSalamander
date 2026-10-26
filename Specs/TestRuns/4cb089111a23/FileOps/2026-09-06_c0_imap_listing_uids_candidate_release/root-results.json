@@ -1,0 +1,45 @@
+{
+    "run_started_utc": "2026-09-06T08:18:35.629Z",
+    "duration_ms": 2245,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "C0_CurlImapListingTruth",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-imap-uids-candidate-release-focused-20260906\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 1531,
+            "passed": 3,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "C0_CurlImapListingTruth",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1359,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlImapListingTruth",
+                    "status": "passed",
+                    "duration_ms": 79,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 93,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0
+}

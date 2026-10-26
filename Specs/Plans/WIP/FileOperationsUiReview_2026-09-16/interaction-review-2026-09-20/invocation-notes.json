@@ -1,0 +1,17 @@
+{
+  "rejected_attempts": [
+    {
+      "log": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-review-20260920.log",
+      "reason": "Gallery phases require separate exact filters. Combined comma-separated filter matched no expected case; no screenshots were taken. Raw disposable run was cleaned by next runner invocation; the complete runner log remains."
+    },
+    {
+      "log": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-review-static-20260920.log",
+      "reason": "SkipBuild refused a targeted project receipt because it requires a full-solution receipt."
+    },
+    {
+      "log": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\interaction-review-static-env-20260920.log",
+      "reason": "Explicit tests-enabled environment did not change the full-solution receipt requirement. Corrected by using normal runner build route."
+    }
+  ],
+  "resolution": "Separate exact filters with normal governed builds both passed. These were invocation/attestation rejections, not passes or product regressions."
+}

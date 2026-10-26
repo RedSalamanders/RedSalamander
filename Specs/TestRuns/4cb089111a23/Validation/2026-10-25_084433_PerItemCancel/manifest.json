@@ -1,0 +1,25 @@
+{
+  "schema": "per-item-cancel-curated-evidence-v1",
+  "archive": "Specs/TestRuns/4cb089111a23/Validation/2026-10-25_084433_PerItemCancel",
+  "source": "56232e438b32953ddf9829529b87e7f3d59f1e5e",
+  "profile": "x64 Release",
+  "candidateStatus": "pending; no final repository qualification claim",
+  "scope": "Failed broad baseline and failed unchanged-binary replay; full per-case verdicts retained, selected raw trace observations compacted deterministically with source digests and ordered line numbers",
+  "files": [
+    {
+      "file": "broad-results.json",
+      "sha256": "5D651F72AA6247FB422D08C56756082F93C18EA74BA523ECE3AD61CC6DC2F2E7",
+      "bytes": 87099
+    },
+    {
+      "file": "baseline-results.json",
+      "sha256": "468B5577435C63D6C83BF8467B47B78A4AC1EDF758D06C87762F272349C67A30",
+      "bytes": 18833
+    },
+    {
+      "file": "baseline-observations.json",
+      "sha256": "0698897DD5E49B58BE0405C1FE147752C286C290414C372A83DB3A16F59C634F",
+      "bytes": 4220
+    }
+  ]
+}

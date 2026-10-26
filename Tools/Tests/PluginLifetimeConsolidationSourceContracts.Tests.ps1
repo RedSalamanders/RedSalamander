@@ -14,8 +14,8 @@ Describe 'Plugin lifetime consolidation source contracts' {
         $lookupConsumers = @(
             'RedSalamander\CompareDirectoriesWindow.cpp'
             'RedSalamander\FindFilesWindow.cpp'
-            'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.SelfTest.cpp'
-            'RedSalamander\SelfTest\Commands\Commands.SelfTest.Settings.cpp'
+            'RedSalamander\SelfTest\CompareDirectories\CompareDirectoriesEngine.Tests.Runner.cpp'
+            'RedSalamander\SelfTest\Commands\Commands.Tests.Settings.cpp'
         ) | ForEach-Object { Get-Content -LiteralPath (Join-Path $repoRoot $_) -Raw }
         $threadpoolSources = Get-ChildItem -LiteralPath (Join-Path $repoRoot 'Plugins'), (Join-Path $repoRoot 'RedSalamander') -Recurse -Include *.cpp,*.h |
             ForEach-Object { Get-Content -LiteralPath $_.FullName -Raw }

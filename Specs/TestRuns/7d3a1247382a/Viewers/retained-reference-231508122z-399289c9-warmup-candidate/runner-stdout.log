@@ -1,0 +1,39 @@
+Stale TestSandbox run cleanup: 1 removed, 0 failed, 0 retained (unlinkable reparse point or test-owned VHDX receipt).
+Skipping build (verified receipt 37dae646d3557dd0b5ac7618b76b136f0740f1be80dad2744b28236083f98ddd).
+Validation plan: 358adf2236542e57d88754b5cc439c267a7b528a99035a369b6044470c040412
+Entry fingerprints: 19158921313d240cae6e543a9048ff14c948e667e8f5c677b335832ac5f20586 (28 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: Commands
+======================================================================
+  Exe:  C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\RedSalamander.exe
+  Args: --commands-selftest --selftest-case=cmd_viewer_space_memory_heavy_four_root_retained_reference_optin
+
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [PASS] Commands  (3m 16.7s)
+         Passed: 1  Failed: 0  Skipped: 0
+
+  -------------------------------------------------------
+
+  Overall: PASSED  Total: 1  Passed: 1  Failed: 0  Skipped: 0
+  Wall time: 3m 24.6s
+  Classifications: flaky=0 regression=0 isolation_suspect=0 unclassified_failure=0
+  Quarantine: active=0 invalid=0 repair_attempts=0 repair_reproduced=0
+
+--- ARTIFACTS ---
+  Test root: D:\RedSalamander.Perf
+  Run id:    20261009T231914Z-13180-1bdd5c4f635943fd9edcbc6daf8b76b0
+  Disk audit issues: 3
+  Last run: D:\RedSalamander.Perf\runs\20261009T231914Z-13180-1bdd5c4f635943fd9edcbc6daf8b76b0\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.commands.json
+    workspace-final.json
+    commands\results.json
+    perf\viewer_space_memory_heavy_four_root_retained_reference_metrics.json
+

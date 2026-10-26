@@ -64,11 +64,16 @@ constexpr wchar_t kStatusBarSecurityTextProp[]  = L"RedSalamander.StatusBar.Secu
 constexpr wchar_t kStatusBarSortTextProp[]      = L"RedSalamander.StatusBar.SortText";
 constexpr wchar_t kStatusBarFocusHueProp[]      = L"RedSalamander.StatusBar.FocusHue";
 constexpr wchar_t kStatusBarSortHotProp[]       = L"RedSalamander.StatusBar.SortHot";
+// I35 R8.9: the File Operations pending-decision segment (text owned by the pane) and its hot state.
+constexpr wchar_t kStatusBarDecisionTextProp[] = L"RedSalamander.StatusBar.DecisionText";
+constexpr wchar_t kStatusBarDecisionHotProp[]  = L"RedSalamander.StatusBar.DecisionHot";
 
-constexpr int kStatusBarPartSelection          = 0;
-constexpr int kStatusBarPartSecurity           = 1;
-constexpr int kStatusBarPartSort               = 2;
-constexpr UINT kStatusBarSortClickNotification = 0x7251;
+constexpr int kStatusBarPartSelection              = 0;
+constexpr int kStatusBarPartSecurity               = 1;
+constexpr int kStatusBarPartSort                   = 2;
+constexpr int kStatusBarPartDecision               = 3;
+constexpr UINT kStatusBarSortClickNotification     = 0x7251;
+constexpr UINT kStatusBarDecisionClickNotification = 0x7252;
 
 struct FolderWindowNotifyHeader
 {

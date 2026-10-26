@@ -1,0 +1,1466 @@
+[
+  {
+    "path": "artifacts/selftest/last_run/CrashHandlingTests.output.log",
+    "sha256": "be9424679e96712ff11b7874e6ae2cf8c2658d8392404b1c4924d563de803ff2"
+  },
+  {
+    "path": "artifacts/selftest/last_run/entry-fingerprints.json",
+    "sha256": "d9eb1e5f265628a865431f1430ab7298ae09154497f6f10a0d471aa740dba9f1"
+  },
+  {
+    "path": "artifacts/selftest/last_run/FileSystemCurlTests.output.log",
+    "sha256": "cc85669ba3041b35b1573fd08112fdbd462d036b58ed69a9243bdf27f3473900"
+  },
+  {
+    "path": "artifacts/selftest/last_run/LocalizationTests.output.log",
+    "sha256": "07c3b184725869a594f017686418f3601137efe177be804d2bd4fa4ecbd18ab2"
+  },
+  {
+    "path": "artifacts/selftest/last_run/MonitorTest.output.log",
+    "sha256": "63d7b383a16641b812494d36899fdd9a34190a06f00afa92614553b85c411c99"
+  },
+  {
+    "path": "artifacts/selftest/last_run/PerformanceTests2.output.log",
+    "sha256": "5bcc91ecfa98aa1aa8467e786cc04952047065571da54598c29b199ff3c8fe67"
+  },
+  {
+    "path": "artifacts/selftest/last_run/PluginContractTests.output.log",
+    "sha256": "489ebb7283bf6072a107433a37ae267eaa1df47263824bdfdfeeb0829680b29a"
+  },
+  {
+    "path": "artifacts/selftest/last_run/ProductUiTests.output.log",
+    "sha256": "29cb36fcbdee4c70bfd80be8f06b38308116ed5cb29b1096c6449ccc4f9983c2"
+  },
+  {
+    "path": "artifacts/selftest/last_run/RedConfigureTests.output.log",
+    "sha256": "041851ceab487e56288003068167fa9a6dc8f3de5500eb47deb0be23b91267fa"
+  },
+  {
+    "path": "artifacts/selftest/last_run/run-all-tests-case-history.jsonl",
+    "sha256": "e60c29ae335a3f29bf002cb9e3e5ae9f2c0141bfddbe5475ac58f3a54c2155b0"
+  },
+  {
+    "path": "artifacts/selftest/last_run/run-all-tests-dashboard.md",
+    "sha256": "fda857edfdaac26bc1ac4aaf918e2de343ddb11277d7484135a65c6324934793"
+  },
+  {
+    "path": "artifacts/selftest/last_run/run-all-tests-results-v1.json",
+    "sha256": "7d72d5d7565a599199bfccc0d8cafd66d564571996b6670398696627e4f4e816"
+  },
+  {
+    "path": "artifacts/selftest/last_run/run-all-tests-results.json",
+    "sha256": "466ddaab9a0583e7b9c760e35c54fdaecd7ffaaf2462f8e0820d42c7c9076e30"
+  },
+  {
+    "path": "artifacts/selftest/last_run/SettingsSchemaTests.output.log",
+    "sha256": "de96bb375a31c12e7d7681094e81b6b55c6ad79e4af22974d33a9a8f89a217fa"
+  },
+  {
+    "path": "artifacts/selftest/last_run/validation-plan-decision.json",
+    "sha256": "18307e80bfd32f59b36691edffe6be91b37874caeb70e594c62f1baacd93874c"
+  },
+  {
+    "path": "artifacts/selftest/last_run/validation-plan.json",
+    "sha256": "f90025e19146fa4e7ff4fe943a5df558c360bdf28526e08521cbcf2b5ed8e530"
+  },
+  {
+    "path": "artifacts/selftest/last_run/ViewerPETests.Noninteractive.output.log",
+    "sha256": "6617f5592412488fcc288d321b85b512c1b142bb18c6216c01bf9fcbb9d1c29d"
+  },
+  {
+    "path": "artifacts/selftest/last_run/ViewerSqliteTests.Noninteractive.output.log",
+    "sha256": "05c60dea1af51c9f6cd2e37f1cb6cab64aafaa39fe0ba8fc668658e3ee1f3fc7"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-perf.performance-tests2.json",
+    "sha256": "de2ccfd4b7b20e5b039b5dc376e75df418ba690975f52711acbfd93fe3c086c8"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-standalone.crash-handling.json",
+    "sha256": "e6365356ed13f0458a7868e1bf523a3ddbcc948cd9e4e6d1d09755fbeb3da702"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-standalone.filesystem-curl.json",
+    "sha256": "d1f08558f2a6edbd106d83f272b069845e14b14fc1a54c5203eb7da59a95a978"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-standalone.localization.json",
+    "sha256": "75b6fddb7e26ea479b6a1d7bd4755bfaa96ab051bdb986a2b519d935443862ab"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-standalone.monitor.json",
+    "sha256": "b021c296a21146193e0974ef6e7d1af84cb168e96756f4268cb2711ed422e257"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-standalone.plugin-contract.json",
+    "sha256": "179501c4568ff69bec6f3bb03072eb2755dd0c92767d0f13a65a41a69f9ae3c2"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-standalone.product-ui.json",
+    "sha256": "d52aae7f8038cb21c448fe3b0cd6f91f4a30a72ae57d97e1f7dab8442aecf66d"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-standalone.red-configure.json",
+    "sha256": "869391641dbbbdfb8570fb21014b306b56133f409770c93cb4bfb1725ccc3d54"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-standalone.settings-schema.json",
+    "sha256": "459ec9adf53163766b99b782d0d3e343e4771886a9a2cdebdcf9b100efab5d73"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-tooling.pester.json",
+    "sha256": "e08d0f5f459aafe345a442a122644389bfaca1489c132fb2db78ab592118f004"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-tooling.vcpkg-merge-synthetic.json",
+    "sha256": "e7fa4e4555649bd7363821b50fd75c85338929faabb2182d708539b51373507e"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-viewer-pe.noninteractive.json",
+    "sha256": "ebad21ed236a1c043d2f1f9b151e6a1bd31e96a0047162cd026fe93dc4ede426"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-after-viewer-sqlite.noninteractive.json",
+    "sha256": "db89d5ce468ecf338a35c50fbb27f60f90bfeabf4f487185ce1e50886ceb551d"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-final.json",
+    "sha256": "cef86067ab18bd1bd20ba224ba11692a6acccc487065cc6d04d0377a8a4c0ada"
+  },
+  {
+    "path": "artifacts/selftest/last_run/workspace-initial.json",
+    "sha256": "fd5edd615399ab7c31c525ae3ce2759d95fa48da7969b394ba700dceeec51bfb"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/blank-record-input.txt",
+    "sha256": "01ba4719c80b6fe911b091a7c05124b64eeece964e09c058ef8f9805daca546b"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/blank-record-output.txt",
+    "sha256": "b42f2099187886def637d6aa840022266e05cb6c987a9394e708e23cd505eb46"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/bom-only-input.txt",
+    "sha256": "f1945cd6c19e56b3c1c78943ef5ec18116907a4ca1efc40a57d48ab1db7adfc5"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/bom-only-output.txt",
+    "sha256": "f1945cd6c19e56b3c1c78943ef5ec18116907a4ca1efc40a57d48ab1db7adfc5"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/cancel-during-decode.txt",
+    "sha256": "56d0bd62ab4e35c1075927508ce01c2a4fda8e3fcd030b60fe2f91ed59f577f7"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/canonical-terminated-input.txt",
+    "sha256": "be4fccb045869c7ad387b9081a44cfd495b37efc020da4b44542de0d980c747f"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/canonical-terminated-output.txt",
+    "sha256": "be4fccb045869c7ad387b9081a44cfd495b37efc020da4b44542de0d980c747f"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/consecutive-blank-input.txt",
+    "sha256": "38022fd2b8dbc5cb3d2cee74e083edbf59e3d4e13d067ebcb5db633d4cff4d8c"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/consecutive-blank-output.txt",
+    "sha256": "d1ce8310f38e893ac29e19480ce9855f729834e5445645aead1de83cbcc65111"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/crlf-input.txt",
+    "sha256": "8e4621379786ef42a4fec155cd525c291dd7db3c1fde3478522f4f61c03fd1bd"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/crlf-output.txt",
+    "sha256": "be4fccb045869c7ad387b9081a44cfd495b37efc020da4b44542de0d980c747f"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/decoded-expansion.txt",
+    "sha256": "88d4266fd4e6338d13b845fcf289579d209c897823b9217da3e161936f031589"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/empty-input.txt",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/empty-output.txt",
+    "sha256": "f1945cd6c19e56b3c1c78943ef5ec18116907a4ca1efc40a57d48ab1db7adfc5"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/exact-line-budget.txt",
+    "sha256": "911169ddaaf146aff539f58c26c489af3b892dff0fe283c1c264c65ae5aa59a2"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/invalid-utf8.txt",
+    "sha256": "eddf68639913a3cb8331cdfe7f87559e0beccf2c289c0d90ac4d89b3204004f8"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/over-line-budget.txt",
+    "sha256": "880553fca8fcea94e325ee2cfb48e5a985cc797f39a14cc6d3cedecfeb2ae4d2"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/sparse-over-2gib.txt",
+    "sha256": "b8030a8ab89280935633d8d991da3d9907c0f12e8b6fc3bfc515f4d440872b6e"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/split-utf16.txt",
+    "sha256": "10423488695f50d765062f81a6dd505846b9a7b26b8bb7dfee87da072378f02f"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/split-utf8.txt",
+    "sha256": "7ccab2f6026ad1455a8e917ad2d084fd9a508645692252d8ccd4cddd37cfdee3"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/too-many-lines.txt",
+    "sha256": "058053d87c818d699cde0f00d670bca0e1c6ad857caa9758ea6a556d7c64fcee"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/trailing-blanks-input.txt",
+    "sha256": "ca8b171a24094e738954a2c932d1f8fd04a5a4261ab9caef6a63e7f6f7a4ae9f"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/trailing-blanks-output.txt",
+    "sha256": "482d81d20d4abf94961e762afa661e4150699dd1f203fe5fba84e6a6b21efd40"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/truncated-utf16.txt",
+    "sha256": "e338b52c1bba42031362180fb1465d6e8b382881cb2f2601e30e971f21e4901c"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/truncated-utf8.txt",
+    "sha256": "b38af6aef10b9620ceb4fe55a4aaf8def5e4d9bd99bd1ebff06a0d44220546a2"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/unicode-input.txt",
+    "sha256": "c67d75a2c6c3e578f51df9ea0eadc221f9ce27133d1740cff34896e27b500ac3"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/unicode-output.txt",
+    "sha256": "c67d75a2c6c3e578f51df9ea0eadc221f9ce27133d1740cff34896e27b500ac3"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/unpaired-utf16.txt",
+    "sha256": "8518694a5f19d90bdc04e05e7f37fb2a5eba2336ad438a6d3e87a6b517feccef"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/unterminated-input.txt",
+    "sha256": "ca978112ca1bbdcafac231b39a23dc4da786eff8147c4e72b9807785afee48bb"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/unterminated-output.txt",
+    "sha256": "be4fccb045869c7ad387b9081a44cfd495b37efc020da4b44542de0d980c747f"
+  },
+  {
+    "path": "scratch/MonitorTest/bounded_file_reader/valid-utf8.txt",
+    "sha256": "f07ebb32c3e3a9973c7930636a3407836a05ba094c2f24313d923b51db5100da"
+  },
+  {
+    "path": "scratch/MonitorTest/document_atomic_save/monitor-export.txt",
+    "sha256": "c750ae0bbdff9fa86d6b9ed0f851eb6f4f0fe9e876f9efd73ab3e59c2ce386ec"
+  },
+  {
+    "path": "scratch/MonitorTest/local_file_transaction_faults/preserved.txt",
+    "sha256": "c750ae0bbdff9fa86d6b9ed0f851eb6f4f0fe9e876f9efd73ab3e59c2ce386ec"
+  },
+  {
+    "path": "scratch/process-temp/RedSalamander-ViewerSqlite-{3940B2E7-4460-4E4C-AF28-A9B94973DF51}.sqlite",
+    "sha256": "4ba6bb7297ed1e005469e425e02a223614b82a3291fab6de2c240783b27faab6"
+  },
+  {
+    "path": "scratch/process-temp/RedSalamander-ViewerSqlite-{59131E3F-7C84-4A9A-9AC4-CFD93E4CA5D7}.sqlite-shm",
+    "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+  },
+  {
+    "path": "scratch/process-temp/RedSalamander-ViewerSqlite-{59131E3F-7C84-4A9A-9AC4-CFD93E4CA5D7}.sqlite-wal",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "scratch/process-temp/RedSalamander-ViewerSqlite-{5AACE649-EC25-42B4-AE49-9DC995561E3D}.sqlite-shm",
+    "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+  },
+  {
+    "path": "scratch/process-temp/RedSalamander-ViewerSqlite-{5AACE649-EC25-42B4-AE49-9DC995561E3D}.sqlite-wal",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "scratch/process-temp/RedSalamander-ViewerSqlite-{DB340CC9-5496-4340-9AEE-5260A957BE39}.sqlite-shm",
+    "sha256": "fd4c9fda9cd3f9ae7c962b0ddf37232294d55580e1aa165aa06129b8549389eb"
+  },
+  {
+    "path": "scratch/process-temp/RedSalamander-ViewerSqlite-{DB340CC9-5496-4340-9AEE-5260A957BE39}.sqlite-wal",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "scratch/tools-pester/remove-ads-29141215cf9d4ca286e24d45d4a87dd7/probe.txt",
+    "sha256": "cddab482e2eafaed83801551ca5caf2a9cebe02a37345342bd66ab26ec28c778"
+  },
+  {
+    "path": "scratch/tools-pester/remove-ads-3a71eb8431b841949b6ad0da39d4bcb3/named.txt",
+    "sha256": "cddab482e2eafaed83801551ca5caf2a9cebe02a37345342bd66ab26ec28c778"
+  },
+  {
+    "path": "scratch/tools-pester/remove-ads-449cf596268144c59ac933f20c06247c/locked.txt",
+    "sha256": "cddab482e2eafaed83801551ca5caf2a9cebe02a37345342bd66ab26ec28c778"
+  },
+  {
+    "path": "scratch/tools-pester/remove-ads-9a2088c7b18d4d76bbd1a3696226b421/root.txt",
+    "sha256": "b47c4c5f82a3b46964d446dca60c70bbc6e1c8bd097ca7ee33e5c28d55562c88"
+  },
+  {
+    "path": "scratch/tools-pester/remove-ads-9a2088c7b18d4d76bbd1a3696226b421/nested/nested.txt",
+    "sha256": "37f77d12d8aef5f696669e387eafc38d57ae38644f142c31d1064d4d41ffd7a1"
+  },
+  {
+    "path": "scratch/tools-pester/remove-ads-e8d924b1037e401b9bf3f139e24ef4c3/preview.txt",
+    "sha256": "cddab482e2eafaed83801551ca5caf2a9cebe02a37345342bd66ab26ec28c778"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/060cb72562eb4aac8926dec22dd98d0b/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/060cb72562eb4aac8926dec22dd98d0b/Specs/Core/Core_Example.md",
+    "sha256": "5a98c6a3e1893fdf33010202abc079f61aa655a62e9f2d856756170755bd2316"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/060cb72562eb4aac8926dec22dd98d0b/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/060cb72562eb4aac8926dec22dd98d0b/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/060cb72562eb4aac8926dec22dd98d0b/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/060cb72562eb4aac8926dec22dd98d0b/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/060cb72562eb4aac8926dec22dd98d0b/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/0993476559594d2b8f5f0e4fbf4a1bbf/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/0993476559594d2b8f5f0e4fbf4a1bbf/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/0993476559594d2b8f5f0e4fbf4a1bbf/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/0993476559594d2b8f5f0e4fbf4a1bbf/Specs/Plans/Done/Operation_FileOperations_PostCloseoutArchitectureDebt_2026-08-28.md",
+    "sha256": "7ff9d80c2840233c4bd0e9e7d02245a95340ba5607a14883af624a653951d483"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/0993476559594d2b8f5f0e4fbf4a1bbf/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/0993476559594d2b8f5f0e4fbf4a1bbf/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/0993476559594d2b8f5f0e4fbf4a1bbf/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/0993476559594d2b8f5f0e4fbf4a1bbf/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/16c0d5e1b84a40e488876c27447fb530/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/16c0d5e1b84a40e488876c27447fb530/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/16c0d5e1b84a40e488876c27447fb530/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/16c0d5e1b84a40e488876c27447fb530/Specs/Plans/Done/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md",
+    "sha256": "cce37b19f56a142fe4f17477448d4ae6ce1e2d26d4c6cd0f8bfe57e1def12dfb"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/16c0d5e1b84a40e488876c27447fb530/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/16c0d5e1b84a40e488876c27447fb530/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/16c0d5e1b84a40e488876c27447fb530/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/16c0d5e1b84a40e488876c27447fb530/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/17164d34b74b4394a2ca7f45406c8928/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/17164d34b74b4394a2ca7f45406c8928/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/17164d34b74b4394a2ca7f45406c8928/Specs/Plans/Done/FileOperations_S3MarkerAndResiduals_2026-09-15.md",
+    "sha256": "3213f0c62c53414a3935a0644d90288d964e116a6d54978818f842c2226805c4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/17164d34b74b4394a2ca7f45406c8928/Specs/Plans/Done/FileOperations_S3MarkerAndResiduals_2026-09-16.md",
+    "sha256": "edb07b73c15921617e4c060078fe9cf073d795fc6946863b99f2857de4196566"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/17164d34b74b4394a2ca7f45406c8928/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/17164d34b74b4394a2ca7f45406c8928/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/17164d34b74b4394a2ca7f45406c8928/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/17164d34b74b4394a2ca7f45406c8928/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/17164d34b74b4394a2ca7f45406c8928/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/2f1df2ef0d9c4e778dd793d4034595f9/Specs/NormativeConsistency.json",
+    "sha256": "9447b27dc4035dd58b4b34d21dab1d9f5debb6472738faff3d816e8b8df00b09"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/2f1df2ef0d9c4e778dd793d4034595f9/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/2f1df2ef0d9c4e778dd793d4034595f9/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/2f1df2ef0d9c4e778dd793d4034595f9/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/2f1df2ef0d9c4e778dd793d4034595f9/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/2f1df2ef0d9c4e778dd793d4034595f9/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/2f1df2ef0d9c4e778dd793d4034595f9/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/3160158746cd40fbbe3d622ac6433683/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/3160158746cd40fbbe3d622ac6433683/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/3160158746cd40fbbe3d622ac6433683/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/3160158746cd40fbbe3d622ac6433683/Specs/Plans/Done/Operation_ReviewFollowup_FOTerminalFocus_2026-08-19.md",
+    "sha256": "42d05201712ee2e662b25fa69b9586bb1f1b079ef46b745c329725b32c169e55"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/3160158746cd40fbbe3d622ac6433683/Specs/Plans/Done/Operation_ReviewFollowup_FOTerminalFocus_2026-08-20.md",
+    "sha256": "edb07b73c15921617e4c060078fe9cf073d795fc6946863b99f2857de4196566"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/3160158746cd40fbbe3d622ac6433683/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/3160158746cd40fbbe3d622ac6433683/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/3160158746cd40fbbe3d622ac6433683/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/3160158746cd40fbbe3d622ac6433683/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/388a63e2b5074eef90e54faaafb3593c/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/388a63e2b5074eef90e54faaafb3593c/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/388a63e2b5074eef90e54faaafb3593c/Specs/Plans/Done/FileOperations_DiscoveryScopeAndLeafProgress_2026-09-13.md",
+    "sha256": "10746e45e5d104f332f75601ce0cd0a032a9bcca1400b1333189245c40ecbcf6"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/388a63e2b5074eef90e54faaafb3593c/Specs/Plans/Done/FileOperations_DiscoveryScopeAndLeafProgress_2026-09-14.md",
+    "sha256": "edb07b73c15921617e4c060078fe9cf073d795fc6946863b99f2857de4196566"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/388a63e2b5074eef90e54faaafb3593c/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/388a63e2b5074eef90e54faaafb3593c/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/388a63e2b5074eef90e54faaafb3593c/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/388a63e2b5074eef90e54faaafb3593c/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/388a63e2b5074eef90e54faaafb3593c/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/42163e8cf13748e999a8a7a42017eda0/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/42163e8cf13748e999a8a7a42017eda0/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/42163e8cf13748e999a8a7a42017eda0/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/42163e8cf13748e999a8a7a42017eda0/Specs/Plans/Done/UI_MenuInformationArchitectureAndConsistency_2026-08-28.md",
+    "sha256": "408792bb6ea11c0f2ee0096a7cc51c5380afa917976ac09538b3c92306a91edc"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/42163e8cf13748e999a8a7a42017eda0/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/42163e8cf13748e999a8a7a42017eda0/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/42163e8cf13748e999a8a7a42017eda0/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/42163e8cf13748e999a8a7a42017eda0/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/439f0b89b8e548e5bab21a8d88ed8280/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/439f0b89b8e548e5bab21a8d88ed8280/Specs/Core/Core_Example.md",
+    "sha256": "044a3d70ab94e6d7f0cc98249a54ec65c1aeae4e43bb278f849818213178181b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/439f0b89b8e548e5bab21a8d88ed8280/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/439f0b89b8e548e5bab21a8d88ed8280/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/439f0b89b8e548e5bab21a8d88ed8280/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/439f0b89b8e548e5bab21a8d88ed8280/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/439f0b89b8e548e5bab21a8d88ed8280/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/4b903b9b04b84991a97c2ef8e4a25cab/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/4b903b9b04b84991a97c2ef8e4a25cab/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/4b903b9b04b84991a97c2ef8e4a25cab/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/4b903b9b04b84991a97c2ef8e4a25cab/Specs/Plans/Done/UI_MenuContextEncodingReviewRemediation_2026-08-29.md",
+    "sha256": "3b8acea86b9d0895e400ddfc416c16839f06991c6fe3107ad220233860af09fd"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/4b903b9b04b84991a97c2ef8e4a25cab/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/4b903b9b04b84991a97c2ef8e4a25cab/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/4b903b9b04b84991a97c2ef8e4a25cab/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/4b903b9b04b84991a97c2ef8e4a25cab/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/4cb3d17a9e0d4af9840d3404bd527a0e/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/4cb3d17a9e0d4af9840d3404bd527a0e/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/4cb3d17a9e0d4af9840d3404bd527a0e/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/4cb3d17a9e0d4af9840d3404bd527a0e/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/4cb3d17a9e0d4af9840d3404bd527a0e/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/4cb3d17a9e0d4af9840d3404bd527a0e/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/4cb3d17a9e0d4af9840d3404bd527a0e/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/52c406e6b3d44487a26ae3c76af1c27a/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/52c406e6b3d44487a26ae3c76af1c27a/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/52c406e6b3d44487a26ae3c76af1c27a/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/52c406e6b3d44487a26ae3c76af1c27a/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/52c406e6b3d44487a26ae3c76af1c27a/Specs/Plans/WIP/README.md",
+    "sha256": "7c0dbee7065d3fd2b9976c3c749fbbf56e8c3098f90f41b516cee723bb47b0eb"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/52c406e6b3d44487a26ae3c76af1c27a/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/52c406e6b3d44487a26ae3c76af1c27a/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/63413fa682564e959440fe62eabfc84c/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/63413fa682564e959440fe62eabfc84c/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/63413fa682564e959440fe62eabfc84c/Specs/Plans/Done/FileOperations_DirectApiDiscoveryContract_2026-09-14.md",
+    "sha256": "2a6529fe396d28e7b7507cfe7398d49f7a7d6b771ad77ecc7d7c4ae3b8cd39d3"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/63413fa682564e959440fe62eabfc84c/Specs/Plans/Done/FileOperations_DirectApiDiscoveryContract_2026-09-15.md",
+    "sha256": "edb07b73c15921617e4c060078fe9cf073d795fc6946863b99f2857de4196566"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/63413fa682564e959440fe62eabfc84c/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/63413fa682564e959440fe62eabfc84c/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/63413fa682564e959440fe62eabfc84c/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/63413fa682564e959440fe62eabfc84c/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/63413fa682564e959440fe62eabfc84c/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/71ccf1f4a2d4406fa8d74f34b3efba22/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/71ccf1f4a2d4406fa8d74f34b3efba22/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/71ccf1f4a2d4406fa8d74f34b3efba22/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/71ccf1f4a2d4406fa8d74f34b3efba22/Specs/Plans/Done/DxUi_SharedLibrary/GapAnalysis_2026-09-09_unreviewed.md",
+    "sha256": "edb07b73c15921617e4c060078fe9cf073d795fc6946863b99f2857de4196566"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/71ccf1f4a2d4406fa8d74f34b3efba22/Specs/Plans/Done/DxUi_SharedLibrary/GapAnalysis_2026-09-09.md",
+    "sha256": "b02b9b0b185b083ad1fcd6dc617a5b8818cee176a5328708c90c93f9ab179017"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/71ccf1f4a2d4406fa8d74f34b3efba22/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/71ccf1f4a2d4406fa8d74f34b3efba22/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/71ccf1f4a2d4406fa8d74f34b3efba22/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/71ccf1f4a2d4406fa8d74f34b3efba22/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/78725a31aca544f3a68b9840819d86b1/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/78725a31aca544f3a68b9840819d86b1/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/78725a31aca544f3a68b9840819d86b1/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/78725a31aca544f3a68b9840819d86b1/Specs/Plans/Done/DxUi_SharedLibrary/RetirementDispositions_2026-09-12_unreviewed.md",
+    "sha256": "edb07b73c15921617e4c060078fe9cf073d795fc6946863b99f2857de4196566"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/78725a31aca544f3a68b9840819d86b1/Specs/Plans/Done/DxUi_SharedLibrary/RetirementDispositions_2026-09-12.md",
+    "sha256": "b02b9b0b185b083ad1fcd6dc617a5b8818cee176a5328708c90c93f9ab179017"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/78725a31aca544f3a68b9840819d86b1/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/78725a31aca544f3a68b9840819d86b1/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/78725a31aca544f3a68b9840819d86b1/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/78725a31aca544f3a68b9840819d86b1/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/81d7ea5ee90e4ede99fa97c3f03c8c0d/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/81d7ea5ee90e4ede99fa97c3f03c8c0d/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/81d7ea5ee90e4ede99fa97c3f03c8c0d/Specs/Plans/Done/History.md",
+    "sha256": "54b89dad883b4d6ab9858736e6fdfcc5951a23008ede9320e63e18e2a5b18c80"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/81d7ea5ee90e4ede99fa97c3f03c8c0d/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/81d7ea5ee90e4ede99fa97c3f03c8c0d/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/81d7ea5ee90e4ede99fa97c3f03c8c0d/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/81d7ea5ee90e4ede99fa97c3f03c8c0d/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8d915894daa540dcbbf11062507489c8/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8d915894daa540dcbbf11062507489c8/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8d915894daa540dcbbf11062507489c8/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8d915894daa540dcbbf11062507489c8/Specs/Plans/Done/UI_FileOperationsPopupParallelProgressPendingPrompt_2026-08-28.md",
+    "sha256": "f2dd7e4a9d739131864099544929705b776f8a515b9f3093d135bf86fb32c7ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8d915894daa540dcbbf11062507489c8/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8d915894daa540dcbbf11062507489c8/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8d915894daa540dcbbf11062507489c8/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8d915894daa540dcbbf11062507489c8/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8ee6896c8c2640f28f8a7fbc640080cc/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8ee6896c8c2640f28f8a7fbc640080cc/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8ee6896c8c2640f28f8a7fbc640080cc/Specs/Plans/Done/DxUi_SharedLibraryAdoptionAndReleasePlan_2026-09-09_unreviewed.md",
+    "sha256": "edb07b73c15921617e4c060078fe9cf073d795fc6946863b99f2857de4196566"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8ee6896c8c2640f28f8a7fbc640080cc/Specs/Plans/Done/DxUi_SharedLibraryAdoptionAndReleasePlan_2026-09-09.md",
+    "sha256": "b02b9b0b185b083ad1fcd6dc617a5b8818cee176a5328708c90c93f9ab179017"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8ee6896c8c2640f28f8a7fbc640080cc/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8ee6896c8c2640f28f8a7fbc640080cc/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8ee6896c8c2640f28f8a7fbc640080cc/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8ee6896c8c2640f28f8a7fbc640080cc/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/8ee6896c8c2640f28f8a7fbc640080cc/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/99d51567d29647e180988c753a78dffc/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/99d51567d29647e180988c753a78dffc/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/99d51567d29647e180988c753a78dffc/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/99d51567d29647e180988c753a78dffc/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/99d51567d29647e180988c753a78dffc/Specs/Plans/WIP/README.md",
+    "sha256": "bfeabc8ba5db6a045470b869e62efa777ae844ff9804eae311fde4595600546a"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/99d51567d29647e180988c753a78dffc/Specs/Plans/WIP/Retired.md",
+    "sha256": "bea74e535462d84fb10cceb607dd1fc2184a40e1714b633bafb67d42e6e84200"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/99d51567d29647e180988c753a78dffc/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/99d51567d29647e180988c753a78dffc/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/9a382d5194924dab9399a6cd95ab4f3e/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/9a382d5194924dab9399a6cd95ab4f3e/Specs/Core/Core_Example.md",
+    "sha256": "8c1ba75ad2407a7d6b8cc27b699083d2abc8c7bf7e936fb36815008d98aee77c"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/9a382d5194924dab9399a6cd95ab4f3e/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/9a382d5194924dab9399a6cd95ab4f3e/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/9a382d5194924dab9399a6cd95ab4f3e/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/9a382d5194924dab9399a6cd95ab4f3e/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/9a382d5194924dab9399a6cd95ab4f3e/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/9f394e105619416693eec04408fb219d/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/9f394e105619416693eec04408fb219d/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/9f394e105619416693eec04408fb219d/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/9f394e105619416693eec04408fb219d/Specs/Plans/Done/Operation_FileOperations_ReliabilityFirst_ExecutionRecord_2026-09-05.md",
+    "sha256": "1d859dcc446cd65fc1025e93f6a317e50147e529facf23c4dca308c68605d8ef"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/9f394e105619416693eec04408fb219d/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/9f394e105619416693eec04408fb219d/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/9f394e105619416693eec04408fb219d/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/9f394e105619416693eec04408fb219d/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/aadc11981e954bf0a45fa49bcabbd544/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/aadc11981e954bf0a45fa49bcabbd544/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/aadc11981e954bf0a45fa49bcabbd544/Specs/Plans/Done/History.md",
+    "sha256": "412e4a588eee1d6bf1f835475afc7821c9c3e49b12505432058d61ea2abf9d64"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/aadc11981e954bf0a45fa49bcabbd544/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/aadc11981e954bf0a45fa49bcabbd544/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/aadc11981e954bf0a45fa49bcabbd544/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/aadc11981e954bf0a45fa49bcabbd544/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/b918a43310fe4b17adef5f50b04a1e8c/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/b918a43310fe4b17adef5f50b04a1e8c/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/b918a43310fe4b17adef5f50b04a1e8c/Specs/Plans/Done/FileOperations_ProviderDiscoveryParity_2026-09-14.md",
+    "sha256": "d541328a82595278b4fd13dcfe3ad8fe73108ede0b18fac0aa043f5dc8558030"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/b918a43310fe4b17adef5f50b04a1e8c/Specs/Plans/Done/FileOperations_ProviderDiscoveryParity_2026-09-15.md",
+    "sha256": "edb07b73c15921617e4c060078fe9cf073d795fc6946863b99f2857de4196566"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/b918a43310fe4b17adef5f50b04a1e8c/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/b918a43310fe4b17adef5f50b04a1e8c/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/b918a43310fe4b17adef5f50b04a1e8c/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/b918a43310fe4b17adef5f50b04a1e8c/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/b918a43310fe4b17adef5f50b04a1e8c/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/bdf7baf39f814e20ba24603a2e792047/Specs/NormativeConsistency.json",
+    "sha256": "2a2e2d66ed545ac248fc5fe8201df78307bf0a8f83c074f4093e723882fb3839"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/bdf7baf39f814e20ba24603a2e792047/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/bdf7baf39f814e20ba24603a2e792047/Specs/Core/Core_Missing.md",
+    "sha256": "8846c959829f04194d93f3414173e2e6fc18b0f4003a4094b74337ec5766dbfd"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/bdf7baf39f814e20ba24603a2e792047/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/bdf7baf39f814e20ba24603a2e792047/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/bdf7baf39f814e20ba24603a2e792047/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/bdf7baf39f814e20ba24603a2e792047/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/bdf7baf39f814e20ba24603a2e792047/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c204d6747b6140399c97463e6d389050/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c204d6747b6140399c97463e6d389050/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c204d6747b6140399c97463e6d389050/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c204d6747b6140399c97463e6d389050/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c204d6747b6140399c97463e6d389050/Specs/Plans/WIP/README.md",
+    "sha256": "bfeabc8ba5db6a045470b869e62efa777ae844ff9804eae311fde4595600546a"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c204d6747b6140399c97463e6d389050/Specs/Plans/WIP/Retired.md",
+    "sha256": "87099412178152a83102fa6f465e3b1ce330cd68b584ff9a401c4b7549fd1b60"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c204d6747b6140399c97463e6d389050/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c204d6747b6140399c97463e6d389050/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c5fe44945cc9446d89e5ba06e0987227/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c5fe44945cc9446d89e5ba06e0987227/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c5fe44945cc9446d89e5ba06e0987227/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c5fe44945cc9446d89e5ba06e0987227/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c5fe44945cc9446d89e5ba06e0987227/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c5fe44945cc9446d89e5ba06e0987227/Specs/Plans/WIP/Unindexed.md",
+    "sha256": "b67565cb643a01ffae861cdcb6f1297bc5e035353dfe5566ad4c074718c982f6"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c5fe44945cc9446d89e5ba06e0987227/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c5fe44945cc9446d89e5ba06e0987227/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c7a3d666582a485f8184638e043a2f6a/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c7a3d666582a485f8184638e043a2f6a/Specs/Core/Core_Example.md",
+    "sha256": "c4d7fbc292f25be26d6ba1bc0f78ec6163d91a766827835871cb29692c5ff131"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c7a3d666582a485f8184638e043a2f6a/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c7a3d666582a485f8184638e043a2f6a/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c7a3d666582a485f8184638e043a2f6a/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c7a3d666582a485f8184638e043a2f6a/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/c7a3d666582a485f8184638e043a2f6a/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/ce894570665c44e7bd3ea78f3c367399/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/ce894570665c44e7bd3ea78f3c367399/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/ce894570665c44e7bd3ea78f3c367399/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/ce894570665c44e7bd3ea78f3c367399/Specs/Plans/WIP/Plan.md",
+    "sha256": "d7a9953feea3c339b8b717f342b51c9a4c7fb685b28bb376a628b9b6c97aece8"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/ce894570665c44e7bd3ea78f3c367399/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/ce894570665c44e7bd3ea78f3c367399/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/ce894570665c44e7bd3ea78f3c367399/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/d0ac65afc2d942bca8e569249a78c5b1/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/d0ac65afc2d942bca8e569249a78c5b1/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/d0ac65afc2d942bca8e569249a78c5b1/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/d0ac65afc2d942bca8e569249a78c5b1/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/d0ac65afc2d942bca8e569249a78c5b1/Specs/Plans/WIP/README.md",
+    "sha256": "c968da14f6a72332fd702d05d961537108afc82055bba2a7f67e378f218425f7"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/d0ac65afc2d942bca8e569249a78c5b1/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/d0ac65afc2d942bca8e569249a78c5b1/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/de0ce32155f94cb382fecfb8fbd6f06f/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/de0ce32155f94cb382fecfb8fbd6f06f/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/de0ce32155f94cb382fecfb8fbd6f06f/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/de0ce32155f94cb382fecfb8fbd6f06f/Specs/Plans/WIP/Notes_Scratch.md",
+    "sha256": "b1d122212b1d2ee75aaaf84132bd6ad4e02ba17c1c3c4648e3ccfc3f9dddf331"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/de0ce32155f94cb382fecfb8fbd6f06f/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/de0ce32155f94cb382fecfb8fbd6f06f/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/de0ce32155f94cb382fecfb8fbd6f06f/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/de0ce32155f94cb382fecfb8fbd6f06f/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e6deddbc729442f5a3c4ab431793b792/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e6deddbc729442f5a3c4ab431793b792/Specs/Core/Core_Example.md",
+    "sha256": "99c9ad0a7458c09fefaa7393b88bc793e29f9b08eaf9de701a94d69f0da390de"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e6deddbc729442f5a3c4ab431793b792/Specs/Plans/Done/FileOperations_BeelineResidualsAndProviderRoutes_2026-09-08.md",
+    "sha256": "50e9626523f8e1cf638e633711830fe97b93572c970ee665d59d03bf97861655"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e6deddbc729442f5a3c4ab431793b792/Specs/Plans/Done/FileOperations_BeelineResidualsAndProviderRoutes_2026-09-09.md",
+    "sha256": "edb07b73c15921617e4c060078fe9cf073d795fc6946863b99f2857de4196566"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e6deddbc729442f5a3c4ab431793b792/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e6deddbc729442f5a3c4ab431793b792/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e6deddbc729442f5a3c4ab431793b792/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e6deddbc729442f5a3c4ab431793b792/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e6deddbc729442f5a3c4ab431793b792/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e9d10ce0cd3a4641b15d9a1ae680ffad/Specs/NormativeConsistency.json",
+    "sha256": "0975a420e57b2cd9d255929310f122afa33fecdb79ce14f17858d5348b902b33"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e9d10ce0cd3a4641b15d9a1ae680ffad/Specs/Core/Core_Example.md",
+    "sha256": "9fc2f84d97507cc478844bb49b18259eae92474cb5ce12343bb507ba267d7c5f"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e9d10ce0cd3a4641b15d9a1ae680ffad/Specs/Plans/Done/History.md",
+    "sha256": "e41b3c971c41e626657cc0814546f8136efa0a2f79282a49af11725c3d555e0b"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e9d10ce0cd3a4641b15d9a1ae680ffad/Specs/Plans/WIP/Plan.md",
+    "sha256": "4f7bdc1399128cbdab44ba77a9d648c9e5a89380ba67ddb1c4c5757c267c76ae"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e9d10ce0cd3a4641b15d9a1ae680ffad/Specs/Plans/WIP/README.md",
+    "sha256": "0f18f6eb569309b280e593f522bffbafde36943629a97dee67bcf274921e04f4"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e9d10ce0cd3a4641b15d9a1ae680ffad/src/example.cpp",
+    "sha256": "754ee1a669090f69f7bec90b73e817991d70197034baa63a527d895b4b592f53"
+  },
+  {
+    "path": "scratch/tools-pester/spec-information-architecture/e9d10ce0cd3a4641b15d9a1ae680ffad/Tests/example.ps1",
+    "sha256": "8a299bdc5b6acaa796955d4db300cf2f0a2c6b4c905969031ed9d71d8c611b79"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-21f69bf6cb8c49d288e474103977b800/Specs/TestRuns/7d3a1247382a/Commands/2026-07-11_120000/results.json",
+    "sha256": "80422bc3d307b4a25bdafcc84ac7fb01cb55a09810e8b0f37bb12e0edb5c48ca"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-21f69bf6cb8c49d288e474103977b800/Specs/TestRuns/7d3a1247382a/Commands/2026-07-11_120000/trace.txt",
+    "sha256": "80422bc3d307b4a25bdafcc84ac7fb01cb55a09810e8b0f37bb12e0edb5c48ca"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-2d772857d53f44cc94bb2cb70942f956/Specs/TestRuns/7d3a1247382a/Commands/2026-07-11_120000/trace.txt",
+    "sha256": "5373c2d1dc4c5333681ef9fccfe13fcb842c4779960359570e994a864145c2d2"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-3d7ea31a542e4bfab0b4bcd02c35f7d8/Specs/Terminal/TerminalVtUpgradeEvidence.schema.json",
+    "sha256": "14c204278655821ae5e18c6456bca0b4e90b325cae57ef248097dadb8fdacd47"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-3d7ea31a542e4bfab0b4bcd02c35f7d8/Specs/TestRuns/4cb089111a23/Terminal/20260826_071812_pair2-product/results.json",
+    "sha256": "1899e2b2f0a0d1b0310ff0db825a62f5abb11f40eef8b87f2826a09187417866"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-3d7ea31a542e4bfab0b4bcd02c35f7d8/Specs/TestRuns/4cb089111a23/Terminal/20260826_071812_pair2-product/trace.txt",
+    "sha256": "0efbe61528d4d62adb3af0ecf94dce5ddf14c3e70f1e0bf3628dc776dda998ab"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-3d7ea31a542e4bfab0b4bcd02c35f7d8/Specs/TestRuns/4cb089111a23/Terminal/20260826_071812_pair2-product/perf/perf_metrics.jsonl",
+    "sha256": "3d6bf64ec9cb442bd140884772038e4d119f653869e5c0fdc9fa201be6afb998"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-3d7ea31a542e4bfab0b4bcd02c35f7d8/Specs/TestRuns/4cb089111a23/Terminal/20260826_071820_pair2-candidate/results.json",
+    "sha256": "9fc02984975aadf32fe6c98600fa649958fa42bdd4759a95eea8ccd3dd33d087"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-3d7ea31a542e4bfab0b4bcd02c35f7d8/Specs/TestRuns/4cb089111a23/Terminal/20260826_071820_pair2-candidate/trace.txt",
+    "sha256": "d355818d7cc631b0621eaae911758947839426a7d4eb87cb573371070c2804d7"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-3d7ea31a542e4bfab0b4bcd02c35f7d8/Specs/TestRuns/4cb089111a23/Terminal/20260826_071820_pair2-candidate/perf/perf_metrics.jsonl",
+    "sha256": "03d52a9b94f4526b586ffd2ba1a0b7d10eb9f56e3d346ef1fc8d069b5890f74f"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-450f1ffc40af429b8f1fa4ec3a666379/validator.stderr.txt",
+    "sha256": "e404714473285b01eacc6b7ffcffd7761953bb14ddfe91064553e1802f0e19a6"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-450f1ffc40af429b8f1fa4ec3a666379/validator.stdout.txt",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-450f1ffc40af429b8f1fa4ec3a666379/Specs/TestRuns/7d3a1247382a/FileOps/2026-08-09_120000/new.raw",
+    "sha256": "5373c2d1dc4c5333681ef9fccfe13fcb842c4779960359570e994a864145c2d2"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-5faf59e904ed41fcb98ad581090dad64/Specs/TestRuns/7d3a1247382a/Commands/2026-07-11_120000/perf/perf_metrics.jsonl",
+    "sha256": "5dd3c1be1597f7009e90706981f0b119c8b0341988e720ddbdd68bd652630a85"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-6af5a9c9da994337ace1ab231f20aa53/Specs/Terminal/TerminalVtUpgradeEvidence.schema.json",
+    "sha256": "14c204278655821ae5e18c6456bca0b4e90b325cae57ef248097dadb8fdacd47"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-6af5a9c9da994337ace1ab231f20aa53/Specs/TestRuns/4cb089111a23/Terminal/20260826_071812_pair2-product/results.json",
+    "sha256": "1899e2b2f0a0d1b0310ff0db825a62f5abb11f40eef8b87f2826a09187417866"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-6af5a9c9da994337ace1ab231f20aa53/Specs/TestRuns/4cb089111a23/Terminal/20260826_071812_pair2-product/trace.txt",
+    "sha256": "0efbe61528d4d62adb3af0ecf94dce5ddf14c3e70f1e0bf3628dc776dda998ab"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-6af5a9c9da994337ace1ab231f20aa53/Specs/TestRuns/4cb089111a23/Terminal/20260826_071812_pair2-product/perf/perf_metrics.jsonl",
+    "sha256": "3d6bf64ec9cb442bd140884772038e4d119f653869e5c0fdc9fa201be6afb998"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-6af5a9c9da994337ace1ab231f20aa53/Specs/TestRuns/4cb089111a23/Terminal/20260826_071820_pair2-candidate/results.json",
+    "sha256": "35844162dc8e19c445ee791bae107eac921985271760cc56cf3544fb5968f4f8"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-6af5a9c9da994337ace1ab231f20aa53/Specs/TestRuns/4cb089111a23/Terminal/20260826_071820_pair2-candidate/perf/perf_metrics.jsonl",
+    "sha256": "b12fe0176ef85697466c4c0426784478cd311cfbe99ec59749775afabb102ea7"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-8a9cdf32e3e0487eb9a31026cf54722e/validator.stderr.txt",
+    "sha256": "e00062077f21d1f8c4917f8cd175e543e2ceafbafee6f2018e755a57f211132c"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-8a9cdf32e3e0487eb9a31026cf54722e/validator.stdout.txt",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-8a9cdf32e3e0487eb9a31026cf54722e/Specs/TestRuns/7d3a1247382a/FileOps/2026-07-20_205550/perf/perf_metrics.jsonl",
+    "sha256": "5373c2d1dc4c5333681ef9fccfe13fcb842c4779960359570e994a864145c2d2"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-8f9e47d0958e4b3f85f878343dde241b/.gitignore",
+    "sha256": "ff00a5a56615753d489687f23b4ce2b6cbb9ec23e5a2bdfd3e8eea2d925f5686"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-8f9e47d0958e4b3f85f878343dde241b/Specs/TestRuns/7d3a1247382a/Continuation/2026-08-03_contract/README.md",
+    "sha256": "076a27c79e5ace2a3d47f9dd2e83e4ff6ea8872b3c2218f66c92b89b55f36560"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-8f9e47d0958e4b3f85f878343dde241b/Specs/TestRuns/7d3a1247382a/Continuation/2026-08-03_contract/trace.raw",
+    "sha256": "ad7facb2586fc6e966c004d7d1d16b024f5805ff7cb47c7a85dabd8b48892ca7"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-9ac5c006b8ed45deb5e73976fa5bba94/Specs/Terminal/TerminalVtUpgradeEvidence.schema.json",
+    "sha256": "14c204278655821ae5e18c6456bca0b4e90b325cae57ef248097dadb8fdacd47"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-9ac5c006b8ed45deb5e73976fa5bba94/Specs/TestRuns/4cb089111a23/Terminal/20260826_071812_pair2-product/results.json",
+    "sha256": "1899e2b2f0a0d1b0310ff0db825a62f5abb11f40eef8b87f2826a09187417866"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-9ac5c006b8ed45deb5e73976fa5bba94/Specs/TestRuns/4cb089111a23/Terminal/20260826_071812_pair2-product/trace.txt",
+    "sha256": "0efbe61528d4d62adb3af0ecf94dce5ddf14c3e70f1e0bf3628dc776dda998ab"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-9ac5c006b8ed45deb5e73976fa5bba94/Specs/TestRuns/4cb089111a23/Terminal/20260826_071812_pair2-product/perf/perf_metrics.jsonl",
+    "sha256": "3d6bf64ec9cb442bd140884772038e4d119f653869e5c0fdc9fa201be6afb998"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-9ac5c006b8ed45deb5e73976fa5bba94/Specs/TestRuns/4cb089111a23/Terminal/20260826_071820_pair2-candidate/results.json",
+    "sha256": "44a038b778c6d01c9deee426ab222d4045723130b31a9158cf58970b5579b086"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-9ac5c006b8ed45deb5e73976fa5bba94/Specs/TestRuns/4cb089111a23/Terminal/20260826_071820_pair2-candidate/trace.txt",
+    "sha256": "d355818d7cc631b0621eaae911758947839426a7d4eb87cb573371070c2804d7"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-9ac5c006b8ed45deb5e73976fa5bba94/Specs/TestRuns/4cb089111a23/Terminal/20260826_071820_pair2-candidate/perf/perf_metrics.jsonl",
+    "sha256": "03d52a9b94f4526b586ffd2ba1a0b7d10eb9f56e3d346ef1fc8d069b5890f74f"
+  },
+  {
+    "path": "scratch/tools-pester/test-run-archive-c5f70a03e9df4cb38303ebf4a94a7295/Specs/TestRuns/00013ba62/Commands/2026-07-11_120000/perf/perf_metrics.jsonl",
+    "sha256": "5dd3c1be1597f7009e90706981f0b119c8b0341988e720ddbdd68bd652630a85"
+  }
+]

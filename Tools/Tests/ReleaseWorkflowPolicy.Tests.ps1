@@ -7,6 +7,7 @@ $testRunPlanModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestRunPlan.psm1
 $buildEvidenceModule = Join-Path $repoRoot 'Tools\Modules\Build\BuildEvidence.psm1'
 
 Import-Module $testRunPlanModule -Force -ErrorAction Stop
+Import-Module (Join-Path $repoRoot 'Tools\Modules\Testing\TestSandbox.psm1') -Force -ErrorAction Stop
 Import-Module $policyModule -Force -ErrorAction Stop
 Import-Module $buildEvidenceModule -Force -ErrorAction Stop
 Add-Type -AssemblyName System.IO.Compression.FileSystem
@@ -19,22 +20,120 @@ function New-RSReleasePolicyTestRoot {
 }
 
 function New-RSFakePeBytes {
+    # Minimal PE32+ image: an export section naming $Export and a resource section that holds
+    # the ENABLE_TESTS version marker when -TestSurfaceMarker is set.
     param(
         [Parameter(Mandatory = $true)]
         [ValidateSet(0x8664, 0xAA64)]
-        [int]$Machine
+        [int]$Machine,
+
+        [string[]]$Export = @(),
+
+        [switch]$TestSurfaceMarker
     )
 
-    $bytes = [byte[]]::new(512)
+    $peOffset = 0x80
+    $optionalHeader = $peOffset + 24
+    $optionalHeaderSize = 0xF0
+    $sectionTable = $optionalHeader + $optionalHeaderSize
+    $exportRva = 0x1000
+    $resourceRva = 0x2000
+
+    $exportSection = [IO.MemoryStream]::new()
+    $exportWriter = [IO.BinaryWriter]::new($exportSection)
+    $nameTableRva = $exportRva + 40
+    $nameRva = $nameTableRva + (4 * $Export.Count)
+    $exportWriter.Write([byte[]]::new(24))
+    $exportWriter.Write([uint32]$Export.Count)
+    $exportWriter.Write([uint32]0)
+    $exportWriter.Write([uint32]$nameTableRva)
+    $exportWriter.Write([uint32]0)
+    foreach ($name in $Export) {
+        $exportWriter.Write([uint32]$nameRva)
+        $nameRva += [Text.Encoding]::ASCII.GetByteCount($name) + 1
+    }
+    foreach ($name in $Export) {
+        $exportWriter.Write([Text.Encoding]::ASCII.GetBytes($name))
+        $exportWriter.Write([byte]0)
+    }
+    $exportWriter.Flush()
+    $exportBytes = $exportSection.ToArray()
+
+    $resourceText = if ($TestSurfaceMarker) { 'SpecialBuild RedSalamander.TestSurface=ENABLE_TESTS' } else { 'ProductName RedSalamander' }
+    $resourceBytes = [byte[]]([byte[]]::new(16) + [Text.Encoding]::Unicode.GetBytes($resourceText) + [byte[]]::new(2))
+
+    $alignUp = { param([int]$value) [int]([Math]::Ceiling($value / 512.0) * 512) }
+    $exportRaw = 0x200
+    $exportRawSize = & $alignUp ([Math]::Max(1, $exportBytes.Length))
+    $resourceRaw = $exportRaw + $exportRawSize
+    $resourceRawSize = & $alignUp $resourceBytes.Length
+
+    $bytes = [byte[]]::new($resourceRaw + $resourceRawSize)
     $bytes[0] = 0x4D
     $bytes[1] = 0x5A
-    [BitConverter]::GetBytes([int]128).CopyTo($bytes, 0x3C)
-    $bytes[128] = 0x50
-    $bytes[129] = 0x45
-    $bytes[130] = 0
-    $bytes[131] = 0
-    [BitConverter]::GetBytes([uint16]$Machine).CopyTo($bytes, 132)
+    [BitConverter]::GetBytes([int]$peOffset).CopyTo($bytes, 0x3C)
+    $bytes[$peOffset] = 0x50
+    $bytes[$peOffset + 1] = 0x45
+    [BitConverter]::GetBytes([uint16]$Machine).CopyTo($bytes, $peOffset + 4)
+    [BitConverter]::GetBytes([uint16]2).CopyTo($bytes, $peOffset + 6)
+    [BitConverter]::GetBytes([uint16]$optionalHeaderSize).CopyTo($bytes, $peOffset + 20)
+    [BitConverter]::GetBytes([uint16]0x20B).CopyTo($bytes, $optionalHeader)
+    [BitConverter]::GetBytes([uint32]16).CopyTo($bytes, $optionalHeader + 108)
+    if ($Export.Count -gt 0) {
+        [BitConverter]::GetBytes([uint32]$exportRva).CopyTo($bytes, $optionalHeader + 112)
+        [BitConverter]::GetBytes([uint32]$exportBytes.Length).CopyTo($bytes, $optionalHeader + 116)
+    }
+    [BitConverter]::GetBytes([uint32]$resourceRva).CopyTo($bytes, $optionalHeader + 128)
+    [BitConverter]::GetBytes([uint32]$resourceBytes.Length).CopyTo($bytes, $optionalHeader + 132)
+
+    $sections = @(
+        @{ Name = '.edata'; Rva = $exportRva; Raw = $exportRaw; RawSize = $exportRawSize; Data = $exportBytes },
+        @{ Name = '.rsrc'; Rva = $resourceRva; Raw = $resourceRaw; RawSize = $resourceRawSize; Data = $resourceBytes }
+    )
+    for ($index = 0; $index -lt $sections.Count; ++$index) {
+        $header = $sectionTable + (40 * $index)
+        $section = $sections[$index]
+        [Text.Encoding]::ASCII.GetBytes($section.Name).CopyTo($bytes, $header)
+        [BitConverter]::GetBytes([uint32]$section.RawSize).CopyTo($bytes, $header + 8)
+        [BitConverter]::GetBytes([uint32]$section.Rva).CopyTo($bytes, $header + 12)
+        [BitConverter]::GetBytes([uint32]$section.RawSize).CopyTo($bytes, $header + 16)
+        [BitConverter]::GetBytes([uint32]$section.Raw).CopyTo($bytes, $header + 20)
+        $section.Data.CopyTo($bytes, $section.Raw)
+    }
     return ,$bytes
+}
+
+function Add-RSFakeArchiveEntry {
+    param(
+        [Parameter(Mandatory = $true)]
+        [IO.Compression.ZipArchive]$Archive,
+
+        [Parameter(Mandatory = $true)]
+        [string]$Name,
+
+        [Parameter(Mandatory = $true)]
+        [byte[]]$Bytes
+    )
+
+    $entryStream = $Archive.CreateEntry($Name).Open()
+    try {
+        $entryStream.Write($Bytes, 0, $Bytes.Length)
+    }
+    finally {
+        $entryStream.Dispose()
+    }
+}
+
+function Get-RSThrownMessage {
+    param([Parameter(Mandatory = $true)][scriptblock]$Action)
+
+    try {
+        & $Action | Out-Null
+    }
+    catch {
+        return $_.Exception.Message
+    }
+    return $null
 }
 
 function New-RSFakePortableArtifact {
@@ -49,7 +148,11 @@ function New-RSFakePortableArtifact {
         [ValidateSet('x64', 'ARM64')]
         [string]$Platform,
 
-        [int]$Machine = 0
+        [int]$Machine = 0,
+
+        [switch]$TestEnabledApplication,
+
+        [string[]]$PluginExport = @('RedSalamanderCreate', 'RedSalamanderEnumeratePlugins')
     )
 
     if ($Machine -eq 0) {
@@ -59,15 +162,10 @@ function New-RSFakePortableArtifact {
     $stream = [IO.File]::Open($path, [IO.FileMode]::CreateNew, [IO.FileAccess]::ReadWrite, [IO.FileShare]::None)
     $archive = [IO.Compression.ZipArchive]::new($stream, [IO.Compression.ZipArchiveMode]::Create, $false)
     try {
-        $entry = $archive.CreateEntry('RedSalamander.exe')
-        $entryStream = $entry.Open()
-        try {
-            $bytes = New-RSFakePeBytes -Machine $Machine
-            $entryStream.Write($bytes, 0, $bytes.Length)
-        }
-        finally {
-            $entryStream.Dispose()
-        }
+        Add-RSFakeArchiveEntry -Archive $archive -Name 'RedSalamander.exe' `
+            -Bytes (New-RSFakePeBytes -Machine $Machine -TestSurfaceMarker:$TestEnabledApplication)
+        Add-RSFakeArchiveEntry -Archive $archive -Name 'Plugins/FileSystem.dll' `
+            -Bytes (New-RSFakePeBytes -Machine $Machine -Export $PluginExport)
     }
     finally {
         $archive.Dispose()
@@ -91,7 +189,9 @@ function New-RSFakeMsixArtifact {
 
         [string]$IdentityVersion = '',
 
-        [string]$ProcessorArchitecture = ''
+        [string]$ProcessorArchitecture = '',
+
+        [string[]]$PluginExport = @('RedSalamanderCreate')
     )
 
     if (-not $IdentityVersion) {
@@ -115,6 +215,9 @@ function New-RSFakeMsixArtifact {
             $writer.Dispose()
             $entryStream.Dispose()
         }
+        $machine = if ($Platform -eq 'ARM64') { 0xAA64 } else { 0x8664 }
+        Add-RSFakeArchiveEntry -Archive $archive -Name 'Plugins/FileSystem.dll' `
+            -Bytes (New-RSFakePeBytes -Machine $machine -Export $PluginExport)
     }
     finally {
         $archive.Dispose()
@@ -240,7 +343,350 @@ Describe 'Release artifact fail-closed policy' {
     }
 }
 
+Describe 'Distributable test surface (ENABLE_TESTS) policy' {
+    It 'reports reserved test exports and the test-build marker but not production exports' {
+        $production = Get-RSPeTestSurface -Name 'FileSystem.dll' -Bytes (New-RSFakePeBytes -Machine 0x8664 -Export @(
+                'RedSalamanderCreate', 'RedSalamanderEnumeratePlugins', 'RedSalamanderGetConfigurationSchema',
+                'RedSalamanderPluginShutdown', 'RedSalamanderPluginCanUnloadNow',
+                'RedSalamanderPluginRetainModuleUntilProcessExit', 'RedSalamanderBrowseConnectionTargets'))
+        $production.TestBuildMarker | Should Be $false
+        $production.TestExports.Count | Should Be 0
+
+        $testExports = @(
+            'RedSalamanderFileSystemTestGetRecycleBinBatchSnapshot',
+            'RedSalamanderCurlStartFakeFtpForSelfTest',
+            'RedSalamanderS3MultipartSelfTests',
+            'RedSalamanderDebugCurlRuntimeProbe',
+            'RedSalamanderTerminalDebugCommandSurfaceJoinTid',
+            '?DebugUseFixedSettingsBackupTimestampForTest@Settings@Common@@YAX_N@Z')
+        $tested = Get-RSPeTestSurface -Name 'FileSystem.dll' -Bytes (New-RSFakePeBytes -Machine 0xAA64 -Export (@('RedSalamanderCreate') + $testExports))
+        $tested.TestBuildMarker | Should Be $false
+        ($tested.TestExports -join '|') | Should BeExactly ($testExports -join '|')
+
+        $marked = Get-RSPeTestSurface -Name 'RedSalamander.exe' -Bytes (New-RSFakePeBytes -Machine 0x8664 -TestSurfaceMarker)
+        $marked.TestBuildMarker | Should Be $true
+        $marked.TestExports.Count | Should Be 0
+    }
+
+    It 'rejects a release portable ZIP whose plugin exports a test entry point' {
+        $root = New-RSReleasePolicyTestRoot
+        try {
+            New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform x64 `
+                -PluginExport @('RedSalamanderCreate', 'RedSalamanderFileSystemTestAdmissionProbe') | Out-Null
+            $message = Get-RSThrownMessage { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $false -BuildMsix $false }
+            $message | Should Match 'Distributable package carries a test surface'
+            $message | Should Match ([regex]::Escape('Plugins/FileSystem.dll: test exports [RedSalamanderFileSystemTestAdmissionProbe]'))
+        }
+        finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'rejects a release portable ZIP whose application was built with ENABLE_TESTS' {
+        $root = New-RSReleasePolicyTestRoot
+        try {
+            New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform ARM64 -TestEnabledApplication | Out-Null
+            $message = Get-RSThrownMessage { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true -BuildMsix $false }
+            # The x64 archive is missing, so build the full matrix to reach the content check.
+            $message | Should Match 'Release artifact count mismatch'
+            New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform x64 | Out-Null
+            $message = Get-RSThrownMessage { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $true -BuildMsix $false }
+            $message | Should Match ([regex]::Escape('RedSalamander.exe: built with ENABLE_TESTS'))
+        }
+        finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'rejects a release MSIX whose plugin exports a test entry point' {
+        $root = New-RSReleasePolicyTestRoot
+        try {
+            New-RSFakePortableArtifact -Root $root -ReleaseVersion '7.0.42' -Platform x64 | Out-Null
+            New-RSFakeMsixArtifact -Root $root -ReleaseVersion '7.0.42' -Platform x64 `
+                -PluginExport @('RedSalamanderCreate', 'RedSalamanderS3DebugSelfTests') | Out-Null
+            $message = Get-RSThrownMessage { Assert-RSReleaseArtifacts -ArtifactsRoot $root -ReleaseVersion '7.0.42' -BuildArm64 $false -BuildMsix $true }
+            $message | Should Match ([regex]::Escape('RedSalamander-7.0.42-x64.msix'))
+            $message | Should Match ([regex]::Escape('test exports [RedSalamanderS3DebugSelfTests]'))
+        }
+        finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'removes a rejected produced MSIX and its package folder but keeps accepted packages' {
+        $root = New-RSReleasePolicyTestRoot
+        try {
+            $appPackages = Join-Path $root 'AppPackages'
+            $rejectedFolder = Join-Path $appPackages 'RedSalamanderInstaller_7.0.42.0_x64_Test'
+            $acceptedFolder = Join-Path $appPackages 'RedSalamanderInstaller_7.0.41.0_x64_Test'
+            [void][IO.Directory]::CreateDirectory((Join-Path $rejectedFolder 'Dependencies'))
+            [void][IO.Directory]::CreateDirectory($acceptedFolder)
+            $rejected = New-RSFakeMsixArtifact -Root $rejectedFolder -ReleaseVersion '7.0.42' -Platform x64 `
+                -PluginExport @('RedSalamanderCreate', 'RedSalamanderFileSystemTestAdmissionProbe')
+            [IO.File]::WriteAllText((Join-Path $rejectedFolder 'Add-AppDevPackage.ps1'), '#')
+            $accepted = New-RSFakeMsixArtifact -Root $acceptedFolder -ReleaseVersion '7.0.41' -Platform x64
+
+            Get-RSThrownMessage { Assert-RSProducedMsixHasNoTestSurface -LiteralPath $accepted -AppPackagesRoot $appPackages } |
+                Should BeNullOrEmpty
+            Test-Path -LiteralPath $accepted -PathType Leaf | Should Be $true
+
+            $message = Get-RSThrownMessage { Assert-RSProducedMsixHasNoTestSurface -LiteralPath $rejected -AppPackagesRoot $appPackages }
+            $message | Should Match ([regex]::Escape('test exports [RedSalamanderFileSystemTestAdmissionProbe]'))
+            $message | Should Match ([regex]::Escape("The rejected package was removed: $rejectedFolder"))
+            Test-Path -LiteralPath $rejectedFolder | Should Be $false
+            Test-Path -LiteralPath $accepted -PathType Leaf | Should Be $true
+
+            # A package written directly into AppPackages is removed alone; one outside it is refused untouched.
+            $loose = New-RSFakeMsixArtifact -Root $appPackages -ReleaseVersion '7.0.43' -Platform x64 -PluginExport @('RedSalamanderS3DebugSelfTests')
+            Get-RSThrownMessage { Assert-RSProducedMsixHasNoTestSurface -LiteralPath $loose -AppPackagesRoot $appPackages } |
+                Should Match ([regex]::Escape("The rejected package was removed: $loose"))
+            Test-Path -LiteralPath $loose | Should Be $false
+            Test-Path -LiteralPath $acceptedFolder -PathType Container | Should Be $true
+
+            $outside = New-RSFakeMsixArtifact -Root $root -ReleaseVersion '7.0.44' -Platform x64 -PluginExport @('RedSalamanderS3DebugSelfTests')
+            Get-RSThrownMessage { Assert-RSProducedMsixHasNoTestSurface -LiteralPath $outside -AppPackagesRoot $appPackages } |
+                Should Match 'is not beneath the AppPackages root'
+            Test-Path -LiteralPath $outside -PathType Leaf | Should Be $true
+        }
+        finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'never deletes a rejected produced MSIX through a link' {
+        $root = New-RSReleasePolicyTestRoot
+        $links = [Collections.Generic.List[string]]::new()
+        try {
+            $testExport = @('RedSalamanderCreate', 'RedSalamanderS3DebugSelfTests')
+
+            # The AppPackages root is a junction: the package folder behind it stays untouched.
+            $elsewhere = Join-Path $root 'elsewhere'
+            $behindFolder = Join-Path $elsewhere 'RedSalamanderInstaller_7.0.42.0_x64_Test'
+            [void][IO.Directory]::CreateDirectory($behindFolder)
+            $behindMsix = New-RSFakeMsixArtifact -Root $behindFolder -ReleaseVersion '7.0.42' -Platform x64 -PluginExport $testExport
+            $linkedAppPackages = Join-Path $root 'LinkedAppPackages'
+            New-RSTestSandboxLink -ItemType Junction -Path $linkedAppPackages -Target $elsewhere | Out-Null
+            $links.Add($linkedAppPackages)
+            $throughRoot = Join-Path $linkedAppPackages ('RedSalamanderInstaller_7.0.42.0_x64_Test\' + [IO.Path]::GetFileName($behindMsix))
+            $message = Get-RSThrownMessage { Assert-RSProducedMsixHasNoTestSurface -LiteralPath $throughRoot -AppPackagesRoot $linkedAppPackages }
+            $message | Should Match ([regex]::Escape('test exports [RedSalamanderS3DebugSelfTests]'))
+            $message | Should Match 'could not be removed and must not be distributed'
+            $message | Should Match ([regex]::Escape("reparse point '$linkedAppPackages'"))
+            Test-Path -LiteralPath $behindMsix -PathType Leaf | Should Be $true
+
+            # The package folder itself is a junction beneath a real AppPackages root.
+            $appPackages = Join-Path $root 'AppPackages'
+            [void][IO.Directory]::CreateDirectory($appPackages)
+            $linkedFolder = Join-Path $appPackages 'RedSalamanderInstaller_7.0.43.0_x64_Test'
+            New-RSTestSandboxLink -ItemType Junction -Path $linkedFolder -Target $behindFolder | Out-Null
+            $links.Add($linkedFolder)
+            $throughFolder = Join-Path $linkedFolder ([IO.Path]::GetFileName($behindMsix))
+            Get-RSThrownMessage { Assert-RSProducedMsixHasNoTestSurface -LiteralPath $throughFolder -AppPackagesRoot $appPackages } |
+                Should Match ([regex]::Escape("reparse point '$linkedFolder'"))
+            Test-Path -LiteralPath $behindMsix -PathType Leaf | Should Be $true
+
+            # A link inside the package folder refuses the whole removal before anything is deleted.
+            $keep = Join-Path $root 'keep'
+            [void][IO.Directory]::CreateDirectory($keep)
+            $keepFile = Join-Path $keep 'precious.txt'
+            [IO.File]::WriteAllText($keepFile, 'keep')
+            $packageFolder = Join-Path $appPackages 'RedSalamanderInstaller_7.0.44.0_x64_Test'
+            [void][IO.Directory]::CreateDirectory($packageFolder)
+            $packaged = New-RSFakeMsixArtifact -Root $packageFolder -ReleaseVersion '7.0.44' -Platform x64 -PluginExport $testExport
+            $innerLink = Join-Path $packageFolder 'Dependencies'
+            New-RSTestSandboxLink -ItemType Junction -Path $innerLink -Target $keep | Out-Null
+            $links.Add($innerLink)
+            $message = Get-RSThrownMessage { Assert-RSProducedMsixHasNoTestSurface -LiteralPath $packaged -AppPackagesRoot $appPackages }
+            $message | Should Match 'could not be removed and must not be distributed'
+            $message | Should Match ([regex]::Escape("contains the reparse point '$innerLink'"))
+            Test-Path -LiteralPath $keepFile -PathType Leaf | Should Be $true
+            Test-Path -LiteralPath $packaged -PathType Leaf | Should Be $true
+        }
+        finally {
+            foreach ($link in $links) {
+                if (Test-Path -LiteralPath $link) { [IO.Directory]::Delete($link, $false) }
+            }
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'checks an up-to-date MSIX in place and fails only when packaging produced none' {
+        $root = New-RSReleasePolicyTestRoot
+        try {
+            $appPackages = Join-Path $root 'AppPackages'
+            $currentFolder = Join-Path $appPackages 'RedSalamanderInstaller_7.0.42.0_x64_Test'
+            [void][IO.Directory]::CreateDirectory($currentFolder)
+            $current = New-RSFakeMsixArtifact -Root $currentFolder -ReleaseVersion '7.0.42' -Platform x64
+            [IO.File]::WriteAllBytes((Join-Path $appPackages 'broken.msix'), [byte[]](1, 2, 3))
+            $before = Get-RSMsixOutputSnapshot -AppPackagesRoot $appPackages
+            $before.Count | Should Be 2
+
+            # MSBuild left the package for this version and platform untouched: not an error.
+            Get-RSThrownMessage { Assert-RSMsixPackagingOutput -AppPackagesRoot $appPackages -Before $before -ReleaseVersion '7.0.42' -Platform x64 } |
+                Should BeNullOrEmpty
+            Test-Path -LiteralPath $current -PathType Leaf | Should Be $true
+
+            # No up-to-date package for the requested version or platform still fails.
+            Get-RSThrownMessage { Assert-RSMsixPackagingOutput -AppPackagesRoot $appPackages -Before $before -ReleaseVersion '7.0.42' -Platform ARM64 } |
+                Should Match 'produced no new MSIX, and no up-to-date 7\.0\.42\.0 ARM64 MSIX exists'
+            Get-RSThrownMessage { Assert-RSMsixPackagingOutput -AppPackagesRoot $appPackages -Before $before -ReleaseVersion '7.0.43' -Platform x64 } |
+                Should Match 'produced no new MSIX'
+            Get-RSThrownMessage { Assert-RSMsixPackagingOutput -AppPackagesRoot (Join-Path $root 'missing') -Before @{} -ReleaseVersion '7.0.42' -Platform x64 } |
+                Should Match 'produced no new MSIX'
+
+            # An up-to-date package with a test surface fails but is only checked, never removed.
+            $staleFolder = Join-Path $appPackages 'RedSalamanderInstaller_7.0.45.0_x64_Test'
+            [void][IO.Directory]::CreateDirectory($staleFolder)
+            $stale = New-RSFakeMsixArtifact -Root $staleFolder -ReleaseVersion '7.0.45' -Platform x64 `
+                -PluginExport @('RedSalamanderCreate', 'RedSalamanderS3DebugSelfTests')
+            $before = Get-RSMsixOutputSnapshot -AppPackagesRoot $appPackages
+            $message = Get-RSThrownMessage { Assert-RSMsixPackagingOutput -AppPackagesRoot $appPackages -Before $before -ReleaseVersion '7.0.45' -Platform x64 }
+            $message | Should Match ([regex]::Escape('test exports [RedSalamanderS3DebugSelfTests]'))
+            $message | Should Not Match 'was removed'
+            Test-Path -LiteralPath $stale -PathType Leaf | Should Be $true
+
+            # A package this run produced is checked with removal, and only it is checked.
+            $producedFolder = Join-Path $appPackages 'RedSalamanderInstaller_7.0.46.0_x64_Test'
+            [void][IO.Directory]::CreateDirectory($producedFolder)
+            New-RSFakeMsixArtifact -Root $producedFolder -ReleaseVersion '7.0.46' -Platform x64 `
+                -PluginExport @('RedSalamanderCreate', 'RedSalamanderFileSystemTestAdmissionProbe') | Out-Null
+            Get-RSThrownMessage { Assert-RSMsixPackagingOutput -AppPackagesRoot $appPackages -Before $before -ReleaseVersion '7.0.46' -Platform x64 } |
+                Should Match ([regex]::Escape("The rejected package was removed: $producedFolder"))
+            Test-Path -LiteralPath $producedFolder | Should Be $false
+            Test-Path -LiteralPath $stale -PathType Leaf | Should Be $true
+        }
+        finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'checks staged package directories and fails closed on malformed or missing binaries' {
+        $root = New-RSReleasePolicyTestRoot
+        try {
+            $stage = Join-Path $root 'stage'
+            $plugins = Join-Path $stage 'Plugins'
+            [void][IO.Directory]::CreateDirectory($plugins)
+            [IO.File]::WriteAllBytes((Join-Path $stage 'RedSalamander.exe'), (New-RSFakePeBytes -Machine 0x8664))
+            [IO.File]::WriteAllBytes((Join-Path $plugins 'Terminal.dll'), (New-RSFakePeBytes -Machine 0x8664 -Export @('RedSalamanderCreate')))
+            Get-RSThrownMessage { Assert-RSShippingPackageHasNoTestSurface -LiteralPath $stage } | Should BeNullOrEmpty
+
+            [IO.File]::WriteAllBytes((Join-Path $plugins 'Terminal.dll'), (New-RSFakePeBytes -Machine 0x8664 -Export @('RedSalamanderTerminalDebugSelfTests')))
+            Get-RSThrownMessage { Assert-RSShippingPackageHasNoTestSurface -LiteralPath $stage } |
+                Should Match ([regex]::Escape('Plugins\Terminal.dll: test exports [RedSalamanderTerminalDebugSelfTests]'))
+
+            [IO.File]::WriteAllBytes((Join-Path $plugins 'Terminal.dll'), [byte[]](1, 2, 3, 4))
+            Get-RSThrownMessage { Assert-RSShippingPackageHasNoTestSurface -LiteralPath $stage } |
+                Should Match ([regex]::Escape("PE image 'Plugins\Terminal.dll' does not start with an MZ header."))
+
+            $empty = Join-Path $root 'empty'
+            [void][IO.Directory]::CreateDirectory($empty)
+            Get-RSThrownMessage { Assert-RSShippingPackageHasNoTestSurface -LiteralPath $empty } |
+                Should Match 'contains no \.exe or \.dll to inspect'
+        }
+        finally {
+            Remove-Item -LiteralPath $root -Recurse -Force -ErrorAction SilentlyContinue
+        }
+    }
+
+    It 'keeps every first-party native C export production-reviewed or in a reserved test-only form' {
+        # Test-only exports are found in binaries by name, so a test entry point that escapes the
+        # reserved forms would ship undetected. A new production export must be reviewed here.
+        $production = @(
+            'RedSalamanderCreate', 'RedSalamanderEnumeratePlugins', 'RedSalamanderGetConfigurationSchema',
+            'RedSalamanderPluginShutdown', 'RedSalamanderPluginCanUnloadNow',
+            'RedSalamanderPluginRetainModuleUntilProcessExit', 'RedSalamanderBrowseConnectionTargets')
+        $exportPattern = '(?:__declspec\(dllexport\)|PLUGFACTORY_API)\s+(?:[\w:]+[\s\*&]+)+?(?:__stdcall\s+)?(\w+)\s*\('
+        $found = @{}
+        foreach ($sourceRoot in @('Common', 'Plugins', 'RedSalamander', 'RedSalamanderMonitor', 'RedSalamanderSearchService', 'RedLauncher', 'RedConfigure')) {
+            $path = Join-Path $repoRoot $sourceRoot
+            if (-not (Test-Path -LiteralPath $path -PathType Container)) { continue }
+            foreach ($file in @(Get-ChildItem -LiteralPath $path -File -Recurse -Include *.cpp, *.h)) {
+                foreach ($match in [regex]::Matches([IO.File]::ReadAllText($file.FullName), $exportPattern)) {
+                    $found[$match.Groups[1].Value] = $file.FullName.Substring($repoRoot.Length + 1)
+                }
+            }
+        }
+
+        $unreviewed = @($found.Keys | Where-Object {
+                $production -cnotcontains $_ -and $_ -cnotmatch 'SelfTest|ForTest|^RedSalamander\w*(Test|Debug)'
+            } | Sort-Object | ForEach-Object { "$_ ($($found[$_]))" })
+        ($unreviewed -join '; ') | Should BeNullOrEmpty
+        @($production | Where-Object { -not $found.ContainsKey($_) }).Count | Should Be 0
+        ($found.Count - $production.Count) | Should BeGreaterThan 40
+    }
+
+    It 'keeps every distributable packaging path test-disabled and checked' {
+        $versionInfo = Get-Content -LiteralPath (Join-Path $repoRoot 'Common\VersionInfo.rc') -Raw
+        $versionInfo | Should Match '#if defined\(ENABLE_TESTS\)\s+VALUE "SpecialBuild", L"RedSalamander\.TestSurface=ENABLE_TESTS"\s+#endif'
+        $versionInfo | Should Match 'FILEFLAGS \(RS_VERSION_FILEFLAGS \| RS_VERSION_TEST_FILEFLAGS\)'
+
+        $build = Get-Content -LiteralPath (Join-Path $repoRoot 'build.ps1') -Raw
+        $build | Should Match '\(\$Msix -or \$Msi -or \$Zip -or \$GenerateWingetManifest -or \$OfficialRelease\) -and\s+\(\$requestedDistributableTests -ieq ''true'' -or\s+\(\[string\]::IsNullOrWhiteSpace\(\$requestedDistributableTests\) -and \$Configuration -ne ''Release''\)\)\) \{\s+Write-Error[^\r\n]+\s+exit 1'
+        $build | Should Match '"/p:RSAppxManifestPath=\$stagedMsixManifest"\s+"/p:RSBuildEnableTests=false"'
+        $build | Should Match "-AppPackagesRoot \`$appPackagesEvidenceRoot\s+\}\s+\}\s+\`$msixStopwatch\.Stop\(\)"
+        $build | Should Match "\`$appPackagesEvidenceRoot = Resolve-RSGuardedRepositoryPath \``\s+-RepoRoot \`$SolutionDir -GuardedRelativeRoot '\.build\\AppPackages' \``\s+-Path \`$appPackagesEvidenceRoot"
+        # The whole repository chain is re-checked for links right before a rejected package can be removed.
+        $build | Should Match '\$appPackagesEvidenceRoot = Resolve-RSGuardedRepositoryPath `\s+-RepoRoot \$SolutionDir -GuardedRelativeRoot ''\.build\\AppPackages'' `\s+-Path \$appPackagesEvidenceRoot\s+foreach \(\$producedMsix in'
+        # After the packaging lease is released the package outputs are only checked, never deleted.
+        $leaseRelease = $build.IndexOf('Exit-RSArtifactOperationLock -Lock $packagingLock')
+        $leaseRelease | Should BeGreaterThan 0
+        $afterLease = $build.Substring($leaseRelease)
+        $afterLease | Should Not Match 'Assert-RSProducedMsixHasNoTestSurface'
+        $afterLease | Should Match "\.Extension -ieq '\.msix' -or \`$file\.Extension -ieq '\.zip'\) \{\s+Assert-RSShippingPackageHasNoTestSurface -LiteralPath \`$file\.FullName\s+\}"
+
+        $zip = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\zip\build-zip.ps1') -Raw
+        $zip | Should Match "Compress-Archive[\s\S]+if \(\`$Configuration -eq 'Release'\) \{\s+Assert-RSShippingPackageHasNoTestSurface -LiteralPath \`$StagedZipPath[\s\S]+Test-RSPortablePackage"
+
+        $msi = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\msi\build-msi.ps1') -Raw
+        $msi | Should Match 'Assert-RSShippingPackageHasNoTestSurface -LiteralPath \$stageDir[\s\S]+\$wixExitCode = Invoke-RSProcess'
+
+        $msix = Get-Content -LiteralPath (Join-Path $repoRoot 'Installer\msix\build-msix.ps1') -Raw
+        $msix | Should Match "'/p:RSBuildEnableTests=false'"
+        $msix | Should Match '\$appPackagesRoot = Resolve-RSGuardedRepositoryPath `\s+-RepoRoot \$repoRoot -GuardedRelativeRoot ''\.build\\AppPackages'' `\s+-Path ''\.build\\AppPackages''\s+\$msixBefore = Get-RSMsixOutputSnapshot -AppPackagesRoot \$appPackagesRoot'
+        $msix | Should Match '\$appPackagesRoot = Resolve-RSGuardedRepositoryPath `\s+-RepoRoot \$repoRoot -GuardedRelativeRoot ''\.build\\AppPackages'' `\s+-Path \$appPackagesRoot\s+Assert-RSMsixPackagingOutput `'
+        $msix | Should Match 'Assert-RSMsixPackagingOutput `\s+-AppPackagesRoot \$appPackagesRoot `\s+-Before \$msixBefore `\s+-ReleaseVersion \$Version `\s+-Platform \$Platform'
+        $msix | Should Not Match 'produced no new MSIX'
+
+        $reusable = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/build-reusable.yml') -Raw
+        $reusable | Should Match 'if: \$\{\{ inputs\.official_release && \(inputs\.run_full_tests \|\| inputs\.configuration != ''Release''\) \}\}\s+shell: pwsh\s+run: throw'
+        $release = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/release.yml') -Raw
+        $release | Should Not Match 'run_full_tests'
+        $release | Should Match 'Assert-RSReleaseArtifacts'
+    }
+}
+
 Describe 'Release workflow source contracts' {
+    It 'keeps current artifact downloaders pinned and the exact sealed Gate0 workflow intact' {
+        $downloaders = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot '.github/workflows') -Filter '*.yml' |
+            Select-String -Pattern 'uses:\s*actions/download-artifact@(\S+)')
+        $downloaders.Count | Should BeGreaterThan 0
+        foreach ($downloader in $downloaders) {
+            $expectedPin = '9000827ccba6bdab643e8b6fd33ac0654aef8333'
+            if ($downloader.Filename -ceq 'terminal-engine-gate0.yml') {
+                # Historical pins are accepted only with the exact sealed workflow bytes.
+                (Get-FileHash -Algorithm SHA256 -LiteralPath $downloader.Path).Hash.ToLowerInvariant() |
+                    Should Be 'e6f15b6fef9c0d367e12dc7f43cb769106dc982934658f501120728599f32d1c'
+                $expectedPin = '3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c'
+            }
+            $downloader.Matches[0].Groups[1].Value | Should Be $expectedPin
+        }
+    }
+
+    It 'keeps current artifact uploaders pinned and the exact sealed Gate0 workflow intact' {
+        $uploaders = @(Get-ChildItem -LiteralPath (Join-Path $repoRoot '.github/workflows') -Filter '*.yml' |
+            Select-String -Pattern 'uses:\s*actions/upload-artifact@(\S+)')
+        $uploaders.Count | Should BeGreaterThan 0
+        foreach ($uploader in $uploaders) {
+            $expectedPin = 'cf430e030ddbb5b0abf93d22962f4752f3646cd9'
+            if ($uploader.Filename -ceq 'terminal-engine-gate0.yml') {
+                (Get-FileHash -Algorithm SHA256 -LiteralPath $uploader.Path).Hash.ToLowerInvariant() |
+                    Should Be 'e6f15b6fef9c0d367e12dc7f43cb769106dc982934658f501120728599f32d1c'
+                $expectedPin = '043fb46d1a93c77aae656e7c1c64a875d1fc6a0a'
+            }
+            $uploader.Matches[0].Groups[1].Value | Should Be $expectedPin
+        }
+    }
+
     It 'keeps native Full tooling, rebuild integration and external evidence available' {
         $workflow = Get-Content -LiteralPath (Join-Path $repoRoot '.github/workflows/build-reusable.yml') -Raw
         $workflow | Should Match 'Import-Module Pester -RequiredVersion 3\.4\.0 -Force'
@@ -432,7 +878,7 @@ Describe 'Release workflow source contracts' {
         $ghosttyNativeWorkflow | Should Match "test\\\.exe"
         $ghosttyNativeWorkflow | Should Match 'GhosttyRuntimeNativeQualification\.schema\.json'
         $ghosttyNativeWorkflow | Should Match 'Write-RSAtomicCanonicalJsonFile'
-        $ghosttyNativeWorkflow | Should Match 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a'
+        $ghosttyNativeWorkflow | Should Match 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         $ghosttyNativeWorkflow | Should Match 'if-no-files-found:\s*error'
         $ghosttyNativeWorkflow | Should Match '(?ms)^  qualify-product:.*?if:\s*\$\{\{ inputs\.qualify_product \}\}.*?needs:\s*qualify-arm64'
         $ghosttyNativeWorkflow | Should Match 'uses:\s*\./\.github/workflows/ghostty-runtime-product-qualification\.yml'
@@ -494,7 +940,7 @@ Describe 'Release workflow source contracts' {
         $ghosttyProductWorkflow | Should Match 'RSBuildEnableTests:\s*''false'''
         $ghosttyProductWorkflow | Should Match '(?s)build\.ps1.*?-Configuration Release.*?-Platform ARM64.*?-Rebuild'
         $ghosttyProductWorkflow | Should Match '(?s)build-zip\.ps1.*?-Configuration Release.*?-Platform ARM64.*?-BuildNumber'
-        $ghosttyProductWorkflow | Should Match 'actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a'
+        $ghosttyProductWorkflow | Should Match 'actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9'
         $ghosttyProductWorkflow | Should Match '\.build/TerminalEngine/Product/ARM64/terminal-runtime-identity\.json'
         $ghosttyProductWorkflow | Should Match 'if-no-files-found:\s*error'
         $ghosttyProductWorkflow | Should Not Match '\.build/ARM64/(Debug|Release)/terminal-runtime-identity\.json'
@@ -560,7 +1006,7 @@ Describe 'Release workflow source contracts' {
             })
         @($actualInputs | Sort-Object -Unique).Count | Should Be $actualInputs.Count
         (($actualInputs | Sort-Object) -join "`0") | Should Be (($expectedInputs | Sort-Object) -join "`0")
-        $actualInputs | Should Not Contain 'Tools/TerminalEngine/Patches/Ghostty-WindowsARM64-SharedOnly.patch'
+        @($actualInputs | Where-Object { $_ -ceq 'Tools/TerminalEngine/Patches/Ghostty-WindowsARM64-SharedOnly.patch' }).Count | Should Be 0
         $buildWorkflow | Should Match 'id:\s*toolchain_identity'
         $buildWorkflow | Should Match 'Get-RSBuildToolchainIdentity'
         $buildWorkflow | Should Match 'steps\.toolchain_identity\.outputs\.digest'

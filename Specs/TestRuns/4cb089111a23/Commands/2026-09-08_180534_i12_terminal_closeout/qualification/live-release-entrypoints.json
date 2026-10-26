@@ -1,0 +1,30 @@
+{
+  "observedAtUtc": "2026-09-08T16:28:02.2055499Z",
+  "profile": "test-enabled x64 Release",
+  "buildReceiptId": "2e82e97d7bd68c754071f1bd796cf1ada95add25a990aad799d627e8aad99568",
+  "source": "3dcf7ab167211451882f2c50e202aec68a5a4318 plus I12 production repair worktree (before final lifecycle fixture cancellation)",
+  "method": "Computer Use: actual keyboard shortcuts and main menu; visible screenshot and UIA document text",
+  "workingDirectory": "Z:\\RedSalamander.Perf",
+  "checks": [
+    {
+      "name": "Alt+7",
+      "result": "Passed",
+      "observation": "Embedded Terminal displayed customized PowerShell prompt."
+    },
+    {
+      "name": "Ctrl+Alt+T from file pane",
+      "result": "Passed",
+      "observation": "Floating terminal opened and displayed customized PowerShell prompt."
+    },
+    {
+      "name": "Commands > Terminal > Command Shell Window",
+      "result": "Passed",
+      "observation": "Floating terminal opened and displayed customized PowerShell prompt."
+    }
+  ],
+  "notes": [
+    "No command text was entered through the terminal UI.",
+    "Verification app, floating windows and companion monitor were closed normally.",
+    "Prompt characters were readable through UIA; the selected font displayed boxes for some private-use theme glyphs. No font/rendering improvement is claimed."
+  ]
+}

@@ -1,0 +1,11 @@
+{
+  "case": "pane_view_options_toggle_thumbnails",
+  "itemCount": 18,
+  "metrics": {
+    "paneViewOptions.thumbnailsToggleUs": 90229,
+    "thumbnails.queued": 10,
+    "thumbnails.completed": 10,
+    "thumbnails.fallback": 10,
+    "thumbnails.staleDrops": 0
+  }
+}

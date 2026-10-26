@@ -1,0 +1,56 @@
+[
+  {
+    "path": "checks/build-debug-r21.txt",
+    "original_path": "V:/RedSalamander.Perf/evidence/fileops-review-remediation-20261001/build-debug-r21.log",
+    "original_sha256": "8a9988a53f37dd322cfe42bd1a11c6041959e3066b8451722a7d0930626eebfd",
+    "original_bytes": 28630,
+    "retained_sha256": "b96446989155c54cbf862493a3c3c940819b8eb9577d453c3b6e8b22c10f6af5",
+    "retained_bytes": 28612,
+    "normalization": "Trim only trailing ASCII spaces/tabs from build console log lines; preserve all messages and line ordering."
+  },
+  {
+    "path": "checks/build-release-r21.txt",
+    "original_path": "V:/RedSalamander.Perf/evidence/fileops-review-remediation-20261001/build-release-r21.log",
+    "original_sha256": "ce31bf8be592393aeb15e15dbd26972755d87af16b80709fd8a417f2450803fd",
+    "original_bytes": 35271,
+    "retained_sha256": "6442d155efa531a425a02bcd20589476b6a9cae3364bf98791c6ec97f47e5cc4",
+    "retained_bytes": 35253,
+    "normalization": "Trim only trailing ASCII spaces/tabs from build console log lines; preserve all messages and line ordering."
+  },
+  {
+    "path": "checks/merge-governance.txt",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\fileops-review-remediation-20261001\\merge-governance.log",
+    "original_sha256": "8dca818339d8491f9bf8e8056514d8859f725178b52e617204d5b4139b1d196b",
+    "original_bytes": 25198,
+    "retained_sha256": "61039ae7b668e2ae745a4e6b7b6a636ec356be1356b2b69a0031cde76331874b",
+    "retained_bytes": 25197,
+    "normalization": "Trim only trailing ASCII spaces/tabs and blank EOF lines; retain every console message and ordering."
+  },
+  {
+    "path": "checks/merge-governance-long-prefix-failed.txt",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\fileops-review-remediation-20261001\\merge-governance-long-prefix-failed.log",
+    "original_sha256": "b9b7a794e83d67276bf60815ba712d6966251b1b7e9d9997a86df76fb8f901e8",
+    "original_bytes": 24337,
+    "retained_sha256": "834b107c8b5a62265ad77dd93c8cffb683b56bcc6ce58e4cddac86d4f9c3a576",
+    "retained_bytes": 24336,
+    "normalization": "Trim only trailing ASCII spaces/tabs and blank EOF lines; retain every console message and ordering."
+  },
+  {
+    "path": "checks/merge-archive-inventory.txt",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\fileops-review-remediation-20261001\\merge-archive-inventory.log",
+    "original_sha256": "3efa2dd0fcaf5642ce9503bf4e2e19e1f26526b2f95b4b03e098074735759cde",
+    "original_bytes": 76,
+    "retained_sha256": "f64984ff3a46e4fcd1c276fdfe146837bafef1df3e5361611c87ee964b1f52db",
+    "retained_bytes": 75,
+    "normalization": "Trim only trailing ASCII spaces/tabs and blank EOF lines; retain every console message and ordering."
+  },
+  {
+    "path": "checks/merge-format.txt",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\fileops-review-remediation-20261001\\merge-format.log",
+    "original_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "original_bytes": 0,
+    "retained_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "retained_bytes": 0,
+    "normalization": "Trim only trailing ASCII spaces/tabs and blank EOF lines; retain every console message and ordering."
+  }
+]

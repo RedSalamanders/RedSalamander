@@ -1,0 +1,20 @@
+{
+    "run_started_utc": "2026-10-02T14:54:26.348Z",
+    "suite": "FileOperations",
+    "artifact_root": "V:\\RedSalamander.Perf\\runs\\20261002T145353Z-108796-fa7988f695704c4293db4361d2d5c258\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 10828,
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "FileOps_IntegratedPresentationPerf",
+            "status": "passed",
+            "duration_ms": 10828,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

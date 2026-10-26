@@ -1,0 +1,11 @@
+# Clipboard snapshot repair and popup qualification
+
+The focused two-case set passes **6/6**; the final ten-case popup set passes **30/30**, zero skips, compiler warnings/errors or sandbox audit issues. The earlier 25/27 HTML-format failure and both native test-authoring failures remain archived. This fixes harness preservation, not a product rendering/API change.
+
+The snapshot previously copied the enumerator's multi-medium request mask into a Shell data object while storing one returned medium. The owned-data probe reproduces a stream-only request returning TYMED_HGLOBAL. Retaining `STGMEDIUM.tymed` as the stored format's medium removes that mismatch. The byte-alias hypothesis was not reproduced by the probe; `SetData(FALSE)` returns E_NOTIMPL and is not the repair.
+
+The new owned-object native test releases each source, verifies exact opaque rich-format bytes and checks the actual type returned for stream-only requests across three snapshots. It does not touch the system clipboard. The directed popup fixture additionally performs three rich-format OleSetClipboard/OleFlushClipboard/OleGetClipboard cycles inside its existing complete-snapshot restoration scope, then exercises exact French/Unicode Ctrl+C and focus/navigation. Formats remain fail-closed and are never skipped. Shell may enumerate multiple storage entries for one format; a mistaken count==1 assertion caused the two early native failures and was corrected without removing the byte/type checks.
+
+Source workspace: `002c2fd168c6fca57d78150b0eef8f131962d1a3f116948b9d071af8f009c005`. Build receipt: `e3d70ac1228ababf27363870de4c072ff169efadad06a47ebd6bf64329acbd8d`. All selected capture/timing rows retain raw hashes and original line positions. Original probes and logs accompany this record; the read-only live format diagnostic found HTML absent and did not log payloads. [The SetData ownership/type contract](https://learn.microsoft.com/en-us/windows/win32/api/objidl/nf-objidl-idataobject-setdata) requires a matching medium description.
+
+No new renderer performance equivalence or final Release/native mixed-DPI/AT acceptance is claimed. Both implementation plans remain active. Raw data: `C:/RedSalamander.Perf/evidence/i26-ui/clipboard-medium-final`.

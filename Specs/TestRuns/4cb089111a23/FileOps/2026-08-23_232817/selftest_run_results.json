@@ -1,0 +1,47 @@
+{
+    "run_started_utc": "2026-08-23T21:28:16.016Z",
+    "duration_ms": 1873,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "Phase7_CopyItemsSingleFolderRecursiveParallelism",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260823T212758Z-57580-e29617a59f314287a413a6f044364f2d\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 1344,
+            "passed": 2,
+            "failed": 1,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "Phase7_CopyItemsSingleFolderRecursiveParallelism",
+            "failureMessage": "CopyItems single-folder recursive parallelism output mismatch: expected 4 files, got 0.",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1266,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "Phase7_CopyItemsSingleFolderRecursiveParallelism",
+                    "status": "failed",
+                    "duration_ms": 31,
+                    "repeat_index": 1,
+                    "reason": "CopyItems single-folder recursive parallelism output mismatch: expected 4 files, got 0."
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 47,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0
+}

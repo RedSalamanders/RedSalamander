@@ -1,0 +1,17 @@
+{
+  "original_run_id": "20261018T182530Z-29380-8cabef5c58be49e1b3e54611fbb3ad0c",
+  "case": "Phase11_BridgePipelineDummyToDummyPerf",
+  "native_result": "passed",
+  "performance_acceptance": "NOT_QUALIFIED",
+  "baseline_us": 129234000,
+  "candidate_us": 297000,
+  "original_corpus": "four 32 MiB files",
+  "reason": "Baseline clock was captured before 4096 seed writes with 30 ms latency; seed time contaminated only the baseline. Concurrent folder workers also confounded within-file pipeline isolation.",
+  "repair": "Seed without stream latency, time both copies from admission, use one 128 MiB file, require exact completed bytes, retain the original 80 percent threshold.",
+  "replacement_run": "20261018T184640Z-92896-fcf8f66c27264e0f99e30802cb1e2acb",
+  "replacement_baseline_us": 1422000,
+  "replacement_candidate_us": 922000,
+  "replacement_setup_us": 157000,
+  "replacement_corpus": "one 128 MiB file; same 128 MiB total payload",
+  "replacement_admission_passed": true
+}

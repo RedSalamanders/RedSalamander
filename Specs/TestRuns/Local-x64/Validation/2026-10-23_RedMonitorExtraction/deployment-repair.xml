@@ -1,0 +1,14 @@
+﻿<?xml version="1.0" encoding="utf-8" standalone="no"?>
+<test-results xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="nunit_schema_2.5.xsd" name="Pester" total="1" errors="0" failures="0" not-run="0" inconclusive="0" ignored="0" skipped="0" invalid="0" date="2026-10-23" time="18:10:47">
+  <environment machine-name="SINON" os-version="10.0.26300" nunit-version="2.5.8.0" user-domain="SINON" cwd="Z:\src\RedSalamander" clr-version="" user="eric" platform="Microsoft Windows 11 Pro|C:\WINDOWS|\Device\Harddisk4\Partition3" />
+  <culture-info current-culture="fr-GP" current-uiculture="en-US" />
+  <test-suite type="Powershell" name="Pester" executed="True" result="Success" success="True" time="618.1873" asserts="0">
+    <results>
+      <test-suite type="TestFixture" name="RedSalamander targeted plugin deployment" executed="True" result="Success" success="True" time="618.1873" asserts="0" description="RedSalamander targeted plugin deployment">
+        <results>
+          <test-case description="repopulates bundled sibling binaries and the client notice when build.ps1 targets RedSalamander" name="RedSalamander targeted plugin deployment.repopulates bundled sibling binaries and the client notice when build.ps1 targets RedSalamander" time="618.1873" asserts="0" success="True" result="Success" executed="True" />
+        </results>
+      </test-suite>
+    </results>
+  </test-suite>
+</test-results>

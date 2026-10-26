@@ -1,0 +1,25 @@
+{
+  "schema": "viewer-space-export-preparation-pair-v1",
+  "baseline": "bf2ad18715abc6a406ae8b0ac302703d06b52617",
+  "candidate": "c4c7399b0ccf700d5f761be5245f6a1e3c513fea",
+  "passed": true,
+  "qualification": false,
+  "fixture": "Same host, E-root, two registered 2002-row long-root analysis/export cases, original native predicates; four captured cases per profile and sixteen uncaptured ASan cases per source.",
+  "asanMedianActiveUs": {
+    "candidate": 78722.5,
+    "ratio": 0.4087007084024474,
+    "baseline": 192616.5
+  },
+  "releaseMedianActiveUs": {
+    "candidate": 1013.5,
+    "ratio": 0.5885598141695703,
+    "baseline": 1722.0
+  },
+  "asanUncapturedMedianGateUs": {
+    "candidate": 2106654.0,
+    "ratio": 0.45074772329129836,
+    "baseline": 4673687.5
+  },
+  "independentArtifactWitnesses": 24,
+  "limits": "Existing 1.2ms preparation-turn target, 20000 rows, 8MiB admission/output and native lifetime waits remain unchanged. Release median active preparation must not exceed baseline x1.10; improvement is measured separately from Full qualification."
+}

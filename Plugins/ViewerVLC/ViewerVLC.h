@@ -63,6 +63,12 @@ public:
 private:
     enum class HudPart : uint8_t;
 
+    enum class OverlayErrorKind : uint8_t
+    {
+        Playback,
+        Installation,
+    };
+
     struct ViewerVlcConfig
     {
         std::filesystem::path vlcInstallPath;
@@ -88,7 +94,7 @@ private:
 
     struct AsyncFallbackCompletion
     {
-        AsyncFallbackKind kind = AsyncFallbackKind::Load;
+        AsyncFallbackKind kind  = AsyncFallbackKind::Load;
         uint64_t requestId      = 0;
         uint64_t windowIdentity = 0;
         HRESULT hr              = E_FAIL;
@@ -143,7 +149,7 @@ private:
     void Layout(HWND hwnd, UINT width, UINT height) noexcept;
 
     void UpdatePlaybackUi() noexcept;
-    void SetMissingUiVisible(bool visible, std::wstring_view details) noexcept;
+    void SetMissingUiVisible(bool visible, std::wstring_view details, OverlayErrorKind errorKind = OverlayErrorKind::Playback) noexcept;
     void SetLoadingUiVisible(bool visible) noexcept;
 
     bool EnsureHudDirect2D(HWND hwnd) noexcept;
@@ -164,11 +170,16 @@ private:
     void OnHudMouseWheel(HWND hwnd, WPARAM wheelParam) noexcept;
     void OnHudKillFocus(HWND hwnd) noexcept;
 
-    [[nodiscard]] static bool BuildVlcLoadSpec(const ViewerVlcConfig& config, VlcLoadSpec& spec, std::wstring& outError) noexcept;
+    [[nodiscard]] static bool BuildVlcLoadSpec(const ViewerVlcConfig& config,
+                                               VlcLoadSpec& spec,
+                                               std::wstring& outError,
+                                               OverlayErrorKind& outErrorKind) noexcept;
     [[nodiscard]] static std::unique_ptr<VlcState> LoadVlcState(const VlcLoadSpec& spec, std::wstring& outError) noexcept;
     bool StartPlayback(const std::filesystem::path& path) noexcept;
-    bool StartPlaybackWithLoadedVlc(const std::filesystem::path& path) noexcept;
+    bool StartPlaybackWithLoadedVlc() noexcept;
     void BeginAsyncVlcLoad(const std::filesystem::path& path) noexcept;
+    void QueueAsyncVlcLoad(const std::filesystem::path& path, std::unique_ptr<VlcState> state, uint64_t requestId) noexcept;
+    void CancelPendingMediaOpen() noexcept;
     void OnAsyncVlcLoadComplete(std::unique_ptr<VlcAsyncLoadResult> result) noexcept;
     void BeginDeferredClose() noexcept;
     [[nodiscard]] bool TryQueueDeferredCloseCleanup() noexcept;
@@ -334,31 +345,38 @@ private:
     DWORD _restoreStyle   = 0;
     DWORD _restoreExStyle = 0;
 
-    UINT_PTR _uiTimerId           = 0;
-    bool _missingUiVisible        = false;
-    UINT_PTR _loadingTimerId      = 0;
-    bool _loadingUiActive         = false;
-    bool _loadingUiVisible        = false;
-    ULONGLONG _loadingStartedTick = 0;
-    uint64_t _asyncOpenGeneration = 0;
-    uint64_t _windowIdentity      = 0;
-    uint64_t _closeRequestId      = 0;
-    bool _closePending            = false;
-    bool _closeNotificationSent   = false;
-    bool _destroyingAfterCleanup  = false;
-    uint64_t _pendingLoadWorkCount = 0;
+    UINT_PTR _uiTimerId                = 0;
+    bool _missingUiVisible             = false;
+    OverlayErrorKind _overlayErrorKind = OverlayErrorKind::Playback;
+    UINT_PTR _loadingTimerId           = 0;
+    bool _loadingUiActive              = false;
+    bool _loadingUiVisible             = false;
+    ULONGLONG _loadingStartedTick      = 0;
+    uint64_t _asyncOpenGeneration      = 0;
+    uint64_t _windowIdentity           = 0;
+    uint64_t _closeRequestId           = 0;
+    bool _closePending                 = false;
+    bool _closeNotificationSent        = false;
+    bool _destroyingAfterCleanup       = false;
+    uint64_t _pendingLoadWorkCount     = 0;
+    bool _mediaSwitchInFlight          = false;
+    bool _mediaSwitchRestartRequested  = false;
+    uint64_t _mediaSwitchRequestId     = 0;
+    uint64_t _mediaSwitchCoalesced     = 0;
+    std::filesystem::path _pendingMediaPath;
+    std::shared_ptr<std::atomic_bool> _mediaSwitchCanceled;
     uint64_t _pendingCloseCleanupCount = 0;
-    uint64_t _loadQueueAccepted   = 0;
-    uint64_t _loadQueueRejected   = 0;
-    uint64_t _staleLoadResults    = 0;
-    uint64_t _cleanupCompletions  = 0;
+    uint64_t _loadQueueAccepted        = 0;
+    uint64_t _loadQueueRejected        = 0;
+    uint64_t _staleLoadResults         = 0;
+    uint64_t _cleanupCompletions       = 0;
     std::atomic_uint64_t _cleanupDeferrals{0u};
-    uint64_t _cleanupSubmitFailures = 0;
+    uint64_t _cleanupSubmitFailures     = 0;
     uint64_t _cleanupAllocationFailures = 0;
-    uint64_t _loadPostFallbacks   = 0;
-    uint64_t _cleanupPostFallbacks = 0;
+    uint64_t _loadPostFallbacks         = 0;
+    uint64_t _cleanupPostFallbacks      = 0;
     std::mutex _asyncFallbackMutex;
-    uint64_t _asyncFallbackLoadCount = 0;
+    uint64_t _asyncFallbackLoadCount    = 0;
     uint64_t _asyncFallbackCleanupCount = 0;
     AsyncFallbackCompletion _asyncFallbackNewestLoad;
     AsyncFallbackCompletion _asyncFallbackNewestCleanup;
@@ -369,8 +387,8 @@ private:
     std::mutex _cleanupDispatcherMutex;
     std::unique_ptr<VlcState> _deferredCleanupHead;
     std::atomic_uint64_t _deferredCleanupCount{0u};
-    uint64_t _syntheticCleanupCount = 0u;
-    uint64_t _syntheticCleanupRequestId = 0u;
+    uint64_t _syntheticCleanupCount          = 0u;
+    uint64_t _syntheticCleanupRequestId      = 0u;
     uint64_t _syntheticCleanupWindowIdentity = 0u;
 #ifdef ENABLE_TESTS
     uint32_t _syntheticCleanupDelayMs = 0u;
@@ -387,11 +405,14 @@ private:
     wil::unique_hwnd _debugWheelVideoChild;
     uint32_t _debugStopDelayMs = 0;
     std::shared_ptr<wil::unique_handle> _debugStopReleaseGate;
-    uint32_t _debugLoadDelayMs = 0;
-    bool _debugFailNextLoadSubmit = false;
-    bool _debugFailNextLoadCompletionPost = false;
+    uint32_t _debugLoadDelayMs             = 0;
+    bool _debugFailNextLoadSubmit          = false;
+    bool _debugFailNextLoadCompletionPost  = false;
     bool _debugFailNextCloseCompletionPost = false;
-    bool _debugFailNextCleanupSubmit = false;
-    bool _debugFailNextCleanupAllocation = false;
+    bool _debugFailNextCleanupSubmit       = false;
+    bool _debugFailNextCleanupAllocation   = false;
+    std::shared_ptr<wil::unique_handle> _debugMediaSwitchReleaseGate;
+    bool _debugFailNextMediaSubmit         = false;
+    bool _debugFailNextMediaCompletionPost = false;
 #endif
 };

@@ -1,5 +1,10 @@
 # Batch Rename
 
+Original Name, New Name and Path columns use Windows natural sorting (`file2` before
+`file10`). Folder collection assigns counters in natural path order; an explicit
+selection keeps its supplied order. Manual **Sort like preview** also reorders hidden
+unchanged rows and preserves every source/name pair.
+
 **Batch Rename** is the preview-first surface for renaming many files and folders at once. You build a rename plan from macro templates, search/replace rules, and case transforms (or type names by hand), see every proposed name validated in a grid, and only then apply the renames through the file-system plugin layer.
 
 This page covers the user-facing window first, then the developer-facing engine, window, and execution split. For the standalone **Change Case** command see the [Change Case](#change-case) section below; for the broader copy/move/delete surface see [FileOperations.md](FileOperations.md).
@@ -159,6 +164,8 @@ Press **Rename** to apply the plan. While a collection or execution task runs, *
 
 After a run, the status strip shows a result summary, and affected panes refresh to the new names.
 
+If RedSalamander is closing after you chose to cancel all operations and exit, **Rename** starts nothing: the summary reports the run as canceled with no failed rows, and the pane says why.
+
 ---
 
 # Developer reference
@@ -205,7 +212,7 @@ Execution is the safety-critical part. `BatchRenameWindow::ExecuteRename` builds
 Bookkeeping:
 
 - Undo entries and the success callback record only the **net** original→final transition; temp hops are an implementation detail. A failed temp step surfaces as that row's failure, and an orphaned temp is renamed back to its original name best-effort (`restoreTempBestEffort`).
-- Per-item outcomes come from `BatchRenameExecutionCallback::FileSystemItemCompleted`, so a partially failed parallel batch still records undo entries, notifies `DirectoryInfoCache::NotifyPathMoved`, and counts only the rows that actually failed or never ran. Providers that never report per-item completion fall back to all-or-nothing semantics for that batch.
+- Per-item outcomes come from `BatchRenameExecutionCallback::FileSystemItemCompleted`, so a partially failed parallel batch still records undo entries, notifies `DirectoryInfoCache::NotifyPathMoved`, and counts only the rows that actually failed or never ran. A row that never ran is reported as not attempted with its source retained (`ERROR_OPERATION_ABORTED`, or canceled after a cancel); it never carries the outcome of the row that stopped the run. Providers that never report per-item completion fall back to all-or-nothing semantics for that batch.
 - Successful directory renames are tracked as `ExecutedDirectoryMove`s and replayed (`ApplyExecutedDirectoryMoves`) so child paths in undo entries and the window's own target refresh move under the renamed parent. The `onSuccessfulRename` callback, by contrast, reports each row's path *as of its own rename* (parent moves not folded in); consumers replay the parallel source/target lists sequentially — see the contract in `BatchRenameWindow.h` and `FolderWindow::RefreshPanesAfterBatchRename`.
 
 The engine returns a `BatchRenameExecutionResult`; the worker wrapper posts it back to the UI thread, where the retained `BatchRenameExecutionReport` (totals, first failure, canceled flag, `undoEntries`) feeds the status strip, **Copy Execution Report**, and **Copy Undo Plan**.

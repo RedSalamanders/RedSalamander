@@ -105,7 +105,7 @@ Menu (DxUi-hosted from the hidden native menu model):
 - Other Files is a File submenu, not a top-level category. Every actionable
   static sibling has one access key unique within its separator-delimited group.
 
-When the shared `RedSalamander.DxNativeMenuBar` host attaches successfully, the window detaches its live native `HMENU`, adopts that detached handle as the single hidden RAII menu-model owner, and renders the visible top menu bar through DxUi. If attach fails, the handle remains solely window-owned and the native menu stays visible as the functional fallback. `Alt`, `F10`, and menu mnemonics continue to route through the active menu bar.
+After successful window creation hands off its temporary menu guard, the shared DxUi menu host may detach the live native `HMENU` and retain it as the single hidden RAII menu-model owner. A failed attachment, including failure after detachment, discards the partial host and restores the original native menu as the functional window-owned fallback. A failed restoration retains the valid detached handle and reports its error without claiming a visible menu. The consumer preserves an unexpected native replacement and disposes its unused detached original. `Alt`, `F10`, and menu mnemonics continue to route through the active menu bar. Test-only early and post-detach failure seams exercise both transitions; the attachment snapshot records observed handles and phase independently of optional monitor diagnostics.
 
 Keyboard shortcuts (ViewerText-aligned where meaningful):
 - `Esc`: cancel active RAW decoding if loading; otherwise close viewer

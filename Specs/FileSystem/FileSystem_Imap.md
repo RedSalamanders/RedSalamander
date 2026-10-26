@@ -4,9 +4,11 @@
 
 RedSalamander ships a built-in IMAP virtual file system implemented by `Plugins/FileSystemCurl/FileSystemCurl.dll`.
 
-IMAP remains export-only. Capability v2 identifies a message by `UIDVALIDITY` plus UID when the
-transport can bind it; absent a conditional exact delete, Move uses Copy-only and reports
-`Copied; source kept`. It never expunges a message selected only by mutable pathname text.
+IMAP is browse, open and properties only. Its route stays `uncontained`, so File Operations admits it
+as neither the source nor the destination of a transfer until a contained route (a provider watchdog,
+as R0f-Curl gave FTP) exists; the refusal happens before task creation (I35 XP-08). Capability v2
+identifies a message by `UIDVALIDITY` plus UID when the transport can bind it; it never expunges a
+message selected only by mutable pathname text.
 
 - Display name: **IMAP**
 - `PluginMetaData.id`: `builtin/file-system-imap`

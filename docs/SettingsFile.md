@@ -15,6 +15,45 @@ In Debug builds, RedSalamander first looks for `RedSalamander-debug.settings.jso
 You can open the main settings file from **Preferences -> Advanced -> Open settings file**.
 You can open the monitor settings file from **Preferences -> Monitor -> Open monitor settings file**.
 
+## Settings sections at a glance
+
+The [shipped schema](../Specs/SettingsStore.schema.json) is the complete key/type
+reference. The sections below map it to the product documentation; use Preferences
+for ordinary edits and let the app maintain session/placement state.
+
+| Section | Purpose and owning guide |
+| --- | --- |
+| `$schema` | Editor schema reference. |
+| `schemaVersion` | Format version and upgrade handling, described below. |
+| `windows` | Saved window placement; [Main Window](MainWindow.md). |
+| `theme` | Selected theme and definitions; [Themes](Themes.md). |
+| `plugins` | Enabled plugins, paths and plugin configurations; [Plugins](Plugins.md). |
+| `fileActions` | Viewer/editor actions and associations; [Preferences](Preferences.md). |
+| `userMenu` | Configured external actions; [Selections and File Lists](SelectionsAndLists.md). |
+| `makeFileList` | Last report options; [Make File List](#configure-make-file-list-defaults). |
+| `mainMenu` | Menu/function-bar visibility; [Main Window](MainWindow.md). |
+| `startup` | Startup paths and options; [Getting Started](GettingStarted.md). |
+| `ui` | Language and UI options; [Preferences](Preferences.md). |
+| `mouse` | Pointer-driven pane focus; [Mouse](#mouse). |
+| `cache` | Directory information/watch retention; [Cache](#cache). |
+| `folders` | Pane paths and folder-view state; [Navigation](NavigationAndPaths.md). |
+| `monitor` | ETW monitor options; [Monitor](Monitor.md). |
+| `shortcuts` | Scoped key bindings and aliases; [Keyboard Shortcuts](KeyboardShortcuts.md). |
+| `terminal` | Floating window/tab restoration; [Terminal](Terminal.md). |
+| `extensions` | File-system/archive extension associations; [Plugins](Plugins.md). |
+| `connections` | Non-secret profiles; [Connections](Connections.md) and [Portable Devices](PortableDevices.md). |
+| `fileOperations` | Host defaults and diagnostic retention; [File Operations](FileOperations.md). |
+| `compareDirectories` | Compare defaults; [Compare Directories](CompareDirectories.md). |
+| `hotPaths` | Ten navigation bookmarks; [Navigation](NavigationAndPaths.md). |
+| `selectionMasks` | Reusable selection masks; [Selections](SelectionsAndLists.md). |
+| `search` | Find history/options; [Find Files](FindFiles.md). |
+| `batchRename` | Rename defaults/history; [Batch Rename](BatchRename.md). |
+
+Terminal shell/font/security options belong to the Terminal plugin's configuration
+under `plugins`; `terminal` holds host session restoration data. MTP profile
+device/storage identity and `extra.readOnly` belong to `connections`. Connection
+Manager manages secrets separately from this JSON file.
+
 ## Schemas
 
 Two schema files are relevant:
@@ -287,7 +326,9 @@ The settings file has additional top-level sections beyond the ones above. Sever
 - `compareDirectories` - Compare Directories command options. See [Compare Directories](CompareDirectories.md).
 - `hotPaths` - the 10 hot-path bookmark slots (`Ctrl+1` .. `Ctrl+0`). See [Navigation & Path Syntax](NavigationAndPaths.md).
 - `theme` - active theme and user theme definitions. See [Themes](Themes.md).
-- `monitor` - RedSalamanderMonitor window preferences. See [Monitor](Monitor.md).
+- `monitor` - Independent RedMonitor window preferences, retained under the legacy settings app ID.
+  Preferences always edits RedSalamanderMonitor-7.0.settings.json, including Debug/ASan consumers.
+  See [Monitor](Monitor.md).
 - `mainMenu` - menu-bar and function-bar visibility (`menuBarVisible`, `functionBarVisible`). See the **View** menu in [Main Window](MainWindow.md).
 - `ui.language` - application language override. See [Localization](dev/Localization.md).
 - `mouse` - the two independent pointer-driven pane-focus settings from `Preferences -> Mouse`.
@@ -368,4 +409,3 @@ Persisted Batch Rename options and pattern histories. The full feature is docume
 - Inspecting or resetting advanced values not exposed in the UI
 
 For basic reset instructions, see: [Troubleshooting / Reset](Troubleshooting.md)
-

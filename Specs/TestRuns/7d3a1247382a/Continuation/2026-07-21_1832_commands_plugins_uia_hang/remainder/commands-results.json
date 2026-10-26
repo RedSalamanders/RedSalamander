@@ -1,0 +1,86 @@
+{
+    "run_started_utc": "2026-07-21T16:35:24.987Z",
+    "suite": "Commands",
+    "artifact_root": "D:\\RedSalamander\\.build\\TestSandbox\\runs\\20260721T163522Z-59632-0a920729ad834f36a4301a88b88306ff\\artifacts\\selftest\\last_run\\commands",
+    "duration_ms": 0,
+    "passed": 12,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "cmd_preferences_dialog_plugins_tab_traversal_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 1419,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_plugins_empty_custom_paths_placeholder",
+            "status": "passed",
+            "duration_ms": 221,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_plugins_custom_paths_remove_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 28543,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_plugins_custom_paths_add_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 37720,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_plugins_configure_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 14359,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_plugins_test_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 29128,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_plugins_test_all_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 29122,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_search_action_updates_dxui_surface",
+            "status": "passed",
+            "duration_ms": 459,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_live_search_dx_interaction",
+            "status": "passed",
+            "duration_ms": 10218,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_reset_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 27906,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_duplicate_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 29095,
+            "repeat_index": 1
+        },
+        {
+            "name": "cmd_preferences_dialog_themes_clear_live_dx_interaction",
+            "status": "passed",
+            "duration_ms": 29028,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

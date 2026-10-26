@@ -1,0 +1,15 @@
+[
+  {
+    "attempt": "initial compile",
+    "result": "not tested: 2 compile errors and 2 warnings, fixed before the clean build",
+    "log_path": "C:/RedSalamander.Perf/evidence/i26-ui/paint-single-surface.log",
+    "sha256": "ec4323c74b501925a54594636d300685195d38d1f544d9a8414dc91c90542d06"
+  },
+  {
+    "attempt": "prefix selector",
+    "result": "zero cases: FAILED / NO_TESTS_DISCOVERED; replaced with explicit comma-separated case names",
+    "raw_path": "C:/RedSalamander.Perf/evidence/i26-ui/paint-single-surface-final",
+    "log_sha256": "9128def2fcfb27c628d678ea38b6fa5351e4b30ac9a0e4d6bc2ed77296bd7411",
+    "receipt": "abfa55c311d53683cab449b5210b2578ef7ca407d6fc2e2e85b7f7cee5e8d660"
+  }
+]

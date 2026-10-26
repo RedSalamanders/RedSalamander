@@ -1,0 +1,17 @@
+{
+  "prior_debug_receipt": "0e8bae1ce209243a8e4c4bd75d7598e319ea1ccb8b8c0d9d914ac1cc2f179177",
+  "candidate_release_receipt": "0e2153e829e31fdc13f72eb83d3e6be914b4681bd51f4eecd4fcc61424c87008",
+  "delta": [
+    {
+      "path": ".gitattributes",
+      "debug_sha256": "0c82f3b14478a7043fb685f3fd49edeaa8d2e0dfaa5c28330c862201b001c90b",
+      "release_sha256": "598ab452c413e259473efa93244499b24fbd094a5182d938a64309c3f2fa8e58"
+    },
+    {
+      "path": "Specs/Testing/Testing_PerformanceValidation.md",
+      "debug_sha256": "cd86cf2e0cef33a981ca363bb3b2562acea4152da06fd949196f079cc552fb6d",
+      "release_sha256": "b8094aabf12ac0d3ecff59a47d8f1b57df9d5d31c6f1bd9d60ce9136249744d1"
+    }
+  ],
+  "note": "Profile qualification rerun; production/test sources match final Debug fixes. Only archive policy and Release qualification specification changed before this build."
+}

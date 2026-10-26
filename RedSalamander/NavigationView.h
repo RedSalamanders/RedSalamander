@@ -233,6 +233,13 @@ public:
     [[nodiscard]] bool DebugGetSnapshot(NavigationViewDebugSnapshot& out) const noexcept;
     [[nodiscard]] bool DebugFocusRegion(FocusRegion region) noexcept;
     [[nodiscard]] bool DebugPostCurrentEditSuggestResultForSelfTest();
+    [[nodiscard]] static bool DebugSortEditSuggestNamesForSelfTest(std::vector<std::wstring>& names);
+    // Exercise the shared cached sibling query without creating windows or changing provider menu callbacks.
+    [[nodiscard]] static bool DebugGetSiblingFoldersForSelfTest(IFileSystem* fileSystem,
+                                                                const std::filesystem::path& parentPath,
+                                                                const std::filesystem::path& preferredPath,
+                                                                std::vector<std::filesystem::path>& siblings,
+                                                                bool& truncated);
     void DebugSetFullPathPopupDestroyProbe(std::function<void()> probe)
     {
         _debugFullPathPopupDestroyProbe = std::move(probe);

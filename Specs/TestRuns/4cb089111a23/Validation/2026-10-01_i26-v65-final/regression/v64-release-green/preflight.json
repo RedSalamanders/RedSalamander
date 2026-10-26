@@ -1,0 +1,56 @@
+{
+  "schema": "rs-i26.v64.completed-green.v1",
+  "diagnosticOnly": true,
+  "acceptanceEffect": "none",
+  "candidate": {
+    "head": "ccebd5af68eb45f2e9deed64a7063780e71eb1ce",
+    "receiptId": "25acab62ae2fa24ab85b1171bc2cd6644f2a99cc72e468eb6a42a21ea31777a7",
+    "receiptSha256": "cbf0600857652a8c2d1822970f4021a1fce65410ec31b684122bb91ee729f134",
+    "manifestSha256": "55b1d53c4e12b631dd66609d9d4390bc2dcc0eed50949bd636739793c4063730",
+    "manifestRows": 85,
+    "sourceSnapshotId": "3ce4faf02bd5be620b8087fb1483fbf1d80caa35c795308957463b7084398a5e"
+  },
+  "executableSha256": "5b9d2c4eacaba32e795fbe2af659b619326e50a8bb4d5958628eb6f7930f3729",
+  "expectedManifestSha256": "55b1d53c4e12b631dd66609d9d4390bc2dcc0eed50949bd636739793c4063730",
+  "names": [
+    "cmd_pane_fileops_completed_group_and_navigation"
+  ],
+  "filter": "cmd_pane_fileops_completed_group_and_navigation",
+  "repeatCount": 1,
+  "expectedExecutions": 1,
+  "testRoot": "V:\\RedSalamander.Perf",
+  "alternateTestRoot": "C:\\RedSalamander.Perf",
+  "planId": "selftest.commands",
+  "planArguments": [
+    "--commands-selftest",
+    "--selftest-timeout-multiplier=3",
+    "--selftest-case=cmd_pane_fileops_completed_group_and_navigation"
+  ],
+  "methods": [
+    {
+      "path": "Tools/Run-AllTests.ps1",
+      "sha256": "dc169f8fc069a85019dd90ea280522b88d6281469525e5743f6f6f5b89dd641e"
+    },
+    {
+      "path": "Tools/Modules/Testing/TestRunPlan.psm1",
+      "sha256": "20d0257c3c365646e5ede786f42b1501fdb5bb7b6deeeb66d3a947ad0cacb265"
+    },
+    {
+      "path": "Tools/Modules/Testing/TestInvocation.psm1",
+      "sha256": "5f7321db6817e8ce1fc048030cf3e87a3a3306218d2e3ec4e55b349ae8695fce"
+    },
+    {
+      "path": "RedSalamander/SelfTest/Common/SelfTestCommon.cpp",
+      "sha256": "666c8ffe602fe8709956a3a1c5fbcd6bbb22c563efd15924771d721b13162f21"
+    },
+    {
+      "path": "RedSalamander/SelfTest/Common/SelfTestCommon.h",
+      "sha256": "4740911c70bf4c94e1316cb09b543485b487f4530e6dec00db003ac5a3305ab2"
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.SelfTest.cpp",
+      "sha256": "53472a60b545ad3d8d590b9b7f7a160225fc4c32edc85424f5982b05cb83fb47"
+    }
+  ],
+  "scriptSha256": "e70cced2a847fa84d11c53d37e0d3cce72df1d6a024d086732e9ae67d8c20754"
+}

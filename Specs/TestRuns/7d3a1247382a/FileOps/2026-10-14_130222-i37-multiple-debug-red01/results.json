@@ -1,0 +1,34 @@
+{
+    "run_started_utc": "2026-10-14T13:02:46.089Z",
+    "suite": "FileOperations",
+    "artifact_root": "D:\\RedSalamander.Perf\\runs\\20261014T130222Z-12496-b7be80fc7fcd4626b03f8d79a01ff366\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 1734,
+    "passed": 2,
+    "failed": 1,
+    "skipped": 0,
+    "failureMessage": "A real multiple-folder copy published inconsistent live progress or contents; see trace.",
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1578,
+            "repeat_index": 1
+        },
+        {
+            "name": "DiscoveryScope_MultipleFoldersLiveProgress",
+            "status": "failed",
+            "duration_ms": 62,
+            "repeat_index": 1,
+            "reason": "A real multiple-folder copy published inconsistent live progress or contents; see trace."
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 94,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1
+}

@@ -1,0 +1,87 @@
+{
+    "run_started_utc": "2026-07-15T15:19:28.506Z",
+    "duration_ms": 3706,
+    "fail_fast": false,
+    "timeout_scale": 4.0,
+    "repeat_count": 10,
+    "case_filter": "cmd_app_toggleUiChrome_keeps_navigation_shell_stable",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "Z:\\src\\RedSalamander\\.build\\TestSandbox\\runs\\20260715T151928Z-38392-96738689bea44e4590f8e156b8d05b13\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 3242,
+            "passed": 10,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 4.0,
+            "repeat_count": 10,
+            "case_filter": "cmd_app_toggleUiChrome_keeps_navigation_shell_stable",
+            "cases": [
+                {
+                    "name": "cmd_app_toggleUiChrome_keeps_navigation_shell_stable",
+                    "status": "passed",
+                    "duration_ms": 485,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome_keeps_navigation_shell_stable",
+                    "status": "passed",
+                    "duration_ms": 323,
+                    "repeat_index": 2
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome_keeps_navigation_shell_stable",
+                    "status": "passed",
+                    "duration_ms": 289,
+                    "repeat_index": 3
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome_keeps_navigation_shell_stable",
+                    "status": "passed",
+                    "duration_ms": 304,
+                    "repeat_index": 4
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome_keeps_navigation_shell_stable",
+                    "status": "passed",
+                    "duration_ms": 263,
+                    "repeat_index": 5
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome_keeps_navigation_shell_stable",
+                    "status": "passed",
+                    "duration_ms": 302,
+                    "repeat_index": 6
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome_keeps_navigation_shell_stable",
+                    "status": "passed",
+                    "duration_ms": 285,
+                    "repeat_index": 7
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome_keeps_navigation_shell_stable",
+                    "status": "passed",
+                    "duration_ms": 275,
+                    "repeat_index": 8
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome_keeps_navigation_shell_stable",
+                    "status": "passed",
+                    "duration_ms": 303,
+                    "repeat_index": 9
+                },
+                {
+                    "name": "cmd_app_toggleUiChrome_keeps_navigation_shell_stable",
+                    "status": "passed",
+                    "duration_ms": 262,
+                    "repeat_index": 10
+                }
+            ]
+        }
+    ],
+    "passed": 10,
+    "failed": 0,
+    "skipped": 0
+}

@@ -1,0 +1,17 @@
+[
+  {
+    "path": "Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp",
+    "bytes": 389469,
+    "sha256": "ddaf0a36e17e19b1e033006c9933e42561c3afa0808931156ddf40a25695dc9d"
+  },
+  {
+    "path": "Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md",
+    "bytes": 53920,
+    "sha256": "35b70a8ad4b5e42c6055e031e64076f61587c1b0a1d707cf459c2638ec119b7b"
+  },
+  {
+    "path": "Specs/Testing/Testing_PerformanceValidation.md",
+    "bytes": 104909,
+    "sha256": "5428aafc3257f2735f07cdc59f57eb2657bdfe80275850b7b7889bbd9ab05880"
+  }
+]

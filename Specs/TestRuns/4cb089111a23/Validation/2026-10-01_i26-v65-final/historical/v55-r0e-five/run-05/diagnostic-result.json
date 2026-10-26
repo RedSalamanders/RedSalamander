@@ -1,0 +1,16 @@
+{
+  "ordinal": 5,
+  "startedUtc": "2026-10-01T03:17:11.2120676+00:00",
+  "endedUtc": "2026-10-01T03:17:55.9423674+00:00",
+  "runId": "20261001T031711Z-81052-ebf7b6770f5e494387f33687d673a738",
+  "exitCode": 0,
+  "total": 3,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "targetStatus": "passed",
+  "targetReason": "",
+  "sandboxClean": true,
+  "nativeResultSha256": "4ec3a1330d13cd4e5f1a71ea99bb920dfb2049ef4667f585bc43ce1bbe9ac303",
+  "runnerResultSha256": "708b65de021fe75d290bf66f937db7e39128cbde9c6b2f4cbc36eb793fbe0038"
+}

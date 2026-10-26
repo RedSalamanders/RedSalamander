@@ -15,6 +15,11 @@
 
     Self-test artifacts are written under:
       REDSALAMANDER_TEST_ROOT\runs\<runId>\artifacts\selftest\last_run\
+    After execution, the complete run is verified and renamed on the same volume to
+      REDSALAMANDER_TEST_ROOT\evidence\completed-runs\<runId>\
+    Passed, failed, skipped and interrupted evidence is retained without payload copies.
+    Startup archives abandoned parseable runs instead of deleting them. Unsafe links,
+    unresolved disks, live owners or conflicting destinations retain the run for review.
     The runner uses exact X:\RedSalamander.Perf on the repository drive by default.
     X: may be replaced by any fixed local drive through -TestRoot or
     REDSALAMANDER_TEST_ROOT. No test-generated local data is written outside it.
@@ -140,6 +145,15 @@
 .PARAMETER ResumeFrom
     Run ID or run-directory path beneath X:\RedSalamander.Perf\evidence\runs used by Resume.
 
+.PARAMETER DeferPrGate
+    With unfiltered Fresh Full, defers entries with contracts identical to Suite PR to
+    the forthcoming verified PR workflow. Coverage remains filtered, NOT_EVALUATED.
+
+.PARAMETER NonInteractive
+    Omits entries that require the person's desktop; omitted acceptance remains pending.
+    Reports the pending entry count, including zero, in planning and execution.
+    The repository verdict is NOT_EVALUATED. Never use this to claim Fresh Full success.
+
 .OUTPUTS
     No supported pipeline objects. Writes a color summary and runner-owned JSON, JSONL,
     Markdown, trace, and self-test artifacts beneath REDSALAMANDER_TEST_ROOT. Exit codes:
@@ -225,11 +239,20 @@ param(
     [ValidateSet('Fresh', 'Resume', 'Affected')]
     [string]$ValidationMode = 'Fresh',
 
-    [string]$ResumeFrom = ''
+    [string]$ResumeFrom = '',
+
+    [switch]$DeferPrGate,
+
+    [switch]$NonInteractive
 )
 
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
+
+if ($DeferPrGate -and ($Suite -ne 'Full' -or $ValidationMode -ne 'Fresh' -or $CaseFilter -or $CommandsFamily)) {
+    throw 'DeferPrGate requires unfiltered Fresh Full; it never contributes reusable Full evidence.'
+}
+if ($NonInteractive -and $ValidationMode -eq 'Resume') { throw 'NonInteractive cannot alter the coverage of an exact Full Resume.' }
 
 function Exit-RSInvalidRunnerInvocation {
     param([Parameter(Mandatory = $true)][string]$Message)
@@ -942,6 +965,76 @@ function Invoke-RSSelfTestCaseList {
     return ($stdout | ConvertFrom-Json)
 }
 
+$script:rsTestOwnedVirtualDisk = $null
+function Get-RSRunAllTestsOwnedVirtualDisk {
+    # One test-owned VHDX per run, created lazily for the first FileOps process. Without
+    # elevation it is skipped and F7 logs its mounted routes as skipped with this reason.
+    if ($null -eq $script:rsTestOwnedVirtualDisk) {
+        try {
+            $script:rsTestOwnedVirtualDisk = New-RSTestOwnedVirtualDiskMount `
+                -TestRoot $testRunContext.TestRoot `
+                -RunId $testRunContext.RunId `
+                -Name 'f7-admission-baseline'
+            if ($script:rsTestOwnedVirtualDisk.Status -eq 'Mounted') {
+                Write-Host "Test-owned VHDX mounted for F7: $($script:rsTestOwnedVirtualDisk.MountPath) -> $($script:rsTestOwnedVirtualDisk.VolumeGuidPath)" -ForegroundColor DarkGray
+            }
+        } catch {
+            $message = $_.Exception.Message
+            Write-Warning "Test-owned VHDX unavailable; F7 mounted routes will be skipped: $message"
+            $script:rsTestOwnedVirtualDisk = [pscustomobject]@{ Status = 'Failed'; Reason = "provisioning-failed: $message" }
+        }
+    }
+    return $script:rsTestOwnedVirtualDisk
+}
+
+# $true only once every FileOps suite of this run finished and passed.
+$script:rsFileOpsSuitePassed = $null
+function Complete-RSRunAllTestsOwnedVirtualDisk {
+    param(
+        [AllowNull()]$OwnedVirtualDisk,
+        [AllowNull()]$FileOpsSuitePassed
+    )
+
+    # F7 retains its failed witness on the test-owned volume. Unless FileOps passed, the disk is
+    # unmounted and detached but its VHDX stays in the run (receipt stage 'detached'), so that
+    # evidence survives with the run and is reclaimed when the run is removed.
+    if ($null -eq $OwnedVirtualDisk -or $OwnedVirtualDisk.Status -ne 'Mounted') {
+        return
+    }
+    $retainImage = $FileOpsSuitePassed -ne $true
+    try {
+        Remove-RSTestOwnedVirtualDiskMount `
+            -ReceiptPath $OwnedVirtualDisk.ReceiptPath `
+            -RunRoot $OwnedVirtualDisk.RunRoot `
+            -RetainImage:$retainImage
+        if ($retainImage) {
+            Write-Host "FileOps did not pass: the detached test-owned VHDX stays with this run as F7 evidence: $($OwnedVirtualDisk.VhdxPath)" -ForegroundColor Yellow
+        }
+    } catch {
+        Write-Warning "Test-owned VHDX teardown failed; its receipt retains this run for recovery: $($_.Exception.Message)"
+    }
+}
+
+function Save-RSRunAllTestsEvidence {
+    param([object]$Context, [string]$Disposition = 'completed', [bool]$IncludeAlternateRoots = $false)
+
+    # Only an explicitly enabled alternate-volume run may inspect other fixed roots.
+    # Its exact run id is the ownership boundary; no sibling sweep or initialization occurs there.
+    $roots = @($Context.TestRoot)
+    if ($IncludeAlternateRoots) {
+        $configuredAlternate = [Environment]::GetEnvironmentVariable('REDSALAMANDER_TEST_ALTERNATE_ROOT', 'Process')
+        if (-not [string]::IsNullOrWhiteSpace($configuredAlternate)) { $roots += $configuredAlternate }
+        else {
+            $roots += @([IO.DriveInfo]::GetDrives() | Where-Object { $_.IsReady -and $_.DriveType -eq 'Fixed' } |
+                ForEach-Object { Join-Path $_.RootDirectory.FullName 'RedSalamander.Perf' })
+        }
+    }
+    foreach ($root in @($roots | Select-Object -Unique)) {
+        if (-not [IO.Directory]::Exists((Join-Path $root "runs\$($Context.RunId)"))) { continue }
+        Save-RSTestSandboxRunEvidence -TestRoot $root -RunId $Context.RunId -Disposition $Disposition
+    }
+}
+
 function Invoke-RSSelfTestProcess {
     param(
         [Parameter(Mandatory = $true)]
@@ -963,6 +1056,19 @@ function Invoke-RSSelfTestProcess {
         $localData = New-RSTestSandboxScratchDirectory -RepoRoot $repoRoot `
             -Harness 'fileops-profile' -Case ([Guid]::NewGuid().ToString('N'))
         $startInfo.EnvironmentVariables['LOCALAPPDATA'] = $localData
+    }
+    # Only the runner hands a mount to a child, and only the one it created and proved.
+    foreach ($name in @('REDSALAMANDER_TEST_OWNED_VHDX_MOUNT', 'REDSALAMANDER_TEST_OWNED_VHDX_VOLUME', 'REDSALAMANDER_TEST_OWNED_VHDX_UNAVAILABLE')) {
+        $startInfo.EnvironmentVariables.Remove($name)
+    }
+    if ($Arguments -contains '--fileops-selftest') {
+        $ownedVirtualDisk = Get-RSRunAllTestsOwnedVirtualDisk
+        if ($ownedVirtualDisk.Status -eq 'Mounted') {
+            $startInfo.EnvironmentVariables['REDSALAMANDER_TEST_OWNED_VHDX_MOUNT'] = $ownedVirtualDisk.MountPath
+            $startInfo.EnvironmentVariables['REDSALAMANDER_TEST_OWNED_VHDX_VOLUME'] = $ownedVirtualDisk.VolumeGuidPath
+        } else {
+            $startInfo.EnvironmentVariables['REDSALAMANDER_TEST_OWNED_VHDX_UNAVAILABLE'] = ([string]$ownedVirtualDisk.Reason -replace '\s+', ' ')
+        }
     }
     if ($startInfo.PSObject.Properties['ArgumentList'] -and $null -ne $startInfo.ArgumentList) {
         foreach ($argument in $Arguments) {
@@ -1107,7 +1213,17 @@ if ($ExplainPlan) {
             -ShuffleSeed $SelfTestShuffleSeed -PerfBudgetPath $PerfBudgetPath `
             -RequirePerfBudgets:$RequirePerfBudgets -SelfTestFlakyProofCase $SelfTestFlakyProofCase `
             -SelfTestOrderProofCase $SelfTestOrderProofCase)
-    $coverageScope = if (-not [string]::IsNullOrWhiteSpace($CaseFilter)) {
+    if ($DeferPrGate) {
+        $explainPr = @(Get-RSTestRunPlan -Suite PR -RepoRoot $repoRoot -Platform $Platform -Configuration $Configuration `
+            -RedSalamanderExePath $expectedExeFullPath -TimeoutMultiplier $TimeoutMultiplier -FailFast:$FailFast)
+        $explainEntries = @(Get-RSPrDeferredTestPlan -FullPlan $explainEntries -PrPlan $explainPr -RepoRoot $repoRoot)
+    }
+    if ($NonInteractive) {
+        $explainPending = @($explainEntries | Where-Object RequiresInteractiveDesktop)
+        $explainEntries = @($explainEntries | Where-Object { -not $_.RequiresInteractiveDesktop })
+        Write-Host "PENDING_INTERACTIVE ($($explainPending.Count)): $(@($explainPending | ForEach-Object Name) -join ', ')"
+    }
+    $coverageScope = if ($DeferPrGate -or $NonInteractive -or -not [string]::IsNullOrWhiteSpace($CaseFilter)) {
         'filtered'
     } elseif (-not [string]::IsNullOrWhiteSpace($CommandsFamily) -or $Suite -in @('Compare', 'Commands', 'FileOps')) {
         'family'
@@ -1180,6 +1296,10 @@ else {
 
 $artifactOperationLock = $null
 $testMachineResourceEnvironmentLease = $null
+$testRunContext = $null
+$runnerOwnsRunDirectory = $false
+$runEvidenceArchived = $false
+$runEvidenceArchiveAttempted = $false
 $runnerEnvironmentNames = @(
     'REDSALAMANDER_TEST_ROOT',
     'REDSALAMANDER_TEST_RUN_ID',
@@ -1236,6 +1356,12 @@ $testRunContext = New-RSTestRunContext `
         -TestRoot $testRunContext.TestRoot `
         -RepoRoot $repoRoot `
         -AllowExternalInitialization:$AllowExternalTestRoot)
+if (Test-Path -LiteralPath $testRunContext.RunRoot) {
+    throw "Refusing to reuse an existing run directory: $($testRunContext.RunRoot)"
+}
+[void](Assert-RSTestSandboxContainedPath -TestRoot $testRunContext.TestRoot -Path $testRunContext.RunRoot -RequireDescendant)
+[void](New-Item -ItemType Directory -Path $testRunContext.RunRoot -ErrorAction Stop)
+$runnerOwnsRunDirectory = $true
 $env:REDSALAMANDER_TEST_ROOT = $testRunContext.TestRoot
 $env:REDSALAMANDER_TEST_RUN_ID = $testRunContext.RunId
 [Environment]::SetEnvironmentVariable('REDSALAMANDER_SELFTEST_ROOT', $null, 'Process')
@@ -1251,13 +1377,16 @@ $testMachineResourceEnvironmentLease = Set-RSTestMachineResourceEnvironment -Con
 $artifactRoot = $testRunContext.ArtifactRoot
 New-Item -ItemType Directory -Path $artifactRoot -Force | Out-Null
 
-$staleRunCleanupResults = @(Remove-RSTestSandboxStaleRunDirectories `
+$staleRunCleanupResults = @(Save-RSTestSandboxStaleRunEvidence `
         -TestRoot $testRunContext.TestRoot `
         -RunId $testRunContext.RunId)
 if (@($staleRunCleanupResults).Count -gt 0) {
-    $removedStaleRuns = @($staleRunCleanupResults | Where-Object { $_.Status -eq 'Removed' }).Count
-    $failedStaleRuns = @($staleRunCleanupResults | Where-Object { $_.Status -eq 'Failed' }).Count
-    Write-Host "Stale TestSandbox run cleanup: $removedStaleRuns removed, $failedStaleRuns failed." -ForegroundColor DarkGray
+    $archivedStaleRuns = @($staleRunCleanupResults | Where-Object { $_.Status -eq 'Archived' }).Count
+    $retainedStaleRuns = @($staleRunCleanupResults | Where-Object { $_.Status -eq 'Retained' }).Count
+    Write-Host "Stale TestSandbox evidence: $archivedStaleRuns archived, $retainedStaleRuns retained for review." -ForegroundColor DarkGray
+    foreach ($retainedRun in @($staleRunCleanupResults | Where-Object Status -eq 'Retained')) {
+        Write-Warning "Retained $($retainedRun.RunId): $($retainedRun.Reason)"
+    }
 }
 
 if ([string]::IsNullOrWhiteSpace($QuarantinePath)) {
@@ -1351,6 +1480,22 @@ $testPlan = @(Get-RSTestRunPlan `
         -RequirePerfBudgets:$RequirePerfBudgets `
         -SelfTestFlakyProofCase $SelfTestFlakyProofCase `
         -SelfTestOrderProofCase $SelfTestOrderProofCase)
+if ($DeferPrGate) {
+    $prPlan = @(Get-RSTestRunPlan -Suite PR -RepoRoot $repoRoot -Platform $Platform -Configuration $Configuration `
+        -RedSalamanderExePath $exeFullPath -TimeoutMultiplier $TimeoutMultiplier -FailFast:$FailFast)
+    $before = $testPlan.Count
+    $testPlan = @(Get-RSPrDeferredTestPlan -FullPlan $testPlan -PrPlan $prPlan -RepoRoot $repoRoot)
+    Write-Host "DEFERRED_CI: $($before - $testPlan.Count) exact PR entry contracts; GitHub success remains pending."
+}
+if ($NonInteractive) {
+    $interactivePending = @($testPlan | Where-Object RequiresInteractiveDesktop)
+    $testPlan = @($testPlan | Where-Object { -not $_.RequiresInteractiveDesktop })
+    Write-Host "PENDING_INTERACTIVE ($($interactivePending.Count)): $(@($interactivePending | ForEach-Object Name) -join ', ')"
+    if ($testPlan.Count -eq 0) {
+        # Nothing remains to execute, so no coverage was evaluated; the terminal state stays NOT_EVALUATED.
+        Write-Host 'No test entries selected to execute: every selected entry requires the interactive desktop. Repository coverage is NOT_EVALUATED.' -ForegroundColor Yellow
+    }
+}
 $requiredPlanArtifactPaths = @($testPlan | ForEach-Object {
         $candidate = [IO.Path]::GetFullPath([string]$_.Path)
         $outputRoot = [IO.Path]::GetFullPath($buildOutputDir).TrimEnd('\')
@@ -1366,7 +1511,7 @@ if ($Suite -in @('PR', 'CI', 'Full') -and
     Write-Host 'BLOCKED ATTESTATION: the verified solution receipt does not contain the complete selected executable/plugin test plan closure.' -ForegroundColor Red
     exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
 }
-$validationCoverageScope = if (-not [string]::IsNullOrWhiteSpace($CaseFilter)) {
+$validationCoverageScope = if ($DeferPrGate -or $NonInteractive -or -not [string]::IsNullOrWhiteSpace($CaseFilter)) {
     'filtered'
 } elseif (-not [string]::IsNullOrWhiteSpace($CommandsFamily) -or $Suite -in @('Compare', 'Commands', 'FileOps')) {
     'family'
@@ -1847,6 +1992,7 @@ foreach ($artifactMutator in $artifactMutatorConfigs) {
         exit (Get-RSValidationExitCode -TerminalState BLOCKED_ATTESTATION)
     }
     $receipt = $restoredReceipt
+    $buildReceiptBindingDigest = Get-RSValidationBuildReceiptBindingDigest -BuildReceipt $receipt
 
     # Native PE/PDB identities can change across an equivalent rebuild. Bind all
     # evidence to the verified post-mutation receipt/epoch before publishing this
@@ -1871,7 +2017,6 @@ foreach ($artifactMutator in $artifactMutatorConfigs) {
     $artifactEpoch = Complete-RSValidationArtifactMutation -Run $validationEvidenceRun `
         -Decision $shadowDecision -BuildReceipt $receipt -MutatorEntryId $artifactMutator.Id `
         -ExpectedEpoch $artifactEpoch
-    $buildReceiptBindingDigest = Get-RSValidationBuildReceiptBindingDigest -BuildReceipt $receipt
     if (-not (Test-RSValidationArtifactReadBarrier -Run $validationEvidenceRun `
             -BuildReceipt $receipt -ExpectedEpoch $artifactEpoch)) {
         Write-Host "BLOCKED ATTESTATION: re-attested artifact epoch did not become readable." -ForegroundColor Red
@@ -2059,6 +2204,10 @@ foreach ($sc in $suiteConfigs) {
         $suiteResult.ExitCode = 1
         $overallExitCode = 1
     }
+    if ($args -contains '--fileops-selftest') {
+        # Decided before classification retries: a first failure keeps F7's mounted evidence.
+        $script:rsFileOpsSuitePassed = $script:rsFileOpsSuitePassed -ne $false -and $suiteResult.ExitCode -eq 0
+    }
 
     if ($failureClassificationEnabled -and $suiteResult.ExitCode -ne 0) {
         Write-SubHeader "CLASSIFYING FAILURE: $($sc.Name)"
@@ -2150,6 +2299,19 @@ if ($quarantineStatus.HasBlockingEntries) {
     $overallExitCode = 1
 }
 
+# Children have exited. Finish the existing owned-disk lifecycle before moving any paths.
+Complete-RSRunAllTestsOwnedVirtualDisk -OwnedVirtualDisk $script:rsTestOwnedVirtualDisk `
+    -FileOpsSuitePassed $script:rsFileOpsSuitePassed
+$script:rsTestOwnedVirtualDisk = $null
+$runEvidenceArchiveAttempted = $true
+$runEvidenceArchives = @(Save-RSRunAllTestsEvidence -Context $testRunContext -IncludeAlternateRoots $AllowAlternateVolumeTestRoot.IsPresent)
+$runEvidenceArchive = @($runEvidenceArchives | Where-Object SourceRoot -eq $testRunContext.RunRoot)[0]
+$runEvidenceArchived = $true
+$originalArtifactRoot = $artifactRoot
+$artifactRoot = $runEvidenceArchive.ArtifactRoot
+$env:TEMP = Join-Path $runEvidenceArchive.RunRoot 'scratch\process-temp'
+$env:TMP = $env:TEMP
+
 $testSandboxAudit = Get-RSTestSandboxDiskAudit `
     -TestRoot $testRunContext.TestRoot `
     -RunId $testRunContext.RunId
@@ -2164,6 +2326,7 @@ $runSummary = New-RSTestRunSummary `
     -Configuration $Configuration `
     -ExePath $exeFullPath `
     -ArtifactRoot $artifactRoot `
+    -OriginalArtifactRoot $originalArtifactRoot `
     -RunStartedUtc $($overallStartTime.ToUniversalTime()) `
     -RunEndedUtc $($overallEndTime.ToUniversalTime()) `
     -DurationMs $overallWallMs `
@@ -2199,6 +2362,9 @@ $terminalState = if ($summaryForConsumers.schema -eq 'red-salamander.run-all-tes
         'BLOCKED' { 'CORRUPT_EVIDENCE' }
         default { 'CORRUPT_EVIDENCE' }
     }
+} elseif ($overallExitCode -eq 0 -and $testPlan.Count -eq 0) {
+    # An empty selection (for example every entry pending the interactive desktop) executed nothing.
+    'NOT_EVALUATED'
 } elseif ($overallExitCode -eq 0) {
     'PASSED'
 } else {
@@ -2420,9 +2586,27 @@ if ($terminalState -in @('FAILED', 'CORRUPT_EVIDENCE')) {
     exit $overallExitCode
 }
 finally {
-    Restore-RSTestMachineResourceEnvironment -Lease $testMachineResourceEnvironmentLease
-    foreach ($entry in $runnerEnvironmentPrevious.GetEnumerator()) {
-        [Environment]::SetEnvironmentVariable([string]$entry.Key, $entry.Value, 'Process')
+    $archiveError = $null
+    try {
+        Complete-RSRunAllTestsOwnedVirtualDisk -OwnedVirtualDisk $script:rsTestOwnedVirtualDisk `
+            -FileOpsSuitePassed $script:rsFileOpsSuitePassed
+        if ($runnerOwnsRunDirectory -and -not $runEvidenceArchived -and -not $runEvidenceArchiveAttempted) {
+            foreach ($archive in @(Save-RSRunAllTestsEvidence -Context $testRunContext `
+                -Disposition interrupted -IncludeAlternateRoots $AllowAlternateVolumeTestRoot.IsPresent)) {
+                Write-Host "Interrupted run evidence: $($archive.RunRoot)" -ForegroundColor Yellow
+            }
+        }
+    } catch {
+        $archiveError = $_
+    } finally {
+        Restore-RSTestMachineResourceEnvironment -Lease $testMachineResourceEnvironmentLease
+        foreach ($entry in $runnerEnvironmentPrevious.GetEnumerator()) {
+            [Environment]::SetEnvironmentVariable([string]$entry.Key, $entry.Value, 'Process')
+        }
+        Exit-RSArtifactOperationLock -Lock $artifactOperationLock
     }
-    Exit-RSArtifactOperationLock -Lock $artifactOperationLock
+    if ($null -ne $archiveError) {
+        Write-Error "Run evidence archival failed; retained paths require review: $archiveError" -ErrorAction Continue
+        exit 5
+    }
 }

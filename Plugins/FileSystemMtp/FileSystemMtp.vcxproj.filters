@@ -20,7 +20,7 @@
     <ClCompile Include="FilesInformationMtp.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="FileSystemMtp.Core.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="FileSystemMtp.Device.cpp"><Filter>Source Files</Filter></ClCompile>
-    <ClCompile Include="FileSystemMtp.FakeBackend.cpp"><Filter>Source Files</Filter></ClCompile>
+    <ClCompile Include="FileSystemMtp.Tests.FakeBackend.cpp"><Filter>Source Files</Filter></ClCompile>
     <ClCompile Include="FileSystemMtp.Shared.cpp"><Filter>Source Files</Filter></ClCompile>
   </ItemGroup>
   <ItemGroup>

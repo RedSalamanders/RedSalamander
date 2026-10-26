@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-09-19T10:30:33.022Z",
+    "suite": "FileOperations",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20260919T102714Z-38180-1be50e724bfc4970a5b39cd378281b47\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 37578,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1297,
+            "repeat_index": 1
+        },
+        {
+            "name": "Phase6_PopupSmokeResizeAndPause",
+            "status": "passed",
+            "duration_ms": 36218,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 63,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 3.0,
+    "repeat_count": 1
+}

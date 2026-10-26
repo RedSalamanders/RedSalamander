@@ -1,0 +1,8 @@
+Build receipt ID: abfd2cc6e18053a2f77ba8d9dd84155bb232cb7a72428321274e48f226e65475
+Exact receipt payload source: C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\receipts\abfd2cc6e18053a2f77ba8d9dd84155bb232cb7a72428321274e48f226e65475.json
+Exact receipt payload archive: C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\Specs\TestRuns\7d3a1247382a\Viewers\space_scan_phase_diagnostic_release\build-receipt.json
+Receipt payload source SHA-256: d8a2634d6facebb1ef4d9b09219c29ba3421f7efce660858d429f71981adbb83
+Receipt payload source bytes: 96954
+Immutable build source snapshot: 226b127d04029b79a020739e3c64a4771a7b0e2d8cf0a4b75d30ad0bb77dd438
+Run provenance workspace snapshot: ab6625468ffff0faba46c5271611821b46e762e19578fc1ac5ec68a95807a740 (distinct)
+The build receipt payload was copied from the build output; it was not embedded in the marked run artifact.

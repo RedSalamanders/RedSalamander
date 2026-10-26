@@ -1,4 +1,5 @@
 #include "Framework.h"
+#include "WindowActivation.h"
 
 #include "ShortcutsWindow.h"
 
@@ -38,8 +39,8 @@ using DxUi::GridColumnDesc;
 using DxUi::GridGroupDesc;
 using DxUi::GridSelectionMode;
 using DxUi::GridSortSpec;
-using DxUi::IDxGridDelegate;
-using DxUi::IDxGridModel;
+using DxUi::IGridDelegate;
+using DxUi::IGridModel;
 using DxUi::Label;
 using DxUi::Panel;
 using DxUi::SortDirection;
@@ -348,7 +349,7 @@ struct ShortcutKeySortKey final
     return CompareNoCase(left.keyText, right.keyText);
 }
 
-class ShortcutsGridModel final : public IDxGridModel
+class ShortcutsGridModel final : public IGridModel
 {
 public:
     ShortcutsGridModel()
@@ -594,7 +595,7 @@ private:
     std::unordered_map<uint64_t, bool> _collapsedByStableId;
 };
 
-class ShortcutsWindow final : public IDxGridDelegate
+class ShortcutsWindow final : public IGridDelegate
 {
 public:
     ShortcutsWindow() = default;
@@ -842,7 +843,7 @@ HWND ShortcutsWindow::Create(HWND owner,
 
     const int showCmd = hasSavedPlacement ? WindowPlacementPersistence::Restore(*_settings, kShortcutsWindowId, hwnd) : SW_SHOWNORMAL;
     ShowWindow(hwnd, showCmd);
-    SetForegroundWindow(hwnd);
+    Common::RequestForegroundWindow(hwnd);
     return hwnd;
 }
 
@@ -1096,7 +1097,7 @@ void ShortcutsWindow::OnNcDestroy(HWND hwnd) noexcept
     if (restoreOwner)
     {
         static_cast<void>(SetActiveWindow(restoreOwner));
-        static_cast<void>(SetForegroundWindow(restoreOwner));
+        static_cast<void>(Common::RequestForegroundWindow(restoreOwner));
     }
 }
 
@@ -1754,7 +1755,7 @@ void ShowShortcutsWindow(HWND owner,
             {
                 ShowWindow(hwnd, SW_SHOW);
             }
-            SetForegroundWindow(hwnd);
+            Common::RequestForegroundWindow(hwnd);
             return;
         }
     }

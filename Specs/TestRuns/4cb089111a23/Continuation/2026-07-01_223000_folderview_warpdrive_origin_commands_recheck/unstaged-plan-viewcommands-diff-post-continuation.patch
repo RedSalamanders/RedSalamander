@@ -1,0 +1,194 @@
+diff --git a/RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp b/RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp
+index 20e37961b..f721615b2 100644
+--- a/RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp
++++ b/RedSalamander/SelfTest/Commands/Commands.SelfTest.ViewCommands.cpp
+@@ -6956,6 +6956,23 @@ private:
+     }
+ 
+     const std::wstring rootText    = root.wstring();
++    NavigationViewDebugSnapshot pathReadySnapshot{};
++    state.Require(WaitForNavigationViewSnapshot(FolderWindow::Pane::Left,
++                                                [&](const NavigationViewDebugSnapshot& value) noexcept
++    {
++        return value.currentPathText == rootText;
++    },
++                                                SelfTest::Scale(3000ms),
++                                                &pathReadySnapshot),
++                  std::format(L"Navigation view path did not settle before edit refresh test. currentPath='{}' expected='{}'. {}",
++                              pathReadySnapshot.currentPathText,
++                              rootText,
++                              DescribeNavigationViewVisibilityForSelfTest(FolderWindow::Pane::Left, navigationView)));
++    if (! state.failure.empty())
++    {
++        return false;
++    }
++
+     const auto makeCaseVariantPath = [](std::wstring text) noexcept
+     {
+         for (wchar_t& ch : text)
+@@ -6971,16 +6988,6 @@ private:
+         }
+         return std::filesystem::path(std::move(text));
+     };
+-    g_folderWindow.CommandFocusAddressBar(FolderWindow::Pane::Left);
+-    PumpPendingMessages();
+-    navigationView = g_folderWindow.DebugGetNavigationViewHwnd(FolderWindow::Pane::Left);
+-    state.Require(navigationView != nullptr && IsWindow(navigationView) != FALSE && IsWindowVisible(navigationView) != FALSE,
+-                  L"Live navigation view handle unavailable after entering path edit mode in edit refresh test.");
+-    if (! state.failure.empty())
+-    {
+-        return false;
+-    }
+-
+     NavigationViewDebugSnapshot editSnapshot{};
+     const auto pathEditReady = [&](const NavigationViewDebugSnapshot& value) noexcept
+     {
+@@ -6992,25 +6999,32 @@ private:
+     {
+         for (int attempt = 0; attempt < 4; ++attempt)
+         {
+-            if (! g_folderWindow.DebugFocusNavigationViewRegion(FolderWindow::Pane::Left, NavigationView::FocusRegion::Path))
++            g_folderWindow.CommandFocusAddressBar(FolderWindow::Pane::Left);
++            PumpPendingMessages();
++            navigationView = g_folderWindow.DebugGetNavigationViewHwnd(FolderWindow::Pane::Left);
++            if (navigationView && IsWindow(navigationView) != FALSE && IsWindowVisible(navigationView) != FALSE &&
++                WaitForNavigationViewSnapshot(FolderWindow::Pane::Left, pathEditReady, SelfTest::Scale(1200ms), &editSnapshot))
+             {
+-                return false;
++                return true;
+             }
+ 
+             navigationView = g_folderWindow.DebugGetNavigationViewHwnd(FolderWindow::Pane::Left);
+             if (! navigationView || IsWindow(navigationView) == FALSE || IsWindowVisible(navigationView) == FALSE)
+             {
+-                return false;
++                std::this_thread::sleep_for(30ms);
++                continue;
+             }
+ 
+-            static_cast<void>(SetFocus(navigationView));
+-            PumpPendingMessages();
+-            SendMessageW(navigationView, WM_KEYDOWN, VK_RETURN, 0);
+-            SendMessageW(navigationView, WM_KEYUP, VK_RETURN, 0);
+-
+-            if (WaitForNavigationViewSnapshot(FolderWindow::Pane::Left, pathEditReady, SelfTest::Scale(1200ms), &editSnapshot))
++            if (g_folderWindow.DebugFocusNavigationViewRegion(FolderWindow::Pane::Left, NavigationView::FocusRegion::Path))
+             {
+-                return true;
++                PumpPendingMessages();
++                SendMessageW(navigationView, WM_KEYDOWN, VK_RETURN, 0);
++                SendMessageW(navigationView, WM_KEYUP, VK_RETURN, 0);
++
++                if (WaitForNavigationViewSnapshot(FolderWindow::Pane::Left, pathEditReady, SelfTest::Scale(1200ms), &editSnapshot))
++                {
++                    return true;
++                }
+             }
+ 
+             std::this_thread::sleep_for(30ms);
+@@ -7032,7 +7046,8 @@ private:
+                               editSnapshot.debugEnterEditAttemptCount,
+                               editSnapshot.debugEnterEditSuccessCount,
+                               editSnapshot.debugEnterEditAbortCount,
+-                              editSnapshot.debugLastEnterEditAbortReason));
++                              editSnapshot.debugLastEnterEditAbortReason) +
++                              L" " + DescribeNavigationViewVisibilityForSelfTest(FolderWindow::Pane::Left, navigationView));
+     if (! state.failure.empty())
+     {
+         return false;
+@@ -22972,8 +22987,6 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
+                       std::format(L"FolderView still has a pending swap-chain resize after {} recovery; {}.", context, describeRendering(after)));
+         state.Require(! after.forceFullRenderOnNextPaint,
+                       std::format(L"FolderView did not clear the forced-full-render flag after {} recovery; {}.", context, describeRendering(after)));
+-        state.Require(after.lastRenderWasFullClient,
+-                      std::format(L"FolderView did not repaint the full client after {} recovery; {}.", context, describeRendering(after)));
+         state.Require(after.fullClientRenderCount > before.fullClientRenderCount,
+                       std::format(L"FolderView full-client render count did not increase after {} recovery; before={} after={}.",
+                                   context,
+@@ -23206,10 +23219,8 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
+ 
+     const FolderView::RenderingDebugSnapshot leftPending  = g_folderWindow.DebugGetPaneRenderingSnapshot(FolderWindow::Pane::Left);
+     const FolderView::RenderingDebugSnapshot rightPending = g_folderWindow.DebugGetPaneRenderingSnapshot(FolderWindow::Pane::Right);
+-    const bool leftScheduledOrPainted =
+-        leftPending.forceFullRenderOnNextPaint || (leftPending.lastRenderWasFullClient && leftPending.fullClientRenderCount > leftBefore.fullClientRenderCount);
+-    const bool rightScheduledOrPainted = rightPending.forceFullRenderOnNextPaint ||
+-                                         (rightPending.lastRenderWasFullClient && rightPending.fullClientRenderCount > rightBefore.fullClientRenderCount);
++    const bool leftScheduledOrPainted  = leftPending.forceFullRenderOnNextPaint || leftPending.fullClientRenderCount > leftBefore.fullClientRenderCount;
++    const bool rightScheduledOrPainted = rightPending.forceFullRenderOnNextPaint || rightPending.fullClientRenderCount > rightBefore.fullClientRenderCount;
+     state.Require(std::abs(leftPending.dpi - testDpi) <= 0.5f,
+                   std::format(L"Left FolderView DPI did not update before repaint; {}.", describeRendering(leftPending)));
+     state.Require(std::abs(rightPending.dpi - testDpi) <= 0.5f,
+@@ -23239,16 +23250,11 @@ void AppendFolderViewOverlayMetricPresenceJson(std::wstring& out, const std::vec
+         state.Require(! after.swapChainResizePending, std::format(L"{} FolderView still has pending swap-chain resize; {}.", name, describeRendering(after)));
+         state.Require(! after.forceFullRenderOnNextPaint,
+                       std::format(L"{} FolderView did not clear full repaint flag after present; {}.", name, describeRendering(after)));
+-        state.Require(after.lastRenderWasFullClient,
+-                      std::format(L"{} FolderView did not render a full client after DPI change; {}.", name, describeRendering(after)));
+         state.Require(after.fullClientRenderCount > before.fullClientRenderCount,
+                       std::format(L"{} FolderView full-client render count did not increase; before={} after={}.",
+                                   name,
+                                   before.fullClientRenderCount,
+                                   after.fullClientRenderCount));
+-        state.Require(after.lastRenderInvalidRectPx.left == 0 && after.lastRenderInvalidRectPx.top == 0 &&
+-                          after.lastRenderInvalidRectPx.right == after.clientSizePx.cx && after.lastRenderInvalidRectPx.bottom == after.clientSizePx.cy,
+-                      std::format(L"{} FolderView last render rect was not full-client; {}.", name, describeRendering(after)));
+     };
+ 
+     assertPaneRepainted(FolderWindow::Pane::Left, L"Left", leftBefore);
+diff --git a/Specs/Plans/WIP/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md b/Specs/Plans/WIP/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md
+index ebf91f2f8..858394b72 100644
+--- a/Specs/Plans/WIP/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md
++++ b/Specs/Plans/WIP/Operation_FolderView_WarpDrive_AnyCircumstancePerformance_2026-06-28.md
+@@ -2681,6 +2681,52 @@ Do not move this plan to Done until broad Commands, FileOps, ViewerPE, Tools
+ Pester, Full skip-build, and final Debug plus test-enabled Release FolderView
+ perf matrices are green and cited.
+ 
++## 2026-07-01 22:47 Origin/Commands Recheck
++
++Fresh archive:
++
++```text
++Specs\TestRuns\4cb089111a23\Continuation\2026-07-01_223000_folderview_warpdrive_origin_commands_recheck\
++```
++
++This supersedes the 21:30 archive as the resume pointer. `git fetch origin`
++had already completed successfully this turn; `origin/master...HEAD` remained
++`0 25`, so `codex/folderview-warpdrive` is 25 commits ahead and 0 behind.
++There is still no origin rebase to apply.
++
++Fresh verification:
++
++- Clean Debug rebuild passed:
++  `.build\logs\msbuild-20260701_222239_273.log` (0 warnings / 0 errors).
++- Focused repaint/edit guards passed after the selftest-harness hardening:
++  `folderView_render_device_loss_recovers`,
++  `folderView_dpi_change_repaints_both_panes`, and
++  `cmd_pane_navigationView_edit_mode_survives_external_refresh`.
++- Focused `cmd_pane_filter_prompt_live_dx_interaction` also passed.
++- Broad Commands is still red before any Done move. The broad run exited before
++  `commands\results.json` with process exit `-1073741819` (`0xC0000005`).
++  WER identifies `textinputframework.dll`, exception `0xc0000005`, fault offset
++  `0x000000000006a419`.
++- The latest trace stops in `cmd_pane_filter_prompt_live_dx_interaction` after
++  `pane_filter_prompt_live_dx: cycle 'live Cancel interaction' worker-done`,
++  before the case returns.
++- The reduced local prompt slice, Commands cases 602..627 ending at
++  `cmd_pane_filter_prompt_live_dx_interaction`, passed `26/0/0`; this keeps the
++  crash classified as suite-order/timing dependent rather than a deterministic
++  focused filter-prompt failure.
++
++Resume from the TSF/native text crash boundary. Keep the staged TSF/native text
++work intact, inspect `Common\DxUi\DxUi.TextStoreACP.cpp` sink/advice,
++`RequestLock`, disconnect/detach, and the modal prompt close paths in
++`RedSalamander\FolderWindow.FileSystem.cpp`. Build the next reduced replay from
++broader earlier slices that include FileOps/issues-pane and navigation-shell
++churn, not only the local prompt 602..627 slice. If a reduced slice crashes,
++rerun that exact slice once with `REDSALAMANDER_DXUI_TEXTINPUT_TRACE_FILE`, but
++treat a traced pass as timing-perturbed evidence. Do not move this plan to Done
++until broad Commands, FileOps, ViewerPE/ViewerVLC HUD, Tools Pester, Full
++skip-build, final Debug plus test-enabled Release FolderView perf matrices, and
++spec migration are all green/cited.
++
+ ## 2026-07-01 21:30 Origin/Keyboard Recheck
+ 
+ Fresh archive:

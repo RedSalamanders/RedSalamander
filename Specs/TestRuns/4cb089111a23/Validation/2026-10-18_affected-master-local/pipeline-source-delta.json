@@ -1,0 +1,9 @@
+{
+  "old_snapshot": "06bd32c8dac88276328262dfe952060ea2dda9a13cfc4afebb4f30d79d569933",
+  "new_snapshot": "aeae66efb25b50ba6b8bdaf4a1119b54fee400a5477bb4398f05b7f43c4cf443",
+  "changed_paths": [
+    "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Phases10_13.cpp",
+    "Specs/Testing/Testing_PerformanceValidation.md"
+  ],
+  "production_cpp_changed": 0
+}

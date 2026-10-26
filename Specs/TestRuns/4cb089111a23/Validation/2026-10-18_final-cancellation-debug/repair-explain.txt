@@ -1,0 +1,21 @@
+Native test naming: 118 files checked.
+PENDING_INTERACTIVE (5): Commands, FileOperations, ViewerPETests.Interactive, ViewerSqliteTests.Interactive, RedSalamanderMonitorEtwLatency
+Shadow validation plan: d6c3d8e0fe2e70bb1d70f3e342b8dd66ffd842744facda7c9359c17d49b1f4d7
+Changed paths: 83; advisory build: full
+  AFFECTED   tooling.pester-build-toolchain                775225 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   selftest.compare-directories                  146629 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.product-ui                           3558 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   viewer-pe.noninteractive                       32285 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   viewer-sqlite.noninteractive                   11347 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.filesystem-curl                      3522 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.monitor                              8455 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.localization                         4090 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.red-configure                        3852 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.plugin-contract                     76679 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.settings-schema                      3495 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   standalone.crash-handling                       3197 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   perf.performance-tests2                        15203 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   tooling.pester                                187342 ms  SOURCE_INPUT_CHANGED
+  AFFECTED   tooling.vcpkg-merge-synthetic                   3419 ms  SOURCE_INPUT_CHANGED
+Estimated fresh duration: 1278298 ms (advisory only).
+Decision: Z:\RedSalamander.Perf\evidence\explain-plan.json

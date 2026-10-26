@@ -9,6 +9,8 @@
       - summarizing one run
       - comparing two runs
       - showing metric evolution over time
+    The FolderView preset separates product sort-to-paint latency, legacy synthetic warm-render timing
+    and inclusive synchronous JSONL writer attribution.
 
 .PARAMETER RunsRoot
     Selects the archived TestRuns root to inspect.
@@ -100,6 +102,8 @@ $script:FolderViewPresetMetrics = @(
     'folder.scroll.product_paint_dirty_rect_area_px',
     'folder.relayout_to_paint_us',
     'folder.sort_toggle_us',
+    'folder.sort_product_paint_us',
+    'folder.sort_jsonl_write_us',
     'folder.filter.keystroke_to_paint_us',
     'folder.scale.enumeration_us',
     'folder.scale.first_visible_paint_us',

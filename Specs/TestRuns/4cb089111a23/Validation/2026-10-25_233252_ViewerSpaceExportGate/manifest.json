@@ -1,0 +1,42 @@
+[
+  {
+    "name": "controller-state.json",
+    "bytes": 2697,
+    "sha256": "38983D27915623F431C2D6ED6F26FA8A4EE0412E16BC4D0C3185E5BAA5523AC0"
+  },
+  {
+    "name": "evidence-0eab36b91fd813f918a32cd59f61694a9cd7fadfea703456bafba0080ce87456.json",
+    "bytes": 21690,
+    "sha256": "764438E86415A1A637011E3ABA15AAAF5F806F2223141B99B397FDFC1697282F"
+  },
+  {
+    "name": "failed-entry-build-receipt.json",
+    "bytes": 90385,
+    "sha256": "C1BA4033199BDCC1608EE06B58F719A9B667C6D21A42CB6967E6088C78CF7C90"
+  },
+  {
+    "name": "full-run-state.json",
+    "bytes": 6451,
+    "sha256": "4D64AC6B076EF8E2A641B833C29AD39C665244D2440FBB196283682F3821E26A"
+  },
+  {
+    "name": "full-validation-plan.json",
+    "bytes": 22119,
+    "sha256": "3DBD51E22895FA6117448D287BB2E621D514417C1B998B33ACC1B0C6662D84D2"
+  },
+  {
+    "name": "interruption.json",
+    "bytes": 2289,
+    "sha256": "F98B76970EE0CF0DEA0CD3E40E74F057DBD85AC1EF49F924808372F591493EE3"
+  },
+  {
+    "name": "terminal-results-d4a684dc49d02a7cf0eb3ee84f5dc3cc9d54d8b8e2860fb0e8e20b7954da20a0.json",
+    "bytes": 380,
+    "sha256": "AB82E494F95967EC0E4FAAE1A64BFF48D6581C1900CC65CF53B0F213C43A379D"
+  },
+  {
+    "name": "ViewerPETests.Noninteractive.output.log",
+    "bytes": 223134,
+    "sha256": "8C248A9DCF4827883A11B85DCF56C0C14D4A7EB09D657B7162E2B0563B23D8D1"
+  }
+]

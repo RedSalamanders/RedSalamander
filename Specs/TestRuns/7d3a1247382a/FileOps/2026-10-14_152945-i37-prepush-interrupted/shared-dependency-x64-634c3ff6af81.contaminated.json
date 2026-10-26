@@ -1,0 +1,23 @@
+{
+  "schema": "red-salamander.artifact-operation-contamination.v3",
+  "recorded_utc": "2026-10-14T15:46:30.1493333Z",
+  "process_id": 54012,
+  "reason": "The previous MSBuild owner exited while it could have been writing shared vcpkg dependencies.",
+  "scope_key": "shared-dependency|platform=X64",
+  "scope": {
+    "kind": "build",
+    "target": "D:\\RedSalamander.Perf\\runs\\20261014T152945Z-38708-5b51627373364b24bf87799e4827dd51\\scratch\\relocated-test-sandbox\\a1254c91024e47b69d3d4dfa3ea7e54b\\Relocated.vcxproj",
+    "configuration": "Release",
+    "platform": "x64",
+    "coordination": "shared-dependency"
+  },
+  "abandoned_operation": "MSBuild shared dependency phase Release|x64",
+  "abandoned_started_utc": "10/14/2026 15:31:53",
+  "abandoned_scope": {
+    "kind": "build",
+    "target": "RedSalamander",
+    "configuration": "Release",
+    "platform": "x64",
+    "coordination": "shared-dependency"
+  }
+}

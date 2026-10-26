@@ -1,0 +1,13 @@
+{
+  "schema": "i26-v56-cluster-root-review.v1",
+  "reviewer": "root",
+  "runId": "20261001T032939Z-69528-0f2e124ea9dd4721a752ccd97d5b9d93",
+  "qualificationSha256": "6ee4fd67833c0d72ace3e3ddd7371300a398bc7f612dc9f1c6a46f17113d5732",
+  "nativeResultSha256": "1c22308c480c530e62e5d42038c08503e6ab660834d421e765bd62fb0ed6a4e7",
+  "runnerResultSha256": "25fdd824417fea8e9c1b4bad0bb8e09653423ae05baed67027b75b1971c8fd1e",
+  "executions": 21,
+  "repeats": 3,
+  "exactOrder": true,
+  "sandboxClean": true,
+  "result": "All seven cases passed in each of three ordered repeats, original run retained"
+}

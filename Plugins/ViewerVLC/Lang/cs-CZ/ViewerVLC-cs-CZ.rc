@@ -26,7 +26,7 @@ BEGIN
     IDS_VIEWERVLC_DETAILS_PATH_NOT_LOCAL_FILE "Tento soubor není k dispozici jako místní cesta k souboru."
     IDS_VIEWERVLC_DETAILS_LIBVLC_UNAVAILABLE "libVLC není k dispozici."
     IDS_VIEWERVLC_DETAILS_UTF8_PATH_FAILED "Nepodařilo se převést cestu k souboru na UTF-8."
-    IDS_VIEWERVLC_DETAILS_MEDIA_NEW_PATH_FAILED "libvlc_media_new_path se nezdařilo."
+    IDS_VIEWERVLC_DETAILS_MEDIA_NEW_PATH_FAILED "VLC nemohl otevřít mediální soubor."
     IDS_VIEWERVLC_DETAILS_PLAYER_NEW_FAILED "libvlc_media_player_new_from_media se nezdařilo."
     IDS_VIEWERVLC_DETAILS_PLAYER_PLAY_FAILED_FMT "libvlc_media_player_play se nezdařilo (kód {0})."
     IDS_VIEWERVLC_SNAPSHOT_FAILED_FMT "Snímek se nezdařil (kód {0})."
@@ -36,4 +36,7 @@ BEGIN
     IDS_VIEWERVLC_DETAILS_ASYNC_SUBMIT_FAILED "Načítání VLC se nepodařilo zařadit do fronty. Zkuste soubor otevřít znovu."
     IDS_VIEWERVLC_DETAILS_ASYNC_RESULT_DELIVERY_FAILED "Výsledek načítání VLC se nepodařilo doručit. Zkuste soubor otevřít znovu."
     IDS_VIEWERVLC_DETAILS_LOAD_DLL_FAILED_FMT "Nepodařilo se načíst soubor „{0}“ (Win32: {1})."
+    IDS_VIEWERVLC_ERROR_TITLE "Tento soubor nelze přehrát."
+    IDS_VIEWERVLC_DETAILS_FILE_ACCESS_FAILED_FMT "K souboru nelze získat přístup:\r\n{0}\r\nChyba Win32: {1}."
+    IDS_VIEWERVLC_DETAILS_NOT_REGULAR_FILE_FMT "Vybraná cesta není soubor:\r\n{0}"
 END

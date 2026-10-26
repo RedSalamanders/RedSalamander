@@ -1,0 +1,18 @@
+{
+  "variant": "projection-baseline-v1",
+  "passed": 3,
+  "failed": 3,
+  "skipped": 0,
+  "source_snapshot": "3bfa6e83dd57c8c5439cab686b5be8b95c0ed3033b120eaebe451af60344fbe3",
+  "metrics": {
+    "FileOps.Issues.TypedProjection.RefreshUs": {
+      "samples_us": [
+        502,
+        504,
+        555
+      ],
+      "median_us": 504,
+      "p95_us": 555
+    }
+  }
+}

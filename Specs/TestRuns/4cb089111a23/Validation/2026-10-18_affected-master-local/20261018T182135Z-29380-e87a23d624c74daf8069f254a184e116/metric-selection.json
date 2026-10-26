@@ -1,0 +1,9 @@
+{
+  "raw_path": "Z:\\RedSalamander.Perf\\evidence\\affected-merged-master-2026-10-18\\20261018T182135Z-29380-e87a23d624c74daf8069f254a184e116\\artifacts\\selftest\\last_run/perf/perf_metrics.jsonl",
+  "raw_sha256": "b229c5b54e979c261885d26679dabed83f1434cd7f593517faaf6ea0eaa5e87e",
+  "selected_path": "selected-metrics.jsonl",
+  "selected_sha256": "2abf946684595c16b03a8cb90d6951bc2b264271f814a6358aa2d571bdf4e912",
+  "selected_line_count": 12,
+  "selection_regex": "FileOps\\.SelfTest\\.|FileOps\\.Discovery\\.SelectedFiles|FileOps\\.Popup\\.AutoCollapse|FileOps\\.Bridge\\.ActiveFilesMax|folder\\.sort_toggle_us|folder\\.enumerate\\.natural_name_rank_prepare_us",
+  "derivation": "Original complete matching JSONL lines, unchanged; all other metrics retained in raw archive"
+}

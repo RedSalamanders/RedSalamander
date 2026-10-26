@@ -1,0 +1,67 @@
+{
+  "platform": "x64",
+  "repository_verdict": "NOT_EVALUATED",
+  "build_source_snapshot_id": "846115f86b923381c3d9311025957793349fecaddbccab6fa1748db82982e131",
+  "run_id": "20261009T092014Z-27568-b30eaecd47024d9e919ec24a0fc1aa82",
+  "results": [
+    {
+      "output_log": "D:\\RedSalamander.Perf\\runs\\20261009T092014Z-27568-b30eaecd47024d9e919ec24a0fc1aa82\\artifacts\\selftest\\last_run\\TestViewerSpaceScanPolicyHelpers.output.log",
+      "exit_code": 0,
+      "desktop_lease": false,
+      "case": "TestViewerSpaceScanPolicyHelpers",
+      "group": "noninteractive"
+    },
+    {
+      "output_log": "D:\\RedSalamander.Perf\\runs\\20261009T092014Z-27568-b30eaecd47024d9e919ec24a0fc1aa82\\artifacts\\selftest\\last_run\\TestViewerSpaceAnalysisHostVirtualGridAndLifetime.output.log",
+      "exit_code": 0,
+      "desktop_lease": false,
+      "case": "TestViewerSpaceAnalysisHostVirtualGridAndLifetime",
+      "group": "noninteractive"
+    },
+    {
+      "output_log": "D:\\RedSalamander.Perf\\runs\\20261009T092014Z-27568-b30eaecd47024d9e919ec24a0fc1aa82\\artifacts\\selftest\\last_run\\TestViewerSpaceLifecycleCaptures.output.log",
+      "exit_code": 0,
+      "desktop_lease": false,
+      "case": "TestViewerSpaceLifecycleCaptures",
+      "group": "noninteractive"
+    },
+    {
+      "output_log": "D:\\RedSalamander.Perf\\runs\\20261009T092014Z-27568-b30eaecd47024d9e919ec24a0fc1aa82\\artifacts\\selftest\\last_run\\TestViewerSpaceListingValidation.output.log",
+      "exit_code": 0,
+      "desktop_lease": false,
+      "case": "TestViewerSpaceListingValidation",
+      "group": "noninteractive"
+    },
+    {
+      "output_log": "D:\\RedSalamander.Perf\\runs\\20261009T092014Z-27568-b30eaecd47024d9e919ec24a0fc1aa82\\artifacts\\selftest\\last_run\\TestViewerSpaceBoundedHostileProviderScanning.output.log",
+      "exit_code": 0,
+      "desktop_lease": false,
+      "case": "TestViewerSpaceBoundedHostileProviderScanning",
+      "group": "noninteractive"
+    },
+    {
+      "output_log": "D:\\RedSalamander.Perf\\runs\\20261009T092014Z-27568-b30eaecd47024d9e919ec24a0fc1aa82\\artifacts\\selftest\\last_run\\TestViewerSpaceBlockedProviderCloseAndPostUpdateRace.output.log",
+      "exit_code": 0,
+      "desktop_lease": false,
+      "case": "TestViewerSpaceBlockedProviderCloseAndPostUpdateRace",
+      "group": "noninteractive"
+    },
+    {
+      "output_log": "D:\\RedSalamander.Perf\\runs\\20261009T092014Z-27568-b30eaecd47024d9e919ec24a0fc1aa82\\artifacts\\selftest\\last_run\\TestViewerSpaceDirectorySummaryProtocol.output.log",
+      "exit_code": 0,
+      "desktop_lease": false,
+      "case": "TestViewerSpaceDirectorySummaryProtocol",
+      "group": "noninteractive"
+    },
+    {
+      "output_log": "D:\\RedSalamander.Perf\\runs\\20261009T092014Z-27568-b30eaecd47024d9e919ec24a0fc1aa82\\artifacts\\selftest\\last_run\\TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses.output.log",
+      "exit_code": 0,
+      "desktop_lease": true,
+      "case": "TestViewerSpaceWindowOpensWithoutVisibleChildFallbackAndEscapeCloses",
+      "group": "interactive"
+    }
+  ],
+  "configuration": "Debug",
+  "scope": "focused-diagnostic",
+  "build_receipt_id": "4e2c3e2030fb55d83e9dc573f1455e545d73c38729892d0f8279573427e0645f"
+}

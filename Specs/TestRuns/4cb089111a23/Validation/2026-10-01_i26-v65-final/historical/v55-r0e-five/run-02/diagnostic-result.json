@@ -1,0 +1,15 @@
+{
+  "ordinal": 2,
+  "runId": "20261001T031219Z-75112-397dfe5af45d48babf0a7b13a082258b",
+  "exitCode": 0,
+  "total": 3,
+  "passed": 3,
+  "failed": 0,
+  "skipped": 0,
+  "targetStatus": "passed",
+  "targetReason": "",
+  "sandboxClean": true,
+  "nativeResultSha256": "df3520cd54e969ca44b65004183919458e5a785af52a36567c756bb6f89b95b0",
+  "runnerResultSha256": "47b01d7d29d6a5a39dd731e6cdd2f2834a23c7af5168e90ae29abb6674f39b2f",
+  "postprocessing": "Recovered from retained raw archive without rerunning the native case"
+}

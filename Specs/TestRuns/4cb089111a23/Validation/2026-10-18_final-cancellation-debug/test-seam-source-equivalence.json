@@ -1,0 +1,9 @@
+{
+  "baseline_commit": "a4b506d53b92d716a923199ba436463f95a6e375",
+  "path": "Plugins/FileSystem/FileSystem.cpp",
+  "excluded_old_block": "#if defined(ENABLE_TESTS)\n        if (renamed &&\n            ConsumeMatchingPathInjectionForSelfTest(\n                destinationPath, kRenameCommittedFailurePathEnvVar, kRenameCommittedFailureFiredEnvVar, L\"FileOps.Local.RenameCommittedFailureInjected\"))\n        {\n            renamed = false;\n            error   = ERROR_IO_INCOMPLETE;\n        }\n#endif\n",
+  "excluded_new_block": "#if defined(ENABLE_TESTS)\n        // Inject after either rename API succeeds; SMB servers can require the legacy fallback.\n        if (renamed &&\n            ConsumeMatchingPathInjectionForSelfTest(\n                destinationPath, kRenameCommittedFailurePathEnvVar, kRenameCommittedFailureFiredEnvVar, L\"FileOps.Local.RenameCommittedFailureInjected\"))\n        {\n            renamed = false;\n            error   = ERROR_IO_INCOMPLETE;\n        }\n#endif\n",
+  "remaining_source_equal": true,
+  "comparison": "Exact text after newline normalization and removal of one moved ENABLE_TESTS block per source",
+  "qualification": "No amended Release test-enabled artifact or fixture validation is claimed"
+}

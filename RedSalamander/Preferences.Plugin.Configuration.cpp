@@ -470,6 +470,7 @@ void Clear(PreferencesDialogState& state) noexcept
     state.pluginsDetailsConfigFields.clear();
     state.pluginsDetailsConfigFields.reserve(fields.size());
 
+    std::wstring previousSection;
     for (size_t fieldIndex = 0; fieldIndex < fields.size(); ++fieldIndex)
     {
         const PrefsPluginConfigField& field = fields[fieldIndex];
@@ -486,6 +487,15 @@ void Clear(PreferencesDialogState& state) noexcept
 
         if (! controls.field.uiHidden && dxPanel)
         {
+            if (! controls.field.uiSection.empty() && controls.field.uiSection != previousSection)
+            {
+                controls.dxSectionControl = dxPanel->AddChild<Label>();
+                controls.dxSectionControl->SetText(controls.field.uiSection);
+                controls.dxSectionControl->SetAccessibleName(controls.field.uiSection);
+                controls.dxSectionControl->SetAccessibleAutomationId(L"Preferences.Plugin.Section." + controls.field.uiSection);
+                controls.dxSectionControl->SetFontRole(FontRole::BodyStrong);
+            }
+            previousSection         = controls.field.uiSection;
             controls.dxLabelControl = dxPanel->AddChild<Label>();
             controls.dxLabelControl->SetFontRole(FontRole::Body);
             controls.dxDescriptionControl = dxPanel->AddChild<Label>();
@@ -854,6 +864,13 @@ void LayoutCards(HWND host, PreferencesDialogState& state, int x, int& y, int wi
         if (controls.field.uiHidden)
         {
             continue;
+        }
+
+        if (controls.dxSectionControl)
+        {
+            controls.dxSectionControl->SetVisible(true);
+            controls.dxSectionControl->SetBounds(D2D1::RectF(pxToDip(x + cardPaddingX), pxToDip(y), pxToDip(x + width), pxToDip(y + rowHeight)));
+            y += rowHeight + cardGapY;
         }
 
         SyncDxStaticText(controls);

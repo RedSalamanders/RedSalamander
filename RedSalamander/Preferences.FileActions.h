@@ -12,10 +12,10 @@ enum class FileActionPreferencesFamily : uint8_t
     Editors,
 };
 
-class FileActionPreferencesPage final : public DxUi::IDxGridDelegate
+class FileActionPreferencesPage final : public DxUi::IGridDelegate
 {
 public:
-    using DxUi::IDxGridDelegate::OnGridSelectionChanged;
+    using DxUi::IGridDelegate::OnGridSelectionChanged;
 
     explicit FileActionPreferencesPage(FileActionPreferencesFamily family) noexcept;
     ~FileActionPreferencesPage();

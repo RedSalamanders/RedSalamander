@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "state": "assertion dialog; test interrupted, no completed case result",
+  "case": "FileOps_PermanentDeleteCompletionProgress",
+  "runId": "20261015T142535Z-54116-aacbc7d566874fe1a09eb61f2f8106ba",
+  "source": "RedSalamander/FolderWindow.FileOperations.State.cpp:9132",
+  "assertion": "_dbgCallbackActiveScopeCount.load(std::memory_order_acquire) > 0u",
+  "callback": "Task::FileSystemShouldCancel",
+  "cause": "Direct synchronous test provider invocation omitted active callback scope; first operation-control check occurred before provider mutation",
+  "observedFreshDump": false,
+  "latestKnownCrashUtc": "2026-10-09T17:50:35Z",
+  "ownedTestProcessStopped": true,
+  "independentReleaseProcess": 46732,
+  "rawArtifacts": "D:/RedSalamander.Perf/evidence/fileops-ux-review-20261015/20261015T142535Z-54116-aacbc7d566874fe1a09eb61f2f8106ba-assertion",
+  "command": ".\\Tools\\Run-AllTests.ps1 -Suite FileOps -CaseFilter FileOps_PermanentDeleteCompletionProgress -Configuration Debug -Platform x64 -SkipBuild -TestRoot D:\\RedSalamander.Perf"
+}

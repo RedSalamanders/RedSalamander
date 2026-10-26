@@ -1,0 +1,98 @@
+{
+  "initialSummary": {
+    "TotalCount": 432,
+    "PassedCount": 431,
+    "FailedCount": 1,
+    "SkippedCount": 0,
+    "PendingCount": 0,
+    "Time": {
+      "Ticks": 2053575754,
+      "Days": 0,
+      "Hours": 0,
+      "Milliseconds": 357,
+      "Microseconds": 575,
+      "Nanoseconds": 400,
+      "Minutes": 3,
+      "Seconds": 25,
+      "TotalDays": 0.002376823789351852,
+      "TotalHours": 0.05704377094444445,
+      "TotalMilliseconds": 205357.5754,
+      "TotalMicroseconds": 205357575.4,
+      "TotalNanoseconds": 205357575400.0,
+      "TotalMinutes": 3.4226262566666668,
+      "TotalSeconds": 205.3575754
+    }
+  },
+  "repairSummary": {
+    "TotalCount": 23,
+    "PassedCount": 23,
+    "FailedCount": 0,
+    "SkippedCount": 0,
+    "PendingCount": 0,
+    "Time": {
+      "Ticks": 158552898,
+      "Days": 0,
+      "Hours": 0,
+      "Milliseconds": 855,
+      "Microseconds": 289,
+      "Nanoseconds": 800,
+      "Minutes": 0,
+      "Seconds": 15,
+      "TotalDays": 0.0001835102986111111,
+      "TotalHours": 0.004404247166666667,
+      "TotalMilliseconds": 15855.2898,
+      "TotalMicroseconds": 15855289.8,
+      "TotalNanoseconds": 15855289800.0,
+      "TotalMinutes": 0.26425483,
+      "TotalSeconds": 15.8552898
+    }
+  },
+  "finalSummary": {
+    "TotalCount": 432,
+    "PassedCount": 432,
+    "FailedCount": 0,
+    "SkippedCount": 0,
+    "PendingCount": 0,
+    "Time": {
+      "Ticks": 2053575754,
+      "Days": 0,
+      "Hours": 0,
+      "Milliseconds": 357,
+      "Microseconds": 575,
+      "Nanoseconds": 400,
+      "Minutes": 3,
+      "Seconds": 25,
+      "TotalDays": 0.002376823789351852,
+      "TotalHours": 0.05704377094444445,
+      "TotalMilliseconds": 205357.5754,
+      "TotalMicroseconds": 205357575.4,
+      "TotalNanoseconds": 205357575400.0,
+      "TotalMinutes": 3.4226262566666668,
+      "TotalSeconds": 205.3575754
+    },
+    "EvidenceComposition": "409 unchanged successful checks from the initial eight-file run plus all 23 DocumentationDriftContracts checks rerun after restoring the archived synthetic Image/RAW PNG.",
+    "InitialFailedCount": 1,
+    "RepairedTestCount": 23,
+    "SingleExecution": false
+  },
+  "initialFailure": [
+    {
+      "Name": "binds every whole native frame to its origin receipt and reviewed synthetic data",
+      "Describe": "Published product scenario capture provenance",
+      "Context": "",
+      "Passed": false,
+      "Result": "Failed",
+      "FailureMessage": "String lengths are both 64. Strings differ at index 0.\nExpected: {926f3bf400534f7ba91f8a6887aeb6aca01e68bcfa567e91dcc6ea21953956bc}\nBut was:  {1058f10e5ecb6908d401be57997f60b39221b26cf94ab7c7528c4fce9909851f}\n-----------^"
+    }
+  ],
+  "repair": {
+    "path": "docs/res/viewer-imgraw.png",
+    "previousSha256": "1058f10e5ecb6908d401be57997f60b39221b26cf94ab7c7528c4fce9909851f",
+    "correctedSha256": "926f3bf400534f7ba91f8a6887aeb6aca01e68bcfa567e91dcc6ea21953956bc",
+    "source": "Specs/TestRuns/4cb089111a23/Validation/2026-10-19_product-scenarios/captures/viewer-imgraw.png",
+    "sourceRunId": "20261019T174936Z-34188-7db86e92d0174391b30c1d1ad7014781",
+    "basis": "Full-frame inspection of archived generated synthetic landscape; exact-byte replacement, no recapture or edits.",
+    "oldBytesPreserved": "D:\\RedSalamander.Perf\\evidence\\screenshot-gaps-20261019\\legacy-viewer-imgraw-preserved.png"
+  },
+  "limits": "No native source changed after the passing builds/captures. The correction replaces one published PNG with its exact archived native origin and strips documentation EOF whitespace."
+}

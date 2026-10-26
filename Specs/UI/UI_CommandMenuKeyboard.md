@@ -261,6 +261,27 @@ Pane view option commands target the focused pane, or the active pane when focus
 - The dialog MUST be a modeless DxUi-hosted app window, inherit the active app theme and themed window chrome, and avoid visible native dialog-template controls in DxUi mode.
 - Command selftests MUST keep correctness and responsiveness visible with themed DxUi-host coverage, viewer/editor/preview source coverage, closed-process pruning, focus navigation, `listOpenedFiles.open_us`, and an archived `list_opened_files_metrics.json` artifact.
 
+### Clean Up Leftovers of Interrupted Operations
+
+`cmd/pane/cleanUpLeftovers` (I35 R7.5) opens a modeless application window listing the focused pane's
+current-folder rows whose names RedSalamander gives to the temporary files of a copy or move (the
+Possible artifact shapes).
+
+- The command is available from **Commands -> Clean Up Leftovers of Interrupted Operations...** and from
+  the FolderView item menu's `Leftover from an interrupted operation` submenu whenever the listing has a
+  Possible row. It has no default shortcut and never runs by itself or at startup.
+- Rows show the name (relative to the current folder), size, modified time, and kind (`Possible
+  leftover` or `Possible original`). Leftovers start checked; possible originals (backups, rename hops,
+  case-only rename temps, S3 backup keys, remote rollback siblings) are listed after them and never
+  start checked. **Include subfolders** walks the subfolders on a bounded, cancelable worker that never
+  follows links.
+- **Cancel** is the default and Escape action. **Delete Selected...** submits one ordinary Delete of
+  the checked rows through File Operations (the Recycle Bin where the location has one, else a
+  permanent Delete behind its card), so the artifact warning, the Delete confirmation and the
+  identity-less by-name rules apply unchanged. The window deletes nothing itself.
+- The window MUST be a modeless DxUi-hosted app window, inherit the active app theme and themed window
+  chrome, and avoid visible native dialog-template controls in DxUi mode.
+
 ### Shared Directories
 
 `cmd/pane/shares` opens a modeless application dialog listing local Windows disk shares from the focused pane context.
@@ -371,6 +392,7 @@ This section is the single source of truth for the command ID catalog.
 - `cmd/pane/hotPath` *(parameterized: digit `1..9` and `0`)*
 - `cmd/pane/setHotPath` *(parameterized: digit `1..9` and `0`)*
 - `cmd/pane/listOpenedFiles`
+- `cmd/pane/cleanUpLeftovers`
 - `cmd/pane/showFoldersHistory`
 - `cmd/pane/makeFileList`
 - `cmd/pane/menu`
@@ -612,6 +634,7 @@ Selection commands operate on the concrete displayed set, not on a latent mask o
 - Calculate Occupied Space (`Alt+F10`) `[cmd/pane/viewSpace]`
 - Make File List… (`⊘`) `[cmd/pane/makeFileList]`
 - Go to Shortcut or Link Target (`⊘`) `[cmd/pane/goToShortcutOrLinkTarget]`
+- Clean Up Leftovers of Interrupted Operations… (`⊘`) `[cmd/pane/cleanUpLeftovers]`
 - ---
 - List Opened Files (`Alt+F11`) `[cmd/pane/listOpenedFiles]`
 - Show Folder History (`Alt+F12`) `[cmd/pane/showFoldersHistory]` *(opens NavigationView history dropdown)*

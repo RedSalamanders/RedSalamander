@@ -1,0 +1,66 @@
+{
+  "schema": "red-salamander.file-operations-capture-manifest.v1",
+  "sourceBase": "4e4c0fcd446f2b49bb3d257b969e4f88f6fbff2e",
+  "configuration": "Debug",
+  "platform": "x64",
+  "theme": "dark",
+  "language": "fr-FR",
+  "syntheticOperationData": true,
+  "activation": "SW_SHOWNOACTIVATE",
+  "case": "cmd_pane_fileops_popup_throughput_disclosure",
+  "fixtureSha256": "e60006635e0c358fae90c729dfc5a0df863ed574dcccd47e655fb2fc27707c2e",
+  "images": [
+    {
+      "file": "before__480dip__fr-FR__144dpi.png",
+      "scenario": "discovery-open-long-paths",
+      "variant": "baseline",
+      "clientWidthDip": 480,
+      "dpi": 144,
+      "pixelWidth": 724,
+      "pixelHeight": 767,
+      "sha256": "635667bc24dcde7f8446e5ba07083a1a33dc1c8564e66a9a32de6a9e8c1547b0",
+      "runId": "discovery-actions-retained-baseline",
+      "workspaceSnapshot": "ae337f0713bce9a2bea249c6a58c906cb301d3619467bee491b068babcc56a21",
+      "buildReceipt": "300ea53a85f31c9aa9fab196856762c457103c271ab95b30c6230031b353a249"
+    },
+    {
+      "file": "discovery-open__480dip__fr-FR__144dpi.png",
+      "scenario": "discovery-open-long-paths",
+      "variant": "candidate",
+      "clientWidthDip": 480,
+      "dpi": 144,
+      "pixelWidth": 724,
+      "pixelHeight": 767,
+      "sha256": "37262efc329eef5cd98c83f947ecab58f38d3945a7cfd3b954bc3a057cd271da",
+      "runId": "discovery-actions-retained-candidate",
+      "workspaceSnapshot": "e27ee2e16e041028a512209b4f81ae2436a5342334a253b2dae2a9bad5c8f30f",
+      "buildReceipt": "cf1fdd8325ca006ce167d60b78540e819798efd560f1aa02173ac023898e7ad6"
+    },
+    {
+      "file": "discovery-open__640dip__fr-FR__144dpi.png",
+      "scenario": "discovery-open-long-paths",
+      "variant": "candidate",
+      "clientWidthDip": 640,
+      "dpi": 144,
+      "pixelWidth": 964,
+      "pixelHeight": 767,
+      "sha256": "3cbd1bb531e62c813131fcb50a857e9b75e7d5e5ccc97a06f2016162cf192ed1",
+      "runId": "discovery-actions-retained-candidate",
+      "workspaceSnapshot": "e27ee2e16e041028a512209b4f81ae2436a5342334a253b2dae2a9bad5c8f30f",
+      "buildReceipt": "cf1fdd8325ca006ce167d60b78540e819798efd560f1aa02173ac023898e7ad6"
+    },
+    {
+      "file": "discovery-open__760dip__fr-FR__144dpi.png",
+      "scenario": "discovery-open-long-paths",
+      "variant": "candidate",
+      "clientWidthDip": 760,
+      "dpi": 144,
+      "pixelWidth": 1144,
+      "pixelHeight": 767,
+      "sha256": "74b3df7fda0eb853f90c6dd08ba13ce6ded9718843d07271697e45da2ccc2266",
+      "runId": "discovery-actions-retained-candidate",
+      "workspaceSnapshot": "e27ee2e16e041028a512209b4f81ae2436a5342334a253b2dae2a9bad5c8f30f",
+      "buildReceipt": "cf1fdd8325ca006ce167d60b78540e819798efd560f1aa02173ac023898e7ad6"
+    }
+  ]
+}

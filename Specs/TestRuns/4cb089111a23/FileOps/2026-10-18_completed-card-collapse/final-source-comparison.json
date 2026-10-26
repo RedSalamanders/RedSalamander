@@ -1,0 +1,10 @@
+{
+  "same_head": true,
+  "same_base": true,
+  "same_source_file_records": true,
+  "debug_records": 72,
+  "release_records": 72,
+  "debug_snapshot": "ce6e8c0b1d147b10f57afd8f9a1001b9616ddb766edad42672eb6f68521138e2",
+  "release_snapshot": "c082d2f0e73ff46f23fcd48e6a666ec87e2e4c3185fc8a20b5717fc3f244bd01",
+  "note": "The digest includes physical checkout identity; dirty-source records are compared independently."
+}

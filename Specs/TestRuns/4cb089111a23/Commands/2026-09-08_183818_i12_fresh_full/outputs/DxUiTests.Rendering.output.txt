@@ -1,0 +1,147 @@
+[START] Rendering
+  [START] TestSharedTransientSurfaceRendersOrdinaryPressedAndHighContrastPolicies
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestSharedTransientSurfaceRendersOrdinaryPressedAndHighContrastPolicies
+  [START] TestThroughputGraphBandsStayBelowHistoryLine
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestThroughputGraphBandsStayBelowHistoryLine
+  [START] TestThroughputGraphHueChurnPerformanceScenario
+  [DONE] TestThroughputGraphHueChurnPerformanceScenario
+  [START] TestDxUiCoreControlsDarkVisualBaseline
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestDxUiCoreControlsDarkVisualBaseline
+  [START] TestDxUiCoreControlsLightVisualBaseline
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestDxUiCoreControlsLightVisualBaseline
+  [START] TestDxUiHighContrastVisualBaseline
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestDxUiHighContrastVisualBaseline
+  [START] TestDxUiPopupAndBarsVisualBaseline
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestDxUiPopupAndBarsVisualBaseline
+  [START] TestDxUiPopupAndBarsAcrylicLightVisualBaseline
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestDxUiPopupAndBarsAcrylicLightVisualBaseline
+  [START] TestDxUiPageTransitionVisualBaseline
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestDxUiPageTransitionVisualBaseline
+  [START] TestDxUiAdvancedControlsVisualBaseline
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestDxUiAdvancedControlsVisualBaseline
+  [START] TestAttachedComboBoxPopupHoverDoesNotRepaintWhenHoveredItemStaysTheSame
+    [TRACE] rendering combo hover: begin
+    [TRACE] rendering combo hover: root attached
+    [TRACE] rendering combo hover: before ShowWindow
+    [TRACE] rendering combo hover: after ShowWindow
+    [TRACE] rendering combo hover: dispatching initial msg=799 hwnd=000000000094169E isWindow=1 class=RedSalamander.DxUiTests.AttachedHostWindow wp=1 lp=0
+    [TRACE] rendering combo hover: dispatched initial msg=799 hwnd=000000000094169E
+    [TRACE] rendering combo hover: dispatching initial msg=15 hwnd=000000000094169E isWindow=1 class=RedSalamander.DxUiTests.AttachedHostWindow wp=0 lp=0
+    [TRACE] rendering combo hover: dispatched initial msg=15 hwnd=000000000094169E
+    [TRACE] rendering combo hover: window shown
+    [TRACE] rendering combo hover: popup toggle handled
+    [TRACE] rendering combo hover: initial redraw complete
+    [TRACE] rendering combo hover: popup geometry ready
+    [TRACE] rendering combo hover: first hover complete
+    [TRACE] rendering combo hover: second-row hover complete
+    [TRACE] rendering combo hover: repeat hover complete
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedComboBoxPopupHoverDoesNotRepaintWhenHoveredItemStaysTheSame
+  [START] TestAttachedGridPaintHandlesDegenerateScrollbarTracks
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedGridPaintHandlesDegenerateScrollbarTracks
+  [START] TestGridIncludesBottomClippedTrailingRow
+  [DONE] TestGridIncludesBottomClippedTrailingRow
+  [START] TestAttachedLargeGridVisibleWorkStaysBoundedAfterScroll
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeGridVisibleWorkStaysBoundedAfterScroll
+  [START] TestAttachedLargeGridPaintReusesCellDataStringStorage
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeGridPaintReusesCellDataStringStorage
+  [START] TestAttachedLargeIconBadgeGridVisibleWorkStaysBoundedAfterScroll
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeIconBadgeGridVisibleWorkStaysBoundedAfterScroll
+  [START] TestAttachedGridBottomScrollKeepsFirstVisibleRowFlushWithHeader
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedGridBottomScrollKeepsFirstVisibleRowFlushWithHeader
+  [START] TestAttachedLargeGridLongRunScrollingStaysBoundedWithoutResizeChurn
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeGridLongRunScrollingStaysBoundedWithoutResizeChurn
+  [START] TestAttachedLargeGroupedGridVisibleWorkStaysBoundedAfterScroll
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeGroupedGridVisibleWorkStaysBoundedAfterScroll
+  [START] TestAttachedLargeCheckboxGridVisibleWorkStaysBoundedAfterScroll
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeCheckboxGridVisibleWorkStaysBoundedAfterScroll
+  [START] TestAttachedLargeGroupedGridLongRunScrollingStaysBoundedWithoutResizeChurn
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeGroupedGridLongRunScrollingStaysBoundedWithoutResizeChurn
+  [START] TestAttachedLargeCheckboxGridLongRunScrollingStaysBoundedWithoutResizeChurn
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedLargeCheckboxGridLongRunScrollingStaysBoundedWithoutResizeChurn
+  [START] TestAttachedComboBoxPopupScrollingStaysStable
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedComboBoxPopupScrollingStaysStable
+  [START] TestAttachedComboBoxPopupLongRunScrollingStaysStable
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedComboBoxPopupLongRunScrollingStaysStable
+  [START] TestAttachedHostSameSizeRepaintDoesNotResizeSwapChain
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedHostSameSizeRepaintDoesNotResizeSwapChain
+  [START] TestAttachedHostResizeDoesNotFlushD2DInWrongState
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedHostResizeDoesNotFlushD2DInWrongState
+  [START] TestAttachedHostRecoversAfterSimulatedDeviceLoss
+    [TRACE] attached host dtor: begin
+    [TRACE] attached host dtor: host detached
+    [TRACE] attached host dtor: hwnd reset
+  [DONE] TestAttachedHostRecoversAfterSimulatedDeviceLoss
+[DONE] Rendering
+All DxUi tests passed.

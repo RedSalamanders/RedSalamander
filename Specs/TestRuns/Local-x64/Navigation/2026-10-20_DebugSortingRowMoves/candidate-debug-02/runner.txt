@@ -1,0 +1,39 @@
+Stale TestSandbox run cleanup: 1 removed, 0 failed, 0 retained (unlinkable reparse point or test-owned VHDX receipt).
+Skipping build (verified receipt 73ad760fdbff90ebae53f3ee25a8cc0adbfb46f4378477140e52f6a5d16bf6ee).
+Validation plan: 89f1ce55b006ae83585062e8434f4d387f79963f1f8f503dd2f8e9c61ebdf125
+Entry fingerprints: 2f250a078782efeaf5a1b3c9a1e5a806aa7fb0abab149474942c7a4034430cc9 (99 ms)
+Shadow affected set: 1/1 entries; advisory-build=full. Fresh still executes all.
+
+======================================================================
+  Running: Commands
+======================================================================
+  Exe:  Z:\src\RedSalamander\.build\x64\Debug\RedSalamander.exe
+  Args: --commands-selftest --selftest-case=folderView_perf_sort_toggle_stress --selftest-repeat=5
+
+
+======================================================================
+  TEST RESULTS SUMMARY
+======================================================================
+
+  [PASS] Commands  (51,2s)
+         Passed: 5  Failed: 0  Skipped: 0
+
+  -------------------------------------------------------
+
+  Overall: PASSED  Total: 5  Passed: 5  Failed: 0  Skipped: 0
+  Wall time: 1m 12,1s
+  Classifications: flaky=0 regression=0 isolation_suspect=0 unclassified_failure=0
+  Quarantine: active=0 invalid=0 repair_attempts=0 repair_reproduced=0
+
+--- ARTIFACTS ---
+  Test root: Z:\RedSalamander.Perf
+  Run id:    20261020T120820Z-86480-535cfed2fdc349c8a6571e586a7cc1f0
+  Disk audit issues: 41
+  Last run: Z:\RedSalamander.Perf\runs\20261020T120820Z-86480-535cfed2fdc349c8a6571e586a7cc1f0\artifacts\selftest\last_run
+    results.json
+    run-all-tests-results.json
+    workspace-after-selftest.commands.json
+    workspace-final.json
+    commands\results.json
+    perf\folderView_perf_sort_toggle_stress_metrics.json
+

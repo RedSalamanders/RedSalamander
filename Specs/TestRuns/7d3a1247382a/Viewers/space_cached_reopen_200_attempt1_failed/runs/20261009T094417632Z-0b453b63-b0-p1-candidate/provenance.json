@@ -1,0 +1,4955 @@
+{
+  "schema": "viewer-space.memory-run-evidence.v2",
+  "runId": "20261009T094420Z-45920-c3ef336d9ccc449aba382c4b66ddeb8a",
+  "side": "candidate",
+  "mode": "CachedReopen200",
+  "case": "cmd_viewer_space_cache_reopen_200_first_map_optin",
+  "caseStatus": "failed",
+  "buildReceiptId": "ea4ebe861c5fcf352f2903a1791c44a2e6731f309472dbb1ccf9b9870c2a7bb3",
+  "buildSourceSnapshotId": "846115f86b923381c3d9311025957793349fecaddbccab6fa1748db82982e131",
+  "buildReceiptSha256": "c6237a300b0e1ceeb4d5221979467315f75723c129765e03e536dd7274a2b738",
+  "workspaceSnapshotId": "846115f86b923381c3d9311025957793349fecaddbccab6fa1748db82982e131",
+  "workspaceSnapshotSha256": "db351383ff61428a73d2cc682d2219cddcfaaa61a91b8e65c023b85d5a80773b",
+  "sealedBuildLog": {
+    "source_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\logs\\msbuild-20261009_112742_874-pid44124-ad1da9a7.log",
+    "source_bytes": 42095,
+    "source_sha256": "9fe5f552acca8ee77f57e0f3691d97942cbe43a8c3efb4026de47540daeb1703",
+    "chunks": [
+      {
+        "path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-cachedreopen200-20261009T094417632Z-0b453b63\\build-inputs\\candidate\\msbuild.log",
+        "bytes": 42095,
+        "sha256": "9fe5f552acca8ee77f57e0f3691d97942cbe43a8c3efb4026de47540daeb1703"
+      }
+    ]
+  },
+  "runnerStdout": {
+    "path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-cachedreopen200-20261009T094417632Z-0b453b63\\runner-logs\\20261009T094417632Z-0b453b63-b0-p1-candidate.stdout.txt",
+    "bytes": 2981,
+    "sha256": "87220479cd0d58c4401f6132400754de7b2dc28dd21577cd8bd10a9ac9cbf791",
+    "shards": [
+      "runner-stdout.log"
+    ]
+  },
+  "runnerStderr": {
+    "path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-cachedreopen200-20261009T094417632Z-0b453b63\\runner-logs\\20261009T094417632Z-0b453b63-b0-p1-candidate.stderr.txt",
+    "bytes": 0,
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "shards": []
+  },
+  "rawMetricsOriginalSourcePath": "D:\\RedSalamander.Perf\\runs\\20261009T094420Z-45920-c3ef336d9ccc449aba382c4b66ddeb8a\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "rawMetricsPreservedSourcePath": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-cachedreopen200-20261009T094417632Z-0b453b63\\raw-sources\\20261009T094417632Z-0b453b63-b0-p1-candidate\\perf_metrics.jsonl",
+  "rawMetricsSourceIndex": {
+    "original_path": "D:\\RedSalamander.Perf\\runs\\20261009T094420Z-45920-c3ef336d9ccc449aba382c4b66ddeb8a\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+    "preserved_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-memory-cachedreopen200-20261009T094417632Z-0b453b63\\raw-sources\\20261009T094417632Z-0b453b63-b0-p1-candidate\\perf_metrics.jsonl",
+    "bytes": 22012104,
+    "sha256": "e0cc2938dc85affd5b7d670d338fa34127b90d513c21a92e5d8af376cd35881b"
+  },
+  "rawMetricsSha256": "e0cc2938dc85affd5b7d670d338fa34127b90d513c21a92e5d8af376cd35881b",
+  "rawMetricsBytes": 22012104,
+  "rawMetricRowCount": 58640,
+  "metrics": {
+    "schema": "viewer-space.raw-metric-replay-map.v1",
+    "preservation": "curated-with-source-replay-map",
+    "sourceSha256": "e0cc2938dc85affd5b7d670d338fa34127b90d513c21a92e5d8af376cd35881b",
+    "sourceBytes": 22012104,
+    "sourceRows": 58640,
+    "retainedSha256": "6debfb6b61b92034febe08e744c75aa7de88c73e18ef617d8e951795ec9d855d",
+    "retainedBytes": 69738,
+    "retainedRows": 186,
+    "retainedSourceLineNumbers": [
+      243,
+      244,
+      245,
+      304,
+      1115,
+      1116,
+      1117,
+      1118,
+      1119,
+      1120,
+      1121,
+      1122,
+      1124,
+      1125,
+      1126,
+      1127,
+      1128,
+      1129,
+      1130,
+      1131,
+      1132,
+      1133,
+      1134,
+      1135,
+      1136,
+      1137,
+      1138,
+      1139,
+      1140,
+      1141,
+      1142,
+      1143,
+      1144,
+      1145,
+      1149,
+      1150,
+      1151,
+      1176,
+      1177,
+      1178,
+      1179,
+      1181,
+      1182,
+      1183,
+      1184,
+      1185,
+      1188,
+      1190,
+      1191,
+      1192,
+      1193,
+      1194,
+      1195,
+      1196,
+      1197,
+      1198,
+      1199,
+      1200,
+      1201,
+      1214,
+      1215,
+      1216,
+      1221,
+      1222,
+      1223,
+      1224,
+      1226,
+      1227,
+      1228,
+      1229,
+      1230,
+      1233,
+      1235,
+      1236,
+      1237,
+      1238,
+      1239,
+      1240,
+      1241,
+      1242,
+      1243,
+      1244,
+      1245,
+      1246,
+      1247,
+      1248,
+      1277,
+      1278,
+      1279,
+      1280,
+      1282,
+      1283,
+      1284,
+      1285,
+      1286,
+      1289,
+      1291,
+      1292,
+      1293,
+      1294,
+      1295,
+      1296,
+      1297,
+      1298,
+      1299,
+      1303,
+      1304,
+      1305,
+      1326,
+      1327,
+      1328,
+      1332,
+      1333,
+      1334,
+      1335,
+      1336,
+      1337,
+      1338,
+      1339,
+      1340,
+      1341,
+      1342,
+      1343,
+      1344,
+      1345,
+      1346,
+      1347,
+      1348,
+      1349,
+      1353,
+      1359,
+      1364,
+      1365,
+      1366,
+      1367,
+      1369,
+      1370,
+      1371,
+      1372,
+      1373,
+      1376,
+      1378,
+      1388,
+      1392,
+      1396,
+      1406,
+      1413,
+      1426,
+      1427,
+      1428,
+      5452,
+      5453,
+      5454,
+      5455,
+      5456,
+      5466,
+      5470,
+      5471,
+      5481,
+      5488,
+      5489,
+      5490,
+      5491,
+      5504,
+      6732,
+      6736,
+      15647,
+      15654,
+      15658,
+      15662,
+      16917,
+      58604,
+      58605,
+      58606,
+      58607,
+      58609,
+      58610,
+      58611,
+      58612,
+      58613,
+      58616,
+      58618,
+      58619,
+      58620,
+      58621,
+      58622
+    ],
+    "retentionPolicy": "all claim-bearing ViewerSpace rows; high-frequency diagnostic counters omitted by named family policy",
+    "metricCounts": {
+      "App.Startup.CoInitializeEx": 1,
+      "App.Startup.LoadThemeDefinitions": 1,
+      "App.Startup.LoadSettings": 1,
+      "App.Startup.QueueNavigationViewWarmup": 1,
+      "App.Startup.Shortcuts.Initialize": 1,
+      "NavigationView.WarmSharedDeviceResources": 1,
+      "App.Startup.Plugins.Initialize.FileSystems": 1,
+      "App.Startup.Plugins.Initialize.Viewers": 1,
+      "App.Startup.DirectoryInfoCache.ApplySettings": 1,
+      "App.Startup.InitInstance.RegisterClassExW": 1,
+      "App.Startup.MainWindow.Menus": 1,
+      "FolderWindow.OnCreate.GetDpiForWindow": 1,
+      "fileops.move_breadcrumb.load.us": 1,
+      "FolderWindow.OnCreate.EnsureFileOperations": 1,
+      "FolderWindow.OnCreate.CalculateLayout": 1,
+      "NavigationView.Create.RegisterWndClass": 2,
+      "NavigationView.OnCreate.GetDpiForWindow": 2,
+      "NavigationView.OnCreate.SetTheme": 2,
+      "NavigationView.OnCreate": 2,
+      "NavigationView.Create.CreateWindowExW": 2,
+      "NavigationView.Create": 2,
+      "FolderWindow.OnCreate.CreatePane.NavigationView.Create": 2,
+      "FolderWindow.OnCreate.CreatePane.FilterBar.CreateDxHost": 2,
+      "folder.layout.setup_us": 14,
+      "render.layout_items_us": 14,
+      "FolderWindow.OnCreate.CreatePane.FolderView.Create": 2,
+      "FolderWindow.OnCreate.CreatePane.StatusBar.CreateWindowExW": 2,
+      "FolderWindow.OnCreate.CreatePane.StatusBar.Initialize": 2,
+      "FolderWindow.OnCreate.CreatePane.PreviewTabs.CreateDxHost": 2,
+      "FolderWindow.OnCreate.CreatePane.PreviewContent.CreateDxHost": 2,
+      "FolderWindow.OnCreate.CreatePane.SetFileSystem": 2,
+      "FolderWindow.OnCreate.CreatePane.SetCallbacks": 2,
+      "FolderWindow.OnCreate.CreatePane.StartSelectionSizeWorker": 2,
+      "FolderWindow.OnCreate.CreatePane": 2,
+      "FolderWindow.OnCreate.FunctionBar.Create": 1,
+      "FolderWindow.OnCreate.FunctionBar.Initialize": 1,
+      "FolderWindow.OnCreate.UpdatePaneUI": 1,
+      "FolderWindow.OnCreate.EnsurePaneFileSystems": 1,
+      "FolderWindow.OnCreate.NetworkChangeSubscription": 1,
+      "FolderWindow.OnCreate.ApplyTheme": 1,
+      "App.Startup.FolderWindow.Create": 1,
+      "App.Startup.ApplyAppTheme": 1,
+      "App.Startup.ApplyPane.Left.SetFileExtensionsVisible": 1,
+      "App.Startup.ApplyPane.Left.SetNavigationBarVisible": 1,
+      "App.Startup.ApplyPane.Left.SetFilterBarVisible": 1,
+      "App.Startup.ApplyPane.Left.SetStatusBarVisible": 1,
+      "App.Startup.ApplyPane.Left.SetSort": 1,
+      "App.Startup.ApplyPane.Left.SetThumbnailSize": 1,
+      "App.Startup.ApplyPane.Left.SetDisplayMode": 1,
+      "App.Startup.ApplyPane.Left.SetFolderPath": 1,
+      "App.Startup.ApplyPane.Left": 1,
+      "App.Startup.ApplyPane.Right.SetFileExtensionsVisible": 1,
+      "App.Startup.ApplyPane.Right.SetNavigationBarVisible": 1,
+      "App.Startup.ApplyPane.Right.SetFilterBarVisible": 1,
+      "App.Startup.ApplyPane.Right.SetStatusBarVisible": 1,
+      "App.Startup.ApplyPane.Right.SetSort": 1,
+      "App.Startup.ApplyPane.Right.SetThumbnailSize": 1,
+      "App.Startup.ApplyPane.Right.SetDisplayMode": 1,
+      "App.Startup.ApplyPane.Right.SetFolderPath": 1,
+      "App.Startup.ApplyPane.Right": 1,
+      "App.Startup.MainWindow.WM_CREATE": 1,
+      "App.Startup.InitInstance.CreateWindowW": 1,
+      "App.Startup.Metric.TimeToFirstWindow": 1,
+      "App.Startup.InitInstance.RestoreWindowPlacement": 1,
+      "App.Startup.InitInstance.ShowUpdateWindow": 1,
+      "App.Startup.InitInstance.QueueIconCacheWarm": 1,
+      "App.Startup.InitInstance": 1,
+      "App.Startup.LoadAccelerators": 1,
+      "App.Startup.Metric.TimeToFirstPaint": 1,
+      "iconcache.shgetfileinfo_us": 48,
+      "App.Startup.Metric.TimeToInputReady": 1,
+      "iconcache.lock_hold_slow_us": 1,
+      "NavigationView.DeferredInit": 2,
+      "FolderView.DeferredInit": 2,
+      "render.begin_to_enddraw_us": 8,
+      "render.dirty_rect_area_px": 8,
+      "render.items_considered": 8,
+      "render.items_drawn": 8,
+      "render.empty_state_layout_creates": 8,
+      "render.item_has_icon": 8,
+      "render.item_placeholder_icon": 8,
+      "render.item_textlayout_label": 8,
+      "render.item_textlayout_details": 8,
+      "render.item_textlayout_metadata": 8,
+      "render.incremental_search_effect_updates": 8,
+      "render.present_us": 8,
+      "folder.frame.total_us": 8,
+      "folder.frame.present_us": 8,
+      "folder.frame.visible_work_count": 8,
+      "folder.frame.dirty_rect_area_px": 8,
+      "dwrite.text_layout.frame_create_count": 8,
+      "render.frame_us": 8,
+      "render.status_bar.paint_us": 2,
+      "IconCache.WarmCommonExtensions": 1,
+      "render.function_bar.paint_us": 1,
+      "viewer.space.refresh.dispose_us": 4,
+      "viewer.space.refresh.dispose_completed": 4,
+      "viewer.space.scan.cache_miss": 1,
+      "viewer.space.scan.active_workers": 243,
+      "viewer.space.scan.frontier_depth": 142,
+      "FileSystem.DirectoryOps.Enumerate": 121,
+      "FileSystem.DirectoryOps.TrimBuffer": 121,
+      "viewer.space.scan.enumerate_us": 121,
+      "viewer.space.scan.frontier_lock_wait_us": 121,
+      "viewer.space.hit_test_us": 21,
+      "viewer.space.scan.frontier_depth_peak": 1,
+      "viewer.space.scan.idle_worker_waits": 1,
+      "viewer.space.scan.total_us": 1,
+      "viewer.space.scan.files": 1,
+      "viewer.space.scan.folders": 1,
+      "viewer.space.scan.bytes": 1,
+      "viewer.space.scan.cpu_priority": 1,
+      "viewer.space.scan.first_preview_priority_jobs": 1,
+      "viewer.space.scan.provider_buffer_peak_bytes": 1,
+      "viewer.space.scan.validation_scratch_peak_bytes": 1,
+      "viewer.space.scan.worker_staging_peak_bytes": 1,
+      "viewer.space.scan.worker_staging_preflight_us": 1,
+      "viewer.space.scan.worker_staging_preflight_reservation_peak_bytes": 1,
+      "viewer.space.scan.worker_staging_preflight_record_total": 1,
+      "viewer.space.scan.worker_staging_rejected_count": 1,
+      "viewer.space.scan.bookkeeping_peak_bytes": 1,
+      "viewer.space.scan.validation_scratch_rejected_count": 1,
+      "viewer.space.scan.active_path_peak_bytes": 1,
+      "viewer.space.scan.active_path_rejected_count": 1,
+      "viewer.space.model.accepted_entries": 1,
+      "viewer.space.model.rejected_entries": 1,
+      "viewer.space.model.capped_directories": 1,
+      "viewer.space.model.capped_files": 1,
+      "viewer.space.model.retained_directories": 1,
+      "viewer.space.model.retained_files": 1,
+      "viewer.space.model.child_references": 1,
+      "viewer.space.model.retained_name_bytes": 1,
+      "viewer.space.model.traversed_directories": 1,
+      "viewer.space.scan.worker_completed": 1,
+      "viewer.space.render.paint_us": 14,
+      "viewer.space.render.tile_draw_count": 14,
+      "viewer.space.render.text_draw_count": 14,
+      "viewer.space.layout.visible_tiles": 14,
+      "viewer.space.open_to_first_paint_us": 2,
+      "viewer.space.dxui.paint_us": 3,
+      "dxui.frame.dirty_rect_count": 3,
+      "dxui.frame.dirty_rect_area_px": 3,
+      "viewer.space.queue.posted_count": 5,
+      "viewer.space.queue.coalesced_count": 5,
+      "viewer.space.queue.pending_bytes": 5,
+      "viewer.space.queue.pending_peak_bytes": 5,
+      "viewer.space.queue.posted_bytes": 5,
+      "viewer.space.queue.lock_hold_count": 5,
+      "viewer.space.queue.lock_hold_total_us": 5,
+      "viewer.space.queue.lock_hold_max_us": 5,
+      "viewer.space.queue.lock_hold_us": 5,
+      "viewer.space.queue.drained_count": 5,
+      "viewer.space.queue.drain_count": 5,
+      "viewer.space.queue.drain_total_us": 5,
+      "viewer.space.queue.drain_max_us": 5,
+      "viewer.space.queue.drain_us": 5,
+      "viewer.space.scan.summary_stage_bytes": 5,
+      "viewer.space.scan.summary_committed_count": 5,
+      "viewer.space.scan.summary_rejected_count": 5,
+      "viewer.space.scan.summary_chunk_max_bytes": 5,
+      "viewer.space.layout.draw_items": 3,
+      "viewer.space.layout.nested_directory_tiles": 3,
+      "viewer.space.layout.nested_file_tiles": 3,
+      "viewer.space.layout.expandable_unexpanded_folders": 3,
+      "viewer.space.layout.publish_us": 3,
+      "viewer.space.layout.turn_us": 3,
+      "viewer.space.layout.rebuild_us": 3,
+      "viewer.space.layout.dispose_us": 3,
+      "viewer.space.layout.dispose_completed": 3,
+      "viewer.space.open_to_first_meaningful_paint_us": 2,
+      "viewer.space.model.directory_count": 19061,
+      "viewer.space.model.file_candidate_count": 19061,
+      "viewer.space.model.synthetic_count": 19061,
+      "viewer.space.model.child_arena_slots": 1,
+      "viewer.space.model.child_arena_free_slots": 1,
+      "viewer.space.model.aggregate_bytes": 1,
+      "viewer.space.analysis.retained_rows": 2,
+      "viewer.space.analysis.turn_us": 2,
+      "viewer.space.model.cache_snapshot_bytes": 1,
+      "viewer.space.model.cache_resident_bytes": 2,
+      "viewer.space.refresh.dispose_submit_us": 2,
+      "viewer.space.refresh.dispose_submit_bytes_total": 2,
+      "viewer.space.refresh.dispose_submit_owner_peak": 2,
+      "viewer.space.model.cache_restore_turn_us": 2,
+      "viewer.space.model.cache_restore_batched_turn": 1,
+      "viewer.space.scan.cache_hit": 1,
+      "viewer.space.model.cache_restore_bytes": 1,
+      "viewer.space.model.cache_restore_us": 1,
+      "viewer.space.render.static_cache_miss": 1,
+      "viewer.space.render.static_cache_record_us": 1,
+      "viewer.space.render.static_cache_hit": 2,
+      "viewer.space.input.handler_to_next_present_us": 1,
+      "viewer.space.render.static_cache_replay_us": 2
+    },
+    "metricSummary": {
+      "App.Startup.ApplyAppTheme": {
+        "durationUs": {
+          "n": 1,
+          "min": 663,
+          "p50": 663,
+          "p95": 663,
+          "max": 663
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left": {
+        "durationUs": {
+          "n": 1,
+          "min": 5198,
+          "p50": 5198,
+          "p95": 5198,
+          "max": 5198
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetDisplayMode": {
+        "durationUs": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetFileExtensionsVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 2,
+          "p50": 2,
+          "p95": 2,
+          "max": 2
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetFilterBarVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetFolderPath": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetNavigationBarVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetSort": {
+        "durationUs": {
+          "n": 1,
+          "min": 24,
+          "p50": 24,
+          "p95": 24,
+          "max": 24
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetStatusBarVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Left.SetThumbnailSize": {
+        "durationUs": {
+          "n": 1,
+          "min": 2,
+          "p50": 2,
+          "p95": 2,
+          "max": 2
+        },
+        "value0": {
+          "n": 1,
+          "min": 64,
+          "p50": 64,
+          "p95": 64,
+          "max": 64
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right": {
+        "durationUs": {
+          "n": 1,
+          "min": 3882,
+          "p50": 3882,
+          "p95": 3882,
+          "max": 3882
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetDisplayMode": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetFileExtensionsVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetFilterBarVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetFolderPath": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetNavigationBarVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetSort": {
+        "durationUs": {
+          "n": 1,
+          "min": 25,
+          "p50": 25,
+          "p95": 25,
+          "max": 25
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetStatusBarVisible": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.ApplyPane.Right.SetThumbnailSize": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 64,
+          "p50": 64,
+          "p95": 64,
+          "max": 64
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.CoInitializeEx": {
+        "durationUs": {
+          "n": 1,
+          "min": 988,
+          "p50": 988,
+          "p95": 988,
+          "max": 988
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.DirectoryInfoCache.ApplySettings": {
+        "durationUs": {
+          "n": 1,
+          "min": 19,
+          "p50": 19,
+          "p95": 19,
+          "max": 19
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.FolderWindow.Create": {
+        "durationUs": {
+          "n": 1,
+          "min": 149230,
+          "p50": 149230,
+          "p95": 149230,
+          "max": 149230
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.InitInstance": {
+        "durationUs": {
+          "n": 1,
+          "min": 352231,
+          "p50": 352231,
+          "p95": 352231,
+          "max": 352231
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.InitInstance.CreateWindowW": {
+        "durationUs": {
+          "n": 1,
+          "min": 298456,
+          "p50": 298456,
+          "p95": 298456,
+          "max": 298456
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.InitInstance.QueueIconCacheWarm": {
+        "durationUs": {
+          "n": 1,
+          "min": 6,
+          "p50": 6,
+          "p95": 6,
+          "max": 6
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.InitInstance.RegisterClassExW": {
+        "durationUs": {
+          "n": 1,
+          "min": 21,
+          "p50": 21,
+          "p95": 21,
+          "max": 21
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.InitInstance.RestoreWindowPlacement": {
+        "durationUs": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.InitInstance.ShowUpdateWindow": {
+        "durationUs": {
+          "n": 1,
+          "min": 42603,
+          "p50": 42603,
+          "p95": 42603,
+          "max": 42603
+        },
+        "value0": {
+          "n": 1,
+          "min": 10,
+          "p50": 10,
+          "p95": 10,
+          "max": 10
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.LoadAccelerators": {
+        "durationUs": {
+          "n": 1,
+          "min": 69,
+          "p50": 69,
+          "p95": 69,
+          "max": 69
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.LoadSettings": {
+        "durationUs": {
+          "n": 1,
+          "min": 860,
+          "p50": 860,
+          "p95": 860,
+          "max": 860
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.LoadThemeDefinitions": {
+        "durationUs": {
+          "n": 1,
+          "min": 3233,
+          "p50": 3233,
+          "p95": 3233,
+          "max": 3233
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.MainWindow.Menus": {
+        "durationUs": {
+          "n": 1,
+          "min": 1672,
+          "p50": 1672,
+          "p95": 1672,
+          "max": 1672
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.MainWindow.WM_CREATE": {
+        "durationUs": {
+          "n": 1,
+          "min": 297589,
+          "p50": 297589,
+          "p95": 297589,
+          "max": 297589
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.Metric.TimeToFirstPaint": {
+        "durationUs": {
+          "n": 1,
+          "min": 4074041,
+          "p50": 4074041,
+          "p95": 4074041,
+          "max": 4074041
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.Metric.TimeToFirstWindow": {
+        "durationUs": {
+          "n": 1,
+          "min": 4007660,
+          "p50": 4007660,
+          "p95": 4007660,
+          "max": 4007660
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.Metric.TimeToInputReady": {
+        "durationUs": {
+          "n": 1,
+          "min": 4134951,
+          "p50": 4134951,
+          "p95": 4134951,
+          "max": 4134951
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.Plugins.Initialize.FileSystems": {
+        "durationUs": {
+          "n": 1,
+          "min": 617166,
+          "p50": 617166,
+          "p95": 617166,
+          "max": 617166
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.Plugins.Initialize.Viewers": {
+        "durationUs": {
+          "n": 1,
+          "min": 61565,
+          "p50": 61565,
+          "p95": 61565,
+          "max": 61565
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.QueueNavigationViewWarmup": {
+        "durationUs": {
+          "n": 1,
+          "min": 200,
+          "p50": 200,
+          "p95": 200,
+          "max": 200
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "App.Startup.Shortcuts.Initialize": {
+        "durationUs": {
+          "n": 1,
+          "min": 221,
+          "p50": 221,
+          "p95": 221,
+          "max": 221
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FileSystem.DirectoryOps.Enumerate": {
+        "durationUs": {
+          "n": 121,
+          "min": 105,
+          "p50": 196,
+          "p95": 304,
+          "max": 353
+        },
+        "value0": {
+          "n": 121,
+          "min": 524288,
+          "p50": 524288,
+          "p95": 524288,
+          "max": 524288
+        },
+        "value1": {
+          "n": 121,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FileSystem.DirectoryOps.TrimBuffer": {
+        "durationUs": {
+          "n": 121,
+          "min": 0,
+          "p50": 1,
+          "p95": 2,
+          "max": 10
+        },
+        "value0": {
+          "n": 121,
+          "min": 524288,
+          "p50": 524288,
+          "p95": 524288,
+          "max": 524288
+        },
+        "value1": {
+          "n": 121,
+          "min": 514688,
+          "p50": 514688,
+          "p95": 523848,
+          "max": 523848
+        }
+      },
+      "FolderView.DeferredInit": {
+        "durationUs": {
+          "n": 2,
+          "min": 32294,
+          "p50": 32294,
+          "p95": 41831,
+          "max": 41831
+        },
+        "value0": {
+          "n": 2,
+          "min": 14,
+          "p50": 14,
+          "p95": 14,
+          "max": 14
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.ApplyTheme": {
+        "durationUs": {
+          "n": 1,
+          "min": 328,
+          "p50": 328,
+          "p95": 328,
+          "max": 328
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CalculateLayout": {
+        "durationUs": {
+          "n": 1,
+          "min": 2,
+          "p50": 2,
+          "p95": 2,
+          "max": 2
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane": {
+        "durationUs": {
+          "n": 2,
+          "min": 3998,
+          "p50": 3998,
+          "p95": 137278,
+          "max": 137278
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.FilterBar.CreateDxHost": {
+        "durationUs": {
+          "n": 2,
+          "min": 188,
+          "p50": 188,
+          "p95": 202,
+          "max": 202
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.FolderView.Create": {
+        "durationUs": {
+          "n": 2,
+          "min": 1554,
+          "p50": 1554,
+          "p95": 134445,
+          "max": 134445
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.NavigationView.Create": {
+        "durationUs": {
+          "n": 2,
+          "min": 593,
+          "p50": 593,
+          "p95": 758,
+          "max": 758
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.PreviewContent.CreateDxHost": {
+        "durationUs": {
+          "n": 2,
+          "min": 159,
+          "p50": 159,
+          "p95": 189,
+          "max": 189
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.PreviewTabs.CreateDxHost": {
+        "durationUs": {
+          "n": 2,
+          "min": 176,
+          "p50": 176,
+          "p95": 185,
+          "max": 185
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.SetCallbacks": {
+        "durationUs": {
+          "n": 2,
+          "min": 5,
+          "p50": 5,
+          "p95": 22,
+          "max": 22
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.SetFileSystem": {
+        "durationUs": {
+          "n": 2,
+          "min": 69,
+          "p50": 69,
+          "p95": 127,
+          "max": 127
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.StartSelectionSizeWorker": {
+        "durationUs": {
+          "n": 2,
+          "min": 231,
+          "p50": 231,
+          "p95": 272,
+          "max": 272
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.StatusBar.CreateWindowExW": {
+        "durationUs": {
+          "n": 2,
+          "min": 291,
+          "p50": 291,
+          "p95": 372,
+          "max": 372
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.CreatePane.StatusBar.Initialize": {
+        "durationUs": {
+          "n": 2,
+          "min": 11,
+          "p50": 11,
+          "p95": 52,
+          "max": 52
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.EnsureFileOperations": {
+        "durationUs": {
+          "n": 1,
+          "min": 766,
+          "p50": 766,
+          "p95": 766,
+          "max": 766
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.EnsurePaneFileSystems": {
+        "durationUs": {
+          "n": 1,
+          "min": 607,
+          "p50": 607,
+          "p95": 607,
+          "max": 607
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.FunctionBar.Create": {
+        "durationUs": {
+          "n": 1,
+          "min": 309,
+          "p50": 309,
+          "p95": 309,
+          "max": 309
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.FunctionBar.Initialize": {
+        "durationUs": {
+          "n": 1,
+          "min": 7,
+          "p50": 7,
+          "p95": 7,
+          "max": 7
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.GetDpiForWindow": {
+        "durationUs": {
+          "n": 1,
+          "min": 2,
+          "p50": 2,
+          "p95": 2,
+          "max": 2
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.NetworkChangeSubscription": {
+        "durationUs": {
+          "n": 1,
+          "min": 4344,
+          "p50": 4344,
+          "p95": 4344,
+          "max": 4344
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "FolderWindow.OnCreate.UpdatePaneUI": {
+        "durationUs": {
+          "n": 1,
+          "min": 46,
+          "p50": 46,
+          "p95": 46,
+          "max": 46
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "IconCache.WarmCommonExtensions": {
+        "durationUs": {
+          "n": 1,
+          "min": 354298,
+          "p50": 354298,
+          "p95": 354298,
+          "max": 354298
+        },
+        "value0": {
+          "n": 1,
+          "min": 48,
+          "p50": 48,
+          "p95": 48,
+          "max": 48
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.Create": {
+        "durationUs": {
+          "n": 2,
+          "min": 572,
+          "p50": 572,
+          "p95": 743,
+          "max": 743
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.Create.CreateWindowExW": {
+        "durationUs": {
+          "n": 2,
+          "min": 503,
+          "p50": 503,
+          "p95": 678,
+          "max": 678
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.Create.RegisterWndClass": {
+        "durationUs": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 11,
+          "max": 11
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.DeferredInit": {
+        "durationUs": {
+          "n": 2,
+          "min": 934,
+          "p50": 934,
+          "p95": 185667,
+          "max": 185667
+        },
+        "value0": {
+          "n": 2,
+          "min": 1001,
+          "p50": 1001,
+          "p95": 1003,
+          "max": 1003
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.OnCreate": {
+        "durationUs": {
+          "n": 2,
+          "min": 209,
+          "p50": 209,
+          "p95": 264,
+          "max": 264
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.OnCreate.GetDpiForWindow": {
+        "durationUs": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.OnCreate.SetTheme": {
+        "durationUs": {
+          "n": 2,
+          "min": 172,
+          "p50": 172,
+          "p95": 210,
+          "max": 210
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "NavigationView.WarmSharedDeviceResources": {
+        "durationUs": {
+          "n": 1,
+          "min": 149595,
+          "p50": 149595,
+          "p95": 149595,
+          "max": 149595
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "dwrite.text_layout.frame_create_count": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "dxui.frame.dirty_rect_area_px": {
+        "durationUs": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "dxui.frame.dirty_rect_count": {
+        "durationUs": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "fileops.move_breadcrumb.load.us": {
+        "durationUs": {
+          "n": 1,
+          "min": 703,
+          "p50": 703,
+          "p95": 703,
+          "max": 703
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "folder.frame.dirty_rect_area_px": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 428736,
+          "p50": 429345,
+          "p95": 429345,
+          "max": 429345
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "folder.frame.present_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 110,
+          "p50": 168,
+          "p95": 800,
+          "max": 800
+        },
+        "value0": {
+          "n": 8,
+          "min": 428736,
+          "p50": 429345,
+          "p95": 429345,
+          "max": 429345
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "folder.frame.total_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 324,
+          "p50": 445,
+          "p95": 1137,
+          "max": 1137
+        },
+        "value0": {
+          "n": 8,
+          "min": 428736,
+          "p50": 429345,
+          "p95": 429345,
+          "max": 429345
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "folder.frame.visible_work_count": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "folder.layout.setup_us": {
+        "durationUs": {
+          "n": 14,
+          "min": 1,
+          "p50": 1,
+          "p95": 119395,
+          "max": 119395
+        },
+        "value0": {
+          "n": 14,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 14,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "iconcache.lock_hold_slow_us": {
+        "durationUs": {
+          "n": 1,
+          "min": 183903,
+          "p50": 183903,
+          "p95": 183903,
+          "max": 183903
+        },
+        "value0": {
+          "n": 1,
+          "min": 250,
+          "p50": 250,
+          "p95": 250,
+          "max": 250
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "iconcache.shgetfileinfo_us": {
+        "durationUs": {
+          "n": 48,
+          "min": 287,
+          "p50": 2517,
+          "p95": 5999,
+          "max": 27471
+        },
+        "value0": {
+          "n": 48,
+          "min": 16,
+          "p50": 128,
+          "p95": 128,
+          "max": 128
+        },
+        "value1": {
+          "n": 48,
+          "min": 16400,
+          "p50": 16400,
+          "p95": 16400,
+          "max": 16400
+        }
+      },
+      "render.begin_to_enddraw_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 31,
+          "p50": 49,
+          "p95": 105,
+          "max": 105
+        },
+        "value0": {
+          "n": 8,
+          "min": 428736,
+          "p50": 429345,
+          "p95": 429345,
+          "max": 429345
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.dirty_rect_area_px": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 428736,
+          "p50": 429345,
+          "p95": 429345,
+          "max": 429345
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.empty_state_layout_creates": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.frame_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 380,
+          "p50": 532,
+          "p95": 1216,
+          "max": 1216
+        },
+        "value0": {
+          "n": 8,
+          "min": 428736,
+          "p50": 429345,
+          "p95": 429345,
+          "max": 429345
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.function_bar.paint_us": {
+        "durationUs": {
+          "n": 1,
+          "min": 35891,
+          "p50": 35891,
+          "p95": 35891,
+          "max": 35891
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.incremental_search_effect_updates": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.item_has_icon": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.item_placeholder_icon": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.item_textlayout_details": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.item_textlayout_label": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.item_textlayout_metadata": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.items_considered": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.items_drawn": {
+        "durationUs": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.layout_items_us": {
+        "durationUs": {
+          "n": 14,
+          "min": 14,
+          "p50": 41,
+          "p95": 119472,
+          "max": 119472
+        },
+        "value0": {
+          "n": 14,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 14,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.present_us": {
+        "durationUs": {
+          "n": 8,
+          "min": 110,
+          "p50": 169,
+          "p95": 801,
+          "max": 801
+        },
+        "value0": {
+          "n": 8,
+          "min": 428736,
+          "p50": 429345,
+          "p95": 429345,
+          "max": 429345
+        },
+        "value1": {
+          "n": 8,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "render.status_bar.paint_us": {
+        "durationUs": {
+          "n": 2,
+          "min": 4807,
+          "p50": 4807,
+          "p95": 5111,
+          "max": 5111
+        },
+        "value0": {
+          "n": 2,
+          "min": 704,
+          "p50": 704,
+          "p95": 705,
+          "max": 705
+        },
+        "value1": {
+          "n": 2,
+          "min": 1005,
+          "p50": 1005,
+          "p95": 1006,
+          "max": 1006
+        }
+      },
+      "viewer.space.analysis.retained_rows": {
+        "durationUs": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 2,
+          "min": 20,
+          "p50": 20,
+          "p95": 20,
+          "max": 20
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.analysis.turn_us": {
+        "durationUs": {
+          "n": 2,
+          "min": 101,
+          "p50": 101,
+          "p95": 213,
+          "max": 213
+        },
+        "value0": {
+          "n": 2,
+          "min": 249,
+          "p50": 249,
+          "p95": 249,
+          "max": 249
+        },
+        "value1": {
+          "n": 2,
+          "min": 20,
+          "p50": 20,
+          "p95": 20,
+          "max": 20
+        }
+      },
+      "viewer.space.dxui.paint_us": {
+        "durationUs": {
+          "n": 3,
+          "min": 312,
+          "p50": 1606,
+          "p95": 1930,
+          "max": 1930
+        },
+        "value0": {
+          "n": 3,
+          "min": 978,
+          "p50": 978,
+          "p95": 978,
+          "max": 978
+        },
+        "value1": {
+          "n": 3,
+          "min": 54,
+          "p50": 54,
+          "p95": 54,
+          "max": 54
+        }
+      },
+      "viewer.space.hit_test_us": {
+        "durationUs": {
+          "n": 21,
+          "min": 1,
+          "p50": 4,
+          "p95": 6,
+          "max": 6
+        },
+        "value0": {
+          "n": 21,
+          "min": 0,
+          "p50": 320,
+          "p95": 320,
+          "max": 2338
+        },
+        "value1": {
+          "n": 21,
+          "min": 0,
+          "p50": 3,
+          "p95": 320,
+          "max": 2338
+        }
+      },
+      "viewer.space.input.handler_to_next_present_us": {
+        "durationUs": {
+          "n": 1,
+          "min": 1984,
+          "p50": 1984,
+          "p95": 1984,
+          "max": 1984
+        },
+        "value0": {
+          "n": 1,
+          "min": 320,
+          "p50": 320,
+          "p95": 320,
+          "max": 320
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.layout.dispose_completed": {
+        "durationUs": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 3,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.layout.dispose_us": {
+        "durationUs": {
+          "n": 3,
+          "min": 5,
+          "p50": 7,
+          "p95": 109,
+          "max": 109
+        },
+        "value0": {
+          "n": 3,
+          "min": 101752,
+          "p50": 101752,
+          "p95": 416160,
+          "max": 416160
+        },
+        "value1": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.layout.draw_items": {
+        "durationUs": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 3,
+          "min": 320,
+          "p50": 320,
+          "p95": 2338,
+          "max": 2338
+        },
+        "value1": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.layout.expandable_unexpanded_folders": {
+        "durationUs": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.layout.nested_directory_tiles": {
+        "durationUs": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 3,
+          "min": 31,
+          "p50": 100,
+          "p95": 100,
+          "max": 100
+        },
+        "value1": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.layout.nested_file_tiles": {
+        "durationUs": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 3,
+          "min": 200,
+          "p50": 200,
+          "p95": 2300,
+          "max": 2300
+        },
+        "value1": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.layout.publish_us": {
+        "durationUs": {
+          "n": 3,
+          "min": 63,
+          "p50": 129,
+          "p95": 203,
+          "max": 203
+        },
+        "value0": {
+          "n": 3,
+          "min": 320,
+          "p50": 320,
+          "p95": 2338,
+          "max": 2338
+        },
+        "value1": {
+          "n": 3,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        }
+      },
+      "viewer.space.layout.rebuild_us": {
+        "durationUs": {
+          "n": 3,
+          "min": 348,
+          "p50": 512,
+          "p95": 753,
+          "max": 753
+        },
+        "value0": {
+          "n": 3,
+          "min": 320,
+          "p50": 320,
+          "p95": 2338,
+          "max": 2338
+        },
+        "value1": {
+          "n": 3,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.layout.turn_us": {
+        "durationUs": {
+          "n": 3,
+          "min": 348,
+          "p50": 512,
+          "p95": 753,
+          "max": 753
+        },
+        "value0": {
+          "n": 3,
+          "min": 4371,
+          "p50": 6709,
+          "p95": 31893,
+          "max": 31893
+        },
+        "value1": {
+          "n": 3,
+          "min": 320,
+          "p50": 320,
+          "p95": 2338,
+          "max": 2338
+        }
+      },
+      "viewer.space.layout.visible_tiles": {
+        "durationUs": {
+          "n": 14,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 14,
+          "min": 0,
+          "p50": 188,
+          "p95": 2335,
+          "max": 2335
+        },
+        "value1": {
+          "n": 14,
+          "min": 0,
+          "p50": 132,
+          "p95": 132,
+          "max": 132
+        }
+      },
+      "viewer.space.model.accepted_entries": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 10120,
+          "p50": 10120,
+          "p95": 10120,
+          "max": 10120
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.aggregate_bytes": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.cache_resident_bytes": {
+        "durationUs": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 2,
+          "min": 533966,
+          "p50": 533966,
+          "p95": 533966,
+          "max": 533966
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.cache_restore_batched_turn": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 9,
+          "p50": 9,
+          "p95": 9,
+          "max": 9
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.cache_restore_bytes": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 614398,
+          "p50": 614398,
+          "p95": 614398,
+          "max": 614398
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.cache_restore_turn_us": {
+        "durationUs": {
+          "n": 2,
+          "min": 1200,
+          "p50": 1200,
+          "p95": 1731,
+          "max": 1731
+        },
+        "value0": {
+          "n": 2,
+          "min": 1,
+          "p50": 1,
+          "p95": 9,
+          "max": 9
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 10,
+          "max": 10
+        }
+      },
+      "viewer.space.model.cache_restore_us": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 115791,
+          "p50": 115791,
+          "p95": 115791,
+          "max": 115791
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.cache_snapshot_bytes": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 533566,
+          "p50": 533566,
+          "p95": 533566,
+          "max": 533566
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.capped_directories": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.capped_files": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.child_arena_free_slots": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.child_arena_slots": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 10192,
+          "p50": 10192,
+          "p95": 10192,
+          "max": 10192
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.child_references": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 10120,
+          "p50": 10120,
+          "p95": 10120,
+          "max": 10120
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.directory_count": {
+        "durationUs": {
+          "n": 19061,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 19061,
+          "min": 121,
+          "p50": 121,
+          "p95": 121,
+          "max": 121
+        },
+        "value1": {
+          "n": 19061,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.file_candidate_count": {
+        "durationUs": {
+          "n": 19061,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 19061,
+          "min": 3100,
+          "p50": 10000,
+          "p95": 10000,
+          "max": 10000
+        },
+        "value1": {
+          "n": 19061,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.rejected_entries": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.retained_directories": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 121,
+          "p50": 121,
+          "p95": 121,
+          "max": 121
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.retained_files": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 10000,
+          "p50": 10000,
+          "p95": 10000,
+          "max": 10000
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.retained_name_bytes": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 242168,
+          "p50": 242168,
+          "p95": 242168,
+          "max": 242168
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.synthetic_count": {
+        "durationUs": {
+          "n": 19061,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 19061,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 19061,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.model.traversed_directories": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 121,
+          "p50": 121,
+          "p95": 121,
+          "max": 121
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.open_to_first_meaningful_paint_us": {
+        "durationUs": {
+          "n": 2,
+          "min": 157818,
+          "p50": 157818,
+          "p95": 232836,
+          "max": 232836
+        },
+        "value0": {
+          "n": 2,
+          "min": 320,
+          "p50": 320,
+          "p95": 2338,
+          "max": 2338
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 1,
+          "max": 1
+        }
+      },
+      "viewer.space.open_to_first_paint_us": {
+        "durationUs": {
+          "n": 2,
+          "min": 42155,
+          "p50": 42155,
+          "p95": 42233,
+          "max": 42233
+        },
+        "value0": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 2,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        }
+      },
+      "viewer.space.queue.coalesced_count": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 315,
+          "p95": 315,
+          "max": 315
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.drain_count": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 1,
+          "p95": 3,
+          "max": 3
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.drain_max_us": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 406,
+          "p95": 991,
+          "max": 991
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.drain_total_us": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 406,
+          "p95": 1655,
+          "max": 1655
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.drain_us": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 406,
+          "p95": 991,
+          "max": 991
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 1,
+          "p95": 3,
+          "max": 3
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 406,
+          "p95": 1655,
+          "max": 1655
+        }
+      },
+      "viewer.space.queue.drained_count": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 512,
+          "p95": 1097,
+          "max": 1097
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.lock_hold_count": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 1412,
+          "p95": 1412,
+          "max": 1412
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.lock_hold_max_us": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 28,
+          "p95": 28,
+          "max": 28
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.lock_hold_total_us": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 96,
+          "p95": 96,
+          "max": 96
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.lock_hold_us": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 28,
+          "p95": 28,
+          "max": 28
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 1412,
+          "p95": 1412,
+          "max": 1412
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 96,
+          "p95": 96,
+          "max": 96
+        }
+      },
+      "viewer.space.queue.pending_bytes": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 800232,
+          "max": 800232
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.pending_peak_bytes": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 1227336,
+          "p95": 1227336,
+          "max": 1227336
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.posted_bytes": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 1312096,
+          "p95": 1312096,
+          "max": 1312096
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.queue.posted_count": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 1412,
+          "p95": 1412,
+          "max": 1412
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.refresh.dispose_completed": {
+        "durationUs": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 4,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.refresh.dispose_submit_bytes_total": {
+        "durationUs": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 2,
+          "min": 2887230,
+          "p50": 2887230,
+          "p95": 5073166,
+          "max": 5073166
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.refresh.dispose_submit_owner_peak": {
+        "durationUs": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 2,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.refresh.dispose_submit_us": {
+        "durationUs": {
+          "n": 2,
+          "min": 9,
+          "p50": 9,
+          "p95": 15,
+          "max": 15
+        },
+        "value0": {
+          "n": 2,
+          "min": 3,
+          "p50": 3,
+          "p95": 4,
+          "max": 4
+        },
+        "value1": {
+          "n": 2,
+          "min": 22,
+          "p50": 22,
+          "p95": 33,
+          "max": 33
+        }
+      },
+      "viewer.space.refresh.dispose_us": {
+        "durationUs": {
+          "n": 4,
+          "min": 14,
+          "p50": 29,
+          "p95": 32,
+          "max": 32
+        },
+        "value0": {
+          "n": 4,
+          "min": 940,
+          "p50": 940,
+          "p95": 4554314,
+          "max": 4554314
+        },
+        "value1": {
+          "n": 4,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.render.paint_us": {
+        "durationUs": {
+          "n": 14,
+          "min": 788,
+          "p50": 3394,
+          "p95": 35339,
+          "max": 35339
+        },
+        "value0": {
+          "n": 14,
+          "min": 0,
+          "p50": 320,
+          "p95": 2338,
+          "max": 2338
+        },
+        "value1": {
+          "n": 14,
+          "min": 0,
+          "p50": 0,
+          "p95": 2,
+          "max": 2
+        }
+      },
+      "viewer.space.render.static_cache_hit": {
+        "durationUs": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 2,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 2,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.render.static_cache_miss": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.render.static_cache_record_us": {
+        "durationUs": {
+          "n": 1,
+          "min": 426,
+          "p50": 426,
+          "p95": 426,
+          "max": 426
+        },
+        "value0": {
+          "n": 1,
+          "min": 320,
+          "p50": 320,
+          "p95": 320,
+          "max": 320
+        },
+        "value1": {
+          "n": 1,
+          "min": 2519328,
+          "p50": 2519328,
+          "p95": 2519328,
+          "max": 2519328
+        }
+      },
+      "viewer.space.render.static_cache_replay_us": {
+        "durationUs": {
+          "n": 2,
+          "min": 788,
+          "p50": 788,
+          "p95": 1549,
+          "max": 1549
+        },
+        "value0": {
+          "n": 2,
+          "min": 320,
+          "p50": 320,
+          "p95": 320,
+          "max": 320
+        },
+        "value1": {
+          "n": 2,
+          "min": 2519328,
+          "p50": 2519328,
+          "p95": 2519328,
+          "max": 2519328
+        }
+      },
+      "viewer.space.render.text_draw_count": {
+        "durationUs": {
+          "n": 14,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 14,
+          "min": 0,
+          "p50": 118,
+          "p95": 118,
+          "max": 118
+        },
+        "value1": {
+          "n": 14,
+          "min": 0,
+          "p50": 188,
+          "p95": 2335,
+          "max": 2335
+        }
+      },
+      "viewer.space.render.tile_draw_count": {
+        "durationUs": {
+          "n": 14,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 14,
+          "min": 0,
+          "p50": 188,
+          "p95": 2335,
+          "max": 2335
+        },
+        "value1": {
+          "n": 14,
+          "min": 0,
+          "p50": 132,
+          "p95": 132,
+          "max": 132
+        }
+      },
+      "viewer.space.scan.active_path_peak_bytes": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 36060,
+          "p50": 36060,
+          "p95": 36060,
+          "max": 36060
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.active_path_rejected_count": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.active_workers": {
+        "durationUs": {
+          "n": 243,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 243,
+          "min": 0,
+          "p50": 7,
+          "p95": 8,
+          "max": 8
+        },
+        "value1": {
+          "n": 243,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.bookkeeping_peak_bytes": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 83216,
+          "p50": 83216,
+          "p95": 83216,
+          "max": 83216
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.bytes": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 302230,
+          "p50": 302230,
+          "p95": 302230,
+          "max": 302230
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.cache_hit": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.cache_miss": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.cpu_priority": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 8,
+          "p50": 8,
+          "p95": 8,
+          "max": 8
+        },
+        "value1": {
+          "n": 1,
+          "min": 8,
+          "p50": 8,
+          "p95": 8,
+          "max": 8
+        }
+      },
+      "viewer.space.scan.enumerate_us": {
+        "durationUs": {
+          "n": 121,
+          "min": 172,
+          "p50": 547,
+          "p95": 1493,
+          "max": 2152
+        },
+        "value0": {
+          "n": 121,
+          "min": 5,
+          "p50": 100,
+          "p95": 100,
+          "max": 100
+        },
+        "value1": {
+          "n": 121,
+          "min": 0,
+          "p50": 4,
+          "p95": 7,
+          "max": 7
+        }
+      },
+      "viewer.space.scan.files": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 10000,
+          "p50": 10000,
+          "p95": 10000,
+          "max": 10000
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.first_preview_priority_jobs": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 7,
+          "p50": 7,
+          "p95": 7,
+          "max": 7
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.folders": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 120,
+          "p50": 120,
+          "p95": 120,
+          "max": 120
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.frontier_depth": {
+        "durationUs": {
+          "n": 142,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 142,
+          "min": 0,
+          "p50": 43,
+          "p95": 82,
+          "max": 87
+        },
+        "value1": {
+          "n": 142,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.frontier_depth_peak": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 87,
+          "p50": 87,
+          "p95": 87,
+          "max": 87
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.frontier_lock_wait_us": {
+        "durationUs": {
+          "n": 121,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 34
+        },
+        "value0": {
+          "n": 121,
+          "min": 0,
+          "p50": 0,
+          "p95": 5,
+          "max": 20
+        },
+        "value1": {
+          "n": 121,
+          "min": 0,
+          "p50": 4,
+          "p95": 7,
+          "max": 7
+        }
+      },
+      "viewer.space.scan.idle_worker_waits": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 10,
+          "p50": 10,
+          "p95": 10,
+          "max": 10
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.provider_buffer_peak_bytes": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 19200,
+          "p50": 19200,
+          "p95": 19200,
+          "max": 19200
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.summary_chunk_max_bytes": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 5384,
+          "p95": 5384,
+          "max": 5384
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.summary_committed_count": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 52,
+          "p95": 121,
+          "max": 121
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.summary_rejected_count": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.summary_stage_bytes": {
+        "durationUs": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 5,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.total_us": {
+        "durationUs": {
+          "n": 1,
+          "min": 26170,
+          "p50": 26170,
+          "p95": 26170,
+          "max": 26170
+        },
+        "value0": {
+          "n": 1,
+          "min": 10000,
+          "p50": 10000,
+          "p95": 10000,
+          "max": 10000
+        },
+        "value1": {
+          "n": 1,
+          "min": 120,
+          "p50": 120,
+          "p95": 120,
+          "max": 120
+        }
+      },
+      "viewer.space.scan.validation_scratch_peak_bytes": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 143872,
+          "p50": 143872,
+          "p95": 143872,
+          "max": 143872
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.validation_scratch_rejected_count": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.worker_completed": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 1,
+          "p50": 1,
+          "p95": 1,
+          "max": 1
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.worker_staging_peak_bytes": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 861448,
+          "p50": 861448,
+          "p95": 861448,
+          "max": 861448
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.worker_staging_preflight_record_total": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 10120,
+          "p50": 10120,
+          "p95": 10120,
+          "max": 10120
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.worker_staging_preflight_reservation_peak_bytes": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 123064,
+          "p50": 123064,
+          "p95": 123064,
+          "max": 123064
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.worker_staging_preflight_us": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 121,
+          "p50": 121,
+          "p95": 121,
+          "max": 121
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      },
+      "viewer.space.scan.worker_staging_rejected_count": {
+        "durationUs": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value0": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        },
+        "value1": {
+          "n": 1,
+          "min": 0,
+          "p50": 0,
+          "p95": 0,
+          "max": 0
+        }
+      }
+    }
+  },
+  "artifactSha256": "e86718165d6a94962f353ca308d4fbf9bbbf374099f52184e12f9f391bdb83f5",
+  "artifactBytes": 666,
+  "fixtureDigests": null,
+  "fixtureFiles": 10000,
+  "fixtureDirectories": 121,
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "bytes": 96954,
+      "sha256": "c6237a300b0e1ceeb4d5221979467315f75723c129765e03e536dd7274a2b738"
+    },
+    {
+      "path": "build-log-index.json",
+      "bytes": 581,
+      "sha256": "8743a22f3de5b253d420717d9f15316d2efb88d39f5428b755e79a700831d01c"
+    },
+    {
+      "path": "runner-stdout.log",
+      "bytes": 2981,
+      "sha256": "87220479cd0d58c4401f6132400754de7b2dc28dd21577cd8bd10a9ac9cbf791"
+    },
+    {
+      "path": "run-all-tests-results.json",
+      "bytes": 3827,
+      "sha256": "a1c07c3582be58e62d4f1c7ecbaf79fa34ba7a430e0d5cb8988e34c897be84b9"
+    },
+    {
+      "path": "workspace-final.json",
+      "bytes": 1513,
+      "sha256": "db351383ff61428a73d2cc682d2219cddcfaaa61a91b8e65c023b85d5a80773b"
+    },
+    {
+      "path": "results.json",
+      "bytes": 1053,
+      "sha256": "fc91ac1c2b5817f8c47deb185fb049a85312094711d6883a90c7423ca141f436"
+    },
+    {
+      "path": "viewer_space_cached_reopen_200_first_map.json",
+      "bytes": 666,
+      "sha256": "e86718165d6a94962f353ca308d4fbf9bbbf374099f52184e12f9f391bdb83f5"
+    },
+    {
+      "path": "raw-metrics-source-index.json",
+      "bytes": 475,
+      "sha256": "f292fe2ea0e257e164cb560bfb5cccc326c6b26065b90653a5582ef08e32ae8c"
+    },
+    {
+      "path": "perf-metrics-curated.jsonl",
+      "bytes": 69738,
+      "sha256": "6debfb6b61b92034febe08e744c75aa7de88c73e18ef617d8e951795ec9d855d"
+    },
+    {
+      "path": "metric-replay-map.json",
+      "bytes": 48614,
+      "sha256": "288548bd9fc19105e082675c9c833f6a3ab6d68a0514be5c9c6e9d800acb2c22"
+    }
+  ],
+  "qualificationStatus": "unqualified",
+  "qualificationErrors": [
+    "focused Commands case status is failed",
+    "canonical runner did not record exactly one passing focused case",
+    "cached-reopen artifact is incomplete or failed",
+    "cached-reopen artifact contains a failed/non-current presentation sample",
+    "cached-reopen fixture/cache-hit count mismatch"
+  ],
+  "limits": {
+    "fileBytes": 2097152,
+    "runBytes": 5242880
+  },
+  "fullRawMetricsPreserved": false
+}

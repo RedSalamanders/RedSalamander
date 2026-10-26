@@ -1,0 +1,22 @@
+[
+  {
+    "Algorithm": "SHA256",
+    "Hash": "2B13888FF0609171D5C738C5B9CDD4BF688AB58D486ED371A67698DC97AD141E",
+    "Path": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\Plugins\\ViewerSpace.dll"
+  },
+  {
+    "Algorithm": "SHA256",
+    "Hash": "58F81B924BB75CAC94508875CD949B5FDD905BCA77DD5650F91D29CA043B9FEC",
+    "Path": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\ViewerPETests.exe"
+  },
+  {
+    "Algorithm": "SHA256",
+    "Hash": "0E8C1E740882FE393C1C26877C485C997E51FE02C29B28F51A9870EB30E4BC1F",
+    "Path": "Z:\\src\\RedSalamander\\.build\\x64\\Release\\Plugins\\ViewerSpace.dll"
+  },
+  {
+    "Algorithm": "SHA256",
+    "Hash": "62CBA482CCF6A9AD823DBA7F10BF0E7972F2D74FD0639FCB498A60333AD11215",
+    "Path": "Z:\\src\\RedSalamander\\.build\\x64\\Release\\ViewerPETests.exe"
+  }
+]

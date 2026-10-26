@@ -1,0 +1,42 @@
+{
+  "kind": "actual application captures through deterministic WGC test harness",
+  "scenario": "cmd_pane_fileops_popup_throughput_disclosure",
+  "configuration": "x64 Debug",
+  "language": "fr-FR",
+  "dpi": 144,
+  "client_width_dip": 760,
+  "repetition": 3,
+  "workspace": "e2418b58bfc337a33de6387e09db541dc0bab3378974eff09beafd7780b0ead0",
+  "receipt": "3884060edf5ce3794af78d117d53de89061c1bf81d96b8cc02a9d8811f695eae",
+  "pin": "f5c7fc7403e352425b8e82b7a4da1c042d942ede",
+  "files": [
+    {
+      "scenario_file": "throughput-device-recovery-1__760dip__fr-FR__144dpi.png",
+      "raw_source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\device-recovery-idle\\commands\\throughput-disclosure\\throughput-device-recovery-1__760dip__fr-FR__144dpi.png",
+      "sha256": "4a247c490c28d82026c34a432248aee94595e6d82cb1d3c0167f15d5e1286261",
+      "gallery_file": "../2026-09-19-single-surface/throughput-uncovered__760dip__fr-FR__144dpi.png",
+      "visual_reviewed": true
+    },
+    {
+      "scenario_file": "throughput-device-recovery-2__760dip__fr-FR__144dpi.png",
+      "raw_source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\device-recovery-idle\\commands\\throughput-disclosure\\throughput-device-recovery-2__760dip__fr-FR__144dpi.png",
+      "sha256": "4a247c490c28d82026c34a432248aee94595e6d82cb1d3c0167f15d5e1286261",
+      "gallery_file": "../2026-09-19-single-surface/throughput-uncovered__760dip__fr-FR__144dpi.png",
+      "visual_reviewed": true
+    },
+    {
+      "scenario_file": "throughput-device-recovery-3__760dip__fr-FR__144dpi.png",
+      "raw_source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\device-recovery-idle\\commands\\throughput-disclosure\\throughput-device-recovery-3__760dip__fr-FR__144dpi.png",
+      "sha256": "4a247c490c28d82026c34a432248aee94595e6d82cb1d3c0167f15d5e1286261",
+      "gallery_file": "../2026-09-19-single-surface/throughput-uncovered__760dip__fr-FR__144dpi.png",
+      "visual_reviewed": true
+    },
+    {
+      "scenario_file": "throughput-shown-after-idle__760dip__fr-FR__144dpi.png",
+      "raw_source": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\device-recovery-idle\\commands\\throughput-disclosure\\throughput-shown-after-idle__760dip__fr-FR__144dpi.png",
+      "sha256": "4a247c490c28d82026c34a432248aee94595e6d82cb1d3c0167f15d5e1286261",
+      "gallery_file": "../2026-09-19-single-surface/throughput-uncovered__760dip__fr-FR__144dpi.png",
+      "visual_reviewed": true
+    }
+  ]
+}

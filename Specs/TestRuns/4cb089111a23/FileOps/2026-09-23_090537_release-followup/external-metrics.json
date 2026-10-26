@@ -1,0 +1,16 @@
+[
+  {
+    "attempt": "initial",
+    "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\release-fileops-20260923\\runner-artifacts\\perf\\perf_metrics.jsonl",
+    "size_bytes": 264645214,
+    "sha256": "0e1d1c2be467a33bea43021e32aa0ed79d63e1b63bb5cf2e2e14136088d52ae2",
+    "lines": 682608
+  },
+  {
+    "attempt": "alternate-volume-retry",
+    "path": "C:\\RedSalamander.Perf\\evidence\\i26-ui\\release-fileops-20260923\\alternate-volume-retry\\runner-artifacts\\perf\\perf_metrics.jsonl",
+    "size_bytes": 3589782,
+    "sha256": "ea07c025b1b8a109e3404795203901d20174a71b2db018cf75c7d451e9cd4491",
+    "lines": 9569
+  }
+]

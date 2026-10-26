@@ -1,0 +1,123 @@
+{
+  "runId": "20261014T121620Z-54548-03c9f6fa49fb4641a539d2ab0dd695ee",
+  "receipt": "7245d6d015bac9b6eb89a3325722c4c73cf00b8ef37d0fc95dd9e7112c858d04",
+  "sourceRetained": "D:\\RedSalamander.Perf\\evidence\\folder-copy-progress-corrected-baseline-20261014-01",
+  "base": "93de8fd846d78828681baa99d5f455b75bf80457",
+  "nativeVerdict": "FAILED",
+  "runnerVerdict": "FAILED",
+  "runnerAudit": "Three unrelated pre-existing unexpected-test-run-dir entries: archive-skip-check-7756799779d4, dxui-ci-first-37835055279, dxui-ci-retry-37835055279-attempt2; left untouched.",
+  "note": "Reconstructed observation-only runtime equals immutable HEAD in Common/Native/State/Internal. Exact small destination directory precreated: actual named readable 1-MiB Publishing file shows indeterminate 0/0. All five child rows and three Native finalization meters fail. Overwrite early/late sampling missed late window; preserve failed assertion, use prior baseline advancing pair.",
+  "files": [
+    {
+      "path": "build-receipt.json",
+      "bytes": 93727,
+      "sha256": "A8C2A30F764098D92D5936A4DF241A595269ED3192A4F4AE37037D4000C5BBC5"
+    },
+    {
+      "path": "candidate-restoration-manifest.json",
+      "bytes": 4610,
+      "sha256": "740D31A7C75231F1FFDDB77596E75E7E5B16E164DC47E8F128537180EC291147"
+    },
+    {
+      "path": "metric-selection.json",
+      "bytes": 22779,
+      "sha256": "75B7BD314B1F3C977F5AC266DDC42EE7015BE2951B6E0744447A3F745E659583"
+    },
+    {
+      "path": "observation-overlay.patch",
+      "bytes": 109659,
+      "sha256": "FBA2D5F36E77828DD07F9762632D2407A7DB7085C760B0F1CF11A7C530266E10"
+    },
+    {
+      "path": "perf_metrics.jsonl",
+      "bytes": 1328616,
+      "sha256": "F3F83F7407F3CFD00222CBC5EE1A0FD9217D8C8921BCCF2F2595A88CD5ABACD9"
+    },
+    {
+      "path": "results.json",
+      "bytes": 1147,
+      "sha256": "2D97B376A6B172B3F5F0686F6BD16282DFD1423FC1AEFA9074CB57ACB6DC4309"
+    },
+    {
+      "path": "runner-results.json",
+      "bytes": 3910,
+      "sha256": "6C7F986991EB369711D70A9FEC4433AE80CE53B33A533614EF23A42386C86957"
+    },
+    {
+      "path": "source-provenance.json",
+      "bytes": 1572,
+      "sha256": "7233F763096A1EBDE2139C5171975EE25FC7279103FDDE9AA8F171D7489E78C5"
+    },
+    {
+      "path": "trace.txt",
+      "bytes": 28368,
+      "sha256": "0B645B2BB5B67870B1562C99A7FD0A597C1A640F1320D02A1E8355B9AAF62C01"
+    },
+    {
+      "path": "captures\\bridge-parallel-early.png",
+      "bytes": 64864,
+      "sha256": "515114C99FCDC6C7E96D704D812499794E4E2A8FEAA104910678F1E6D47C8924"
+    },
+    {
+      "path": "captures\\bridge-parallel-late.png",
+      "bytes": 76129,
+      "sha256": "C3A098DD3F2A7941EAD522BB8FCC4603C09CB29F35AEB3F2DB4A01CDB40FF90E"
+    },
+    {
+      "path": "captures\\bridge-small-publishing.png",
+      "bytes": 69861,
+      "sha256": "01530C2D633F4B0C47F0CAA054BF879FDBD89479F656E50064DC24C48AA20601"
+    },
+    {
+      "path": "captures\\bridge-verify-early.png",
+      "bytes": 70281,
+      "sha256": "4BF5A097485DA90FA98EF94D8C6805A37CAAF2E0CA73D206DD58C59F5448330B"
+    },
+    {
+      "path": "captures\\bridge-verify-late.png",
+      "bytes": 78622,
+      "sha256": "C9FDAE873C4CB8695F1752B49AE3630E7CF2B76DA4AC3090CEC1F4F3E7B7E9D5"
+    },
+    {
+      "path": "captures\\local-overwrite-early.png",
+      "bytes": 50069,
+      "sha256": "F1571F98BDAFE40DB42B8F4795DD7AEB173A22C6D2EB59518E0EA02ACC24D4EA"
+    },
+    {
+      "path": "captures\\local-overwrite-finalizing.png",
+      "bytes": 58916,
+      "sha256": "48FA28239105164F731D8A6AF4DD86FBB23CBEA73AD667E99C074B037B5F9229"
+    },
+    {
+      "path": "captures\\local-parallel-early.png",
+      "bytes": 62157,
+      "sha256": "83A84F3F8451D93105D655923E08D7E956567685025929F1EAACDBDBB384C13C"
+    },
+    {
+      "path": "captures\\local-parallel-finalizing.png",
+      "bytes": 63163,
+      "sha256": "D7154DA55B25C948556BBF6BBB5C00EF5FD3CDFBCAB7EC387217A2C40AE9BB92"
+    },
+    {
+      "path": "captures\\local-parallel-late.png",
+      "bytes": 76022,
+      "sha256": "3A2ACA98878B7B31E81B07BE3F7C106B25CEFBB136DBEF1861CFB98196E7A2D3"
+    },
+    {
+      "path": "captures\\local-serial-early.png",
+      "bytes": 44715,
+      "sha256": "4DC3F1C0A2A64077A39EDF0A7050E81266FDC9AE532E3E2BB450A3F15A96EF8A"
+    },
+    {
+      "path": "captures\\local-serial-finalizing.png",
+      "bytes": 53124,
+      "sha256": "04ACC665DA484014D1D4747C1ADFF683F83A3A4272AE779E66EC0666867B1B09"
+    },
+    {
+      "path": "captures\\local-serial-late.png",
+      "bytes": 47766,
+      "sha256": "5681B796EF4128DC5F7785AFAA382EBFCA5989CDF282BF8A817A721C649A3D26"
+    }
+  ],
+  "metricSeparatorPolicy": "Original LF separators retained; payload and newline bytes are an ordered line subset of the digest-bound raw UTF-8 stream."
+}

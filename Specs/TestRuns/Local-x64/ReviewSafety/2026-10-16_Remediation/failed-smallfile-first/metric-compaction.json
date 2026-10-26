@@ -1,0 +1,13 @@
+{
+  "method": "retain every FileOps.SelfTest.SmallFileCopy row verbatim in source order; other metric rows support no archived claim",
+  "original_sha256": "a476e9137c237ff68d7644ce8e0e881429b67f0c50195f0b879e89a08a15ce13",
+  "original_bytes": 7861186,
+  "original_nonblank_rows": 20171,
+  "retained_source_line_numbers": [
+    12903
+  ],
+  "retained_sha256": "a5bd17656e2891739fc8dbdc9df2a8feedae5ed381de23ab6deff268310086d2",
+  "retained_bytes": 409,
+  "retained_rows": 1,
+  "raw_retained_at": "Z:\\RedSalamander.Perf\\evidence\\review-safety-raw\\20261016T095911Z-82588-63a693cc24334ac3b2ea6e1794578985\\perf_metrics.jsonl"
+}

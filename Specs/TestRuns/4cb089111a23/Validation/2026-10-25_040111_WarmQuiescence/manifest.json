@@ -1,0 +1,31 @@
+{
+  "baselineSource": "986e623325a66135553990d5f415f140bf23fb7f",
+  "runId": "20261025T040111Z-75708-0c710bf54e184d3385b9aa85b7f7c004",
+  "buildReceipt": "8624117970650d63373c76e32efa3961a785517a18eaa52eee990c76058913c6",
+  "nativeVerdict": "0 passed, 1 failed, 0 skipped; controlled queued-paint gap",
+  "candidateStatus": "Pending focused and full qualification",
+  "fixtureSpans": [
+    {
+      "name": "queued-paint-control",
+      "sha256": "AC95790A5B02DD6C0AB878454E5CBB43265759BB5CBFB4306C083A4BDC08E675"
+    },
+    {
+      "name": "scroll-fixture",
+      "sha256": "9E94B2D10A73E73E80802BD791D3A3A768342BC99A67A6F1A62C3BA387C5AC1B"
+    }
+  ],
+  "files": [
+    {
+      "name": "baseline-observations.txt",
+      "sha256": "B59C7B6F5E40646CB9BADCE903D97A0017BE2E72FB0FA395C49523B53E0F1757"
+    },
+    {
+      "name": "baseline-results.json",
+      "sha256": "566543D358E286957B1AD90C5E86C69CA1F804A9FF5C988F9FC802D3825DB6D2"
+    },
+    {
+      "name": "README.md",
+      "sha256": "EEE3A49D00467178F761E66116B92C637347B709F4CD0C43012E6CF5F5755938"
+    }
+  ]
+}

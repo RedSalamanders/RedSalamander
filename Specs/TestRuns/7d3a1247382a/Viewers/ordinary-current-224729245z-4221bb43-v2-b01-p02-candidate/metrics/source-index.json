@@ -1,0 +1,19 @@
+{
+  "schema": "viewer-space.ordinary-current-raw-source.v1",
+  "sourceRunId": "20261009T225308Z-1080-9be4a2e2890c447e9599fb4861a20096",
+  "source_path": "D:\\RedSalamander.Perf\\runs\\20261009T225308Z-1080-9be4a2e2890c447e9599fb4861a20096\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl",
+  "source_bytes": 2257843,
+  "source_sha256": "46096dd97afd42c91ec30b5043a817168dff3edb67212a152ba96cb3598620d1",
+  "shards": [
+    {
+      "path": "raw-sources/20261009T225308Z-1080-9be4a2e2890c447e9599fb4861a20096/perf_metrics.jsonl",
+      "bytes": 2097152,
+      "sha256": "231e6162ed59459d619cda1eec2aa40f9fffc03f547bb1ca3a9f056239b40927"
+    },
+    {
+      "path": "raw-sources/20261009T225308Z-1080-9be4a2e2890c447e9599fb4861a20096/perf_metrics-part2.jsonl",
+      "bytes": 160691,
+      "sha256": "0aceddd3a6871539976a960cff9e9ef9f6282d83bc2d46f1911ed6becc836e2f"
+    }
+  ]
+}

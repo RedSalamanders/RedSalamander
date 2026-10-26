@@ -1,0 +1,32 @@
+{
+    "run_started_utc": "2026-10-12T14:18:53.029Z",
+    "suite": "FileOperations",
+    "artifact_root": "C:\\RedSalamander.Perf\\runs\\20261012T141813Z-96724-5d8b3da109da4e8ca36f9d83a26ed14f\\artifacts\\selftest\\last_run\\fileops",
+    "duration_ms": 294469,
+    "passed": 3,
+    "failed": 0,
+    "skipped": 0,
+    "cases": [
+        {
+            "name": "Setup",
+            "status": "passed",
+            "duration_ms": 1375,
+            "repeat_index": 1
+        },
+        {
+            "name": "FileOps_SmallFileCopyCost",
+            "status": "passed",
+            "duration_ms": 292125,
+            "repeat_index": 1
+        },
+        {
+            "name": "Cleanup_RestorePluginConfig",
+            "status": "passed",
+            "duration_ms": 547,
+            "repeat_index": 1
+        }
+    ],
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1
+}

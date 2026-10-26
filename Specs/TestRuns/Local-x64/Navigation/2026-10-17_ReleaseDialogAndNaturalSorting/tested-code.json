@@ -1,0 +1,26 @@
+[
+  {
+    "path": "RedSalamander/FolderWindow.FileOperations.DecisionMirror.cpp",
+    "sha256": "AC01E56ED24D9B9063D8C3370554A8A5931F0ECC9190FE3143E883BA65CDE532"
+  },
+  {
+    "path": "RedSalamander/SelfTest/Commands/Commands.Tests.FileOps.cpp",
+    "sha256": "505820880AC4F5D45C6D04C3AD20BEED7048BBF4DCD34933D82C7E080FB80FE6"
+  },
+  {
+    "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.DecisionMirror.cpp",
+    "sha256": "0DAC091EC754EF794940E487476000DC87726A5F2E3D4850E92D6F8BB256FF3B"
+  },
+  {
+    "path": "RedSalamander/NavigationView.h",
+    "sha256": "65B99A32913845C63A95F713977B236349D0BCB06018AB4751E162522F475789"
+  },
+  {
+    "path": "RedSalamander/NavigationView.Menus.cpp",
+    "sha256": "529F0C16328D2C6C0632F9B294C2FECB2B292752BDDD646E9EFF8A496A2697CF"
+  },
+  {
+    "path": "RedSalamander/SelfTest/Commands/Commands.Tests.Navigation.cpp",
+    "sha256": "D98D3B369A44255DDA936EA51627A051E3CAC0B07D8A7F71D7997658573F74AB"
+  }
+]

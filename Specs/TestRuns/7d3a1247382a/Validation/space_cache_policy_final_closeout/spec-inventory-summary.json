@@ -1,0 +1,45 @@
+{
+  "generatedAtUtc": "2026-10-09T12:05:11.1783807Z",
+  "sourceCommit": "d713d469213659f20d47f842d6980c1c85b24609",
+  "summary": {
+    "TrackedAndUntrackedPaths": 20256,
+    "TestRunPaths": 12754,
+    "Files": 446,
+    "InScopeFiles": 403,
+    "NormativeFiles": 62,
+    "DirectWipFiles": 28,
+    "WipIndexEntries": 28,
+    "Findings": 74,
+    "BlockingFindings": 3
+  },
+  "blockingFindings": [
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Error",
+      "Path": "Specs/Plans/WIP/FileOperationsUiReview_2026-09-16/interaction-review-2026-09-20/README.md",
+      "Line": 169,
+      "Message": "Local link target does not exist: ../../../../../RedSalamander/SelfTest/Commands/Commands.SelfTest.FileOps.cpp"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Error",
+      "Path": "Specs/Plans/WIP/FileOperationsUiReview_2026-09-16/interaction-review-2026-09-20/README.md",
+      "Line": 172,
+      "Message": "Local link target does not exist: ../../../../../RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallery.cpp"
+    },
+    {
+      "Code": "LINK_MISSING_TARGET",
+      "Severity": "Error",
+      "Path": "Specs/Plans/WIP/FileOperationsUiReview_2026-09-16/interaction-review-2026-09-20/README.md",
+      "Line": 173,
+      "Message": "Local link target does not exist: ../../../../../RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.VisualGallerySurfaces.cpp"
+    }
+  ],
+  "viewerSpaceFindings": [],
+  "fullSourcePath": "D:\\RedSalamander.Perf\\evidence\\viewer-space-final-qualification-d713\\final-spec-inventory.full.json",
+  "fullSourceBytes": 5655164,
+  "fullSourceSha256": "2565df3b1790f77908569e1c966818549aa543b728c31dd6e8c1e93d38e01e88",
+  "command": "./Tools/Get-SpecInventory.ps1 -FailOnFindings",
+  "outcome": "FAILED: three FileOps missing local link targets; no ViewerSpace findings",
+  "owner": "FileOperations documentation maintainer"
+}

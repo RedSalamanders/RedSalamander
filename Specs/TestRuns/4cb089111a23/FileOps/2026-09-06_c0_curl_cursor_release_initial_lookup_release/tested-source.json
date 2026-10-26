@@ -1,0 +1,41 @@
+{
+  "base": "96c5c5f808abc9093cd0e72f1e55f0f23ffd5b9b",
+  "receipt": "13a08eb93134fea8f8b919d80b8a1e92ada036a9ee0541f3baef03c463c83df3",
+  "files": [
+    {
+      "path": "Plugins/FileSystemCurl/FileSystemCurl.Internal.h",
+      "bytes": 44937,
+      "sha256": "b3ebf01a22ee0d1c6c7b5864943693b0656cf28077e5fbccc4327867e221100d"
+    },
+    {
+      "path": "Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp",
+      "bytes": 417404,
+      "sha256": "4fca36dbe34a85e7f7d1b9a566c063a2386b3bc37f2ed622448612657edd2e32"
+    },
+    {
+      "path": "Plugins/FileSystemCurl/FileSystemCurl.Shared.cpp",
+      "bytes": 183362,
+      "sha256": "bf4797f9cac5e6d2b8057c225678943743b12ccd8f21a83c46df60010fa5046a"
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp",
+      "bytes": 719580,
+      "sha256": "a80b6684f1f468fe586a3af71a1f2a20bb261a0ba7157bc2137ac9bdac1806c9"
+    },
+    {
+      "path": "Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md",
+      "bytes": 66714,
+      "sha256": "c5c3c4585f88b602e27f587aba8c3bc02fd619f5fe9ccecc9890f61542199173"
+    },
+    {
+      "path": "Specs/Plugins/Plugins_VirtualFileSystem.md",
+      "bytes": 187563,
+      "sha256": "2dd2527e48f3138785cc6bd09f0a6a2b02aec144eaced46e7ff5c7b93f7f0058"
+    },
+    {
+      "path": "Specs/Testing/Testing_PerformanceValidation.md",
+      "bytes": 110687,
+      "sha256": "963765d80c3db0ff3c6b93642488d38772880b31d5809f19b4a3d3f29e04bf33"
+    }
+  ]
+}

@@ -1,0 +1,6 @@
+Exception: E:\RedSalamander.Perf\evidence\redmonitor-merge-migration-20261024\Invoke-ViewerSpaceExportDiagnostics.ps1:22
+Line |
+  22 |  … de -ne 0) { throw "Diagnostic phase $Name returned $code; see $log" } …
+     |                ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+     | Diagnostic phase export-diagnostics-x64-ASan-Debug-rebuild returned 1; see
+     | E:\RedSalamander.Perf\evidence\redmonitor-merge-migration-20261024\export-diagnostics-x64-ASan-Debug-rebuild.log

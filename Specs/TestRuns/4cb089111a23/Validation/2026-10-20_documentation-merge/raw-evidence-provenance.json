@@ -1,0 +1,29 @@
+{
+  "archives": [
+    {
+      "runId": "20261020T052506Z-100568-370c77efeb91473094bbf001f06981be",
+      "archive": "D:\\RedSalamander.Perf\\evidence\\merge-screenshots-20261020\\formatted-app-run.zip",
+      "sha256": "0473cdb7a7a70859769711dc072ef3732108914f1eeb0648e8e7d737bc54385e",
+      "reparsePointsNotFollowed": []
+    },
+    {
+      "runId": "20261020T053211Z-100568-a37601a81d9b4cafb6f8351a40f2c67b",
+      "archive": "D:\\RedSalamander.Perf\\evidence\\merge-screenshots-20261020\\formatted-playback-run.zip",
+      "sha256": "30cc4437429aebc7bce9558419c7eac04808bd904c14bde6018a43817b02fa42",
+      "reparsePointsNotFollowed": []
+    },
+    {
+      "runId": "20261020T053249Z-28764-1afda6c11a174171b18045d878863081",
+      "archive": "D:\\RedSalamander.Perf\\evidence\\merge-screenshots-20261020\\formatted-fileops-reviewremediationcontracts.zip",
+      "sha256": "2954a17efb5585abad0b2acb29aab9b75f8e9ff01234e1b08fbd510ab41e4a1d",
+      "reparsePointsNotFollowed": []
+    },
+    {
+      "runId": "20261020T053328Z-28764-1a6bb46a3384477bbba0a4fc50330653",
+      "archive": "D:\\RedSalamander.Perf\\evidence\\merge-screenshots-20261020\\formatted-discoveryscope-folderliveprogress.zip",
+      "sha256": "5abb27ece9d811e0f6b9ed687a8c5338bd866ff9738e70b8f5264b442c30bc3b",
+      "reparsePointsNotFollowed": []
+    }
+  ],
+  "privateEvidencePreserved": true
+}

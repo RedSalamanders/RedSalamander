@@ -20,8 +20,8 @@ function Get-RSTerminalPluginImplementationSource {
         'Plugins\Terminal\TerminalSecurity.cpp'
         'Plugins\Terminal\TerminalSession.cpp'
         'Plugins\Terminal\TerminalVt.cpp'
-        'Plugins\Terminal\TerminalVtUpgradeTests.cpp'
-        'Plugins\Terminal\TerminalVtUpgradeTestContract.h'
+        'Plugins\Terminal\Terminal.Tests.VtUpgrade.cpp'
+        'Plugins\Terminal\TerminalVtUpgrade.Tests.Contract.h'
     )
     return ($parts | ForEach-Object { Get-RSTerminalText -Path $_ }) -join "`n"
 }
@@ -46,10 +46,10 @@ Describe 'Embedded Terminal plugin source contracts' {
         $runtimeLock = $runtimeLockText | ConvertFrom-Json -Depth 100
         $runtimeOverlay = Get-RSTerminalText -Path 'Tools\TerminalEngine\Patches\Ghostty-WindowsPrivateRuntime.patch'
         $runtimeManifest = Get-RSTerminalText -Path 'RuntimeDependencies.props'
-        $pluginContractTests = Get-RSTerminalText -Path 'Tests\PluginContractTests\PluginContractTests.cpp'
+        $pluginContractTests = Get-RSTerminalText -Path 'Tests\PluginContractTests\PluginContract.Tests.Runner.cpp'
         $resources = Get-RSTerminalText -Path 'Plugins\Terminal\TerminalResources.rc'
         $folderNavigation = Get-RSTerminalText -Path 'RedSalamander\FolderWindow.FileSystem.Navigation.cpp'
-        $commandsNavigation = Get-RSTerminalText -Path 'RedSalamander\SelfTest\Commands\Commands.SelfTest.Navigation.cpp'
+        $commandsNavigation = Get-RSTerminalText -Path 'RedSalamander\SelfTest\Commands\Commands.Tests.Navigation.cpp'
         $folderHeader = Get-RSTerminalText -Path 'RedSalamander\FolderWindow.h'
         $folderLayout = Get-RSTerminalText -Path 'RedSalamander\FolderWindow.Layout.cpp'
         $folderInteraction = Get-RSTerminalText -Path 'RedSalamander\FolderWindow.Interaction.cpp'
@@ -318,7 +318,7 @@ Describe 'Embedded Terminal plugin source contracts' {
         $source | Should Match 'payload->utf8\.assign'
         $source | Should Match 'PostMessagePayload\(hwnd, WndMsg::kTerminalClipboardWrite'
         $source | Should Match 'InitPostedPayloadWindow\(hwnd\)'
-        $source | Should Match 'TakeMessagePayload<Osc52ClipboardPayload>\(lParam\)'
+        $source | Should Match 'TakeMessagePayload<Osc52ClipboardPayload>\(hwnd,\s*message,\s*lParam\)'
         $source | Should Match 'DrainPostedPayloadsForWindow\(hwnd\)'
         $source | Should Match 'TryUtf16FromUtf8Strict\(payload->utf8\)'
         $source | Should Match 'TrySetUnicodeText\('

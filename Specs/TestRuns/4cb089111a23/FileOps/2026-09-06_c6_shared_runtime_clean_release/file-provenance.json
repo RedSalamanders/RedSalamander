@@ -1,0 +1,44 @@
+[
+  {
+    "name": "results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c6-runtime-clean-smoke-release-20260906\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "bytes": 874,
+    "sha256": "a18e15711abfc9f9cff62013d37750e9cac07906d3b54b8bf4a6cbbac8e1a4c4",
+    "transform": "none"
+  },
+  {
+    "name": "trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c6-runtime-clean-smoke-release-20260906\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "bytes": 5270,
+    "sha256": "5b9e019cdab17e2c2dcc0c70330b6b37f43e3a62f582b6710c6f7ebf3cd84ef5",
+    "transform": "none"
+  },
+  {
+    "name": "root-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c6-runtime-clean-smoke-release-20260906\\artifacts\\selftest\\last_run\\results.json",
+    "bytes": 1424,
+    "sha256": "5abe385b77b503dccebd4d56f2c4744fba42b8d843cf50f788ecfcf71a7195d8",
+    "transform": "none"
+  },
+  {
+    "name": "suite-trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c6-runtime-clean-smoke-release-20260906\\artifacts\\selftest\\last_run\\trace.txt",
+    "bytes": 19804,
+    "sha256": "ec413fd57e0c21653bcac98d7dc5c0d618764b5a7b1587819cfda5f17fc24c63",
+    "transform": "none"
+  },
+  {
+    "name": "run-all-tests-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c6-runtime-clean-smoke-release-20260906\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "bytes": 52442,
+    "sha256": "a8a05cd7bada8de6286ae45ee3abac8cd7545ec349e1816214e9172cb34cb0ea",
+    "transform": "none"
+  },
+  {
+    "name": "entry-fingerprints.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c6-runtime-clean-smoke-release-20260906\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+    "bytes": 1695,
+    "sha256": "d28664122987c50cbfd35982fa8b0bcfbd0b39d5d69fa4ae061fb49248699a00",
+    "transform": "none"
+  }
+]

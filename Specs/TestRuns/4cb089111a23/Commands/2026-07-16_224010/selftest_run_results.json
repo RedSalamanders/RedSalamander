@@ -1,0 +1,33 @@
+{
+    "run_started_utc": "2026-07-16T20:40:06.564Z",
+    "duration_ms": 4061,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "repeat_count": 1,
+    "case_filter": "cmd_pane_makeFileList_generates_formats_and_saves_options",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands",
+            "duration_ms": 3365,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "repeat_count": 1,
+            "case_filter": "cmd_pane_makeFileList_generates_formats_and_saves_options",
+            "cases": [
+                {
+                    "name": "cmd_pane_makeFileList_generates_formats_and_saves_options",
+                    "status": "passed",
+                    "duration_ms": 3353,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

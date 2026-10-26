@@ -1,0 +1,207 @@
+Describing IMAP UIDVALIDITY and single-message delete source contracts
+ [+] never issues mailbox-wide EXPUNGE and requires UIDPLUS before the mark-expunge-rollback state machine 221ms
+ [+] carries UIDVALIDITY in listed identity and revalidates it before message fetch or delete 49ms
+Describing Microsoft Drive credential-boundary source contracts
+ [+] validates Graph and preauthenticated upload targets before credential-bound dispatch 137ms
+ [+] keeps bearer values and opaque query values out of diagnostics and serialized header blocks 4ms
+Describing Preferences settings-backed page source contracts
+ [+] keeps Mouse in both manual Preferences projections and verifies live Apply persistence 32ms
+ [+] documents every required draft-to-disk integration layer in the spec and project skill 3ms
+Describing Test harness source contracts
+ [+] documents and enforces bounded self-test timeout multipliers 77ms
+ [+] keeps scaled self-test timeouts finite and nonzero for nonzero bases 3ms
+ [+] waits for runner-native self-test processes by direct process handle 2ms
+ [+] keeps the nightly shuffle repeat lane separate from the PR gate 4ms
+ [+] gives ViewerPETests nested shell churn its own timeout budget 4ms
+ [+] keeps ViewerVLC dependency loading isolated from the process DLL directory 8ms
+ [+] keeps ViewerVLC probing, loader fallback, drawable teardown, and option boundaries safe 27ms
+ [+] bounds multi-plugin metadata before host indexing and reference-counts shared localization owners 9ms
+ [+] keeps viewer threadpool module pins alive through the callback return boundary 64ms
+ [+] rejects viewer async work without module pins and impossible provider read counts 32ms
+ [+] keeps ViewerImgRaw main decode scheduling bounded, exact, terminal, and ordered 56ms
+ [+] keeps ViewerWeb security setup fail-closed and teardown outside DllMain 17ms
+ [+] keeps ViewerPE reader commitments exact and current terminal delivery recoverable 5ms
+ [+] keeps ViewerSpace close non-waiting with an honest runtime unload and shutdown gate 28ms
+ [+] publishes authoritative ViewerSpace totals before root completion becomes visible 5ms
+ [+] captures viewer payload fields before moving the payload into PostMessagePayload 42ms
+ [+] keeps ViewerText Save As source-first and transactionally committed 21ms
+ [+] keeps ViewerText async decode and clipboard work terminal and bounded 21ms
+ [+] requires git identity before accepting self-test archive repo roots 3ms
+ [+] keeps self-test archive parent walking bounded by a named limit 3ms
+ [+] scopes the self-test run mutex to the isolated self-test root 9ms
+ [+] lets native selftests consume the unified test root and run id directly 5ms
+ [+] exposes native TestSandbox scratch acquisition separate from last_run artifacts 4ms
+ [+] removes native self-test sandboxes without traversing directory reparse points 5ms
+ [+] keeps nested settings-save child artifacts shallow and removes them before audit 30ms
+ [+] routes FileOperations cross-volume scratch through the sanctioned alternate TestSandbox root 6ms
+ [+] authorizes test roots centrally and fails closed before native mutation 5ms
+ [+] routes RedConfigureTests scratch through the unified TestSandbox root 18ms
+ [+] routes ViewerSqliteTests scratch through the unified TestSandbox root 5ms
+ [+] routes CrashHandlingTests scratch through the unified TestSandbox root 4ms
+ [+] routes Commands plugin-config scratch through native TestSandbox roots 3ms
+ [+] recovers plugin-config debug tab traversal from logical focus position before first-control fallback 6ms
+ [+] keeps plugin-config tab traversal retries from sending an extra tab after a successful advance 3ms
+ [+] waits for preview fallback text and source-pane focus together 3ms
+ [+] separates configured preview publication from external desktop deactivation 4ms
+ [+] makes quick-search tests own pane sort and extension visibility 35ms
+ [+] keeps quick-search navigation expectations tied to visible match order 38ms
+ [+] keeps Hot Paths browse page-settle failures diagnostic-rich 5ms
+ [+] uses condition-based focus waiting for Viewers roundtrip category navigation 6ms
+ [+] retries Preferences focus acquisition during condition-based waits 4ms
+ [+] keeps embedded Terminal pointer-follow lifecycle proof capability-aware and fail-closed 13ms
+ [+] waits for Plugins sort-search header rects before reorder-resize interactions 15ms
+ [+] waits for Viewers sort-search header rects before reorder-resize interactions 15ms
+ [+] keeps broad Preferences focus paths on the shared focus helper 69ms
+ [+] defers change-case folder focus restoration until modal teardown unwinds 13ms
+ [+] retries transient selected-path lease observations to a diagnostic quiet point 7ms
+ [+] keeps broad Commands app navigation shell focus checks condition-based 35ms
+ [+] makes the app Shortcuts navigation-shell fixture own its settings and window isolation 15ms
+ [+] isolates the Preferences Keyboard reset live interaction fixture 6ms
+ [+] isolates the pane-filter DxUi surface fixture before global prompt discovery 7ms
+ [+] isolates both Compare navigation-shell fixtures before asserting restored focus 45ms
+ [+] isolates mouse-opened menu keyboard ordering and preserves split post diagnostics 15ms
+ [+] reacquires the submenu placement cascade target after root-menu initialization 15ms
+ [+] reports locked-desktop clipboard and foreground dependencies as explicit Commands skips 8ms
+ [+] keeps Preferences category-tree UIA selection pinned to category-id selection 4ms
+ [+] keeps Preferences debug category selection independent from transient snapshot capture 7ms
+ [+] keeps broad-process Preferences navigation on a stable category surface and retires stale UIA providers 17ms
+ [+] keeps Preferences category churn settled, attributable, and bounded under uncontended focus 16ms
+ [+] isolates Compare Directories wrap traversal and keeps failures diagnostic-rich 6ms
+ [+] carries selected FolderView rename identity across bounded refresh interleavings 4ms
+ [+] routes Commands long-path and high-cardinality fixtures through native TestSandbox roots 18ms
+ [+] routes ShellCommands shortcut save temp files through native TestSandbox roots 4ms
+ [+] routes PerformanceTests2 scratch through the unified TestSandbox root 8ms
+ [+] routes BatchRename window fixture roots through native TestSandbox roots 5ms
+ [+] routes ViewerPETests fixture files through the unified TestSandbox root 5ms
+ [+] keeps shared TestSupport sandbox and environment policies explicit 4ms
+ [+] keeps viewer message pumping and typed snapshot polling on bounded shared support 7ms
+ [+] routes MTP fake journal LOCALAPPDATA state through native TestSandbox roots 13ms
+ [+] routes Compare dummy filesystem scratch through native TestSandbox roots 19ms
+ [+] routes Tools Pester scratch through the unified TestSandbox root 8ms
+ [+] gives retained Preferences page-state activation a broad-order settle budget 12ms
+ [+] unwinds retained Plugins children before parent-grid UIA validation 10ms
+ [+] uses deterministic retryable category-tree boundary routes in broad-order Preferences coverage 12ms
+ [+] quiesces asynchronous UI state before broad-order preview, overlay, Preferences, and Find fixtures 161ms
+ [+] keeps gated test sources inside TestSandbox instead of raw temp or profile roots 134ms
+ [+] routes SettingsStore app files through the unified TestSandbox root during test runs 6ms
+ [+] keeps SettingsStore TestSandbox path overrides behind ENABLE_TESTS 11ms
+ [+] moves Compare foreground service capture files into TestSandbox instead of process temp 3ms
+ [+] wraps foreground search service selftest processes in a kill-on-close JobObject 8ms
+ [+] keeps broad-order foreground Search service failures process-diagnostic 30ms
+ [+] keeps foreground Search service stdout tests independent from hidden readiness requests 69ms
+ [+] keeps Compare live compact requests bound to an explicit pipe with captured-output diagnostics 16ms
+ [+] keeps the shared child-process runner contained, concurrently drained, and parity-tested 10ms
+ [+] keeps local index snapshot reload timing advisory instead of a correctness ceiling 4ms
+ [+] keeps SQLite traversal-seed currentness-unproven state from being downgraded by metadata probes 18ms
+ [+] keeps foreground Search service status probes behind a condition-based status wait 89ms
+ [+] lets delete-burst maintenance tests accept an already completed first idle window 16ms
+ [+] drains Batch Rename central test tasks before provider teardown 48ms
+ [+] scales named raw self-test waits through the timeout multiplier 83ms
+ [+] keeps FileOperations popup fixtures inside the current self-test process 26ms
+ [+] keeps Commands UIA action helpers deterministic under DxUi dispatch timeouts 46ms
+ [+] suppresses the deliberately parked live cursor during persistent View-to-Plugins menu hover selftests 20ms
+ [+] routes persistent View-to-Files menu hover through the menu bar root-switch path 16ms
+ [+] centralizes the Commands real-input warning and guards every cursor-warp family 27ms
+ [+] reuses one native warning across foreground suites and preserves it through Commands isolation 30ms
+ [+] opens the temporary menu-bar hover-switch popup through keyboard activation 21ms
+ [+] parks real cursor away from DxUi popup initial hover in menu selftests 39ms
+ [+] restores broad command-probe UI state and isolates modeless ownership fixtures 17ms
+ [+] keeps Shortcuts live UIA search interaction message-pumped under broad order 13ms
+ [+] keeps Compare Options close-reopen churn globally settled before live UIA reuse 13ms
+ [+] keeps File Operations speed-limit prompt churn ValuePattern checks condition-based 22ms
+ [+] keeps dialog prompt model and UIA checks condition-based under broad order 24ms
+ [+] keeps Item Properties UIA interaction off the owning window thread and joins bounded workers 32ms
+ [+] keeps broad-order Commands fixtures pinned to the state each case owns 62ms
+ [+] keeps Find destination/action button probes pinned to deterministic input state 33ms
+ [+] keeps Find header-drag reorder failures diagnostic-rich 16ms
+ [+] keeps Find reordered-sort restore checks diagnostic-rich under broad order 18ms
+ [+] stabilizes shared-process Preferences close-reopen and category transitions before UIA assertions 52ms
+ [+] keeps Compare Directories lower-card scroll focus failures diagnostic-rich 11ms
+ [+] keeps Connection Manager long-run open-close settled and diagnostic-rich 11ms
+ [+] keeps exact-run TestSandbox cleanup root-confined, dry-run gated, and ShouldProcess protected 7ms
+ [+] rejects retired outside-root cleanup in the unified runner 5ms
+ [+] bypasses fatal error modal dialogs while self-tests are running 11ms
+ [+] keeps Commands Preferences chunks namespace-self-contained 36ms
+ [+] keeps IconCache association LRU perf emission outside the association cache lock helper 6ms
+ [+] bounds DirectoryInfoCache eviction when protected entries exceed the cache budget 5ms
+ [+] keeps FolderView thumbnail WIC factory ownership local to the processing thread 5ms
+ [+] keeps IMAP summary repair budget exhaustion local to the current repair pass 7ms
+ [+] clears FolderView incremental-search layout effects over the visual label text 6ms
+ [+] matches FolderView incremental-search highlights against visual display names 5ms
+ [+] cleans stale FolderView incremental-search drawing effects when search is inactive 5ms
+ [+] exposes runner-native self-test case listing without executing case bodies 8ms
+ [+] exposes native self-test repeat and seeded shuffle execution controls 10ms
+ [+] reinitializes Commands UIA cache after explicit-order case listing 17ms
+ [+] isolates every Commands case before fixture dispatch 7ms
+ [+] resets pane content and transient UI state between Commands explicit-order cases 14ms
+ [+] rehydrates runtime plugins after the MTP deferred-unload probe 12ms
+ [+] keeps CompareDirectories seeded shuffle native through explicit case order 5ms
+ [+] keeps FileOperations repeat coverage native instead of runner-only 8ms
+ [+] keeps FolderView overlay perf sample sufficiency advisory 41ms
+ [+] uses shared self-test result emission for ad hoc and state-machine cases 7ms
+ [+] preserves partial self-test results when a case or suite crashes 21ms
+ [+] keeps injected classifier proof hooks explicit and debug-only 26ms
+ [+] keeps CompareDirectories runner-listed case names unique 19ms
+ [+] keeps CompareDirectories literal RunCase names listed for runner coverage 70ms
+ [+] opens the file-operations custom speed-limit prompt asynchronously for self-tests 5ms
+ [+] keeps FileOperations self-test case prefixes runnable 4ms
+ [+] keeps FileOperations discovery perf counters race-free under worker concurrency 7ms
+ [+] closes the discovery scope of every Local mutation entry point exactly once 56ms
+ [+] gives every provider mutation entry point on a direct route one discovery scope 226ms
+ [+] keeps FileSystem dynamic scheduler cleanup explicit and recursive-copy queueing unbounded 13ms
+ [+] keeps admitted CopyOnly MOVE on the bridge with source cleanup disabled 7ms
+ [+] keeps Copy issue handling from converting PermanentDelete into a Recycle opt-out 9ms
+ [+] keeps FileOperations conflict routing in one arbiter and one engine policy builder 56ms
+ [+] keeps same-host overlap choices bounded, relation-scoped, and safely defaulted 18ms
+ [+] keeps cached Keep Both eligibility scoped to the current top-level conflict 70ms
+ [+] keeps Riptide low-risk hardening invariants wired 51ms
+ [+] keeps Floodgate data-safety invariants wired 201ms
+ [+] keeps Microsoft Drive merge destination-metadata reuse and Release proof wired 14ms
+ [+] keeps Delta reverify file-system safety fixes wired 128ms
+ [+] keeps possible file-operation artifact projections visible and recovery-free in FolderView Compare and Find 47ms
+ [+] keeps Change Case discovery fail-closed and task updates token-owned 37ms
+ [+] shares only safe File Operations durable-state file mechanics 14ms
+ [+] keeps R1c exact compensation independent from primary cancel and exposes committed cleanup debt 37ms
+ [+] keeps File Operations scheduler failure policy local and the worker start gate cancelable 20ms
+ [+] keeps Curl reader and full-buffer writer waits stop-aware 4ms
+ [+] isolates the destructive missing-directory hot-reload fixture from the shared settings run 17ms
+ [+] keeps HostServices synchronous marshaling, result-capacity, and connection-secret lifecycle contracts wired 13ms
+ [+] keeps bounded registry strings and canonical WSL discovery wired through Common 11ms
+ [+] keeps RedConfigure rectangular paste bound to visible row and culture identities 9ms
+ [+] keeps Riptide test-credibility gaps closed 45ms
+ [+] keeps focus-independent GUI coverage behind the shared no-activation guard 10ms
+ [+] keeps new native focus calls inside reviewed focus-sensitive test adapters 68ms
+ [+] keeps MainMenuBarHost HWND teardown inside the DxUi host lifetime 17ms
+ [+] serializes build and test artifacts and contains every shared process launch tree 38ms
+ [+] keeps IronLedger FolderView data-integrity guards wired 13ms
+ [+] keeps Observatory Track 5 pack-and-delete output safety wired 14ms
+ [+] keeps Observatory Track 5 local outputs transactional 17ms
+ [+] keeps Observatory Track 5 Make File List responsive, cancellable, and explicit about its destination 11ms
+ [+] keeps Observatory Track 5 archive extraction conflicts explicit and transactional 8ms
+ [+] keeps Observatory Track 6 Monitor ownership and bounded-pipeline guards wired 15ms
+ [+] keeps Observatory Track 7 settings commits conflict-aware and recoverable 13ms
+ [+] keeps Observatory Track 8 connection identity and authorization boundaries wired 12ms
+ [+] keeps Observatory Track 9 DxUi identity, reentrancy, and text-input guards wired 6ms
+ [+] keeps Observatory Track 10 cloud paging, upload acknowledgement, commit, and identity guards wired 33ms
+ [+] keeps Observatory Track 11 S3 transfer, cleanup, and unload contracts wired 10ms
+ [+] keeps Observatory Track 12 plugin configuration, secret, runtime, and cancellation contracts wired 16ms
+ [+] keeps Observatory Track 13 local and Dummy provider mutations fail-before-change 8ms
+ [+] keeps Observatory Track 14 final-save, stale-suggestion, and bounded-menu contracts wired 10ms
+ [+] keeps production translation units independently compiled 305ms
+Describing Product source policies retained from the extracted DxUi test target
+ [+] TestNavigationViewPointerRoutingHasNoSyntheticGenerationGate 29ms
+ [+] TestConnectionCredentialPromptDestroysWindowOnModalQuit 4ms
+ [+] TestConnectionCredentialPromptTeardownDoesNotWipeThroughRawTextFieldPointers 6ms
+ [+] TestConnectionCredentialPromptUiaPumpDoesNotDetachTimedOutWorkers 10ms
+Describing Resource localization contracts
+ [+] requires every top-level RC resource root to be explicitly allowlisted 8.68s
+ [+] keeps resource format placeholders positional and translation-safe 3.08s
+ [+] keeps documented language-neutral string ids embedded-only in their owning resource module 297ms
+ [+] loads documented language-neutral string ids through embedded helpers only 1.1s
+ [+] keeps satellite string ids complete except documented embedded-only ids 843ms
+ [+] keeps file-operations count summaries count-neutral and removes the retired combined format 241ms
+ [+] keeps base and satellite MENU structures identical 645ms
+ [+] keeps the reviewed context, viewer, and monitor command placement exact 121ms
+ [+] keeps actionable static sibling menu access keys present and unique 521ms
+Tests completed in 20.56s
+Passed: 199 Failed: 0 Skipped: 0 Pending: 0 Inconclusive: 0

@@ -1,0 +1,35 @@
+{
+    "run_started_utc": "2026-10-17T16:10:44.261Z",
+    "duration_ms": 2026,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "cmd_navigation_sibling_natural_sorting",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "Z:\\RedSalamander.Perf\\runs\\20261017T160547Z-85008-039b803c38b84950ae38676d58c8a639\\artifacts\\selftest\\last_run\\commands",
+            "duration_ms": 1200,
+            "passed": 0,
+            "failed": 1,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "cmd_navigation_sibling_natural_sorting",
+            "failureMessage": "Sibling folders must use case-insensitive natural number order: Folder1, folder2, Folder10.",
+            "cases": [
+                {
+                    "name": "cmd_navigation_sibling_natural_sorting",
+                    "status": "failed",
+                    "duration_ms": 610,
+                    "repeat_index": 1,
+                    "reason": "Sibling folders must use case-insensitive natural number order: Folder1, folder2, Folder10."
+                }
+            ]
+        }
+    ],
+    "passed": 0,
+    "failed": 1,
+    "skipped": 0
+}

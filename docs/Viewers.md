@@ -12,8 +12,6 @@ The examples below use generated documentation samples, not personal files.
 
 ![Preview pane showing an embedded Image/RAW viewer](res/preview-pane-image.png)
 
-![Preview pane showing an embedded text preview](res/preview-pane-text.png)
-
 The Preview Pane hosts the viewer for the focused file in the opposite pane, using the same viewer associations where an embedded viewer is available. When no specific embedded preview is available, it shows the focused file or folder Properties as compact cards with wrapping text and an on-demand scrollbar. Rainbow theme adds subtle rainbow section accents. The source Folder view keeps keyboard focus, embedded viewers hide standalone filename/header chrome so they blend with the Preview tab, and compatible preview viewers are reused by closing the previous preview content before opening the next file.
 
 Standalone viewers share a keyboard rule: focus starts on the main viewer surface, `Tab` / `Shift+Tab` moves through menus, dropdowns, and tool controls, and accepted combo/menu actions return focus to the main surface. `Esc` from viewer chrome returns focus to the main surface; from the main surface it cancels active long work when available, then closes when idle unless a visible alert consumes the first press.
@@ -61,7 +59,9 @@ Viewer windows follow the same focus rule: menu commands and combo selections re
 
 ## Text / Hex / Diff Viewer (`builtin/viewer-text`)
 
-![Text viewer showing a generated log file](res/viewer-text.png)
+![Viewer text with generated sample content](res/viewer-text.png)
+
+![Viewer text hex with generated sample content](res/viewer-text-hex.png)
 
 Use the Text viewer for logs, source-like files, configuration files, CSV/XML content, unknown files, and any file you want to inspect as text or bytes.
 
@@ -94,7 +94,7 @@ Shortcuts:
 
 ## Image / RAW Viewer (`builtin/viewer-imgraw`)
 
-![Image/RAW viewer showing a generated sample image](res/viewer-imgraw.png)
+![Viewer imgraw with generated sample content](res/viewer-imgraw.png)
 
 Use the Image/RAW viewer for common images and camera RAW files.
 
@@ -134,33 +134,45 @@ Mouse wheel zooms, and dragging pans when the image is zoomed.
 
 ## Space Viewer (`builtin/viewer-space`)
 
-![Space viewer showing a generated folder treemap](res/viewer-space.png)
+![Space with its right-hand analysis panel](res/viewer-space-explorer.png)
 
-Use the Space viewer to understand which folders or files consume the most disk space.
+![Space with a bottom panel and compact inspector](res/viewer-space-analyst.png)
 
-Open it with:
+These native client frames use invented library data and the no-activation test harness. The owned capture host omits application window chrome.
 
-- **Commands -> Calculate Occupied Space** (`Alt+F10`), or
-- Folder context menu -> **View Space**.
+Open **Commands → Calculate Occupied Space** (Alt+F10), or a folder's **View Space** context action. Exactly one selected folder is scanned; otherwise the current pane folder is used.
 
-Behavior:
+- **Discovered** always reports the scan-wide logical bytes and counts. **This folder / Shown** separately reports what you are exploring or computing after exclusions. Partial results, unreadable content and summarized details remain explicit. Scan rate can appear; an unreliable remaining-time estimate is omitted.
+- One icon-only **Layout** control offers **Panel right**, **Panel bottom** and **Map only**, with an accessible name and tooltip. The right preference moves below the map in narrower viable windows. Splitter sizes and linked selection survive layout changes.
+- The ranked table shows retained direct children with an icon/name, Size, parent share and a separate Cleanup checkbox. The compact inspector shows the name once, its parent location once, Size/share/Modified, and exceptional status. Full paths and exact bytes remain in accessible details and tooltips.
+- Name, optional type and age filters apply to the current folder's retained entries. They highlight matching map items without changing areas or totals. Other contains summarized names that cannot be searched. An expandable type breakdown makes the retained scope clear.
+- Optional file-type and age colors have a legend. Folder age defaults to its own Modified date; newest-contained-file age is available where retained data establishes it. Normal Salamander **Size** remains the default area; **File count** is optional. Size on disk remains unavailable until allocation and hard-link data are reliable.
+- Click a file tile to select it; click a folder tile to explore it. Selecting a table row does not navigate. Enter activates the selection. Back/Forward and structural Up remain separate.
+- **Copy path** is in the main/context menus and uses Alt+Insert. Ordinary text Copy remains available in editing fields. Synthetic Other has no invented copyable path.
+- Use the row icon or **Exclude from view** to remove a real item and its descendants from shown sizes, percentages and map area. The row stays dimmed with an exclusion overlay and its original Size. Restore an item or **Restore all**. Exclusions survive navigation/refresh in this viewer and clear when it closes.
+- Mark cleanup independently with checkboxes or explicit **Mark matching items**. **Review cleanup** shows real target paths, whole-folder consequences and a removable target list, then sends Recycle/Delete through the normal confirmed File Operations workflow. Exclusion does not mark or delete data. Refresh after the operation finishes.
+- **Focus in pane** reveals a real item in the active pane. **Open folder in other pane** is an explicit action with no new shortcut. These actions retain the source provider context and refuse unavailable bindings.
+- The **Problems** count/menu opens a bounded list of retained unreadable or unmeasured entries. **Export** writes the settled current projection to CSV or JSON, identifying scan/view scope, original/shown bytes, exclusions, summaries and unavailable facts. These exports do not save a reusable scan snapshot.
+- Settings belong to global **Preferences → Plugins → Space**, with technical scan/cache/retention fields under **Advanced**.
+- F5 bypasses the cache. A settled display remains visible during a retained refresh; refusal keeps it and offers **File → Rebuild**, which discards it before rescanning.
 
-- If exactly one folder is selected, the viewer scans that folder.
-- Otherwise it scans the current pane folder.
-- The treemap area is proportional to item size.
-- You can navigate upward and rescan after files change.
+![Excluded item retained for restoration](res/viewer-space-excluded.png)
 
-Shortcuts:
+![Reviewed cleanup with clear host-owned actions](res/viewer-space-cleanup-review.png)
 
 | Shortcut | Action |
 |----------|--------|
-| `F5` | Refresh/rescan. |
-| `Backspace` | Go up. |
-| `Esc` | Cancel scan while scanning; close when idle. |
+| Alt+Insert | Copy the real selected path, or the current folder without a selection. |
+| F5 | Fresh scan, bypassing the cache. |
+| Backspace / Alt+Up | Structural Up. |
+| Alt+Left / Alt+Right | Back / Forward. |
+| Ctrl+1 / Ctrl+2 | Panel right / Panel bottom. |
+| Enter | Explore a folder or focus a file in the host pane. |
+| Esc | Dismiss a popup, leave review/Problems or clear a filter first; otherwise cancel a scan, then close when idle. |
 
 ## PE Viewer (`builtin/viewer-pe`)
 
-![PE viewer showing parsed metadata for a sample executable](res/viewer-pe.png)
+![Viewer pe with generated sample content](res/viewer-pe.png)
 
 Use the PE viewer for Windows Portable Executable files such as `.exe`, `.dll`, `.sys`, and related binary formats.
 
@@ -212,7 +224,10 @@ Shortcuts:
 
 ## VLC Viewer (`builtin/viewer-vlc`)
 
-![VLC viewer playing a generated audio sample](res/viewer-vlc.png)
+The example shows the missing-runtime state using a generated sandbox Wave file.
+It illustrates setup guidance; it does not demonstrate media playback.
+
+![VLC installation guidance when the runtime is unavailable](res/viewer-vlc-unavailable.png)
 
 Use the VLC viewer for audio and video playback through VLC/libVLC.
 
@@ -241,7 +256,7 @@ No separate viewer menu accelerator table is currently defined for VLC; use the 
 
 ## Web Viewer (`builtin/viewer-web`)
 
-![Web viewer rendering a generated HTML sample](res/viewer-web.png)
+![Viewer web with generated sample content](res/viewer-web.png)
 
 Use the Web viewer for HTML, PDF, and browser-rendered content.
 
@@ -273,7 +288,7 @@ Shortcuts:
 
 ## JSON Viewer (`builtin/viewer-json`)
 
-![JSON viewer showing a generated structured sample](res/viewer-json.png)
+![Viewer json with generated sample content](res/viewer-json.png)
 
 Use the JSON viewer for `.json`, `.json5`, and JSONL-style inspection.
 
@@ -306,7 +321,7 @@ Shortcuts:
 
 ## Markdown Viewer (`builtin/viewer-markdown`)
 
-![Markdown viewer rendering a generated Markdown sample](res/viewer-markdown.png)
+![Viewer markdown with generated sample content](res/viewer-markdown.png)
 
 Use the Markdown viewer for `.md` documentation and notes.
 
@@ -339,3 +354,36 @@ Shortcuts:
 | `Esc` | Close when idle. |
 
 See also: [Plugins](Plugins.md), [Preferences](Preferences.md), and [Settings File & Advanced Configuration](SettingsFile.md).
+
+## Space scan and refresh examples
+
+These scenarios use the same invented library. Displayed totals are observed logical
+bytes, with no overall scan percentage or ETA. A refresh keeps the settled display
+when retention is possible. Canceling the refresh leaves those results available.
+
+| State | Example |
+| --- | --- |
+| Before results arrive | [Native frame](res/viewer-space-scanning.png) |
+| Observed partial scan | [Native frame](res/viewer-space-inflight.png) |
+| Refresh with retained results | [Native frame](res/viewer-space-refreshing.png) |
+| Canceled refresh with retained results | [Native frame](res/viewer-space-refresh-canceled.png) |
+| Refresh refused; rebuild offered | [Native frame](res/viewer-space-refresh-refused.png) |
+| Empty folder | [Native frame](res/viewer-space-empty.png) |
+| Provider error | [Native frame](res/viewer-space-error.png) |
+| Bottom panel; inspector collapsed | [Native frame](res/viewer-space-bottom-panel.png) |
+| Map only | [Native frame](res/viewer-space-map-only.png) |
+| Excluded item with original size retained | [Native frame](res/viewer-space-excluded.png) |
+| Reviewed cleanup targets | [Native frame](res/viewer-space-cleanup-review.png) |
+
+## Generated media playback
+
+These frames show a real VLC decoder playing and pausing a generated silent AVI,
+using software decoding and the identified GDI video output.
+The fixture checks positive decoder time and duration, an actual video child,
+and a stable time after pause. The picture is generated test content and the
+clip stays inside the marked sandbox. The setup-error example above remains
+useful for hosts without a VLC runtime.
+
+![Real VLC playback of an original generated silent clip](res/viewer-vlc-playback.png)
+
+![The generated clip paused through the native player action](res/viewer-vlc-paused.png)

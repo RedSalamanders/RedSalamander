@@ -1,0 +1,6 @@
+{
+  "ProcessId": 89384,
+  "ParentProcessId": 104936,
+  "ExecutablePath": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\ViewerPETests.exe",
+  "CommandLine": "Z:\\src\\RedSalamander\\.build\\x64\\Debug\\ViewerPETests.exe TestViewerDocumentationGallery --no-activate"
+}

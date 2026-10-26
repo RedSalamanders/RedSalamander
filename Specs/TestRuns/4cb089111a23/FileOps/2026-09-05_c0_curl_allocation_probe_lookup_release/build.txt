@@ -1,0 +1,683 @@
+
+  ls2.cpp
+  ViewerPETests.cpp
+  DxUi.Accessibility.cpp
+  ls1.cpp
+  Main.cpp
+  ls3.cpp
+  dllmain.cpp
+  dllmain.cpp
+  FlipSequentialDiscard.cpp
+  dllmain.cpp
+  Common.cpp
+  Blake3Digest.cpp
+  LocalizationManager.cpp
+  MinimumOsVersion.cpp
+  RegistryUtils.cpp
+  PerfJsonl.cpp
+  PluginConfiguration.cpp
+  SettingsStore.cpp
+  ThemeDefinitionIo.cpp
+  ThemeExpression.cpp
+  TraceProvider.cpp
+  WslDistributionCatalog.cpp
+  dllmain.cpp
+  ViewerText-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerText-fr-FR.dll
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  Terminal-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\Terminal-fr-FR.dll
+  Terminal-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\Terminal-sk-SK.dll
+  Terminal-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\Terminal-cs-CZ.dll
+  RedSalamander-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamander-fr-FR.dll
+  FileSystem-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem-fr-FR.dll
+  RedSalamanderMonitor-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-ja-JP.dll
+  RedSalamander-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamander-ja-JP.dll
+  RedConfigure-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedConfigure-ja-JP.dll
+  FileSystemCurl-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-fr-FR.dll
+  Terminal-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\Terminal-ja-JP.dll
+  LocalizationTests-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\LocalizationTests-fr-FR.dll
+  RedSalamanderMonitor-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-fr-FR.dll
+  FileSystemDummy-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-fr-FR.dll
+  FileSystemMicrosoftDrive-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-fr-FR.dll
+  ViewerImgRaw-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-fr-FR.dll
+  FileSystem7z-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem7z-fr-FR.dll
+  FileSystemS3-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemS3-fr-FR.dll
+  ViewerSpace-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSpace-fr-FR.dll
+  ViewerPE-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerPE-fr-FR.dll
+  FileSystemGoogleDrive-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-fr-FR.dll
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 236 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemCurl.ImapHelpers.cpp
+  FileSystemMtp-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-fr-FR.dll
+  ViewerSqlite-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-fr-FR.dll
+  FilesInformationGoogleDrive.cpp
+  FileSystemDummy-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-ja-JP.dll
+  FileSystemCurl-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-ja-JP.dll
+  FileSystemS3-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemS3-ja-JP.dll
+  FileSystemGoogleDrive-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-ja-JP.dll
+  FileSystem7z.cpp
+  ViewerImgRaw-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-ja-JP.dll
+  FileSystem7z-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem7z-ja-JP.dll
+  ls1.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\ls1.exe
+  FileSystemDummy.cpp
+  FileSystemMtp-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-ja-JP.dll
+  ViewerVLC-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerVLC-fr-FR.dll
+  FileSystemMicrosoftDrive-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-ja-JP.dll
+  FileSystem-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem-ja-JP.dll
+  ViewerWeb-fr-FR.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerWeb-fr-FR.dll
+  FileSystemMtp-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-sk-SK.dll
+  ViewerSpace-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSpace-ja-JP.dll
+  ViewerPE-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerPE-ja-JP.dll
+  FileSystem-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem-cs-CZ.dll
+  ViewerWeb-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerWeb-ja-JP.dll
+  ViewerVLC-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerVLC-ja-JP.dll
+  FileSystem7z-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem7z-cs-CZ.dll
+  FileSystem-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem-sk-SK.dll
+  ViewerText-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerText-ja-JP.dll
+  FileSystem7z-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystem7z-sk-SK.dll
+  ViewerSqlite-ja-JP.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-ja-JP.dll
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  FileSystemMtp-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMtp-cs-CZ.dll
+  FileSystemCurl-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-sk-SK.dll
+  FileSystemCurl-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemCurl-cs-CZ.dll
+  FileSystemMicrosoftDrive-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-cs-CZ.dll
+  FileSystemDummy-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-cs-CZ.dll
+  FileSystemGoogleDrive-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-sk-SK.dll
+  FileSystemGoogleDrive-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemGoogleDrive-cs-CZ.dll
+  FileSystemMicrosoftDrive-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemMicrosoftDrive-sk-SK.dll
+  All 1126 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemS3-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemS3-cs-CZ.dll
+  FileSystemCurlTests.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  DxUi.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 234 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  All 301 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  ViewerImgRaw-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-cs-CZ.dll
+  All 1219 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemDummy-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemDummy-sk-SK.dll
+  FileSystemS3-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\FileSystemS3-sk-SK.dll
+  FileSystemGoogleDrive.cpp
+  ViewerPE-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerPE-cs-CZ.dll
+  ViewerPE-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerPE-sk-SK.dll
+  ViewerSqlite-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-cs-CZ.dll
+  ViewerImgRaw-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerImgRaw-sk-SK.dll
+  ViewerText-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerText-cs-CZ.dll
+  RedLauncher.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\RedLauncher.exe
+  ViewerSpace-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSpace-sk-SK.dll
+  ViewerVLC-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerVLC-cs-CZ.dll
+  ViewerText-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerText-sk-SK.dll
+  ls2.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\ls2.exe
+  RedSalamanderMonitor-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-cs-CZ.dll
+  RedSalamander-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamander-sk-SK.dll
+  LocalizationTests-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\LocalizationTests-cs-CZ.dll
+  RedConfigure-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedConfigure-sk-SK.dll
+  RedSalamander-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamander-cs-CZ.dll
+  ViewerWeb-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerWeb-sk-SK.dll
+  RedConfigure-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedConfigure-cs-CZ.dll
+  RedSalamanderMonitor-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\RedSalamanderMonitor-sk-SK.dll
+  ViewerSqlite-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSqlite-sk-SK.dll
+  ViewerSpace-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerSpace-cs-CZ.dll
+  ls3.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\ls3.exe
+  FlipSequentialDiscard.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\FlipSequentialDiscard.exe
+  LocalizationTests-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\LocalizationTests-sk-SK.dll
+  ViewerVLC-sk-SK.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerVLC-sk-SK.dll
+  ViewerWeb-cs-CZ.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Lang\ViewerWeb-cs-CZ.dll
+  DxUi.ComboBox.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystem7z.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystem7z.exp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Common.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Common.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  Generating code
+  Generating code
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemDummy.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemDummy.exp
+  Previous IPDB not found, fall back to full compilation.
+  Previous IPDB not found, fall back to full compilation.
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 5756 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  All 1374 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemGoogleDrive.SelfTest.FakeDrive.cpp
+  All 3678 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  All 3708 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  Finished generating code
+  ViewerPETests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\ViewerPETests.exe
+  FileSystemCurlTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\FileSystemCurlTests.exe
+  FileSystem7z.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystem7z.dll
+  FileSystemDummy.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemDummy.dll
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\yyjson.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\yyjson.dll done
+  DxUi.Controls.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemGoogleDrive.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemGoogleDrive.exp
+  All 10230 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  Finished generating code
+  Common.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Common.dll
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\blake3.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\blake3.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\yyjson.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\yyjson.dll done
+  DxUi.FrameRuntime.cpp
+  SettingsSchemaTests.cpp
+  dllmain.cpp
+  pch.cpp
+  dllmain.cpp
+  CrashHandlingTests.cpp
+  dllmain.cpp
+  dllmain.cpp
+  dllmain.cpp
+  All 5955 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  LocalSearchIndexCore.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  Main.cpp
+  LocalizationTests.cpp
+  PluginContractTests.cpp
+  Document.cpp
+  Finished generating code
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  FileSystemGoogleDrive.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemGoogleDrive.dll
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\libcurl.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\libcurl.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\libssl-3-x64.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\libssl-3-x64.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\libcrypto-3-x64.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\libcrypto-3-x64.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\z.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\z.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\libssh2.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\libssh2.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\brotlidec.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\brotlidec.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\brotlicommon.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\brotlicommon.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\nghttp2.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\nghttp2.dll done
+  ViewerSqlite.Engine.cpp
+  DxUi.Grid.cpp
+  CrashQuarantine.cpp
+  ViewerVLC.cpp
+  FilesInformationMicrosoftDrive.cpp
+  FileSystemCurl.CopyMove.cpp
+  EtwListener.cpp
+  FilesInformationMtp.cpp
+  TraceProvider.cpp
+  SearchServiceBroker.cpp
+  SettingsSchemaParser.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  ViewerSqliteTests.cpp
+  FileSystemPathIdentity.cpp
+  All 2394 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  Generating code
+  Factory.cpp
+  Previous IPDB not found, fall back to full compilation.
+  LocalizationTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\LocalizationTests.exe
+  FileSystemRouteContract.cpp
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\blake3.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\blake3.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\yyjson.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\yyjson.dll done
+  SelfTestLatencyHooks.cpp
+  CrashHandler.cpp
+  FileSystemMicrosoftDrive.cpp
+  All 7406 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  MonitorFileReader.cpp
+  Finished generating code
+  FileSystemMtp.Core.cpp
+  DxUi.Menu.cpp
+  RedSalamanderSearchService.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\RedSalamanderSearchService.exe
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\sqlite3.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\sqlite3.dll done
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  FileSystemCurl.DirectoryOps.cpp
+  FileSystemPluginManager.cpp
+  SqliteIndexStore.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerVLC.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerVLC.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 3710 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  MonitorFileExporter.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  PluginContractTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\PluginContractTests.exe
+  All 3726 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  CrashQuarantine.TestStubs.cpp
+  Finished generating code
+  ViewerSqliteTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\ViewerSqliteTests.exe
+  FilesInformationS3.cpp
+  FileSystemMicrosoftDrive.SelfTest.FakeGraph.cpp
+  FileSystemCurl.Imap.cpp
+  FileSystemMtp.Device.cpp
+  All 4211 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  DxUi.NativeTextInput.cpp
+  All 4279 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  MonitorTest.cpp
+  ViewerVLC.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerVLC.dll
+  SearchTextHelpers.cpp
+  SettingsSchemaTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\SettingsSchemaTests.exe
+  PluginModuleLifecycle.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 2820 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerPluginManager.cpp
+  CrashHandlingTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\CrashHandlingTests.exe
+  FileSystemCurl.ImapHelpers.cpp
+  dllmain.cpp
+  DxUi.PointerInput.cpp
+  FileSystemMtp.FakeBackend.cpp
+  Factory.cpp
+  DxUi.Scrollbar.cpp
+  FileSystemS3.Configuration.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 3503 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  MonitorTest.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\MonitorTest.exe
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemMicrosoftDrive.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemMicrosoftDrive.exp
+  Generating code
+  FileSystemCurl.Shared.cpp
+  Previous IPDB not found, fall back to full compilation.
+  DxUi.SingleLineTextEditing.cpp
+  FileSystem.cpp
+  FileSystemMtp.Shared.cpp
+  All 6627 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  FolderView.Enumeration.Access.cpp
+  Finished generating code
+  FileSystemMicrosoftDrive.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemMicrosoftDrive.dll
+  FileSystemS3.Core.cpp
+  DxUi.TextStoreACP.cpp
+  FileSystemCurl.SelfTest.Ftp.cpp
+  FileSystem.DirectoryOps.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemMtp.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemMtp.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 6939 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  IconCache.cpp
+  FileSystemMtp.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemMtp.dll
+  DxUi.TextInput.cpp
+  FileSystem.FileOps.cpp
+  FileSystemS3.Directory.cpp
+  FolderIconEnumerationDuplicatePathPerfTest.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemCurl.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemCurl.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  DxUi.Tree.cpp
+  FolderIconEnumerationPerfTest.cpp
+  FileSystem.Menu.cpp
+  FolderViewColumnLayoutTests.cpp
+  FolderViewRefreshDuplicatePathPerfTest.cpp
+  All 9653 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  FileSystemCurl.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemCurl.dll
+  FileSystemS3.DirectoryOps.cpp
+  DxUi.Typeahead.cpp
+  FileSystem.Path.cpp
+  PerformanceTests2.cpp
+  PluginManager.TestStubs.cpp
+  DxUi.Theme.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\PerformanceTests2.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\PerformanceTests2.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  FileSystem.Search.cpp
+  FileSystemS3.DriveInfo.cpp
+  All 9749 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  PerformanceTests2.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\PerformanceTests2.dll
+  DxUi.WindowHost.cpp
+  FileSystem.Watch.cpp
+  FileSystemS3.IO.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystem.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystem.exp
+  Generating code
+  DxUi.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\DxUi.lib
+  dllmain.cpp
+  dllmain.cpp
+  PlaceholderValidation.cpp
+  dllmain.cpp
+  Previous IPDB not found, fall back to full compilation.
+  dllmain.cpp
+  dllmain.cpp
+  ColorTextView.cpp
+  AppTheme.cpp
+  Configuration.cpp
+  Document.cpp
+  PlaceholderValidation.cpp
+  RcParser.cpp
+  EtwListener.cpp
+  MonitorFileReader.cpp
+  RcWriter.cpp
+  Main.cpp
+  RedConfigureApp.cpp
+  RedConfigurePagePresenters.cpp
+  MonitorFileExporter.cpp
+  RedConfigureRoot.cpp
+  RedSalamanderMonitor.cpp
+  RedConfigureSession.cpp
+  RedConfigureWorkflow.cpp
+  RedConfigureSplashScreen.cpp
+  RedConfigureTraceProvider.cpp
+  RedConfigureUiHelpers.cpp
+  ThemeCatalog.cpp
+  ThemePreviewModel.cpp
+  WorkspaceDiscovery.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  Factory.cpp
+  RcParser.cpp
+  All 11631 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  RcWriter.cpp
+  FileSystemS3.Menu.cpp
+  FileSystem.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystem.dll
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\sqlite3.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\sqlite3.dll done
+  RedConfigureApp.cpp
+  ls4.cpp
+  ViewerSqlite.Engine.cpp
+  ViewerText.Encoding.cpp
+  ViewerImgRaw.Decode.cpp
+  UiMetrics.cpp
+  ViewerPE.cpp
+  ViewerWeb.cpp
+  ViewerSpace.cpp
+  Ghostty terminal runtime ready: mode=Product platform=x64 pairedRaw=cb84ae8fc116e2721d0e1b1d82396c8b898c5364ddb98faf47434ddc22048088 normalizedDiagnostic=a65a45989fb75954489538ff37a98e0722022c08798c5c0a0c2ab0d775dc2599
+  dllmain.cpp
+  Factory.cpp
+  RedConfigurePagePresenters.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 1319 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ls4.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\ls4.exe
+  Generating code
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  DxUiTests.cpp
+  ViewerSqlite.cpp
+  Previous IPDB not found, fall back to full compilation.
+  ViewerText.MenuTheme.cpp
+  FileSystemS3.S3.cpp
+  Terminal.cpp
+  RedConfigureRoot.cpp
+  ViewerImgRaw.Export.cpp
+  dllmain.cpp
+  All 18029 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerWeb.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerWeb.exp
+  Generating code
+  RedConfigure.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\RedConfigure.exe
+  Previous IPDB not found, fall back to full compilation.
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerPE.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerPE.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerSpace.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerSpace.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  DxUiTests.Accessibility.cpp
+  ViewerText.cpp
+  All 12721 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerImgRaw.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerSqlite.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerSqlite.exp
+  Generating code
+  ViewerWeb.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerWeb.dll
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\WebView2Loader.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\WebView2Loader.dll done
+  Previous IPDB not found, fall back to full compilation.
+  RedConfigureSession.cpp
+  TerminalAccessibility.cpp
+  FileSystemS3.S3Table.cpp
+  All 12053 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  ViewerSqlite.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerSqlite.dll
+  TerminalInternal.cpp
+  DxUiTests.Animation.cpp
+  ViewerText.Text.cpp
+  RedConfigureWorkflow.cpp
+  All 16594 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerImgRaw.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerImgRaw.exp
+  Generating code
+  FileSystemS3.Shared.cpp
+  All 12037 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  Previous IPDB not found, fall back to full compilation.
+  RedSalamanderMonitor.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\RedSalamanderMonitor.exe
+  ViewerPE.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerPE.dll
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\pe-parse.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\pe-parse.dll done
+  All 13043 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  TerminalKittyImagePipeline.cpp
+  DxUiTests.ComboBox.cpp
+  ViewerImgRaw.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerImgRaw.dll
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\raw_r.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\raw_r.dll done
+  ViewerText.Hex.cpp
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\lcms2-2.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\lcms2-2.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\jpeg8.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\jpeg8.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\turbojpeg.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\turbojpeg.dll done
+  All 15463 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  RedConfigureTraceProvider.cpp
+  ViewerSpace.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerSpace.dll
+  FileSystemS3.SelfTest.FakeS3.cpp
+  TerminalCommandSurfaceModel.cpp
+  RedConfigureUiHelpers.cpp
+  DxUiTests.Controls.cpp
+  TerminalRuntimeLoader.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerText.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerText.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  ThemeCatalog.cpp
+  TerminalSecurity.cpp
+  All 15244 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  DxUiTests.Gallery.cpp
+  ViewerText.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\ViewerText.dll
+  ThemePreviewModel.cpp
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemS3.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemS3.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  TerminalSession.cpp
+  All 10010 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  WorkspaceDiscovery.cpp
+  DxUiTests.Grid.cpp
+  FileSystemS3.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\FileSystemS3.dll
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\aws-cpp-sdk-core.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\aws-cpp-sdk-core.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\aws-crt-cpp.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\aws-crt-cpp.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\aws-c-http.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\aws-c-http.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\aws-c-io.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\aws-c-io.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\aws-c-common.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\aws-c-common.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\aws-c-cal.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\aws-c-cal.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\aws-c-compression.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\aws-c-compression.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\aws-c-mqtt.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\aws-c-mqtt.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\aws-c-auth.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\aws-c-auth.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\aws-c-sdkutils.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\aws-c-sdkutils.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\aws-checksums.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\aws-checksums.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\aws-c-event-stream.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\aws-c-event-stream.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\aws-c-s3.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\aws-c-s3.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\aws-cpp-sdk-s3-crt.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\aws-cpp-sdk-s3-crt.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\aws-cpp-sdk-s3tables.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\aws-cpp-sdk-s3tables.dll done
+  RedConfigureTests.cpp
+  TerminalVt.cpp
+  DxUiTests.Menu.cpp
+  TerminalVtUpgradeTests.cpp
+  Generating code
+  DxUiTests.MultilineText.cpp
+  Previous IPDB not found, fall back to full compilation.
+  All 19940 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+     Creating library C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\Terminal.lib and object C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\Terminal.exp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  DxUiTests.NewControls.cpp
+  RedConfigureTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\RedConfigureTests.exe
+  All 14166 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  Terminal.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\Plugins\Terminal.dll
+  FileSystemPathIdentity.cpp
+  FileSystemRouteContract.cpp
+  LocalSearchIndexCore.cpp
+  SearchServiceBroker.cpp
+  SqliteIndexStore.cpp
+  SearchTextHelpers.cpp
+  AppDataPaths.cpp
+  AppTheme.cpp
+  CrashQuarantine.cpp
+  CrashHandler.cpp
+  D2DHdcPaint.cpp
+  ChangeCase.cpp
+  FileSystemRenameBatch.cpp
+  BatchRenameEngine.cpp
+  BatchRenameExecutionEngine.cpp
+  FileOperationArtifactRegistry.cpp
+  FileOperationMoveBreadcrumb.cpp
+  BatchRenameMenus.cpp
+  BatchRenameWindow.cpp
+  Commands.SelfTest.cpp
+  ConnectionProfileUtils.cpp
+  DirectoryInfoCache.cpp
+  FileSystemPluginManager.cpp
+  PluginModuleLifecycle.cpp
+  FunctionBar.cpp
+  FolderView.cpp
+  FolderView.DragDrop.cpp
+  FolderView.Enumeration.cpp
+  FolderView.ErrorOverlay.cpp
+  FileOperationConfirmation.cpp
+  FolderView.FileOps.cpp
+  FolderView.Icons.cpp
+  DxUiTests.NativeTextInput.cpp
+  FolderView.Interaction.cpp
+  FolderView.Layout.cpp
+  FolderView.Menus.cpp
+  FolderView.Rendering.cpp
+  FolderView.Selection.cpp
+  FolderWindow.cpp
+  FolderWindow.FileOperations.cpp
+  FolderWindow.FileOperations.Dialog.cpp
+  FolderWindow.FileOperations.IssuesPane.cpp
+  FolderWindow.FileOperations.Popup.cpp
+  FolderWindow.FileOperations.SelfTest.cpp
+  FolderWindow.FileOperations.State.cpp
+  FolderWindow.ItemProperties.cpp
+  FolderWindow.FileSystem.cpp
+  FolderWindow.Interaction.cpp
+  FolderWindow.Layout.cpp
+  FolderWindow.SelectionSize.cpp
+  FolderWindow.StatusBar.cpp
+  FolderWindow.Viewers.cpp
+  FolderWatcher.cpp
+  FileActionLauncher.cpp
+  FileActionResolver.cpp
+  ConnectionSecrets.cpp
+  DxUiTests.ReadOnly.cpp
+  ConnectionManagerWindow.cpp
+  ConnectionCredentialPromptDialog.cpp
+  WindowsHello.cpp
+  HostServices.cpp
+  IconCache.cpp
+  AlertOverlayWindow.cpp
+  ThemeCycleOverlayWindow.cpp
+  CommandRegistry.cpp
+  CommandVisuals.cpp
+  CommandPaletteWindow.cpp
+  FloatingTerminalWindow.cpp
+  CompareDirectoriesEngine.SelfTest.cpp
+  CompareDirectoriesEngine.cpp
+  FindFilesWindow.cpp
+  SearchFallbackEngine.cpp
+  CompareDirectoriesWindow.cpp
+  CompareDirectoriesWindow.Menu.cpp
+  CompareDirectoriesWindow.Options.cpp
+  CompareDirectoriesWindow.Progress.cpp
+  ManagePluginsDialog.cpp
+  MaskSyntax.cpp
+  NavigationView.cpp
+  SessionState.cpp
+  NavigationView.Breadcrumb.cpp
+  DxUiTests.Rendering.cpp
+  NavigationView.Edit.cpp
+  NavigationView.FullPathPopup.cpp
+  NavigationView.Interaction.cpp
+  NavigationView.Menus.cpp
+  NavigationView.Rendering.cpp
+  Preferences.cpp
+  Preferences.Dialog.cpp
+  Preferences.Internal.cpp
+  Preferences.Advanced.cpp
+  Preferences.Monitor.cpp
+  Preferences.CompareDirectories.cpp
+  Preferences.FileOperations.cpp
+  Preferences.FileActions.cpp
+  Preferences.HotPaths.cpp
+  Preferences.Editors.cpp
+  Preferences.UserMenu.cpp
+  Preferences.General.cpp
+  Preferences.Mouse.cpp
+  Preferences.Panes.cpp
+  Preferences.Plugins.cpp
+  Preferences.Plugin.Configuration.cpp
+  DxUiTests.TextField.cpp
+  Preferences.Keyboard.cpp
+  Preferences.Themes.cpp
+  Preferences.Viewers.cpp
+  StartupMetrics.cpp
+  SettingsSchemaParser.cpp
+  SettingsHotReload.cpp
+  SettingsFileLauncher.cpp
+  ShortcutsWindow.cpp
+  RedSalamander.cpp
+  SettingsSchemaExport.cpp
+  UiMetrics.cpp
+  ThemedInputFrames.cpp
+  ShortcutDefaults.cpp
+  ShortcutManager.cpp
+  ShortcutCommandCatalog.cpp
+  TerminalHostSupport.cpp
+  ShortcutText.cpp
+  SelfTestCommon.cpp
+  SelfTestLatencyHooks.cpp
+  SplashScreen.cpp
+  ViewerPluginManager.cpp
+  WSLDistro.cpp
+  FolderWindow.FileSystem.Commands.cpp
+  FolderWindow.FileSystem.Navigation.cpp
+  FolderWindow.FileOperations.State.Runtime.cpp
+  FolderWindow.FileOperations.State.Diagnostics.cpp
+  FolderWindow.FileOperations.State.Queue.cpp
+  DxUiTests.Theme.cpp
+  DxUiTests.Tooltip.cpp
+  DxUiTests.Tree.cpp
+  DxUiTests.WindowHost.cpp
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 25406 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  DxUiTests.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\DxUiTests.exe
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\yyjson.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\yyjson.dll done
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\blake3.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\blake3.dll done
+  Generating code
+  Previous IPDB not found, fall back to full compilation.
+  All 143120 functions were compiled because no usable IPDB/IOBJ from previous compilation was found.
+  Finished generating code
+  RedSalamander.vcxproj -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\RedSalamander.exe
+  C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\vcpkg_installed\x64\x64-windows\bin\sqlite3.dll -> C:\Users\eric\.codex\worktrees\fd72\RedSalamander\.build\x64\Release\sqlite3.dll done

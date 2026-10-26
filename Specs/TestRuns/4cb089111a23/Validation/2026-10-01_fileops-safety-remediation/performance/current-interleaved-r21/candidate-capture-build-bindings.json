@@ -1,0 +1,52 @@
+[
+  {
+    "capture": 1,
+    "run_id": "20261002T145219Z-15832-c25d7d5c23614f06af96261e7e9a2fd4",
+    "receipt_id": "284d47cf32a3872c22c23e0cce74a17b6d36bd81c20cc52773cae19bab9dc2fc",
+    "source_snapshot_id": "c70c26e7d63c64c8299cf57dd37b1c4e1096231ba6c250d78a0742ccbfbe9ab1",
+    "runtime_binding_sha256": "8935cd5b899c6f013f26602c0d93a7a9297bb949566377b11586e6aafb6f24d6",
+    "modules_checked_before_and_after": 134,
+    "total_build_modules_checked_before_and_after": 154,
+    "derivation": "All source-bound runtime modules are members of the complete pre/post-checked build inventory; additional standalone test executables remain in the original interleaved records."
+  },
+  {
+    "capture": 2,
+    "run_id": "20261002T145353Z-108796-fa7988f695704c4293db4361d2d5c258",
+    "receipt_id": "284d47cf32a3872c22c23e0cce74a17b6d36bd81c20cc52773cae19bab9dc2fc",
+    "source_snapshot_id": "c70c26e7d63c64c8299cf57dd37b1c4e1096231ba6c250d78a0742ccbfbe9ab1",
+    "runtime_binding_sha256": "8935cd5b899c6f013f26602c0d93a7a9297bb949566377b11586e6aafb6f24d6",
+    "modules_checked_before_and_after": 134,
+    "total_build_modules_checked_before_and_after": 154,
+    "derivation": "All source-bound runtime modules are members of the complete pre/post-checked build inventory; additional standalone test executables remain in the original interleaved records."
+  },
+  {
+    "capture": 3,
+    "run_id": "20261002T145708Z-79848-1f5c1aea2dcc4435becc69bb3c37a218",
+    "receipt_id": "284d47cf32a3872c22c23e0cce74a17b6d36bd81c20cc52773cae19bab9dc2fc",
+    "source_snapshot_id": "c70c26e7d63c64c8299cf57dd37b1c4e1096231ba6c250d78a0742ccbfbe9ab1",
+    "runtime_binding_sha256": "8935cd5b899c6f013f26602c0d93a7a9297bb949566377b11586e6aafb6f24d6",
+    "modules_checked_before_and_after": 134,
+    "total_build_modules_checked_before_and_after": 154,
+    "derivation": "All source-bound runtime modules are members of the complete pre/post-checked build inventory; additional standalone test executables remain in the original interleaved records."
+  },
+  {
+    "capture": 4,
+    "run_id": "20261002T145817Z-112872-0e6c3e9ab8044a548e4eca480d40085d",
+    "receipt_id": "284d47cf32a3872c22c23e0cce74a17b6d36bd81c20cc52773cae19bab9dc2fc",
+    "source_snapshot_id": "c70c26e7d63c64c8299cf57dd37b1c4e1096231ba6c250d78a0742ccbfbe9ab1",
+    "runtime_binding_sha256": "8935cd5b899c6f013f26602c0d93a7a9297bb949566377b11586e6aafb6f24d6",
+    "modules_checked_before_and_after": 134,
+    "total_build_modules_checked_before_and_after": 154,
+    "derivation": "All source-bound runtime modules are members of the complete pre/post-checked build inventory; additional standalone test executables remain in the original interleaved records."
+  },
+  {
+    "capture": 5,
+    "run_id": "20261002T150159Z-60664-51f0ff0a39f84097aee3da8cead32b49",
+    "receipt_id": "284d47cf32a3872c22c23e0cce74a17b6d36bd81c20cc52773cae19bab9dc2fc",
+    "source_snapshot_id": "c70c26e7d63c64c8299cf57dd37b1c4e1096231ba6c250d78a0742ccbfbe9ab1",
+    "runtime_binding_sha256": "8935cd5b899c6f013f26602c0d93a7a9297bb949566377b11586e6aafb6f24d6",
+    "modules_checked_before_and_after": 134,
+    "total_build_modules_checked_before_and_after": 154,
+    "derivation": "All source-bound runtime modules are members of the complete pre/post-checked build inventory; additional standalone test executables remain in the original interleaved records."
+  }
+]

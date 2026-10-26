@@ -14,7 +14,7 @@ Primary files:
 ## Goals
 
 - Produce MSIX installers for requested **Release x64 and ARM64** builds.
-- Include **RedSalamander.exe**, **RedSalamanderMonitor.exe**, plugins, and runtime dependencies.
+- Include **RedSalamander.exe**, the search-service executable, plugins, and runtime dependencies.
 - Keep packaging **deterministic** and driven by the `.build\x64\Release` output.
 - Enable **optional signing** in CI with secrets.
 - Support **per-user** install (default) and **per-machine** provisioning.
@@ -32,12 +32,13 @@ The packaging project includes files from:
 
 Excluded from the package:
 - Debug and link artifacts (`*.pdb`, `*.lib`, `*.exp`, `*.ilk`, `*.iobj`, `*.ipdb`).
-- Non-shipping executables (PoC/test `*.exe` other than `RedSalamander.exe` and `RedSalamanderMonitor.exe`).
+- Non-shipping executables (PoC/test `*.exe` other than `RedSalamander.exe` and `RedSalamanderSearchService.exe`).
 - `asan.supp`
 
 The package includes:
 - `RedSalamander.exe`
-- `RedSalamanderMonitor.exe`
+- `RedSalamanderSearchService.exe`
+- `RedMonitor-LICENSE.txt` (the pinned client MIT notice)
 - `Plugins\*.dll` and their copied runtime dependencies
 - `Lang\*.dll` satellite resource assemblies
 - `Themes\*.theme.json5`
@@ -51,9 +52,12 @@ Validation:
 
 ## Manifest
 
-`Installer/msix/Package.appxmanifest` declares two full-trust desktop apps:
+`Installer/msix/Package.appxmanifest` declares one full-trust desktop app:
 - `RedSalamander` (main UI)
-- `RedSalamanderMonitor`
+
+RedMonitor is packaged and installed independently. The consumer ships no viewer EXE, satellites,
+symbols, Start Menu entry or bundled helper. MSI, MSIX and ZIP must exclude old viewer payloads
+even when an output folder contains historical artifacts. The client MIT notice remains required.
 
 Capabilities:
 - `runFullTrust`
@@ -82,6 +86,27 @@ phase because project references may touch
 `.build\vcpkg_installed\<platform>\<triplet>` and that platform root's metadata.
 The leases are released in exact reverse order. Existing contamination in any
 scope blocks this wrapper; it cannot authorize repair or clear a marker.
+
+The wrapper and `build.ps1 -Msix` pass `/p:RSBuildEnableTests=false` to the
+packaging project. Because the package also takes plugin and runtime binaries
+directly from the compiled profile, each then inspects the MSIX it produced and
+fails when any `.exe` or `.dll` carries the `ENABLE_TESTS` version marker or a
+reserved test-only export (see "Distributable test surface" in
+`Specs/Build/Build_Toolchain.md`). The check runs while the packaging lease is
+held, and a rejected package is removed together with its package folder (for
+example `RedSalamanderInstaller_<version>_<platform>_Test`) beneath
+`.build\AppPackages` before the failure is reported, so no test-enabled MSIX is
+left at its normal output path. The removal never follows a link: a reparse point
+at `.build\AppPackages`, on the way to the package or anywhere in its folder
+refuses it, and the failure then says the package must not be distributed. The
+whole repository path down to `.build\AppPackages` is re-checked for links right
+before the check that may remove a package. When
+MSBuild finds the package up to date and writes nothing (a re-run with the same
+version), the wrapper checks the existing package whose identity matches the
+requested version and platform without removing it and succeeds when it is clean,
+as `build.ps1 -Msix` does for an unchanged package; it fails for producing no MSIX
+only when no such package exists. `build.ps1` re-checks its new package outputs
+after the packaging lease is released, and that check never deletes anything.
 
 ## Build
 
@@ -117,6 +142,8 @@ The GitHub workflow in `.github/workflows/release.yml`:
   architecture.
 - Validates MSIX identity `Name`, `Publisher`, four-part `Version`, and `ProcessorArchitecture` through
   `Tools/Modules/Packaging/ReleaseArtifactPolicy.psm1`, then generates and revalidates the exact `checksums.sha256` entries.
+- Rejects any portable ZIP or MSIX containing an `.exe` or `.dll` built with `ENABLE_TESTS` or exporting a reserved
+  test-only entry point, through the same module.
 
 The package identity contract is `Name="RedSalamander"`, `Publisher="CN=RedSalmanders"`, version
 `<major>.<minor>.<build>.0`, and architecture `x64` or `arm64` matching the artifact filename. The workflow uses

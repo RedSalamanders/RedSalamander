@@ -1,0 +1,4 @@
+raw/** -text -whitespace
+captures/** -text -whitespace
+*.json -text -whitespace
+SHA256SUMS.txt -text -whitespace

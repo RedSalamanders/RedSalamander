@@ -1,0 +1,72 @@
+param([switch]$ReadClipboardFormats,[switch]$NormalizeMedium)
+Add-Type -TypeDefinition @'
+using System;
+using System.Runtime.InteropServices;
+using System.Runtime.InteropServices.ComTypes;
+public static class OwnedClipboardProbe {
+ [DllImport("shell32.dll")] static extern int SHCreateDataObject(IntPtr folder,uint count,IntPtr children,IntPtr inner,ref Guid iid,out IDataObject data);
+ [DllImport("user32.dll",CharSet=CharSet.Unicode)] static extern uint RegisterClipboardFormat(string name);
+ [DllImport("kernel32.dll")] static extern IntPtr GlobalAlloc(uint flags,UIntPtr size);
+ [DllImport("kernel32.dll")] static extern IntPtr GlobalLock(IntPtr value);
+ [DllImport("kernel32.dll")] static extern bool GlobalUnlock(IntPtr value);
+ [DllImport("ole32.dll")] static extern void ReleaseStgMedium(ref STGMEDIUM medium);
+ [DllImport("ole32.dll")] static extern int OleGetClipboard(out IDataObject data);
+ [DllImport("ole32.dll")] static extern int OleInitialize(IntPtr reserved);
+ [DllImport("ole32.dll")] static extern void OleUninitialize();
+ public static string InspectClipboard() {
+  int initialized=OleInitialize(IntPtr.Zero);Marshal.ThrowExceptionForHR(initialized);
+  IDataObject source=null;
+  try {
+   Marshal.ThrowExceptionForHR(OleGetClipboard(out source));
+   IEnumFORMATETC formats=source.EnumFormatEtc(DATADIR.DATADIR_GET);string report="";
+   try {var one=new FORMATETC[1];var fetched=new int[1];while(formats.Next(1,one,fetched)==0){
+    var f=one[0];try {if((ushort)f.cfFormat!=RegisterClipboardFormat("HTML Format"))continue;
+     report+="HTML advertised="+f.tymed;
+     foreach(var media in new[]{f.tymed,TYMED.TYMED_HGLOBAL,TYMED.TYMED_ISTREAM,TYMED.TYMED_ISTORAGE}){
+      var request=f;request.tymed=media;STGMEDIUM result=new STGMEDIUM();
+      try {source.GetData(ref request,out result);report+=" request="+media+":actual="+result.tymed;ReleaseStgMedium(ref result);}
+      catch(COMException ex){report+=" request="+media+":hr="+ex.HResult.ToString("X8");}
+     }
+    } finally {if(f.ptd!=IntPtr.Zero)Marshal.FreeCoTaskMem(f.ptd);}
+   }} finally {Marshal.ReleaseComObject(formats);}
+   return report.Length>0?report:"HTML format absent";
+  } finally {if(source!=null)Marshal.ReleaseComObject(source);OleUninitialize();}
+ }
+ static IDataObject Create() {Guid iid=typeof(IDataObject).GUID; IDataObject data;Marshal.ThrowExceptionForHR(SHCreateDataObject(IntPtr.Zero,0,IntPtr.Zero,IntPtr.Zero,ref iid,out data));return data;}
+ static byte Read(IntPtr value) {IntPtr p=GlobalLock(value);if(p==IntPtr.Zero)throw new Exception("GlobalLock");try{return Marshal.ReadByte(p);}finally{GlobalUnlock(value);}}
+ static void Write(IntPtr value,byte b) {IntPtr p=GlobalLock(value);if(p==IntPtr.Zero)throw new Exception("GlobalLock");try{Marshal.WriteByte(p,b);}finally{GlobalUnlock(value);}}
+ public static string Run(bool transfer,bool broad,bool normalize) {
+  IDataObject source=Create(),target=Create();
+  var fmt=new FORMATETC{cfFormat=(short)RegisterClipboardFormat("HTML Format"),dwAspect=DVASPECT.DVASPECT_CONTENT,lindex=-1,tymed=TYMED.TYMED_HGLOBAL};
+  var seed=new STGMEDIUM{tymed=TYMED.TYMED_HGLOBAL,unionmember=GlobalAlloc(0x42,(UIntPtr)64)};
+  if(seed.unionmember==IntPtr.Zero)throw new OutOfMemoryException();
+  IntPtr original=seed.unionmember;Write(original,42);
+  STGMEDIUM read=new STGMEDIUM(),result=new STGMEDIUM();bool ownsRead=false,ownsResult=false,ownsSeed=true;
+  try {
+   source.SetData(ref fmt,ref seed,true);ownsSeed=false;
+   string advertised="";IEnumFORMATETC enumeration=source.EnumFormatEtc(DATADIR.DATADIR_GET);
+   try {var one=new FORMATETC[1];var fetched=new int[1];while(enumeration.Next(1,one,fetched)==0){advertised+=" format="+(ushort)one[0].cfFormat+"/"+one[0].tymed;if(one[0].ptd!=IntPtr.Zero)Marshal.FreeCoTaskMem(one[0].ptd);}}
+   finally {Marshal.ReleaseComObject(enumeration);}
+   source.GetData(ref fmt,out read);ownsRead=true;
+   string before="returnedAlias="+(original==read.unionmember)+" releaser="+(read.pUnkForRelease!=null)+" medium="+read.tymed;
+   var stored=fmt;if(broad)stored.tymed=TYMED.TYMED_HGLOBAL|TYMED.TYMED_ISTREAM|TYMED.TYMED_ISTORAGE;
+   if(normalize)stored.tymed=read.tymed;
+   target.SetData(ref stored,ref read,transfer);if(transfer)ownsRead=false;
+   Write(original,99);
+   target.GetData(ref fmt,out result);ownsResult=true;
+   string value="retained="+Read(result.unionmember)+" "+before;
+   var streamFmt=fmt;streamFmt.tymed=TYMED.TYMED_ISTREAM;
+   value+=" streamQuery="+target.QueryGetData(ref streamFmt).ToString("X8");
+   STGMEDIUM streamResult=new STGMEDIUM();
+   try {target.GetData(ref streamFmt,out streamResult);value+=" streamActual="+streamResult.tymed;ReleaseStgMedium(ref streamResult);}
+   catch(COMException ex){value+=" streamGet="+ex.HResult.ToString("X8");}
+   return "transfer="+transfer+" broad="+broad+" normalized="+normalize+" "+value+advertised;
+  } finally {
+   if(ownsResult)ReleaseStgMedium(ref result);if(ownsRead)ReleaseStgMedium(ref read);if(ownsSeed)ReleaseStgMedium(ref seed);
+   Marshal.ReleaseComObject(target);Marshal.ReleaseComObject(source);
+  }
+ }
+}
+'@
+if($ReadClipboardFormats){[OwnedClipboardProbe]::InspectClipboard()}
+else {foreach($transfer in @($true,$false)){foreach($broad in @($false,$true)){[OwnedClipboardProbe]::Run($transfer,$broad,$NormalizeMedium.IsPresent)}}}

@@ -1,0 +1,194 @@
+diff --git a/Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp b/Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp
+index 0a581f50..6aaacf14 100644
+--- a/Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp
++++ b/Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp
+@@ -774,6 +774,9 @@ private:
+         return _directories.erase(normalized) == 1u;
+     }
+ 
++public:
++    // This class is translation-unit-local test infrastructure. Byte oracles
++    // exercise the exact serializer used by HandleList, not a second encoder.
+     [[nodiscard]] std::string BuildDirectoryPayload(std::string_view directory, bool namesOnly) const
+     {
+         std::scoped_lock lock(_stateMutex);
+@@ -836,6 +839,7 @@ private:
+         return payload;
+     }
+ 
++private:
+     [[nodiscard]] bool TryReadFile(std::string_view path, std::vector<uint8_t>& bytesOut) const
+     {
+         std::scoped_lock lock(_stateMutex);
+@@ -5460,6 +5464,100 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlEntryLookupT
+     auto cleanupWinsock = wil::scope_exit([]() noexcept { WSACleanup(); });
+     try
+     {
++        {
++            FakeFtpEndpoint known(UploadRetention::Complete);
++            FakeFtpEndpoint unknown(UploadRetention::Complete, true, false);
++            for (FakeFtpEndpoint* endpoint : std::array<FakeFtpEndpoint*, 2u>{{&known, &unknown}})
++            {
++                endpoint->SeedDirectory("/empty");
++                endpoint->SeedDirectory("/chosen/sub/deeper");
++                endpoint->SeedFile("/root.bin", {1u, 2u, 3u, 4u});
++                endpoint->SeedFile("/chosen/a.bin", {});
++                endpoint->SeedFile("/chosen/z literal%20 -> \xC3\xA9.bin", {1u, 2u, 3u});
++                endpoint->SeedFile("/chosen/sub/hidden.bin", {1u, 2u, 3u, 4u});
++                endpoint->SeedFile("/chosen-prefix/outside.bin", {1u});
++            }
++            const auto checkPayload =
++                [&](const wchar_t* label, const FakeFtpEndpoint& endpoint, std::string_view directory, bool namesOnly, std::string_view expected)
++            {
++                const auto started        = std::chrono::steady_clock::now();
++                const std::string payload = endpoint.BuildDirectoryPayload(directory, namesOnly);
++                const uint64_t durationUs = Debug::Perf::ElapsedUs(started);
++                const bool correct        = payload == expected;
++                Debug::Perf::Emit(L"FileOps.Curl.FixtureListing.Bytes", label, durationUs, payload.size(), expected.size(), correct ? S_OK : E_FAIL);
++                DebugCheck(correct, std::format(L"FTP fixture listing preserves literal bytes: {}", label).c_str(), *passed, *failed);
++            };
++            // Hand-authored expected bytes independently protect ordering,
++            // direct-child membership, unknown sizes and literal UTF-8 names.
++            constexpr std::string_view knownListing = "drwxr-xr-x 1 owner group 0 Jan 01 2026 sub\r\n"
++                                                      "-rw-r--r-- 1 owner group 0 Jan 01 2026 a.bin\r\n"
++                                                      "-rw-r--r-- 1 owner group 3 Jan 01 2026 z literal%20 -> \xC3\xA9.bin\r\n";
++            checkPayload(L"empty", known, "/empty", false, "");
++            checkPayload(L"root-names", known, "/", true, "chosen\r\nchosen-prefix\r\nempty\r\nroot.bin\r\n");
++            checkPayload(L"selected-list", known, "/chosen", false, knownListing);
++            checkPayload(L"selected-names", known, "/chosen", true, "sub\r\na.bin\r\nz literal%20 -> \xC3\xA9.bin\r\n");
++            checkPayload(L"nested-list",
++                         known,
++                         "/chosen/sub",
++                         false,
++                         "drwxr-xr-x 1 owner group 0 Jan 01 2026 deeper\r\n"
++                         "-rw-r--r-- 1 owner group 4 Jan 01 2026 hidden.bin\r\n");
++            checkPayload(L"missing", known, "/missing", false, "");
++            checkPayload(L"unknown-size",
++                         unknown,
++                         "/chosen",
++                         false,
++                         "drwxr-xr-x 1 owner group 0 Jan 01 2026 sub\r\n"
++                         "-rw-r--r-- 1 owner group ? Jan 01 2026 a.bin\r\n"
++                         "-rw-r--r-- 1 owner group ? Jan 01 2026 z literal%20 -> \xC3\xA9.bin\r\n");
++            known.SetListedSize("/chosen/a.bin", 123456789u);
++            checkPayload(L"size-override",
++                         known,
++                         "/chosen",
++                         false,
++                         "drwxr-xr-x 1 owner group 0 Jan 01 2026 sub\r\n"
++                         "-rw-r--r-- 1 owner group 123456789 Jan 01 2026 a.bin\r\n"
++                         "-rw-r--r-- 1 owner group 3 Jan 01 2026 z literal%20 -> \xC3\xA9.bin\r\n");
++            known.SeedFile("/chosen/b.bin", {1u});
++            checkPayload(L"new-generation",
++                         known,
++                         "/chosen",
++                         false,
++                         "drwxr-xr-x 1 owner group 0 Jan 01 2026 sub\r\n"
++                         "-rw-r--r-- 1 owner group 123456789 Jan 01 2026 a.bin\r\n"
++                         "-rw-r--r-- 1 owner group 1 Jan 01 2026 b.bin\r\n"
++                         "-rw-r--r-- 1 owner group 3 Jan 01 2026 z literal%20 -> \xC3\xA9.bin\r\n");
++            constexpr std::string_view malformed{"bad\0row\n", 8u};
++            known.SetDirectoryPayload("/chosen", std::string(malformed));
++            checkPayload(L"custom-list", known, "/chosen", false, malformed);
++            checkPayload(L"custom-names", known, "/chosen", true, malformed);
++
++            FakeFtpEndpoint wide(UploadRetention::Complete);
++            std::string expectedWide;
++            constexpr size_t fileCount = Common::FileOperations::kTraversalMaxQueuedEntries + 1u;
++            constexpr size_t repeats   = 64u;
++            for (size_t index = 0u; index < fileCount; ++index)
++            {
++                const std::string leaf = std::format("file-{:04}.bin", index);
++                wide.SeedFile(std::format("/wide/{}", leaf), {1u, 2u, 3u});
++                expectedWide.append("-rw-r--r-- 1 owner group 3 Jan 01 2026 ");
++                expectedWide.append(leaf);
++                expectedWide.append("\r\n");
++            }
++            bool exactBytes    = true;
++            size_t bytes       = 0u;
++            const auto started = std::chrono::steady_clock::now();
++            for (size_t repeat = 0u; repeat < repeats; ++repeat)
++            {
++                const std::string payload = wide.BuildDirectoryPayload("/wide", false);
++                exactBytes                = (payload == expectedWide) && exactBytes;
++                bytes += payload.size();
++            }
++            const uint64_t durationUs = Debug::Perf::ElapsedUs(started);
++            Debug::Perf::Emit(L"FileOps.Curl.FixtureListing.Wide", L"files=4097;renders=64", durationUs, repeats, bytes, exactBytes ? S_OK : E_FAIL);
++            DebugCheck(
++                exactBytes && bytes == expectedWide.size() * repeats, L"FTP fixture repeatedly serializes all 4097 files with exact bytes", *passed, *failed);
++        }
+         enum class Shape
+         {
+             Literal,
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp
+index f1fe163a..0e430041 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp
+@@ -8085,7 +8085,7 @@ case SelfTestState::Step::C0_CurlEntryLookupTruth:
+     }
+     state.c0CurlWorker.join();
+     state.c0CurlModule.reset();
+-    const unsigned int expectedChecks = entryLookup       ? 237u
++    const unsigned int expectedChecks = entryLookup       ? 249u
+                                         : copyTraversal   ? 142u
+                                         : movePreflight   ? 97u
+                                         : directorySize   ? 85u
+diff --git a/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md b/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md
+index bb64cffb..e30ae504 100644
+--- a/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md
++++ b/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md
+@@ -288,6 +288,14 @@ a tested, fail-closed multi-case implementation; do not split the predecessor
+ sequence into separate processes or claim an unexecuted cluster. Current binaries
+ still contain the rejected candidate; rebuild before further qualification.
+ 
++Current bounded step: add 12 exact fake LIST serialization checks (249 lookup
++checks total) and a fixed 64-render/4,097-file timing witness before changing the
++generator. Protect byte order, direct children, literal names, size overrides,
++unknown sizes, changed contents and raw malformed overrides. Then remove measured
++temporary parent/leaf/row allocations without changing full-list validation,
++network topology, corpus or limits. Validate broad Debug and Release separately;
++the 10048 diagnosis remains open and a faster fixture is not a production repair.
++
+ Strict lookup retains only the current row and requested candidate. The existing
+ pool now keeps a cursor multi cache and distinct cursor/blocking easy handles per
+ exclusive entry, resetting both callbacks before idle return. Pure and mixed
+@@ -330,7 +338,7 @@ Continue in this order, committing each coherent code/test/spec/evidence step:
+    broad C0 after a causal correction, not just a successful isolated retry.
+    Separately reduce the measured fake listing serialization cost, with literal-byte
+    oracles proving unchanged rows/faults; distinguish fixture speed from production.
+-   Complete Debug wide Copy; rerun `C0_CurlEntryLookupTruth` (237), `C0_` including Copy
++   Complete Debug wide Copy; rerun `C0_CurlEntryLookupTruth` (249), `C0_` including Copy
+    (142 assertions / 46 scenarios), and `R0fCurl_FakeFtpReadWriteCreateDelete` in both builds.
+    Use the governed runner with unique run IDs. Do not use `-SkipBuild` with a
+    project-only receipt. Preserve/restore `RSBuildEnableTests` for Release repeats.
+diff --git a/Specs/Testing/Testing_PerformanceValidation.md b/Specs/Testing/Testing_PerformanceValidation.md
+index 70031c3d..636b2a24 100644
+--- a/Specs/Testing/Testing_PerformanceValidation.md
++++ b/Specs/Testing/Testing_PerformanceValidation.md
+@@ -223,7 +223,15 @@ The whole-tree commitment map and opaque transport allocations remain outside th
+ reservation metric and must not be described as bounded by it.
+ 
+ `C0_CurlEntryLookupTruth` protects single/bulk Copy, Move, Delete and Rename
+-admission with 237 assertions (201 route/setup, 32 framing, four refused-endpoint checks).
++admission with 249 assertions (201 route/setup, 32 framing, four refused-endpoint,
++and 12 fixture-serialization checks). The serializer oracles call the same fake
++FTP generator as network LIST, with hand-authored byte expectations for empty/root/
++nested listings, direct-child ordering, literal UTF-8/percent/arrow names, zero/
++unknown/overridden sizes, a changed generation and unchanged custom malformed LIST/
++NLST payloads. `FileOps.Curl.FixtureListing.Bytes` records actual/expected lengths;
++`.Wide` records elapsed time, 64 renders and total bytes for 4,097 files. Every
++render compares the complete payload; these fixture timings are not real-provider
++throughput. Retain the same-byte generator baseline before optimizing it.
+ Its 64 route scenarios cover literal percent/arrow
+ names, missing names, malformed rows before/after the match, duplicate matches,
+ out-of-parent names, oversized rows and stalled-LIST cancellation. Unsafe admission
+@@ -283,7 +291,7 @@ commit, and machine-wide socket counts alone do not establish exhaustion.
+ 
+ `C0_CurlCopyTraversalTruth` has 142 assertions: 46 native scenarios and three
+ passive-listener lifecycle checks, plus Winsock setup. The host's exact-count
+-guard must agree with the current plugin corpus (237 lookup / 142 Copy) and
++guard must agree with the current plugin corpus (249 lookup / 142 Copy) and
+ report expected/observed counts on failure; S_OK alone is not complete coverage. Both
+ singular/bulk Copy APIs run serial/parallel shallow, literal-name, malformed,
+ out-of-root, overlong, blocked LIST, late refusal/cancel and depth-128/129 cases;

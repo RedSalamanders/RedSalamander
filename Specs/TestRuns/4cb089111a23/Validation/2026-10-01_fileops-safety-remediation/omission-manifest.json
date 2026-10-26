@@ -1,0 +1,156 @@
+[
+  {
+    "path": "history/debug-full-r2/durable/entries/selftest.commands/results/results.json",
+    "sha256": "e23cdfd41ec8653f9a252d5d6c4a1f89dc2e9e50b5b25aa4946e2d3efa4d5144",
+    "bytes": 118030,
+    "reason": "Exact duplicate; canonical bytes retained in packet",
+    "canonical_path": "history/debug-full-r2/commands-results.json"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/selftest.file-operations/results/results.json",
+    "sha256": "8006fc5b05f4d298b7da55f0186360e2ff9d38837f1a7092cadea103ffadadd7",
+    "bytes": 30690,
+    "reason": "Exact duplicate; canonical bytes retained in packet",
+    "canonical_path": "history/debug-full-r2/file-operations-results.json"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/selftest.compare-directories/results/results.json",
+    "sha256": "e5637c6643e34494dae11b104bf0050f814fbfd9049decab76652d59e00e3cb2",
+    "bytes": 32330,
+    "reason": "Exact duplicate; canonical bytes retained in packet",
+    "canonical_path": "history/debug-full-r2/compare-directories-results.json"
+  },
+  {
+    "path": "builds/baseline-build-receipt.json",
+    "sha256": "b0346b50cd65acb8b8e96469677006c47ec6b99241793a878895b701c27a5d3c",
+    "bytes": 84074,
+    "reason": "Exact duplicate; canonical bytes retained in packet",
+    "canonical_path": "performance/baseline-build-receipt.json"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/perf.monitor-etw-latency/results/RedSalamanderMonitorEtwLatency.output.log",
+    "sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+    "bytes": 0,
+    "reason": "Passing auxiliary console log omitted to meet 5 MiB packet limit; original entry JSON and all per-case statuses retained",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\runs\\20261002T005651Z-55492-bc32144485214f708ccd42efaa3e8a9c\\entries\\perf.monitor-etw-latency\\results\\RedSalamanderMonitorEtwLatency.output.log",
+    "entry_id": "perf.monitor-etw-latency",
+    "promotion_state": "promoted"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/perf.performance-tests2/results/PerformanceTests2.output.log",
+    "sha256": "a1d87e9b1b5d54d9ccded8c09a4b5ecda3bcc1ebd463bdbbb40a4036f74f79bd",
+    "bytes": 1277,
+    "reason": "Passing auxiliary console log omitted to meet 5 MiB packet limit; original entry JSON and all per-case statuses retained",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\runs\\20261002T005651Z-55492-bc32144485214f708ccd42efaa3e8a9c\\entries\\perf.performance-tests2\\results\\PerformanceTests2.output.log",
+    "entry_id": "perf.performance-tests2",
+    "promotion_state": "promoted"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/standalone.crash-handling/results/CrashHandlingTests.output.log",
+    "sha256": "be9424679e96712ff11b7874e6ae2cf8c2658d8392404b1c4924d563de803ff2",
+    "bytes": 1718,
+    "reason": "Passing auxiliary console log omitted to meet 5 MiB packet limit; original entry JSON and all per-case statuses retained",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\runs\\20261002T005651Z-55492-bc32144485214f708ccd42efaa3e8a9c\\entries\\standalone.crash-handling\\results\\CrashHandlingTests.output.log",
+    "entry_id": "standalone.crash-handling",
+    "promotion_state": "promoted"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/standalone.filesystem-curl/results/FileSystemCurlTests.output.log",
+    "sha256": "cc85669ba3041b35b1573fd08112fdbd462d036b58ed69a9243bdf27f3473900",
+    "bytes": 29,
+    "reason": "Passing auxiliary console log omitted to meet 5 MiB packet limit; original entry JSON and all per-case statuses retained",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\runs\\20261002T005651Z-55492-bc32144485214f708ccd42efaa3e8a9c\\entries\\standalone.filesystem-curl\\results\\FileSystemCurlTests.output.log",
+    "entry_id": "standalone.filesystem-curl",
+    "promotion_state": "promoted"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/standalone.localization/results/LocalizationTests.output.log",
+    "sha256": "07c3b184725869a594f017686418f3601137efe177be804d2bd4fa4ecbd18ab2",
+    "bytes": 5064,
+    "reason": "Passing auxiliary console log omitted to meet 5 MiB packet limit; original entry JSON and all per-case statuses retained",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\runs\\20261002T005651Z-55492-bc32144485214f708ccd42efaa3e8a9c\\entries\\standalone.localization\\results\\LocalizationTests.output.log",
+    "entry_id": "standalone.localization",
+    "promotion_state": "promoted"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/standalone.monitor/results/MonitorTest.output.log",
+    "sha256": "932b78b5f81e027b09ab0f9aab44c81a6223351189402a1e0437005ed8639f58",
+    "bytes": 315657,
+    "reason": "Passing auxiliary console log omitted to meet 5 MiB packet limit; original entry JSON and all per-case statuses retained",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\runs\\20261002T005651Z-55492-bc32144485214f708ccd42efaa3e8a9c\\entries\\standalone.monitor\\results\\MonitorTest.output.log",
+    "entry_id": "standalone.monitor",
+    "promotion_state": "promoted"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/standalone.plugin-contract/results/PluginContractTests.output.log",
+    "sha256": "97a97f98367c316033eb62df879722c5affb7eb88352e37eb42cb8eb2dadc80f",
+    "bytes": 196886,
+    "reason": "Passing auxiliary console log omitted to meet 5 MiB packet limit; original entry JSON and all per-case statuses retained",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\runs\\20261002T005651Z-55492-bc32144485214f708ccd42efaa3e8a9c\\entries\\standalone.plugin-contract\\results\\PluginContractTests.output.log",
+    "entry_id": "standalone.plugin-contract",
+    "promotion_state": "promoted"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/standalone.product-ui/results/ProductUiTests.output.log",
+    "sha256": "29cb36fcbdee4c70bfd80be8f06b38308116ed5cb29b1096c6449ccc4f9983c2",
+    "bytes": 1837,
+    "reason": "Passing auxiliary console log omitted to meet 5 MiB packet limit; original entry JSON and all per-case statuses retained",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\runs\\20261002T005651Z-55492-bc32144485214f708ccd42efaa3e8a9c\\entries\\standalone.product-ui\\results\\ProductUiTests.output.log",
+    "entry_id": "standalone.product-ui",
+    "promotion_state": "promoted"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/standalone.red-configure/results/RedConfigureTests.output.log",
+    "sha256": "c7027a0a949da8700202fe745d982226af22e570f1276da1d8f450469685300b",
+    "bytes": 5201,
+    "reason": "Passing auxiliary console log omitted to meet 5 MiB packet limit; original entry JSON and all per-case statuses retained",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\runs\\20261002T005651Z-55492-bc32144485214f708ccd42efaa3e8a9c\\entries\\standalone.red-configure\\results\\RedConfigureTests.output.log",
+    "entry_id": "standalone.red-configure",
+    "promotion_state": "promoted"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/standalone.settings-schema/results/SettingsSchemaTests.output.log",
+    "sha256": "4d1e9a80d034d95eebecdf3542d6dddf1e4a231c169d2c10f4c84690d09935cc",
+    "bytes": 10264,
+    "reason": "Passing auxiliary console log omitted to meet 5 MiB packet limit; original entry JSON and all per-case statuses retained",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\runs\\20261002T005651Z-55492-bc32144485214f708ccd42efaa3e8a9c\\entries\\standalone.settings-schema\\results\\SettingsSchemaTests.output.log",
+    "entry_id": "standalone.settings-schema",
+    "promotion_state": "promoted"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/viewer-pe.interactive/results/ViewerPETests.Interactive.output.log",
+    "sha256": "1e46d1c7f7488fc266a3289514a55a2d487952099b17e1ab6ce0a13977128e5b",
+    "bytes": 236637,
+    "reason": "Passing auxiliary console log omitted to meet 5 MiB packet limit; original entry JSON and all per-case statuses retained",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\runs\\20261002T005651Z-55492-bc32144485214f708ccd42efaa3e8a9c\\entries\\viewer-pe.interactive\\results\\ViewerPETests.Interactive.output.log",
+    "entry_id": "viewer-pe.interactive",
+    "promotion_state": "promoted"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/viewer-pe.noninteractive/results/ViewerPETests.Noninteractive.output.log",
+    "sha256": "fdfb154b1fa97832abe6f08dc011becfe4989c0e1dcf11d5cab3b9bf02964089",
+    "bytes": 108908,
+    "reason": "Passing auxiliary console log omitted to meet 5 MiB packet limit; original entry JSON and all per-case statuses retained",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\runs\\20261002T005651Z-55492-bc32144485214f708ccd42efaa3e8a9c\\entries\\viewer-pe.noninteractive\\results\\ViewerPETests.Noninteractive.output.log",
+    "entry_id": "viewer-pe.noninteractive",
+    "promotion_state": "promoted"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/viewer-sqlite.interactive/results/ViewerSqliteTests.Interactive.output.log",
+    "sha256": "c81b0c87447a26597e7c77da10f44cc2b3a7b8bf883e055af2061a5cc3629c0d",
+    "bytes": 2616,
+    "reason": "Passing auxiliary console log omitted to meet 5 MiB packet limit; original entry JSON and all per-case statuses retained",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\runs\\20261002T005651Z-55492-bc32144485214f708ccd42efaa3e8a9c\\entries\\viewer-sqlite.interactive\\results\\ViewerSqliteTests.Interactive.output.log",
+    "entry_id": "viewer-sqlite.interactive",
+    "promotion_state": "promoted"
+  },
+  {
+    "path": "history/debug-full-r2/durable/entries/viewer-sqlite.noninteractive/results/ViewerSqliteTests.Noninteractive.output.log",
+    "sha256": "353ae06e05d04b8d35aa6d4b390f4b797fa0c958f3f52fcb1aba0b269c2294e3",
+    "bytes": 30098,
+    "reason": "Passing auxiliary console log omitted to meet 5 MiB packet limit; original entry JSON and all per-case statuses retained",
+    "original_path": "V:\\RedSalamander.Perf\\evidence\\runs\\20261002T005651Z-55492-bc32144485214f708ccd42efaa3e8a9c\\entries\\viewer-sqlite.noninteractive\\results\\ViewerSqliteTests.Noninteractive.output.log",
+    "entry_id": "viewer-sqlite.noninteractive",
+    "promotion_state": "promoted"
+  }
+]

@@ -1,0 +1,133 @@
+{
+    "run_started_utc": "2026-09-05T23:18:25.654Z",
+    "duration_ms": 244508,
+    "fail_fast": false,
+    "timeout_scale": 1.0,
+    "repeat_count": 1,
+    "case_filter": "C0_",
+    "suites": [
+        {
+            "suite": "FileOperations",
+            "artifact_root": "C:\\RedSalamander.Perf\\runs\\c0-curl-cursor-release-broad-debug-20260906\\artifacts\\selftest\\last_run\\fileops",
+            "duration_ms": 243687,
+            "passed": 15,
+            "failed": 1,
+            "skipped": 1,
+            "fail_fast": false,
+            "timeout_scale": 1.0,
+            "repeat_count": 1,
+            "case_filter": "C0_",
+            "failureMessage": "C0 Curl native safety test failed: 141 of 142 checks passed, 1 failed, hr=0x80004005. See FileOps.Curl metrics for the exact route.",
+            "cases": [
+                {
+                    "name": "Setup",
+                    "status": "passed",
+                    "duration_ms": 1266,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_GDriveCommittedCopyResponseLost",
+                    "status": "passed",
+                    "duration_ms": 500,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_GDriveCommittedDeleteResponseLost",
+                    "status": "passed",
+                    "duration_ms": 312,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_NativeCopyFailurePreservesKnownAxes",
+                    "status": "passed",
+                    "duration_ms": 344,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_MutationReceiptPrefixBoundary",
+                    "status": "passed",
+                    "duration_ms": 15,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlNativeDeleteGuards",
+                    "status": "passed",
+                    "duration_ms": 1407,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlCommittedMutationResponseLost",
+                    "status": "passed",
+                    "duration_ms": 1031,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlHostCommittedDeleteResponseLost",
+                    "status": "passed",
+                    "duration_ms": 312,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlPartialTreeFailure",
+                    "status": "passed",
+                    "duration_ms": 1313,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlHostPartialTreeFailure",
+                    "status": "passed",
+                    "duration_ms": 281,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlNativeDeleteLateListing",
+                    "status": "passed",
+                    "duration_ms": 1766,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlDeleteTraversalBounds",
+                    "status": "passed",
+                    "duration_ms": 9781,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlDirectorySizeTruth",
+                    "status": "passed",
+                    "duration_ms": 4234,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlMovePreflightTruth",
+                    "status": "passed",
+                    "duration_ms": 15110,
+                    "repeat_index": 1
+                },
+                {
+                    "name": "C0_CurlCopyTraversalTruth",
+                    "status": "failed",
+                    "duration_ms": 205984,
+                    "repeat_index": 1,
+                    "reason": "C0 Curl native safety test failed: 141 of 142 checks passed, 1 failed, hr=0x80004005. See FileOps.Curl metrics for the exact route."
+                },
+                {
+                    "name": "C0_CurlEntryLookupTruth",
+                    "status": "skipped",
+                    "duration_ms": 0,
+                    "repeat_index": 1,
+                    "skip_class": "declared-capability",
+                    "reason": "not reached (aborted due to failure)"
+                },
+                {
+                    "name": "Cleanup_RestorePluginConfig",
+                    "status": "passed",
+                    "duration_ms": 31,
+                    "repeat_index": 1
+                }
+            ]
+        }
+    ],
+    "passed": 15,
+    "failed": 1,
+    "skipped": 1
+}

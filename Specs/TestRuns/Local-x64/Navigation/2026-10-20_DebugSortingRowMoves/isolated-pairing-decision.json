@@ -1,0 +1,24 @@
+{
+  "reason": "Concurrent ViewerSpace source edits invalidated the main v2 build. Preserve all foreign work; final Debug and Release A/B will both use the unchanged isolated baseline checkout. Earlier main Debug clean baseline remains valid supplemental history, not selected by latency.",
+  "owned_queued_controller_stopped": 52244,
+  "baseline_checkout": "Z:/src/RedSalamander-worktrees/debug-sort-row-moves-validation",
+  "source_patch": "candidate-main-source.patch",
+  "patch_sha256": "225DD9C7DDE2941B2F54785F4750D7F71CE6FFDE11090346CECA16C11C244F67",
+  "foreign_paths": [
+    "Plugins/ViewerSpace/Lang/cs-CZ/ViewerSpace-cs-CZ.rc",
+    "Plugins/ViewerSpace/Lang/fr-FR/ViewerSpace-fr-FR.rc",
+    "Plugins/ViewerSpace/Lang/ja-JP/ViewerSpace-ja-JP.rc",
+    "Plugins/ViewerSpace/Lang/sk-SK/ViewerSpace-sk-SK.rc",
+    "Plugins/ViewerSpace/ViewerSpace.Analysis.cpp",
+    "Plugins/ViewerSpace/ViewerSpace.AnalysisHost.cpp",
+    "Plugins/ViewerSpace/ViewerSpace.AnalysisHost.h",
+    "Plugins/ViewerSpace/ViewerSpace.cpp",
+    "Plugins/ViewerSpace/ViewerSpace.h",
+    "Plugins/ViewerSpace/ViewerSpaceResources.rc",
+    "Plugins/ViewerSpace/resource.h",
+    "Specs/Plans/WIP/ViewerSpace_ResponsiveTreemapAndAnalysis_2026-10-08.md",
+    "Tests/ViewerPETests/ViewerPE.Tests.Runner.cpp",
+    "Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.cpp",
+    "Tests/ViewerPETests/ViewerPE.Tests.Scope.Tests.ViewerSpaceAnalysisHost.h"
+  ]
+}

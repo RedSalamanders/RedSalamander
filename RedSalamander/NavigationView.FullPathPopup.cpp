@@ -1,4 +1,5 @@
 #include "NavigationViewInternal.h"
+#include "WindowActivation.h"
 
 #include <windowsx.h>
 
@@ -776,7 +777,7 @@ void NavigationView::ShowFullPathPopup()
     }
 
     ShowWindow(_fullPathPopup.get(), SW_SHOW);
-    SetForegroundWindow(_fullPathPopup.get());
+    Common::RequestForegroundWindow(_fullPathPopup.get());
     SetFocus(_fullPathPopup.get());
     InvalidateRect(_fullPathPopup.get(), nullptr, FALSE);
 }

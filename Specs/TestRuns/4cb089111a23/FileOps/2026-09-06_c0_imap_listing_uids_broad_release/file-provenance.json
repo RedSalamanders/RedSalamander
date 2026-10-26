@@ -1,0 +1,72 @@
+[
+  {
+    "name": "results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-imap-uids-candidate-release-20260906-r3\\artifacts\\selftest\\last_run\\fileops\\results.json",
+    "bytes": 3413,
+    "sha256": "c64a96b423667e4b8049229d7c4dfd4a8decaa56b582087ac457ee6c6dca1162",
+    "transform": "none"
+  },
+  {
+    "name": "trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-imap-uids-candidate-release-20260906-r3\\artifacts\\selftest\\last_run\\fileops\\trace.txt",
+    "bytes": 8830,
+    "sha256": "e431ed8729e84d3884e06c4a8a442842e65df8e3311ca1d5ee77a5db4343121c",
+    "transform": "none"
+  },
+  {
+    "name": "root-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-imap-uids-candidate-release-20260906-r3\\artifacts\\selftest\\last_run\\results.json",
+    "bytes": 4620,
+    "sha256": "7a30a53fba0b76b9902cbc93e0d4e39f98d452c4d3a6840e80eae22a03204de1",
+    "transform": "none"
+  },
+  {
+    "name": "suite-trace.txt",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-imap-uids-candidate-release-20260906-r3\\artifacts\\selftest\\last_run\\trace.txt",
+    "bytes": 23372,
+    "sha256": "07817f76cf9674169459bff2b63a8412df96dadb0537c3e8102e622a20f19463",
+    "transform": "none"
+  },
+  {
+    "name": "run-all-tests-results.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-imap-uids-candidate-release-20260906-r3\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+    "bytes": 63578,
+    "sha256": "dd0c4d94dace17768cd1163742bc8e4921d86f8f819885e85d6868e00984431e",
+    "transform": "none"
+  },
+  {
+    "name": "entry-fingerprints.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-imap-uids-candidate-release-20260906-r3\\artifacts\\selftest\\previous_run\\entry-fingerprints.json",
+    "bytes": 1695,
+    "sha256": "96cf39df05cc4caecd990d77458fdd5292fcb14699e3d4c1b344e5391b92183c",
+    "transform": "none"
+  },
+  {
+    "name": "workspace-final.json",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-imap-uids-candidate-release-20260906-r3\\artifacts\\selftest\\last_run\\workspace-final.json",
+    "bytes": 709,
+    "sha256": "5c3ef2c0b0a14406d9bf01854d37feb73b3872ea6415f5ecc8690490d69800f9",
+    "transform": "none"
+  },
+  {
+    "name": "build-receipt.json",
+    "source": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\x64\\Release\\receipts\\ecd372340dc4af1b6efca7cf7faa982498643f482e0adf131e69ad43b403f919.json",
+    "bytes": 85276,
+    "sha256": "9feb0da3d64bade47c7940fbf640621227df0ae2920a7c64add0f8033072cef8",
+    "transform": "none"
+  },
+  {
+    "name": "build.txt",
+    "source": "C:\\Users\\eric\\.codex\\worktrees\\fd72\\RedSalamander\\.build\\logs\\msbuild-20260906_101106_919-pid123376-95a23ec4.log",
+    "bytes": 36041,
+    "sha256": "1d41bb5cfee21979f230445c9b75f4b8e6e4f80f7e9cc4b283b53275895b4f63",
+    "transform": "none"
+  },
+  {
+    "name": "source-resource-contracts.xml",
+    "source": "C:\\RedSalamander.Perf\\runs\\c0-imap-uids-policy-20260906\\scratch\\policy\\source-resources\\source-resource-contracts.xml",
+    "bytes": 62213,
+    "sha256": "fd0c5b949d3300122b5d3f357da0ed79f564432dfc9e288cb21d4714dfb73904",
+    "transform": "none"
+  }
+]

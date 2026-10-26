@@ -1,0 +1,27 @@
+{
+  "variant": "projection-candidate-v1",
+  "passed": 9,
+  "failed": 0,
+  "skipped": 0,
+  "source_snapshot": "8c8e838638b19429966054f7af9ade328b969bdc11d13645b2b8dd16ab2d4e6e",
+  "metrics": {
+    "FileOps.Issues.TypedProjection.RefreshUs": {
+      "samples_us": [
+        852,
+        1234,
+        972
+      ],
+      "median_us": 972,
+      "p95_us": 1234
+    },
+    "FileOps.Issues.TypedProjection.UnchangedRefreshUs": {
+      "samples_us": [
+        408,
+        463,
+        432
+      ],
+      "median_us": 432,
+      "p95_us": 463
+    }
+  }
+}

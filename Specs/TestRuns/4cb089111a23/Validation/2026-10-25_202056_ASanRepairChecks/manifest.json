@@ -1,0 +1,56 @@
+{
+  "schema": "asan-focused-repair-evidence-v1",
+  "source": "4eba261d9122d16aa86762f48307b905716f2e38",
+  "buildReceipt": "de4dcccc353d3bcd95264b923a4aee440e4270b8708faefadeac6941279495e7",
+  "status": "failed search and UI; focused evidence only; not repository qualification",
+  "files": [
+    {
+      "file": "search-results.json",
+      "source": "E:/RedSalamander.Perf/evidence/completed-runs/20261025T202056Z-9104-7a16791081a246d58ea4cc05ae68c108/artifacts/selftest/last_run/compare/results.json",
+      "sha256": "F539D21F5115E2E63E2E0FB51B055E21A90F32694D67AA674E5F18BD0575E3D9",
+      "bytes": 1415
+    },
+    {
+      "file": "search-wrapper-results.json",
+      "source": "E:/RedSalamander.Perf/evidence/completed-runs/20261025T202056Z-9104-7a16791081a246d58ea4cc05ae68c108/artifacts/selftest/last_run/run-all-tests-results.json",
+      "sha256": "234769CDED81AF3E3FC6883CBA45D50F173FD1BD5597C3B980561D9B47CC9C2D",
+      "bytes": 12739
+    },
+    {
+      "file": "ui-results.json",
+      "source": "C:/RedSalamander.Perf/evidence/completed-runs/20261025T203100Z-94028-b5de3d19e5b9474ba87deed2f9ad129c/artifacts/selftest/last_run/commands/results.json",
+      "sha256": "3671DB4EE7B42B86F0B81EAA0A3FFDAF548238B0A8CEDDC9944FD000C71C669A",
+      "bytes": 3099
+    },
+    {
+      "file": "ui-trace.txt",
+      "source": "C:/RedSalamander.Perf/evidence/completed-runs/20261025T203100Z-94028-b5de3d19e5b9474ba87deed2f9ad129c/artifacts/archive/4cb089111a23/Commands/2026-10-25_213307/commands_trace.txt",
+      "sha256": "50C34FCCC4B7DAF5A033E008321CABA1719976A19E5E646925B8CF5941743A65",
+      "bytes": 40566
+    },
+    {
+      "file": "selection-results.json",
+      "source": "E:/RedSalamander.Perf/evidence/completed-runs/20261025T203437Z-94028-e6e0d9b08c264d3cad08bbddb2bbc90b/artifacts/selftest/last_run/fileops/results.json",
+      "sha256": "E4924EB8DD27A701059405F59D39C7254F8E18340E58E871D1DC1487DEAE4098",
+      "bytes": 2794
+    },
+    {
+      "file": "qualification-state.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\asan-repair-qualification.json",
+      "sha256": "74415D94BDB1AF26DE2700F59BD7BE24F964541B911F4CBAB5479307E8CDA188",
+      "bytes": 952
+    },
+    {
+      "file": "remaining-state.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\asan-repair-remaining-probes.json",
+      "sha256": "FA180189CE9F75BEDCF0869D659CDE151240D38A534BDCDA97E04C1BF8272C8E",
+      "bytes": 1165
+    },
+    {
+      "file": "breadcrumb-results.json",
+      "source": "C:/RedSalamander.Perf/evidence/completed-runs/20261025T203349Z-94028-da4f31748ce445c7be6d668ef4f190da/artifacts/selftest/last_run/commands/results.json",
+      "sha256": "B10CD34651B4165282EC661322DE9602F806BFFF8F405E6531846914F4653607",
+      "bytes": 952
+    }
+  ]
+}

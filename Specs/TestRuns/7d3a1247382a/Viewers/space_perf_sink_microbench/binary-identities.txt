@@ -1,0 +1,19 @@
+Executable is identified but not archived as a binary.
+path=
+C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\space-diagnostics\bin\space-perf-sink-microbench.exe
+bytes=
+25088
+sha256=
+3fbee616a3e2edf1ddfdd9d78cc905078a98cc10e24a13f2310ed0f63807b154
+
+Common.dll is identified but not archived as a binary.
+path=
+C:\Users\PVB\.codex\worktrees\viewer-space-explorer-analyst\RedSalamander\.build\x64\Release\Common.dll
+bytes=
+945152
+sha256=
+5a4ff2850f7ef07d718df0ad7b2b69ee5dd32e126f256284deac77d05b8e7080
+
+Build receipt identity=
+abfd2cc6e18053a2f77ba8d9dd84155bb232cb7a72428321274e48f226e65475
+build-receipt.json is the exact receipt payload copied into this archive.

@@ -57,6 +57,35 @@ struct AlertButton
     bool primary = false;
 };
 
+// A button's Alt mnemonic is only an explicit '&' marker in its label (the character after it);
+// "&&" is a literal '&'. There is no first-letter fallback. Returns L'\0' when there is no marker.
+[[nodiscard]] inline wchar_t AlertButtonMnemonic(std::wstring_view label) noexcept
+{
+    for (size_t index = 0; index + 1u < label.size(); ++index)
+    {
+        if (label[index] != L'&')
+            continue;
+        if (label[index + 1u] != L'&')
+            return label[index + 1u];
+        ++index;
+    }
+    return L'\0';
+}
+
+// The label as drawn and named: markers hidden, "&&" shown as '&'.
+[[nodiscard]] inline std::wstring AlertButtonDisplayLabel(std::wstring_view label)
+{
+    std::wstring display;
+    display.reserve(label.size());
+    for (size_t index = 0; index < label.size(); ++index)
+    {
+        if (label[index] == L'&' && index + 1u < label.size())
+            ++index;
+        display.push_back(label[index]);
+    }
+    return display;
+}
+
 struct AlertOptionChoice
 {
     uint64_t value = 0;
@@ -65,7 +94,8 @@ struct AlertOptionChoice
 
 // A compact prompt-owned choice. It deliberately supports only cycling a
 // finite set of values; file-operation confirmation does not need a generic
-// form or arbitrary text-entry surface.
+// form or arbitrary text-entry surface. Zero or one choice is read-only; its
+// label and current value remain available to explain why it cannot change.
 struct AlertOption
 {
     uint32_t id = 0;
@@ -149,9 +179,21 @@ private:
     };
 
 public:
+    // A host must route wheel/keyboard/pointer scrolling before opting in.
+    // FolderView's pane overlay still uses its existing clipped presentation.
+    void SetScrollingEnabled(bool enabled) noexcept
+    {
+        if (_scrollingEnabled == enabled)
+            return;
+        _scrollingEnabled = enabled;
+        _scrollOffsetDip  = 0.0f;
+        InvalidateLayout();
+    }
+
     void SetModel(AlertModel model)
     {
-        _model = std::move(model);
+        _model           = std::move(model);
+        _scrollOffsetDip = 0.0f;
 #if defined(ENABLE_TESTS)
         _debugLastDrawnIconPresentation = AlertPresentation::Severity;
         _debugLastDrawnIconGlyph        = L'\0';
@@ -194,6 +236,7 @@ public:
         _closeIconFormat.reset();
         _iconGlyphSet   = IconGlyphSet::None;
         _dwriteIdentity = nullptr;
+        _optionRects.clear();
         InvalidateTextLayouts();
         InvalidateButtonLayouts();
         InvalidateLayout();
@@ -236,8 +279,18 @@ public:
         return std::nullopt;
     }
 
+    [[nodiscard]] bool IsOptionEnabled(uint32_t optionId) const noexcept
+    {
+        for (const auto& option : _model.options)
+            if (option.id == optionId)
+                return option.choices.size() > 1u;
+        return false;
+    }
+
     [[nodiscard]] bool ActivateOption(uint32_t optionId, bool reverse = false) noexcept
     {
+        if (! IsOptionEnabled(optionId))
+            return false;
         for (auto& option : _model.options)
         {
             if (option.id != optionId || option.choices.empty())
@@ -249,6 +302,29 @@ public:
                                            : ((option.selectedIndex + 1u) % option.choices.size());
             InvalidateLayout();
             return true;
+        }
+        return false;
+    }
+
+    // Selects the choice that carries `value` (the owner's state changed elsewhere). False when the option
+    // or the value is absent, or the choice is already selected.
+    [[nodiscard]] bool SelectOptionValue(uint32_t optionId, uint64_t value) noexcept
+    {
+        for (auto& option : _model.options)
+        {
+            if (option.id != optionId)
+                continue;
+            for (size_t index = 0; index < option.choices.size(); ++index)
+            {
+                if (option.choices[index].value != value)
+                    continue;
+                if (option.selectedIndex == index)
+                    return false;
+                option.selectedIndex = index;
+                InvalidateLayout();
+                return true;
+            }
+            return false;
         }
         return false;
     }
@@ -304,20 +380,28 @@ public:
 
         _focusedControl.part     = AlertHitTest::Part::Button;
         _focusedControl.buttonId = nextId;
+        RevealFocusedControl();
         return true;
     }
 
-    [[nodiscard]] bool FocusNextInteractive(bool reverse) noexcept
+    // Tab order: enabled options, then buttons, then (when `includeClose` and the alert is closable) the
+    // close glyph, so a modeless alert's close affordance is reachable without a pointer.
+    [[nodiscard]] bool FocusNextInteractive(bool reverse, bool includeClose = false) noexcept
     {
         std::vector<AlertHitTest> controls;
-        controls.reserve(_model.options.size() + _model.buttons.size());
+        controls.reserve(_model.options.size() + _model.buttons.size() + 1u);
         for (const auto& option : _model.options)
         {
-            controls.push_back(AlertHitTest{.part = AlertHitTest::Part::Option, .buttonId = option.id});
+            if (IsOptionEnabled(option.id))
+                controls.push_back(AlertHitTest{.part = AlertHitTest::Part::Option, .buttonId = option.id});
         }
         for (const auto& button : _model.buttons)
         {
             controls.push_back(AlertHitTest{.part = AlertHitTest::Part::Button, .buttonId = button.id});
+        }
+        if (includeClose && _model.closable)
+        {
+            controls.push_back(AlertHitTest{.part = AlertHitTest::Part::Close, .buttonId = 0u});
         }
         if (controls.empty())
         {
@@ -340,7 +424,139 @@ public:
             return false;
         }
         _focusedControl = controls[nextIndex];
+        RevealFocusedControl();
         return true;
+    }
+
+    [[nodiscard]] bool ScrollBy(float deltaDip) noexcept
+    {
+        const float next = std::clamp(_scrollOffsetDip + deltaDip, 0.0f, _scrollMaximumDip);
+        if (next == _scrollOffsetDip)
+            return false;
+        const float shift = _scrollOffsetDip - next;
+        _scrollOffsetDip  = next;
+        _layoutTextRect.top += shift;
+        _layoutTextRect.bottom += shift;
+        for (auto& option : _optionRects)
+        {
+            option.rect.top += shift;
+            option.rect.bottom += shift;
+        }
+        if (_scrollFooter)
+            for (auto& button : _buttonRects)
+            {
+                button.rect.top += shift;
+                button.rect.bottom += shift;
+            }
+        ClearHotState();
+        return true;
+    }
+
+    [[nodiscard]] D2D1_RECT_F GetScrollTrack() const noexcept
+    {
+        return _scrollMaximumDip > 0.0f ? D2D1::RectF(_bodyViewport.right, _bodyViewport.top, _bodyViewport.right + 12.0f, _bodyViewport.bottom)
+                                        : D2D1_RECT_F{};
+    }
+
+    [[nodiscard]] bool ScrollAt(D2D1_POINT_2F point) noexcept
+    {
+        const auto track = GetScrollTrack();
+        if (! PointInRect(point, track) || track.bottom <= track.top)
+            return false;
+        const float fraction = std::clamp((point.y - track.top) / (track.bottom - track.top), 0.0f, 1.0f);
+        return ScrollBy(fraction * _scrollMaximumDip - _scrollOffsetDip);
+    }
+
+    void RevealFocusedControl() noexcept
+    {
+        // Without a layout the rectangles are stale and the viewport is empty, so any reveal would
+        // scroll by a control's absolute position. EnsureLayout reveals once it has rebuilt them.
+        if (! _hasLayout)
+            return;
+        D2D1_RECT_F focused{};
+        if (_focusedControl.part == AlertHitTest::Part::Option)
+            for (const auto& option : _optionRects)
+                if (option.id == _focusedControl.buttonId)
+                    focused = option.rect;
+        if (_scrollFooter && _focusedControl.part == AlertHitTest::Part::Button)
+            for (const auto& button : _buttonRects)
+                if (button.id == _focusedControl.buttonId)
+                    focused = button.rect;
+        if (focused.bottom <= focused.top)
+            return;
+        const float viewportHeight = _bodyViewport.bottom - _bodyViewport.top;
+        const float delta          = focused.top < _bodyViewport.top + 4.0f || focused.bottom - focused.top + 8.0f > viewportHeight
+                                         ? focused.top - _bodyViewport.top - 4.0f
+                                         : std::max(0.0f, focused.bottom - _bodyViewport.bottom + 4.0f);
+        static_cast<void>(ScrollBy(delta));
+    }
+
+    [[nodiscard]] D2D1_RECT_F GetVisibleControlRect(AlertHitTest hit) const noexcept
+    {
+        if (! _hasLayout)
+            return {};
+        if (hit.part == AlertHitTest::Part::Close)
+            return _closeRect;
+        if (hit.part == AlertHitTest::Part::Button)
+            for (const auto& button : _buttonRects)
+                if (button.id == hit.buttonId)
+                {
+                    auto rect = button.rect;
+                    if (_scrollFooter)
+                    {
+                        rect.top    = std::max(rect.top, _bodyViewport.top);
+                        rect.bottom = std::min(rect.bottom, _bodyViewport.bottom);
+                    }
+                    return rect.bottom > rect.top ? rect : D2D1_RECT_F{};
+                }
+        if (hit.part == AlertHitTest::Part::Option)
+            for (const auto& option : _optionRects)
+                if (option.id == hit.buttonId)
+                {
+                    auto rect   = option.rect;
+                    rect.top    = std::max(rect.top, _bodyViewport.top);
+                    rect.bottom = std::min(rect.bottom, _bodyViewport.bottom);
+                    return rect.bottom > rect.top ? rect : D2D1_RECT_F{};
+                }
+        return {};
+    }
+
+    [[nodiscard]] bool FocusControl(AlertHitTest hit) noexcept
+    {
+        bool valid = hit.part == AlertHitTest::Part::Close && _model.closable;
+        valid      = valid || (hit.part == AlertHitTest::Part::Option && IsOptionEnabled(hit.buttonId));
+        for (const auto& button : _model.buttons)
+            valid = valid || (hit.part == AlertHitTest::Part::Button && button.id == hit.buttonId);
+        if (! valid)
+            return false;
+        _focusedControl = hit;
+        RevealFocusedControl();
+        return true;
+    }
+
+    [[nodiscard]] D2D1_RECT_F GetVisibleTextRect() const noexcept
+    {
+        auto rect   = _layoutTextRect;
+        rect.top    = std::max(rect.top, _bodyViewport.top);
+        rect.bottom = std::min(rect.bottom, _bodyViewport.bottom);
+        return _hasLayout && rect.bottom > rect.top ? rect : D2D1_RECT_F{};
+    }
+
+    [[nodiscard]] AlertHitTest GetFocusedControl() const noexcept
+    {
+        return _focusedControl;
+    }
+    [[nodiscard]] D2D1_RECT_F GetBodyViewport() const noexcept
+    {
+        return _bodyViewport;
+    }
+    [[nodiscard]] float GetScrollOffset() const noexcept
+    {
+        return _scrollOffsetDip;
+    }
+    [[nodiscard]] float GetScrollMaximum() const noexcept
+    {
+        return _scrollMaximumDip;
     }
 
     [[nodiscard]] bool HasLayout() const noexcept
@@ -354,6 +570,36 @@ public:
     }
 
 #if defined(ENABLE_TESTS)
+    [[nodiscard]] uint64_t DebugGetLayoutPassCount() const noexcept
+    {
+        return _debugLayoutPassCount;
+    }
+    [[nodiscard]] bool DebugAllControlLabelsFit() const noexcept
+    {
+        if (_optionRects.size() != _model.options.size() || _buttonRects.size() != _model.buttons.size())
+            return false;
+        for (const auto& option : _optionRects)
+        {
+            DWRITE_TEXT_METRICS metrics{};
+            if (! option.layout || FAILED(option.layout->GetMetrics(&metrics)) || metrics.width > option.rect.right - option.rect.left - 23.0f ||
+                metrics.height > option.heightDip - 15.0f)
+                return false;
+        }
+        for (const auto& button : _buttonRects)
+        {
+            DWRITE_TEXT_METRICS metrics{};
+            if (button.layout)
+            {
+                if (FAILED(button.layout->GetMetrics(&metrics)) || metrics.width > button.rect.right - button.rect.left - 27.0f ||
+                    metrics.height > button.rect.bottom - button.rect.top - 15.0f)
+                    return false;
+            }
+            else if (button.labelWidthDip > button.rect.right - button.rect.left - 27.0f)
+                return false;
+        }
+        return true;
+    }
+
     [[nodiscard]] float DebugGetLastDrawOpacityForTest() const noexcept
     {
         return _debugLastDrawOpacity;
@@ -367,6 +613,11 @@ public:
     [[nodiscard]] D2D1_RECT_F DebugGetCloseRectForTest() const noexcept
     {
         return _closeRect;
+    }
+
+    [[nodiscard]] D2D1_RECT_F DebugGetIconRectForTest() const noexcept
+    {
+        return _layoutIconRect;
     }
 
     [[nodiscard]] bool DebugUsesSharedCloseChromeForTest() const noexcept
@@ -409,23 +660,29 @@ public:
             return false;
         }
 
-        constexpr float kOuterMarginDip       = 24.0f;
-        constexpr float kInnerPaddingDip      = 20.0f;
-        constexpr float kMaxWidthDip          = 780.0f;
-        constexpr float kMaxHeightDip         = 420.0f;
-        constexpr float kIconSizeDip          = 80.0f;
-        constexpr float kIconTextGapDip       = 18.0f;
-        constexpr float kTitleBodyGapDip      = 6.0f;
-        constexpr float kCloseSizeDip         = 22.0f;
-        constexpr float kCloseInsetDip        = 8.0f;
-        constexpr float kButtonsGapDip        = 14.0f;
-        constexpr float kButtonsRowGapDip     = 14.0f;
-        constexpr float kButtonHeightDip      = 32.0f;
-        constexpr float kButtonMinWidthDip    = 84.0f;
-        constexpr float kButtonHorzPaddingDip = 14.0f;
-        constexpr float kOptionHeightDip      = 32.0f;
-        constexpr float kOptionGapDip         = 8.0f;
-        constexpr float kOptionsTextGapDip    = 14.0f;
+        const bool revealFocusAfterLayout = ! _hasLayout;
+        if (_hasLayout && _layoutClientWidthDip == clientWidthDip && _layoutClientHeightDip == clientHeightDip)
+            return true;
+#if defined(ENABLE_TESTS)
+        ++_debugLayoutPassCount;
+#endif
+        _layoutClientWidthDip  = clientWidthDip;
+        _layoutClientHeightDip = clientHeightDip;
+
+        constexpr float kOuterMarginDip  = 24.0f;
+        constexpr float kInnerPaddingDip = 20.0f;
+        constexpr float kMaxWidthDip     = 780.0f;
+
+        constexpr float kIconSizeDip     = 80.0f;
+        constexpr float kIconTextGapDip  = 18.0f;
+        constexpr float kTitleBodyGapDip = 6.0f;
+        constexpr float kCloseSizeDip    = 22.0f;
+        constexpr float kCloseInsetDip   = 8.0f;
+
+        constexpr float kButtonsRowGapDip = 14.0f;
+
+        constexpr float kOptionGapDip      = 8.0f;
+        constexpr float kOptionsTextGapDip = 14.0f;
 
         const float minDimDip      = std::min(clientWidthDip, clientHeightDip);
         const float outerMarginDip = std::min(kOuterMarginDip, minDimDip * 0.06f);
@@ -434,7 +691,7 @@ public:
         const float availableHeight = std::max(0.0f, clientHeightDip - outerMarginDip * 2.0f);
 
         const float panelWidth     = std::max(0.0f, std::min(kMaxWidthDip, availableWidth));
-        const float maxPanelHeight = std::max(0.0f, std::min(kMaxHeightDip, availableHeight));
+        const float maxPanelHeight = std::max(0.0f, availableHeight);
         if (panelWidth <= 0.0f || maxPanelHeight <= 0.0f)
         {
             InvalidateLayout();
@@ -452,10 +709,12 @@ public:
             innerPaddingDip = 0.0f;
         }
 
-        const float closeReserveDip = _model.closable ? (kCloseSizeDip + kCloseInsetDip) : 0.0f;
-        const float maxTextWidthDip = std::max(1.0f, panelWidth - innerPaddingDip * 2.0f - closeReserveDip);
+        // Use exactly the same right edge as contentRect below, including when
+        // a short host reduces padding below the close-control inset.
+        const float trailingInsetDip = _model.closable ? std::max(innerPaddingDip, kCloseSizeDip + kCloseInsetDip * 2.0f) : innerPaddingDip;
+        const float maxTextWidthDip  = std::max(1.0f, panelWidth - innerPaddingDip - trailingInsetDip);
 
-        const bool allowIcon = maxPanelHeight >= (innerPaddingDip * 2.0f + kIconSizeDip);
+        const bool allowIcon = panelWidth >= 600.0f && maxPanelHeight >= (innerPaddingDip * 2.0f + kIconSizeDip);
         bool showIcon        = allowIcon;
 
         float textWidthDip = maxTextWidthDip;
@@ -471,8 +730,9 @@ public:
             textWidthDip = maxTextWidthDip;
         }
 
-        EnsureTextLayouts(dwriteFactory, textWidthDip);
+        EnsureTextLayouts(dwriteFactory, std::max(1.0f, textWidthDip - 12.0f));
         EnsureButtonLayouts(dwriteFactory);
+        EnsureOptionLayouts(dwriteFactory, textWidthDip - 12.0f);
 
         float textHeightDip = 0.0f;
         if (_titleLayoutHeightDip > 0.0f)
@@ -488,15 +748,23 @@ public:
             textHeightDip += _bodyLayoutHeightDip;
         }
 
-        const float buttonRowHeightDip      = _model.buttons.empty() ? 0.0f : kButtonHeightDip;
-        const float optionBlockHeightDip    = _model.options.empty() ? 0.0f
-                                                                     : static_cast<float>(_model.options.size()) * kOptionHeightDip +
-                                                                           static_cast<float>(_model.options.size() - 1u) * kOptionGapDip;
+        float buttonRowHeightDip = MeasureFooter(dwriteFactory, panelWidth - innerPaddingDip * 2.0f);
+        // Below the pinned-footer minimum, place actions at the end of the same
+        // scrollable content so a short embedded host cannot silently lose them.
+        _scrollFooter = _scrollingEnabled && buttonRowHeightDip + innerPaddingDip * 2.0f + 80.0f > maxPanelHeight;
+        if (_scrollFooter)
+            buttonRowHeightDip = MeasureFooter(dwriteFactory, textWidthDip - 12.0f);
+        float optionBlockHeightDip = 0.0f;
+        for (const auto& option : _optionRects)
+            optionBlockHeightDip += option.heightDip + kOptionGapDip;
+        if (! _optionRects.empty())
+            optionBlockHeightDip -= kOptionGapDip;
         const float textAndOptionsHeightDip = textHeightDip + (optionBlockHeightDip > 0.0f ? kOptionsTextGapDip + optionBlockHeightDip : 0.0f);
-        const float contentHeightDip        = std::max(showIcon ? kIconSizeDip : 0.0f, textAndOptionsHeightDip);
+        const float scrollContentHeightDip  = textAndOptionsHeightDip + (_scrollFooter ? buttonRowHeightDip + kButtonsRowGapDip : 0.0f);
+        const float contentHeightDip        = std::max(showIcon ? kIconSizeDip : 0.0f, scrollContentHeightDip + 4.0f);
 
         float desiredPanelHeight = innerPaddingDip * 2.0f + contentHeightDip;
-        if (buttonRowHeightDip > 0.0f)
+        if (buttonRowHeightDip > 0.0f && ! _scrollFooter)
         {
             desiredPanelHeight += kButtonsRowGapDip + buttonRowHeightDip;
         }
@@ -531,7 +799,13 @@ public:
         {
             const D2D1_RECT_F buttonsRect =
                 D2D1::RectF(contentRect.left, contentRect.bottom - buttonRowHeightDip, _panelRect.right - innerPaddingDip, contentRect.bottom);
-            LayoutButtons(buttonsRect, kButtonsGapDip, kButtonHeightDip, kButtonMinWidthDip, kButtonHorzPaddingDip);
+            for (auto& button : _buttonRects)
+            {
+                button.rect.left += buttonsRect.left;
+                button.rect.right += buttonsRect.left;
+                button.rect.top += buttonsRect.top;
+                button.rect.bottom += buttonsRect.top;
+            }
         }
         else
         {
@@ -539,7 +813,7 @@ public:
         }
 
         D2D1_RECT_F bodyTextRect = contentRect;
-        if (buttonRowHeightDip > 0.0f)
+        if (buttonRowHeightDip > 0.0f && ! _scrollFooter)
         {
             bodyTextRect.bottom = std::max(bodyTextRect.top, bodyTextRect.bottom - buttonRowHeightDip - kButtonsRowGapDip);
         }
@@ -548,41 +822,47 @@ public:
         D2D1_RECT_F textRect = bodyTextRect;
         if (showIcon)
         {
-            const float iconTop = bodyTextRect.top + (contentHeightDip - kIconSizeDip) * 0.5f;
-            iconRect            = D2D1::RectF(bodyTextRect.left, iconTop, bodyTextRect.left + kIconSizeDip, iconTop + kIconSizeDip);
-            textRect            = D2D1::RectF(iconRect.right + kIconTextGapDip, bodyTextRect.top, bodyTextRect.right, bodyTextRect.bottom);
+            // Centre on the visible body: over-tall content scrolls inside it, the icon does not.
+            const float iconSpanDip = std::min(contentHeightDip, bodyTextRect.bottom - bodyTextRect.top);
+            const float iconTop     = bodyTextRect.top + std::max(0.0f, (iconSpanDip - kIconSizeDip) * 0.5f);
+            iconRect                = D2D1::RectF(bodyTextRect.left, iconTop, bodyTextRect.left + kIconSizeDip, iconTop + kIconSizeDip);
+            textRect                = D2D1::RectF(iconRect.right + kIconTextGapDip, bodyTextRect.top, bodyTextRect.right, bodyTextRect.bottom);
         }
 
-        _optionRects.clear();
-        if (optionBlockHeightDip > 0.0f)
+        // Keep the full measured content. The viewport clips drawing/hit testing,
+        // never the model or keyboard traversal. Reserve a scrollbar gutter.
+        textRect.bottom = std::max(textRect.top, textRect.bottom);
+        _bodyViewport   = textRect;
+        _bodyViewport.right -= 12.0f;
+        textRect.right    = _bodyViewport.right;
+        _scrollMaximumDip = _scrollingEnabled ? std::max(0.0f, scrollContentHeightDip + 4.0f - (textRect.bottom - textRect.top)) : 0.0f;
+        _scrollOffsetDip  = std::clamp(_scrollOffsetDip, 0.0f, _scrollMaximumDip);
+        float rowTop      = textRect.top + textHeightDip + kOptionsTextGapDip - _scrollOffsetDip;
+        for (auto& row : _optionRects)
         {
-            const float optionTop = std::min(textRect.bottom, textRect.top + textHeightDip + kOptionsTextGapDip);
-            float rowTop          = optionTop;
-            for (const auto& option : _model.options)
-            {
-                if (rowTop + kOptionHeightDip > textRect.bottom)
-                {
-                    break;
-                }
-
-                OptionRect row{};
-                row.id    = option.id;
-                row.rect  = D2D1::RectF(textRect.left, rowTop, textRect.right, rowTop + kOptionHeightDip);
-                row.label = option.label;
-                if (! option.choices.empty() && option.selectedIndex < option.choices.size())
-                {
-                    row.label.append(L": ");
-                    row.label.append(option.choices[option.selectedIndex].label);
-                }
-                _optionRects.emplace_back(std::move(row));
-                rowTop += kOptionHeightDip + kOptionGapDip;
-            }
-            textRect.bottom = std::max(textRect.top, optionTop - kOptionsTextGapDip);
+            row.rect = D2D1::RectF(textRect.left, rowTop, textRect.right, rowTop + row.heightDip);
+            rowTop += row.heightDip + kOptionGapDip;
         }
+        if (_scrollFooter && ! _buttonRects.empty())
+        {
+            const float shift  = textRect.top + textAndOptionsHeightDip + kButtonsRowGapDip - _scrollOffsetDip - _buttonRects.front().rect.top;
+            const float shiftX = textRect.left - _buttonRects.front().rect.left;
+            for (auto& button : _buttonRects)
+            {
+                button.rect.left += shiftX;
+                button.rect.right += shiftX;
+                button.rect.top += shift;
+                button.rect.bottom += shift;
+            }
+        }
+        textRect.top -= _scrollOffsetDip;
+        textRect.bottom = textRect.top + textHeightDip;
 
         _layoutBodyTextRect = bodyTextRect;
         _layoutIconRect     = iconRect;
         _layoutTextRect     = textRect;
+        if (revealFocusAfterLayout)
+            RevealFocusedControl();
         return true;
     }
 
@@ -612,7 +892,7 @@ public:
 
         for (const auto& button : _buttonRects)
         {
-            if (PointInRect(ptDip, button.rect))
+            if ((! _scrollFooter || PointInRect(ptDip, _bodyViewport)) && PointInRect(ptDip, button.rect))
             {
                 AlertHitTest hit{};
                 hit.part     = AlertHitTest::Part::Button;
@@ -623,7 +903,7 @@ public:
 
         for (const auto& option : _optionRects)
         {
-            if (PointInRect(ptDip, option.rect))
+            if (PointInRect(ptDip, _bodyViewport) && PointInRect(ptDip, option.rect))
             {
                 AlertHitTest hit{};
                 hit.part     = AlertHitTest::Part::Option;
@@ -637,7 +917,9 @@ public:
 
     bool UpdateHotState(D2D1_POINT_2F ptDip) noexcept
     {
-        const AlertHitTest hit = HitTest(ptDip);
+        AlertHitTest hit = HitTest(ptDip);
+        if (hit.part == AlertHitTest::Part::Option && ! IsOptionEnabled(hit.buttonId))
+            hit = {};
         if (hit.part == _hot.part && hit.buttonId == _hot.buttonId)
         {
             return false;
@@ -752,7 +1034,7 @@ public:
         _textBrush->SetOpacity(overlayOpacity);
 
         float textY = textRect.top;
-        target->PushAxisAlignedClip(textRect, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
+        target->PushAxisAlignedClip(_bodyViewport, D2D1_ANTIALIAS_MODE_PER_PRIMITIVE);
 
         if (_titleLayout)
         {
@@ -765,17 +1047,31 @@ public:
             {
                 textY += kTitleBodyGapDip;
             }
+            if (_model.presentation != AlertPresentation::Severity)
+                _textBrush->SetColor(_theme.text);
             target->DrawTextLayout(D2D1::Point2F(textRect.left, textY), _bodyLayout.get(), _textBrush.get());
         }
 
+        DrawOptions(target, overlayOpacity, kButtonCornerDip);
+        if (_scrollFooter)
+            DrawButtons(target, overlayOpacity, kButtonCornerDip);
         target->PopAxisAlignedClip();
+        if (_scrollMaximumDip > 0.0f)
+        {
+            const auto track        = GetScrollTrack();
+            const float viewHeight  = track.bottom - track.top;
+            const float thumbHeight = std::min(viewHeight, std::max(16.0f, viewHeight * viewHeight / (viewHeight + _scrollMaximumDip)));
+            const float thumbTop    = track.top + (viewHeight - thumbHeight) * _scrollOffsetDip / _scrollMaximumDip;
+            _textBrush->SetColor(_theme.text);
+            _textBrush->SetOpacity(0.65f * overlayOpacity);
+            target->FillRoundedRectangle(D2D1::RoundedRect(D2D1::RectF(track.left + 3.0f, thumbTop, track.right - 3.0f, thumbTop + thumbHeight), 2.0f, 2.0f),
+                                         _textBrush.get());
+        }
 
-        if (buttonRowHeightDip > 0.0f)
+        if (buttonRowHeightDip > 0.0f && ! _scrollFooter)
         {
             DrawButtons(target, overlayOpacity, kButtonCornerDip);
         }
-        DrawOptions(target, overlayOpacity, kButtonCornerDip);
-
         target->SetTransform(baseTransform);
     }
 
@@ -787,6 +1083,7 @@ private:
         bool primary = false;
         std::wstring_view label;
         float labelWidthDip = 0.0f;
+        wil::com_ptr<IDWriteTextLayout> layout;
     };
 
     struct OptionRect
@@ -794,6 +1091,8 @@ private:
         uint32_t id = 0;
         D2D1_RECT_F rect{};
         std::wstring label;
+        wil::com_ptr<IDWriteTextLayout> layout;
+        float heightDip = 32.0f;
     };
 
     static bool PointInRect(D2D1_POINT_2F pt, const D2D1_RECT_F& rc) noexcept
@@ -858,12 +1157,11 @@ private:
         if (FAILED(DxUi::Typography::CreateTextFormat(dwriteFactory, DxUi::Typography::MakeUiIconSpec(kIconSizeDip), _iconFormat.put(), L"")))
         {
             _iconFormat.reset();
-            static_cast<void>(DxUi::Typography::CreateTextFormat(dwriteFactory,
-                                                                 DxUi::Typography::TypographySpec{.familyName = DxUi::Typography::kSegoeMdl2AssetsFamily,
-                                                                                                  .weight     = DWRITE_FONT_WEIGHT_NORMAL,
-                                                                                                  .sizeDip    = kIconSizeDip},
-                                                                 _iconFormat.put(),
-                                                                 L""));
+            static_cast<void>(DxUi::Typography::CreateTextFormat(
+                dwriteFactory,
+                DxUi::Typography::Spec{.familyName = DxUi::Typography::kSegoeMdl2AssetsFamily, .weight = DWRITE_FONT_WEIGHT_NORMAL, .sizeDip = kIconSizeDip},
+                _iconFormat.put(),
+                L""));
         }
 
         if (_iconFormat)
@@ -874,9 +1172,9 @@ private:
             {
                 _closeIconFormat.reset();
                 static_cast<void>(DxUi::Typography::CreateTextFormat(dwriteFactory,
-                                                                     DxUi::Typography::TypographySpec{.familyName = DxUi::Typography::kSegoeMdl2AssetsFamily,
-                                                                                                      .weight     = DWRITE_FONT_WEIGHT_NORMAL,
-                                                                                                      .sizeDip    = kCloseIconSizeDip},
+                                                                     DxUi::Typography::Spec{.familyName = DxUi::Typography::kSegoeMdl2AssetsFamily,
+                                                                                            .weight     = DWRITE_FONT_WEIGHT_NORMAL,
+                                                                                            .sizeDip    = kCloseIconSizeDip},
                                                                      _closeIconFormat.put(),
                                                                      L""));
             }
@@ -951,10 +1249,16 @@ private:
             _focusedControl.part     = AlertHitTest::Part::Button;
             _focusedControl.buttonId = _model.buttons.front().id;
         }
-        else if (! _model.options.empty())
+        else
         {
-            _focusedControl.part     = AlertHitTest::Part::Option;
-            _focusedControl.buttonId = _model.options.front().id;
+            for (const auto& option : _model.options)
+            {
+                if (! IsOptionEnabled(option.id))
+                    continue;
+                _focusedControl.part     = AlertHitTest::Part::Option;
+                _focusedControl.buttonId = option.id;
+                return;
+            }
         }
     }
 
@@ -1038,8 +1342,42 @@ private:
         _layoutButtonRowHeightDip = 0.0f;
         _layoutShowIcon           = false;
         _buttonRects.clear();
-        _optionRects.clear();
-        _hasLayout = false;
+        _bodyViewport = {};
+        _hasLayout    = false;
+    }
+
+    void EnsureOptionLayouts(IDWriteFactory* factory, float widthDip) noexcept
+    {
+        widthDip = std::max(1.0f, widthDip);
+        _optionRects.resize(_model.options.size());
+        for (size_t index = 0; index < _model.options.size(); ++index)
+        {
+            const auto& option = _model.options[index];
+            auto& row          = _optionRects[index];
+            std::wstring label = option.label;
+            if (! option.choices.empty() && option.selectedIndex < option.choices.size())
+                label.append(L": ").append(option.choices[option.selectedIndex].label);
+            row.id = option.id;
+            if (row.layout && row.label == label && _optionWidthDip == widthDip)
+                continue;
+            row.label = std::move(label);
+            row.layout.reset();
+            row.heightDip = 32.0f;
+            if (SUCCEEDED(factory->CreateTextLayout(row.label.c_str(),
+                                                    static_cast<UINT32>(row.label.size()),
+                                                    _bodyFormat.get(),
+                                                    std::max(1.0f, widthDip - 24.0f),
+                                                    100000.0f,
+                                                    row.layout.put())))
+            {
+                row.layout->SetFontSize(_buttonFormat->GetFontSize(), DWRITE_TEXT_RANGE{0u, static_cast<UINT32>(row.label.size())});
+                row.layout->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+                DWRITE_TEXT_METRICS metrics{};
+                if (SUCCEEDED(row.layout->GetMetrics(&metrics)))
+                    row.heightDip = std::max(32.0f, std::ceil(metrics.height) + 16.0f);
+            }
+        }
+        _optionWidthDip = widthDip;
     }
 
     void EnsureButtonLayouts(IDWriteFactory* dwriteFactory) noexcept
@@ -1082,20 +1420,26 @@ private:
 
         _buttonBaseRects.clear();
         _buttonBaseRects.reserve(_model.buttons.size());
-
+        // Rectangles view these strings; fill them completely before any view is taken.
+        _buttonDisplayLabels.clear();
+        _buttonDisplayLabels.reserve(_model.buttons.size());
         for (const auto& button : _model.buttons)
+            _buttonDisplayLabels.push_back(AlertButtonDisplayLabel(button.label));
+
+        for (size_t index = 0; index < _model.buttons.size(); ++index)
         {
+            const auto& button = _model.buttons[index];
             ButtonRect btn{};
             btn.id            = button.id;
             btn.primary       = button.primary;
-            btn.label         = button.label;
+            btn.label         = _buttonDisplayLabels[index];
             btn.labelWidthDip = 0.0f;
 
-            if (! button.label.empty())
+            if (! btn.label.empty())
             {
                 wil::com_ptr<IDWriteTextLayout> layout;
                 const HRESULT hr = dwriteFactory->CreateTextLayout(
-                    button.label.c_str(), static_cast<UINT32>(button.label.size()), _buttonFormat.get(), 1000.0f, 1000.0f, layout.put());
+                    btn.label.data(), static_cast<UINT32>(btn.label.size()), _buttonFormat.get(), 1000.0f, 1000.0f, layout.put());
                 if (SUCCEEDED(hr) && layout)
                 {
                     DWRITE_TEXT_METRICS metrics{};
@@ -1181,6 +1525,7 @@ private:
         }
 
         const bool hot     = (_hot.part == AlertHitTest::Part::Close);
+        const bool focused = (_focusedControl.part == AlertHitTest::Part::Close);
         const float w      = std::max(0.0f, rect.right - rect.left);
         const float h      = std::max(0.0f, rect.bottom - rect.top);
         const float size   = std::min(w, h);
@@ -1191,16 +1536,18 @@ private:
 
         _backgroundBrush->SetOpacity(opacity);
         DxUi::ButtonChromeDrawSpec chrome{};
-        chrome.bounds      = rect;
-        chrome.text        = _closeIconFormat ? std::wstring_view(closeText, 1u) : std::wstring_view{};
-        chrome.variant     = DxUi::ButtonVariant::IconOnly;
-        chrome.hovered     = hot;
-        chrome.customStyle = DxUi::ButtonChromeCustomStyle{
+        chrome.bounds          = rect;
+        chrome.text            = _closeIconFormat ? std::wstring_view(closeText, 1u) : std::wstring_view{};
+        chrome.variant         = DxUi::ButtonVariant::IconOnly;
+        chrome.hovered         = hot;
+        chrome.focused         = focused;
+        chrome.keyboardFocused = focused;
+        chrome.customStyle     = DxUi::ButtonChromeCustomStyle{
             .fill            = D2D1::ColorF(accentColor.r, accentColor.g, accentColor.b, 0.14f),
             .text            = accentColor,
             .showFill        = hot,
             .showBorder      = false,
-            .showFocus       = false,
+            .showFocus       = focused,
             .cornerRadiusDip = radius,
         };
         DxUi::DrawButtonChrome(target, _backgroundBrush.get(), nullptr, _closeIconFormat.get(), MakeChromeThemePalette(), chrome);
@@ -1222,39 +1569,43 @@ private:
         target->DrawLine(D2D1::Point2F(rect.right - pad, rect.top + pad), D2D1::Point2F(rect.left + pad, rect.bottom - pad), _textBrush.get(), stroke);
     }
 
-    void LayoutButtons(const D2D1_RECT_F& rowRect, float gapDip, float heightDip, float minWidthDip, float horzPaddingDip) noexcept
+    float MeasureFooter(IDWriteFactory* factory, float widthDip) noexcept
     {
-        _buttonRects.clear();
-
-        if (_buttonBaseRects.empty())
+        _buttonRects = _buttonBaseRects;
+        if (_buttonRects.empty())
+            return 0.0f;
+        widthDip            = std::max(1.0f, widthDip);
+        constexpr float gap = 10.0f;
+        float intrinsic     = -gap;
+        for (const auto& button : _buttonRects)
+            intrinsic += std::max(84.0f, button.labelWidthDip + 28.0f) + gap;
+        const bool stacked = intrinsic > widthDip;
+        float left         = stacked ? 0.0f : widthDip - intrinsic;
+        float top          = 0.0f;
+        for (auto& button : _buttonRects)
         {
-            return;
-        }
-
-        float right        = rowRect.right;
-        const float bottom = rowRect.bottom;
-        const float top    = bottom - heightDip;
-
-        for (size_t i = 0; i < _buttonBaseRects.size(); ++i)
-        {
-            const auto& src = _buttonBaseRects[_buttonBaseRects.size() - 1u - i];
-
-            const float widthDip = std::max(minWidthDip, src.labelWidthDip + horzPaddingDip * 2.0f);
-
-            const float left = right - widthDip;
-            if (left < rowRect.left)
+            const float width = stacked ? widthDip : std::max(84.0f, button.labelWidthDip + 28.0f);
+            float height      = 32.0f;
+            if (stacked && SUCCEEDED(factory->CreateTextLayout(button.label.data(),
+                                                               static_cast<UINT32>(button.label.size()),
+                                                               _buttonFormat.get(),
+                                                               std::max(1.0f, width - 28.0f),
+                                                               100000.0f,
+                                                               button.layout.put())))
             {
-                break;
+                button.layout->SetWordWrapping(DWRITE_WORD_WRAPPING_WRAP);
+                button.layout->SetParagraphAlignment(DWRITE_PARAGRAPH_ALIGNMENT_NEAR);
+                DWRITE_TEXT_METRICS metrics{};
+                if (SUCCEEDED(button.layout->GetMetrics(&metrics)))
+                    height = std::max(height, std::ceil(metrics.height) + 16.0f);
             }
-
-            ButtonRect btn = src;
-            btn.rect       = D2D1::RectF(left, top, right, bottom);
-            _buttonRects.emplace_back(std::move(btn));
-
-            right = left - gapDip;
+            button.rect = D2D1::RectF(left, top, left + width, top + height);
+            if (stacked)
+                top += height + gap;
+            else
+                left += width + gap;
         }
-
-        std::reverse(_buttonRects.begin(), _buttonRects.end());
+        return stacked ? top - gap : 32.0f;
     }
 
     [[nodiscard]] DxUi::ThemePalette MakeChromeThemePalette() const noexcept
@@ -1333,13 +1684,19 @@ private:
             _backgroundBrush->SetOpacity(opacity);
             DxUi::ButtonChromeDrawSpec chrome{};
             chrome.bounds          = btn.rect;
-            chrome.text            = btn.label;
+            chrome.text            = btn.layout ? std::wstring_view{} : btn.label;
             chrome.primary         = btn.primary;
             chrome.hovered         = hot;
             chrome.focused         = focused;
             chrome.keyboardFocused = focused;
             chrome.customStyle     = MakeOverlayButtonChromeStyle(btn, hot, focused, cornerDip);
             DxUi::DrawButtonChrome(target, _backgroundBrush.get(), _buttonFormat.get(), nullptr, MakeChromeThemePalette(), chrome);
+            if (btn.layout)
+            {
+                _textBrush->SetColor(btn.primary ? _theme.selectionText : _theme.text);
+                _textBrush->SetOpacity(opacity);
+                target->DrawTextLayout(D2D1::Point2F(btn.rect.left + 14.0f, btn.rect.top + 8.0f), btn.layout.get(), _textBrush.get());
+            }
 #if defined(ENABLE_TESTS)
             _debugUsesSharedButtonChrome = true;
 #endif
@@ -1355,8 +1712,9 @@ private:
 
         for (const auto& option : _optionRects)
         {
-            const bool hot     = _hot.part == AlertHitTest::Part::Option && _hot.buttonId == option.id;
-            const bool focused = _focusedControl.part == AlertHitTest::Part::Option && _focusedControl.buttonId == option.id;
+            const bool enabled = IsOptionEnabled(option.id);
+            const bool hot     = enabled && _hot.part == AlertHitTest::Part::Option && _hot.buttonId == option.id;
+            const bool focused = enabled && _focusedControl.part == AlertHitTest::Part::Option && _focusedControl.buttonId == option.id;
             ButtonRect chromeSource{};
             chromeSource.id      = option.id;
             chromeSource.rect    = option.rect;
@@ -1366,12 +1724,23 @@ private:
             _backgroundBrush->SetOpacity(opacity);
             DxUi::ButtonChromeDrawSpec chrome{};
             chrome.bounds          = option.rect;
-            chrome.text            = option.label;
+            chrome.enabled         = enabled;
+            chrome.text            = {};
             chrome.hovered         = hot;
             chrome.focused         = focused;
             chrome.keyboardFocused = focused;
             chrome.customStyle     = MakeOverlayButtonChromeStyle(chromeSource, hot, focused, cornerDip);
+            // Custom chrome owns its disabled styling. Remove the button outline
+            // but keep the explanation at full contrast, including High Contrast.
+            if (! enabled)
+                chrome.customStyle.value().showBorder = false;
             DxUi::DrawButtonChrome(target, _backgroundBrush.get(), _buttonFormat.get(), nullptr, MakeChromeThemePalette(), chrome);
+            if (option.layout)
+            {
+                _textBrush->SetColor(_theme.text);
+                _textBrush->SetOpacity(opacity);
+                target->DrawTextLayout(D2D1::Point2F(option.rect.left + 12.0f, option.rect.top + 8.0f), option.layout.get(), _textBrush.get());
+            }
 #if defined(ENABLE_TESTS)
             _debugUsesSharedButtonChrome = true;
 #endif
@@ -1635,10 +2004,19 @@ private:
     float _bodyLayoutHeightDip  = 0.0f;
 
     std::vector<std::wstring_view> _cachedButtonLabels;
+    std::vector<std::wstring> _buttonDisplayLabels;
     std::vector<ButtonRect> _buttonBaseRects;
     std::vector<ButtonRect> _buttonRects;
     std::vector<OptionRect> _optionRects;
 
+    float _layoutClientWidthDip  = 0.0f;
+    float _layoutClientHeightDip = 0.0f;
+    float _optionWidthDip        = 0.0f;
+    float _scrollOffsetDip       = 0.0f;
+    bool _scrollingEnabled       = false;
+    bool _scrollFooter           = false;
+    float _scrollMaximumDip      = 0.0f;
+    D2D1_RECT_F _bodyViewport{};
     D2D1_RECT_F _panelRect{};
     D2D1_RECT_F _closeRect{};
     D2D1_RECT_F _layoutBodyTextRect{};
@@ -1654,6 +2032,7 @@ private:
     AlertHitTest _focusedControl{};
     uint64_t _startTickMs = 0;
 #if defined(ENABLE_TESTS)
+    uint64_t _debugLayoutPassCount                    = 0u;
     float _debugLastDrawOpacity                       = 0.0f;
     float _debugLastDrawScrimOpacity                  = 0.0f;
     bool _debugUsesSharedCloseChrome                  = false;

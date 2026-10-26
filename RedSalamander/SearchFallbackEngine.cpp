@@ -506,7 +506,7 @@ HRESULT RejectRegexSearch(SearchRuntime& runtime, std::wstring_view regexKind, s
     return E_INVALIDARG;
 }
 
-[[nodiscard]] bool MatchNamePattern(const SearchRuntime& runtime, const std::wstring& displayName) noexcept
+[[nodiscard]] bool MatchNamePattern(SearchRuntime& runtime, const std::wstring& displayName) noexcept
 {
     switch (runtime.query->nameMode)
     {
@@ -525,13 +525,15 @@ HRESULT RejectRegexSearch(SearchRuntime& runtime, std::wstring_view regexKind, s
             }
 
             // noexcept boundary: std::regex_search may throw regex_error on
-            // implementation-defined complexity/stack limits.
+            // implementation-defined complexity/stack limits. Keep that bound, but
+            // report the name as unevaluated rather than as a silent non-match.
             try
             {
                 return std::regex_search(displayName, *runtime.nameRegex);
             }
             catch (const std::regex_error&)
             {
+                runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_REGEX_INCOMPLETE;
                 return false;
             }
         }
@@ -619,6 +621,10 @@ HRESULT MatchFileContent(SearchRuntime& runtime, const std::wstring& fullPath, S
     if (helperResult.overflowSkipped)
     {
         runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_OVERFLOW;
+    }
+    if (helperResult.regexEvaluationIncomplete)
+    {
+        runtime.warningFlags |= FILESYSTEM_SEARCH_WARNING_REGEX_INCOMPLETE;
     }
 
     result.matched     = helperResult.matched;

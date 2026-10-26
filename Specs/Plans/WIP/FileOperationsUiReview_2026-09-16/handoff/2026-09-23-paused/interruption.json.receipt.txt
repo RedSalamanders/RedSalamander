@@ -1,0 +1,9 @@
+{
+  "status": "interrupted-by-explicit-user-pause",
+  "session": 57543,
+  "driverExit": 1,
+  "buildCompleted": false,
+  "testsStarted": false,
+  "timeUtc": "2026-09-23T20:48:30.163319+00:00",
+  "note": "Ctrl+C stopped driver; four verified descendant reused MSBuild nodes stopped. No compiler/linker or owned test app remains. Independent RedSalamander PID43688 preserved. No candidate pass or build receipt. Rebuild full solution before testing."
+}

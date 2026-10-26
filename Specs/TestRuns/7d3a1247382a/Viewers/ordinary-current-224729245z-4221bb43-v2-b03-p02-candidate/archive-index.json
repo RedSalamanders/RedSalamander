@@ -1,0 +1,72 @@
+{
+  "schema": "viewer-space.campaign-archive-copy.v1",
+  "archive_folder": "ordinary-current-224729245z-4221bb43-v2-b03-p02-candidate",
+  "archive_kind": "run",
+  "campaign_id": "20261009T224729245Z-4221bb43",
+  "campaign_mode": "OrdinaryCurrent",
+  "campaign_schema": "viewer-space.apprelease-comparison-campaign.v1",
+  "campaign_scope_state": "campaign-state-preserved",
+  "campaign_manifest_sha256": "5e16e6a0e8ca43d226e516cfa4df4c8a636e2b52b3465173e6d0cbc68adb5eba",
+  "expected_receipts": {
+    "baseline": "935a4954a73b50d93f37a9df89f4f880aecf50ec4e5d55f7663ac0de13c8cf44",
+    "candidate": "37dae646d3557dd0b5ac7618b76b136f0740f1be80dad2744b28236083f98ddd"
+  },
+  "expected_build_source_snapshot_ids": {
+    "baseline": "3be7cc158093a805b7a0226e5a4bff7f9d33f792684b066ebe2b2125dea6984b",
+    "candidate": "9addaf53d4d88d618223a7f2d8554ac0b73f2472946c3a3e0875b1fd94ac9554"
+  },
+  "repository_verdict": "NOT_EVALUATED",
+  "sibling_archive_folders": [
+    "ordinary-current-224729245z-4221bb43-v2-overview",
+    "ordinary-current-224729245z-4221bb43-v2-warmup-baseline",
+    "ordinary-current-224729245z-4221bb43-v2-warmup-candidate",
+    "ordinary-current-224729245z-4221bb43-v2-b01-p01-baseline",
+    "ordinary-current-224729245z-4221bb43-v2-b01-p02-candidate",
+    "ordinary-current-224729245z-4221bb43-v2-b01-p03-candidate",
+    "ordinary-current-224729245z-4221bb43-v2-b01-p04-baseline",
+    "ordinary-current-224729245z-4221bb43-v2-b02-p01-baseline",
+    "ordinary-current-224729245z-4221bb43-v2-b02-p02-candidate",
+    "ordinary-current-224729245z-4221bb43-v2-b02-p03-candidate",
+    "ordinary-current-224729245z-4221bb43-v2-b02-p04-baseline",
+    "ordinary-current-224729245z-4221bb43-v2-b03-p01-baseline",
+    "ordinary-current-224729245z-4221bb43-v2-b03-p03-candidate",
+    "ordinary-current-224729245z-4221bb43-v2-b03-p04-baseline"
+  ],
+  "generated_files": [
+    "raw-metric-replay-map.json"
+  ],
+  "runs": [
+    {
+      "archive_folder": "ordinary-current-224729245z-4221bb43-v2-b03-p02-candidate",
+      "manifest_run_index": 11,
+      "archived_file_count": 10,
+      "archived_payload_bytes": 2266415,
+      "block": 3,
+      "label": "20261009T224729245Z-4221bb43-b3-p2",
+      "mode": "OrdinaryCurrent",
+      "position": 2,
+      "role": "measurement",
+      "run_id": "20261009T230617Z-428-0416383bb2b34aab80137c44cdf4f3dd",
+      "side": "candidate",
+      "source_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-ordinary-current-20261009T224729245Z-4221bb43\\curated\\candidate\\20261009T224729245Z-4221bb43-b3-p2",
+      "status": "PASSED",
+      "case_status": null,
+      "curation_status": null,
+      "qualification_status": "qualified",
+      "curation_errors": [],
+      "source_files": [
+        "commands/results.json",
+        "evidence.json",
+        "perf/viewer_space_perf_large_optin_metrics.json",
+        "perf/viewer_space_perf_small_progressive_metrics.json",
+        "provenance.json",
+        "run-all-tests-results.json",
+        "workspace-final.json",
+        "metrics/source-index.json",
+        "metrics/perf_metrics.jsonl.part",
+        "metrics/perf_metrics-part2.jsonl.part"
+      ],
+      "generated_replay_map": "raw-metric-replay-map.json"
+    }
+  ]
+}

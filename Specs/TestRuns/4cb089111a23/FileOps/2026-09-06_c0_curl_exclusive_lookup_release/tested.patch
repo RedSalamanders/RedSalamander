@@ -1,0 +1,120 @@
+diff --git a/Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp b/Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp
+index a00be09c..919741d7 100644
+--- a/Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp
++++ b/Plugins/FileSystemCurl/FileSystemCurl.SelfTest.Ftp.cpp
+@@ -155,11 +155,10 @@ enum class LoopbackEndpointMode
+         return SocketErrorToHResult();
+     }
+ 
+-    // Only the refusal oracle needs exclusive binding: no other local server
+-    // may attach to its reserved port. Listening fixtures retain their policy.
++    // Control/data listeners and the refusal oracle must own their loopback
++    // port exclusively. Never allow a same-user reuse bind to share a fixture.
+     const BOOL exclusive = TRUE;
+-    if (mode == LoopbackEndpointMode::BoundOnly &&
+-        setsockopt(listener.get(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&exclusive), static_cast<int>(sizeof(exclusive))) != 0)
++    if (setsockopt(listener.get(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<const char*>(&exclusive), static_cast<int>(sizeof(exclusive))) != 0)
+     {
+         return SocketErrorToHResult();
+     }
+@@ -5611,6 +5610,36 @@ extern "C" __declspec(dllexport) HRESULT __stdcall RedSalamanderCurlEntryLookupT
+     auto cleanupWinsock = wil::scope_exit([]() noexcept { WSACleanup(); });
+     try
+     {
++        for (const LoopbackEndpointMode mode : {LoopbackEndpointMode::Listening, LoopbackEndpointMode::BoundOnly})
++        {
++            wil::unique_socket endpoint;
++            unsigned short port      = 0u;
++            const HRESULT endpointHr = CreateLoopbackEndpoint(endpoint, port, mode);
++            BOOL exclusive           = FALSE;
++            int optionBytes          = static_cast<int>(sizeof(exclusive));
++            const bool ownsPort      = SUCCEEDED(endpointHr) && port != 0u &&
++                                       getsockopt(endpoint.get(), SOL_SOCKET, SO_EXCLUSIVEADDRUSE, reinterpret_cast<char*>(&exclusive), &optionBytes) == 0 &&
++                                       optionBytes == static_cast<int>(sizeof(exclusive)) && exclusive != FALSE;
++            wil::unique_socket challenger(socket(AF_INET, SOCK_STREAM, IPPROTO_TCP));
++            const BOOL reuse = TRUE;
++            bool rejected    = false;
++            int bindError    = 0;
++            if (ownsPort && challenger &&
++                setsockopt(challenger.get(), SOL_SOCKET, SO_REUSEADDR, reinterpret_cast<const char*>(&reuse), static_cast<int>(sizeof(reuse))) == 0)
++            {
++                sockaddr_in address{};
++                address.sin_family      = AF_INET;
++                address.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
++                address.sin_port        = htons(port);
++                const int bindResult    = bind(challenger.get(), reinterpret_cast<const sockaddr*>(&address), static_cast<int>(sizeof(address)));
++                bindError               = bindResult == 0 ? 0 : WSAGetLastError();
++                rejected                = bindResult == SOCKET_ERROR && (bindError == WSAEACCES || bindError == WSAEADDRINUSE);
++            }
++            const bool correct    = ownsPort && rejected;
++            const wchar_t* detail = mode == LoopbackEndpointMode::Listening ? L"listening" : L"bound-only";
++            Debug::Perf::Emit(L"FileOps.Curl.FakeFtp.ExclusiveEndpoint", detail, 0u, port, static_cast<uint64_t>(bindError), correct ? S_OK : E_FAIL);
++            DebugCheck(correct, L"owned loopback endpoint is exclusive and rejects a competing reuse bind", *passed, *failed);
++        }
+         {
+             const int priorError = WSAGetLastError();
+             auto restoreError    = wil::scope_exit([priorError]() noexcept { WSASetLastError(priorError); });
+diff --git a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp
+index 547d138f..fdbd67e8 100644
+--- a/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp
++++ b/RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.SelfTest.Phases05_06.cpp
+@@ -8085,7 +8085,7 @@ case SelfTestState::Step::C0_CurlEntryLookupTruth:
+     }
+     state.c0CurlWorker.join();
+     state.c0CurlModule.reset();
+-    const unsigned int expectedChecks = entryLookup       ? 271u
++    const unsigned int expectedChecks = entryLookup       ? 273u
+                                         : copyTraversal   ? 142u
+                                         : movePreflight   ? 97u
+                                         : directorySize   ? 85u
+diff --git a/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md b/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md
+index 16ec46a0..e4954199 100644
+--- a/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md
++++ b/Specs/Plans/WIP/Operation_FileOperations_ReliabilityFirstSuccessorPlan_2026-08-29.md
+@@ -395,6 +395,12 @@ listener cap. Preserve a rejected candidate if it does not repair the workload.
+ Then requalify Debug, including its still-open wide timeout. The serial-wide
+ pending-listener retirement is also an open failure, not a passing 4,097-file gate.
+ 
++Candidate after `2283f0cf`: the fixture factory now requests exclusive binding in
++both modes. Two exact-lookup checks verify the installed socket option and reject
++a competing same-address/port reuse bind; expected lookup count is 273. Release
++focused/broad validation is pending. The corpus, deadlines, listener cap and
++production transport/retry behavior are unchanged.
++
+ Strict lookup retains only the current row and requested candidate. The existing
+ pool now keeps a cursor multi cache and distinct cursor/blocking easy handles per
+ exclusive entry, resetting both callbacks before idle return. Pure and mixed
+diff --git a/Specs/Testing/Testing_PerformanceValidation.md b/Specs/Testing/Testing_PerformanceValidation.md
+index c8c5340d..d9e8abac 100644
+--- a/Specs/Testing/Testing_PerformanceValidation.md
++++ b/Specs/Testing/Testing_PerformanceValidation.md
+@@ -223,9 +223,9 @@ The whole-tree commitment map and opaque transport allocations remain outside th
+ reservation metric and must not be described as bounded by it.
+ 
+ `C0_CurlEntryLookupTruth` protects single/bulk Copy, Move, Delete and Rename
+-admission with 271 assertions (201 route/setup, 32 framing, four refused-endpoint,
++admission with 273 assertions (201 route/setup, 32 framing, four refused-endpoint,
+ 12 fixture-serialization checks, three allocation/connect controls and 19 actual-
+-socket diagnostic controls). The serializer oracles call the same fake
++socket diagnostic controls, plus two endpoint-ownership controls). The serializer oracles call the same fake
+ FTP generator as network LIST, with hand-authored byte expectations for empty/root/
+ nested listings, direct-child ordering, literal UTF-8/percent/arrow names, zero/
+ unknown/overridden sizes, a changed generation and unchanged custom malformed LIST/
+@@ -338,9 +338,16 @@ unavailable addresses; it is not generic real-provider connection qualification.
+ ports at scenario start, for correlation with the actual socket diagnostic. It
+ does not prove a data-listener mapping or concurrent port ownership after teardown.
+ 
++The fake FTP endpoint factory sets SO_EXCLUSIVEADDRUSE before bind for both
++listening and bound-only modes, retaining port-zero allocation on loopback only.
++`FileOps.Curl.FakeFtp.ExclusiveEndpoint` guards the installed option and refusal of
++a same-address/port competing SO_REUSEADDR bind in both modes. The challenger is
++an owned negative-test socket, never a production socket policy. This ownership
++contract does not promise immediate port reuse after close or qualify a broad run.
++
+ `C0_CurlCopyTraversalTruth` has 142 assertions: 46 native scenarios and three
+ passive-listener lifecycle checks, plus Winsock setup. The host's exact-count
+-guard must agree with the current plugin corpus (271 lookup / 142 Copy) and
++guard must agree with the current plugin corpus (273 lookup / 142 Copy) and
+ report expected/observed counts on failure; S_OK alone is not complete coverage. Both
+ singular/bulk Copy APIs run serial/parallel shallow, literal-name, malformed,
+ out-of-root, overlong, blocked LIST, late refusal/cancel and depth-128/129 cases;

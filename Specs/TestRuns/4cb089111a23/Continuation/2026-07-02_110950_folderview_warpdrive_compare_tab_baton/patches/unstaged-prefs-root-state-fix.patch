@@ -1,0 +1,87 @@
+diff --git a/RedSalamander/Preferences.Dialog.cpp b/RedSalamander/Preferences.Dialog.cpp
+index 908bb5047..9c01d789a 100644
+--- a/RedSalamander/Preferences.Dialog.cpp
++++ b/RedSalamander/Preferences.Dialog.cpp
+@@ -4143,6 +4143,7 @@ void SelectCategory(HWND dlg, PreferencesDialogState& state, PrefCategory catego
+     state.initialCategory = category;
+     state.pluginsSelectedPlugin.reset();
+     state.pluginsSelectedPluginId.clear();
++    state.pluginsRetainedSelectedPluginId.clear();
+     state.pluginsDetailsActive = false;
+ 
+     if (! dlg || ! state.categoryTreeWindow)
+diff --git a/RedSalamander/SelfTest/Commands/Commands.SelfTest.Preferences.ChromeAndPlugins.cpp b/RedSalamander/SelfTest/Commands/Commands.SelfTest.Preferences.ChromeAndPlugins.cpp
+index 4ca3b5cce..0cf7b4479 100644
+--- a/RedSalamander/SelfTest/Commands/Commands.SelfTest.Preferences.ChromeAndPlugins.cpp
++++ b/RedSalamander/SelfTest/Commands/Commands.SelfTest.Preferences.ChromeAndPlugins.cpp
+@@ -2524,6 +2524,26 @@ namespace
+ 
+     const auto navigateToViewersPage = [&](HWND targetPrefs, PreferencesDebugSnapshot& outSnapshot) noexcept
+     {
++        const auto describeSnapshot = [](const PreferencesDebugSnapshot& value) {
++            return std::format(L"currentCategory={}, pageTitle='{}', viewersRows={}, viewersSearch='{}', selectedExtension='{}', focusTarget={}, "
++                               L"pluginItemSelected={}, pluginsDetailsActive={}, resizeFailures={}, visiblePaneWindows={}, visibleCurrentPageChildren={}",
++                               static_cast<unsigned>(value.currentCategory),
++                               value.pageTitle,
++                               value.viewersListRowCount,
++                               value.viewersSearchText,
++                               value.viewersSelectedExtensionText,
++                               static_cast<unsigned>(value.viewersFocusTarget),
++                               value.pluginItemSelected ? L"true" : L"false",
++                               value.pluginsDetailsActive ? L"true" : L"false",
++                               value.currentPageDxHostResizeFailureCount,
++                               value.visiblePaneWindowCount,
++                               value.visibleCurrentPageChildWindowCount);
++        };
++        const auto hasViewersPageSurfaceState = [](const PreferencesDebugSnapshot& value) noexcept
++        { return value.currentCategory == kPrefCategoryViewers && value.currentPageDxHostResizeFailureCount == 0u; };
++        const auto hasStableViewersPageState = [hasViewersPageSurfaceState](const PreferencesDebugSnapshot& value) noexcept
++        { return hasViewersPageSurfaceState(value) && value.viewersSearchText.empty() && value.viewersListRowCount > 0u; };
++
+         const HWND targetCategoryTreeHost = GetDlgItem(targetPrefs, IDC_PREFS_CATEGORY_LIST);
+         state.Require(targetCategoryTreeHost != nullptr && IsWindow(targetCategoryTreeHost) != FALSE,
+                       L"Preferences category host control missing while navigating to the Viewers page.");
+@@ -2538,20 +2558,34 @@ namespace
+         {
+             return false;
+         }
++        PumpPendingMessages();
+ 
+-        SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_HOME, 0);
+-        SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_HOME, 0);
++        state.Require(DebugSelectPreferencesCategory(kPrefCategoryViewers),
++                      L"Failed to select the Preferences Viewers category while navigating to the Viewers page.");
++        if (! state.failure.empty())
++        {
++            return false;
++        }
+         PumpPendingMessages();
+-        for (int i = 0; i < 2; ++i)
++
++        state.Require(waitForSnapshot(hasViewersPageSurfaceState, outSnapshot),
++                      std::format(L"Preferences Viewers page did not settle to the active DX surface before live search interaction validation: {}",
++                                  describeSnapshot(outSnapshot)));
++        if (! state.failure.empty())
+         {
+-            SendMessageW(targetCategoryTreeHost, WM_KEYDOWN, VK_DOWN, 0);
+-            SendMessageW(targetCategoryTreeHost, WM_KEYUP, VK_DOWN, 0);
+-            PumpPendingMessages();
++            return false;
+         }
+ 
+-        return waitForSnapshot([](const PreferencesDebugSnapshot& value) noexcept {
+-            return value.currentCategory == kPrefCategoryViewers && value.viewersListRowCount > 0u && value.currentPageDxHostResizeFailureCount == 0u;
+-        }, outSnapshot);
++        if (! hasStableViewersPageState(outSnapshot))
++        {
++            state.Require(DebugSetPreferencesViewersSearchText(L""),
++                          std::format(L"Failed to clear retained Viewers search text before live search interaction validation: {}",
++                                      describeSnapshot(outSnapshot)));
++            state.Require(waitForSnapshot(hasStableViewersPageState, outSnapshot),
++                          std::format(L"Preferences Viewers page did not restore an unfiltered list baseline before live search interaction validation: {}",
++                                      describeSnapshot(outSnapshot)));
++        }
++        return state.failure.empty();
+     };
+ 
+     PreferencesDebugSnapshot snapshot{};

@@ -1,0 +1,5 @@
+file	scenario	clientWidthDip	dpi	language	fixture
+throughput-collapsed__480dip__fr-FR__144dpi.png	collapsed	480	144	fr-FR	production-renderer-synthetic-copy
+throughput-expanded__480dip__fr-FR__144dpi.png	expanded	480	144	fr-FR	production-renderer-synthetic-copy
+throughput-collapsed__760dip__fr-FR__144dpi.png	collapsed	760	144	fr-FR	production-renderer-synthetic-copy
+throughput-expanded__760dip__fr-FR__144dpi.png	expanded	760	144	fr-FR	production-renderer-synthetic-copy

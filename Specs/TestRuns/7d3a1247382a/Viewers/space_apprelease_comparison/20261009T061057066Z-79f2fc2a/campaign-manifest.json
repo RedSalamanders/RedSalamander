@@ -1,0 +1,745 @@
+{
+  "schema": "viewer-space.apprelease-comparison-campaign.v1",
+  "campaign_id": "20261009T061057066Z-79f2fc2a",
+  "created_utc": "2026-10-09T06:10:57.1616746Z",
+  "test_root": "D:\\RedSalamander.Perf",
+  "configuration": "Release",
+  "platform": "x64",
+  "runner_arguments": [
+    "-Suite",
+    "Commands",
+    "-SkipBuild",
+    "-CaseFilter",
+    "viewer_space_perf_",
+    "-SelfTestRepeat",
+    "1",
+    "-TestRoot",
+    "D:\\RedSalamander.Perf",
+    "-Platform",
+    "x64",
+    "-Configuration",
+    "Release"
+  ],
+  "opt_in_environment": {
+    "REDSALAMANDER_VIEWERSPACE_LARGE_PERF": "1"
+  },
+  "baseline_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander",
+  "candidate_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander",
+  "ordering": "baseline warmup, candidate warmup, then ABBA x 3 (A=baseline, B=candidate); one fresh runner process per observation; serial only.",
+  "process_helper": "Tools/Modules/Build/ProcessStreaming.psm1::Invoke-RSStreamingProcess with contained child process and a 30 minute outer watchdog.",
+  "launcher_temp_root": "campaign-specific TEMP/TMP beneath the marked TestSandbox evidence directory; Run-AllTests then switches to its run-owned process-temp directory.",
+  "observer_policy": "Both branches aggregate queue diagnostics in producers and emit cumulative UI snapshots at 250 ms plus terminal/teardown. Baseline source includes matched benchmark harness and diagnostic-only aggregation; original scanner/model/layout production algorithms remain unchanged.",
+  "expected_baseline_receipt_id": "a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2",
+  "archive_label_policy": "campaign-id plus warmup side, or campaign-id plus ABBA block and position; existing archive targets fail closed.",
+  "reproduction_inputs": [
+    {
+      "source_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\run-viewer-space-apprelease-comparison.ps1",
+      "preserved_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\reproduction\\run-viewer-space-apprelease-comparison.ps1",
+      "sha256": "77a8390db31bc695b0e2991e28810b5fbe0d8dc348b2d3f051302333e90c45f7",
+      "bytes": 15316
+    },
+    {
+      "source_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\curate-viewer-space-evidence.py",
+      "preserved_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\reproduction\\curate-viewer-space-evidence.py",
+      "sha256": "5c4a681fe260d5b1fb11397c40746ac5a46a566059865cd007b0f8a05a7ac163",
+      "bytes": 16080
+    },
+    {
+      "source_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\analyze-viewer-space-apprelease-comparison.py",
+      "preserved_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\reproduction\\analyze-viewer-space-apprelease-comparison.py",
+      "sha256": "ae98a50f24dfc547af7c7327e0fde5fa82752eabb49aa85c781f3d2327ccad24",
+      "bytes": 28119
+    }
+  ],
+  "measurements": [
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b1-p1",
+      "side": "baseline",
+      "block": 1,
+      "position": 1,
+      "run_id": "20261009T061411Z-23420-32ee1a3d86cf4bd1ac6c14b77199eae9"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b1-p2",
+      "side": "candidate",
+      "block": 1,
+      "position": 2,
+      "run_id": "20261009T061548Z-45408-71d719885b0b4950b52a53993d5383e8"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b1-p3",
+      "side": "candidate",
+      "block": 1,
+      "position": 3,
+      "run_id": "20261009T061718Z-27216-78361f2af8f6483e955dae885f1ec77a"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b1-p4",
+      "side": "baseline",
+      "block": 1,
+      "position": 4,
+      "run_id": "20261009T061849Z-44700-db401c00e83747deaacf2c66f7cca5bd"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b2-p1",
+      "side": "baseline",
+      "block": 2,
+      "position": 1,
+      "run_id": "20261009T062024Z-27260-a62a52800b2d44b78c7b116004f8ce31"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b2-p2",
+      "side": "candidate",
+      "block": 2,
+      "position": 2,
+      "run_id": "20261009T062159Z-45372-e17dd1134a674205b66bd1f060cde79f"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b2-p3",
+      "side": "candidate",
+      "block": 2,
+      "position": 3,
+      "run_id": "20261009T062329Z-21248-8ffb625ac5104803ac5c65a580e94f7c"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b2-p4",
+      "side": "baseline",
+      "block": 2,
+      "position": 4,
+      "run_id": "20261009T062502Z-42240-d58cb091311d4d318624c8ab11cadbda"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b3-p1",
+      "side": "baseline",
+      "block": 3,
+      "position": 1,
+      "run_id": "20261009T062640Z-33168-3a509eba7ca74dab9f2dba815a6ebcf9"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b3-p2",
+      "side": "candidate",
+      "block": 3,
+      "position": 2,
+      "run_id": "20261009T062815Z-37152-2c8a7f8bc3904fe089f332b3aaed0d1c"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b3-p3",
+      "side": "candidate",
+      "block": 3,
+      "position": 3,
+      "run_id": "20261009T062949Z-38092-4b2465260e194a7a95c7a90131c489ed"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b3-p4",
+      "side": "baseline",
+      "block": 3,
+      "position": 4,
+      "run_id": "20261009T063118Z-4080-afbcc11e81c74051acd9cb7e29e20865"
+    }
+  ],
+  "runs": [
+    {
+      "label": "20261009T061057066Z-79f2fc2a-warmup_baseline",
+      "stage": "warmup_baseline",
+      "side": "baseline",
+      "role": "warmup",
+      "block": 0,
+      "position": 0,
+      "workspace_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander",
+      "run_id": "20261009T061100Z-2120-82e2227576e141b299806f6951d17926",
+      "process_exit_code": 0,
+      "summary_exit_code": 0,
+      "summary_schema": "red-salamander.run-all-tests.v1",
+      "summary_path": "D:\\RedSalamander.Perf\\runs\\20261009T061100Z-2120-82e2227576e141b299806f6951d17926\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "summary_sha256": "c875068bc474bba5bef8ab1b82b6b33d5106ce80c3ad752cc109efb2e3379eea",
+      "case_filter": "viewer_space_perf_",
+      "cases": [
+        {
+          "name": "viewer_space_perf_small_progressive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5704,
+          "attempt": 1
+        },
+        {
+          "name": "viewer_space_perf_large_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 47739,
+          "attempt": 1
+        }
+      ],
+      "case_statuses_valid": true,
+      "build_receipt_id": "a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2",
+      "build_receipt_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander\\.build\\x64\\Release\\build-receipt.json",
+      "build_receipt_sha256": "27ca5eee0fa64c6070aafb5ac1c94a75da1d6a00acd798644e68e8492bad72e1",
+      "workspace_snapshot_id": "e67a99083439ec38f6b54df71a50ac578fdf03339fca21310d69a90c89ef3091",
+      "workspace_snapshot_sha256": "15c541fd0efd483526b11287a1e946d964585a2d4f95c569efc8602c39dc188d",
+      "runner_stdout_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-warmup_baseline.stdout.txt",
+      "runner_stderr_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-warmup_baseline.stderr.txt",
+      "curated_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\20261009T061057066Z-79f2fc2a-warmup_baseline",
+      "curation_exit_code": 0,
+      "status": "PASSED"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-warmup_candidate",
+      "stage": "warmup_candidate",
+      "side": "candidate",
+      "role": "warmup",
+      "block": 0,
+      "position": 0,
+      "workspace_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander",
+      "run_id": "20261009T061239Z-40036-584e165b7743415486aa17827f68d04c",
+      "process_exit_code": 0,
+      "summary_exit_code": 0,
+      "summary_schema": "red-salamander.run-all-tests.v1",
+      "summary_path": "D:\\RedSalamander.Perf\\runs\\20261009T061239Z-40036-584e165b7743415486aa17827f68d04c\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "summary_sha256": "7e1468f25a393773f67389e09dc481a93f659aadc81e7b1cbe265f709f4cac51",
+      "case_filter": "viewer_space_perf_",
+      "cases": [
+        {
+          "name": "viewer_space_perf_small_progressive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5165,
+          "attempt": 1
+        },
+        {
+          "name": "viewer_space_perf_large_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 44180,
+          "attempt": 1
+        }
+      ],
+      "case_statuses_valid": true,
+      "build_receipt_id": "039e7389819621e3195ffeb57013b76c98cd1c3b4050cd42645235ea3ef043e5",
+      "build_receipt_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\x64\\Release\\build-receipt.json",
+      "build_receipt_sha256": "0d2bf1cfe3935ce4f9a7a6f13ca9f5776a33f2a02e63a1ad037ef22729c4ace5",
+      "workspace_snapshot_id": "17c73d11118294b1ce91d97c62a1d5cb36dd4652a9111c477fdcc1c9a24833e8",
+      "workspace_snapshot_sha256": "0557557a942e587edcc279e233a055a5e5a2f0b63a802309fcabcda09e5bfa98",
+      "runner_stdout_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-warmup_candidate.stdout.txt",
+      "runner_stderr_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-warmup_candidate.stderr.txt",
+      "curated_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\20261009T061057066Z-79f2fc2a-warmup_candidate",
+      "curation_exit_code": 0,
+      "status": "PASSED"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b1-p1",
+      "stage": "measurement",
+      "side": "baseline",
+      "role": "measurement",
+      "block": 1,
+      "position": 1,
+      "workspace_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander",
+      "run_id": "20261009T061411Z-23420-32ee1a3d86cf4bd1ac6c14b77199eae9",
+      "process_exit_code": 0,
+      "summary_exit_code": 0,
+      "summary_schema": "red-salamander.run-all-tests.v1",
+      "summary_path": "D:\\RedSalamander.Perf\\runs\\20261009T061411Z-23420-32ee1a3d86cf4bd1ac6c14b77199eae9\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "summary_sha256": "918fd96f894d2cfa92137f880e34888aaf16cac16ce8a83549e131ebdd0e7579",
+      "case_filter": "viewer_space_perf_",
+      "cases": [
+        {
+          "name": "viewer_space_perf_small_progressive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5913,
+          "attempt": 1
+        },
+        {
+          "name": "viewer_space_perf_large_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 48850,
+          "attempt": 1
+        }
+      ],
+      "case_statuses_valid": true,
+      "build_receipt_id": "a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2",
+      "build_receipt_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander\\.build\\x64\\Release\\build-receipt.json",
+      "build_receipt_sha256": "27ca5eee0fa64c6070aafb5ac1c94a75da1d6a00acd798644e68e8492bad72e1",
+      "workspace_snapshot_id": "e67a99083439ec38f6b54df71a50ac578fdf03339fca21310d69a90c89ef3091",
+      "workspace_snapshot_sha256": "90ad5dc99395e0b059b3b2b229637ef0a6a8e1d5ec9b6a648c31152b53125cc8",
+      "runner_stdout_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b1-p1.stdout.txt",
+      "runner_stderr_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b1-p1.stderr.txt",
+      "curated_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\20261009T061057066Z-79f2fc2a-b1-p1",
+      "curation_exit_code": 0,
+      "status": "PASSED"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b1-p2",
+      "stage": "measurement",
+      "side": "candidate",
+      "role": "measurement",
+      "block": 1,
+      "position": 2,
+      "workspace_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander",
+      "run_id": "20261009T061548Z-45408-71d719885b0b4950b52a53993d5383e8",
+      "process_exit_code": 0,
+      "summary_exit_code": 0,
+      "summary_schema": "red-salamander.run-all-tests.v1",
+      "summary_path": "D:\\RedSalamander.Perf\\runs\\20261009T061548Z-45408-71d719885b0b4950b52a53993d5383e8\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "summary_sha256": "86c8df4f95d81807c0de454d48ffe004612125ea2e4b30d2e9229ea4868215ce",
+      "case_filter": "viewer_space_perf_",
+      "cases": [
+        {
+          "name": "viewer_space_perf_small_progressive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5061,
+          "attempt": 1
+        },
+        {
+          "name": "viewer_space_perf_large_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 43532,
+          "attempt": 1
+        }
+      ],
+      "case_statuses_valid": true,
+      "build_receipt_id": "039e7389819621e3195ffeb57013b76c98cd1c3b4050cd42645235ea3ef043e5",
+      "build_receipt_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\x64\\Release\\build-receipt.json",
+      "build_receipt_sha256": "0d2bf1cfe3935ce4f9a7a6f13ca9f5776a33f2a02e63a1ad037ef22729c4ace5",
+      "workspace_snapshot_id": "17c73d11118294b1ce91d97c62a1d5cb36dd4652a9111c477fdcc1c9a24833e8",
+      "workspace_snapshot_sha256": "ca07c8972966dffe76fafcc37ba5a8e774638189394bf7a4632e9cc1606e4c15",
+      "runner_stdout_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b1-p2.stdout.txt",
+      "runner_stderr_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b1-p2.stderr.txt",
+      "curated_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\20261009T061057066Z-79f2fc2a-b1-p2",
+      "curation_exit_code": 0,
+      "status": "PASSED"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b1-p3",
+      "stage": "measurement",
+      "side": "candidate",
+      "role": "measurement",
+      "block": 1,
+      "position": 3,
+      "workspace_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander",
+      "run_id": "20261009T061718Z-27216-78361f2af8f6483e955dae885f1ec77a",
+      "process_exit_code": 0,
+      "summary_exit_code": 0,
+      "summary_schema": "red-salamander.run-all-tests.v1",
+      "summary_path": "D:\\RedSalamander.Perf\\runs\\20261009T061718Z-27216-78361f2af8f6483e955dae885f1ec77a\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "summary_sha256": "90b0183e870f7bf609ae88e851895d503820c7a6bbf6b72a879f91013ab1889b",
+      "case_filter": "viewer_space_perf_",
+      "cases": [
+        {
+          "name": "viewer_space_perf_small_progressive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5059,
+          "attempt": 1
+        },
+        {
+          "name": "viewer_space_perf_large_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 43327,
+          "attempt": 1
+        }
+      ],
+      "case_statuses_valid": true,
+      "build_receipt_id": "039e7389819621e3195ffeb57013b76c98cd1c3b4050cd42645235ea3ef043e5",
+      "build_receipt_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\x64\\Release\\build-receipt.json",
+      "build_receipt_sha256": "0d2bf1cfe3935ce4f9a7a6f13ca9f5776a33f2a02e63a1ad037ef22729c4ace5",
+      "workspace_snapshot_id": "17c73d11118294b1ce91d97c62a1d5cb36dd4652a9111c477fdcc1c9a24833e8",
+      "workspace_snapshot_sha256": "fe91e0c21beee541f61e3adbc820aee83d1e6d3a215ef21007e44992aeabd1cb",
+      "runner_stdout_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b1-p3.stdout.txt",
+      "runner_stderr_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b1-p3.stderr.txt",
+      "curated_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\20261009T061057066Z-79f2fc2a-b1-p3",
+      "curation_exit_code": 0,
+      "status": "PASSED"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b1-p4",
+      "stage": "measurement",
+      "side": "baseline",
+      "role": "measurement",
+      "block": 1,
+      "position": 4,
+      "workspace_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander",
+      "run_id": "20261009T061849Z-44700-db401c00e83747deaacf2c66f7cca5bd",
+      "process_exit_code": 0,
+      "summary_exit_code": 0,
+      "summary_schema": "red-salamander.run-all-tests.v1",
+      "summary_path": "D:\\RedSalamander.Perf\\runs\\20261009T061849Z-44700-db401c00e83747deaacf2c66f7cca5bd\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "summary_sha256": "fa54b48b6d7b1ab44846edcd52c095dc6e01945784a3297cdffdc1d53611471e",
+      "case_filter": "viewer_space_perf_",
+      "cases": [
+        {
+          "name": "viewer_space_perf_small_progressive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4894,
+          "attempt": 1
+        },
+        {
+          "name": "viewer_space_perf_large_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 47550,
+          "attempt": 1
+        }
+      ],
+      "case_statuses_valid": true,
+      "build_receipt_id": "a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2",
+      "build_receipt_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander\\.build\\x64\\Release\\build-receipt.json",
+      "build_receipt_sha256": "27ca5eee0fa64c6070aafb5ac1c94a75da1d6a00acd798644e68e8492bad72e1",
+      "workspace_snapshot_id": "e67a99083439ec38f6b54df71a50ac578fdf03339fca21310d69a90c89ef3091",
+      "workspace_snapshot_sha256": "2a0bbbef23b3e7201201045dc4a5376fff1a8ac0a70af51dbb09b39bdef06171",
+      "runner_stdout_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b1-p4.stdout.txt",
+      "runner_stderr_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b1-p4.stderr.txt",
+      "curated_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\20261009T061057066Z-79f2fc2a-b1-p4",
+      "curation_exit_code": 0,
+      "status": "PASSED"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b2-p1",
+      "stage": "measurement",
+      "side": "baseline",
+      "role": "measurement",
+      "block": 2,
+      "position": 1,
+      "workspace_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander",
+      "run_id": "20261009T062024Z-27260-a62a52800b2d44b78c7b116004f8ce31",
+      "process_exit_code": 0,
+      "summary_exit_code": 0,
+      "summary_schema": "red-salamander.run-all-tests.v1",
+      "summary_path": "D:\\RedSalamander.Perf\\runs\\20261009T062024Z-27260-a62a52800b2d44b78c7b116004f8ce31\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "summary_sha256": "1fee2c3501f85e6fa2dcb43da7e3525d489db0f0f04e855d81ad8333372abbeb",
+      "case_filter": "viewer_space_perf_",
+      "cases": [
+        {
+          "name": "viewer_space_perf_small_progressive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5181,
+          "attempt": 1
+        },
+        {
+          "name": "viewer_space_perf_large_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 46560,
+          "attempt": 1
+        }
+      ],
+      "case_statuses_valid": true,
+      "build_receipt_id": "a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2",
+      "build_receipt_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander\\.build\\x64\\Release\\build-receipt.json",
+      "build_receipt_sha256": "27ca5eee0fa64c6070aafb5ac1c94a75da1d6a00acd798644e68e8492bad72e1",
+      "workspace_snapshot_id": "e67a99083439ec38f6b54df71a50ac578fdf03339fca21310d69a90c89ef3091",
+      "workspace_snapshot_sha256": "fb0e2ce937563e8cb25bed87112576181f63af52412fee694ec593df55527bdd",
+      "runner_stdout_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b2-p1.stdout.txt",
+      "runner_stderr_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b2-p1.stderr.txt",
+      "curated_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\20261009T061057066Z-79f2fc2a-b2-p1",
+      "curation_exit_code": 0,
+      "status": "PASSED"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b2-p2",
+      "stage": "measurement",
+      "side": "candidate",
+      "role": "measurement",
+      "block": 2,
+      "position": 2,
+      "workspace_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander",
+      "run_id": "20261009T062159Z-45372-e17dd1134a674205b66bd1f060cde79f",
+      "process_exit_code": 0,
+      "summary_exit_code": 0,
+      "summary_schema": "red-salamander.run-all-tests.v1",
+      "summary_path": "D:\\RedSalamander.Perf\\runs\\20261009T062159Z-45372-e17dd1134a674205b66bd1f060cde79f\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "summary_sha256": "9b1a9646d7b90362c9e80f19403af9bae065667705d76c670f3548402d1770ef",
+      "case_filter": "viewer_space_perf_",
+      "cases": [
+        {
+          "name": "viewer_space_perf_small_progressive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 4996,
+          "attempt": 1
+        },
+        {
+          "name": "viewer_space_perf_large_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 43262,
+          "attempt": 1
+        }
+      ],
+      "case_statuses_valid": true,
+      "build_receipt_id": "039e7389819621e3195ffeb57013b76c98cd1c3b4050cd42645235ea3ef043e5",
+      "build_receipt_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\x64\\Release\\build-receipt.json",
+      "build_receipt_sha256": "0d2bf1cfe3935ce4f9a7a6f13ca9f5776a33f2a02e63a1ad037ef22729c4ace5",
+      "workspace_snapshot_id": "17c73d11118294b1ce91d97c62a1d5cb36dd4652a9111c477fdcc1c9a24833e8",
+      "workspace_snapshot_sha256": "487d11f7c76eb9a290fd15f7b2bdba657b22511a6eb7202f72ff2f0c7c224e7a",
+      "runner_stdout_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b2-p2.stdout.txt",
+      "runner_stderr_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b2-p2.stderr.txt",
+      "curated_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\20261009T061057066Z-79f2fc2a-b2-p2",
+      "curation_exit_code": 0,
+      "status": "PASSED"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b2-p3",
+      "stage": "measurement",
+      "side": "candidate",
+      "role": "measurement",
+      "block": 2,
+      "position": 3,
+      "workspace_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander",
+      "run_id": "20261009T062329Z-21248-8ffb625ac5104803ac5c65a580e94f7c",
+      "process_exit_code": 0,
+      "summary_exit_code": 0,
+      "summary_schema": "red-salamander.run-all-tests.v1",
+      "summary_path": "D:\\RedSalamander.Perf\\runs\\20261009T062329Z-21248-8ffb625ac5104803ac5c65a580e94f7c\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "summary_sha256": "37bfe8f22c8dfe73285ce2e5a0cd5333f4bed0e543e85d7285e9da28356373d5",
+      "case_filter": "viewer_space_perf_",
+      "cases": [
+        {
+          "name": "viewer_space_perf_small_progressive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5008,
+          "attempt": 1
+        },
+        {
+          "name": "viewer_space_perf_large_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 45327,
+          "attempt": 1
+        }
+      ],
+      "case_statuses_valid": true,
+      "build_receipt_id": "039e7389819621e3195ffeb57013b76c98cd1c3b4050cd42645235ea3ef043e5",
+      "build_receipt_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\x64\\Release\\build-receipt.json",
+      "build_receipt_sha256": "0d2bf1cfe3935ce4f9a7a6f13ca9f5776a33f2a02e63a1ad037ef22729c4ace5",
+      "workspace_snapshot_id": "17c73d11118294b1ce91d97c62a1d5cb36dd4652a9111c477fdcc1c9a24833e8",
+      "workspace_snapshot_sha256": "509e479090003156243931de906090d85251898850a153a1ccfec50543e61301",
+      "runner_stdout_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b2-p3.stdout.txt",
+      "runner_stderr_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b2-p3.stderr.txt",
+      "curated_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\20261009T061057066Z-79f2fc2a-b2-p3",
+      "curation_exit_code": 0,
+      "status": "PASSED"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b2-p4",
+      "stage": "measurement",
+      "side": "baseline",
+      "role": "measurement",
+      "block": 2,
+      "position": 4,
+      "workspace_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander",
+      "run_id": "20261009T062502Z-42240-d58cb091311d4d318624c8ab11cadbda",
+      "process_exit_code": 0,
+      "summary_exit_code": 0,
+      "summary_schema": "red-salamander.run-all-tests.v1",
+      "summary_path": "D:\\RedSalamander.Perf\\runs\\20261009T062502Z-42240-d58cb091311d4d318624c8ab11cadbda\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "summary_sha256": "9226d2b4ae012a434c7f0d5669e1892fe8cd101ef351b5c4f6ed3baa888d91aa",
+      "case_filter": "viewer_space_perf_",
+      "cases": [
+        {
+          "name": "viewer_space_perf_small_progressive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 6063,
+          "attempt": 1
+        },
+        {
+          "name": "viewer_space_perf_large_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 47097,
+          "attempt": 1
+        }
+      ],
+      "case_statuses_valid": true,
+      "build_receipt_id": "a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2",
+      "build_receipt_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander\\.build\\x64\\Release\\build-receipt.json",
+      "build_receipt_sha256": "27ca5eee0fa64c6070aafb5ac1c94a75da1d6a00acd798644e68e8492bad72e1",
+      "workspace_snapshot_id": "e67a99083439ec38f6b54df71a50ac578fdf03339fca21310d69a90c89ef3091",
+      "workspace_snapshot_sha256": "fa1df2ecdad2db5743ef8f4329b47975f871865669929469f657c32ef033eced",
+      "runner_stdout_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b2-p4.stdout.txt",
+      "runner_stderr_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b2-p4.stderr.txt",
+      "curated_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\20261009T061057066Z-79f2fc2a-b2-p4",
+      "curation_exit_code": 0,
+      "status": "PASSED"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b3-p1",
+      "stage": "measurement",
+      "side": "baseline",
+      "role": "measurement",
+      "block": 3,
+      "position": 1,
+      "workspace_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander",
+      "run_id": "20261009T062640Z-33168-3a509eba7ca74dab9f2dba815a6ebcf9",
+      "process_exit_code": 0,
+      "summary_exit_code": 0,
+      "summary_schema": "red-salamander.run-all-tests.v1",
+      "summary_path": "D:\\RedSalamander.Perf\\runs\\20261009T062640Z-33168-3a509eba7ca74dab9f2dba815a6ebcf9\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "summary_sha256": "5d89b7d7a180324ee7c35e481c5666707dc141d42e692f2a43b2846f8e78d54a",
+      "case_filter": "viewer_space_perf_",
+      "cases": [
+        {
+          "name": "viewer_space_perf_small_progressive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5436,
+          "attempt": 1
+        },
+        {
+          "name": "viewer_space_perf_large_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 47078,
+          "attempt": 1
+        }
+      ],
+      "case_statuses_valid": true,
+      "build_receipt_id": "a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2",
+      "build_receipt_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander\\.build\\x64\\Release\\build-receipt.json",
+      "build_receipt_sha256": "27ca5eee0fa64c6070aafb5ac1c94a75da1d6a00acd798644e68e8492bad72e1",
+      "workspace_snapshot_id": "e67a99083439ec38f6b54df71a50ac578fdf03339fca21310d69a90c89ef3091",
+      "workspace_snapshot_sha256": "ba6f863b206509f297d8dd9ebfd1deda33db1c693a17203d82ea61f27f5009ee",
+      "runner_stdout_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b3-p1.stdout.txt",
+      "runner_stderr_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b3-p1.stderr.txt",
+      "curated_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\20261009T061057066Z-79f2fc2a-b3-p1",
+      "curation_exit_code": 0,
+      "status": "PASSED"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b3-p2",
+      "stage": "measurement",
+      "side": "candidate",
+      "role": "measurement",
+      "block": 3,
+      "position": 2,
+      "workspace_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander",
+      "run_id": "20261009T062815Z-37152-2c8a7f8bc3904fe089f332b3aaed0d1c",
+      "process_exit_code": 0,
+      "summary_exit_code": 0,
+      "summary_schema": "red-salamander.run-all-tests.v1",
+      "summary_path": "D:\\RedSalamander.Perf\\runs\\20261009T062815Z-37152-2c8a7f8bc3904fe089f332b3aaed0d1c\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "summary_sha256": "f483ea1a28217bfc3be692f1197e5b80385df333c302e636888219cd005c8639",
+      "case_filter": "viewer_space_perf_",
+      "cases": [
+        {
+          "name": "viewer_space_perf_small_progressive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5010,
+          "attempt": 1
+        },
+        {
+          "name": "viewer_space_perf_large_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 46802,
+          "attempt": 1
+        }
+      ],
+      "case_statuses_valid": true,
+      "build_receipt_id": "039e7389819621e3195ffeb57013b76c98cd1c3b4050cd42645235ea3ef043e5",
+      "build_receipt_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\x64\\Release\\build-receipt.json",
+      "build_receipt_sha256": "0d2bf1cfe3935ce4f9a7a6f13ca9f5776a33f2a02e63a1ad037ef22729c4ace5",
+      "workspace_snapshot_id": "17c73d11118294b1ce91d97c62a1d5cb36dd4652a9111c477fdcc1c9a24833e8",
+      "workspace_snapshot_sha256": "9cfd7b80342b6d562f064dae83cd5beb19f6e369dfa744d79466f2fc624d3fe6",
+      "runner_stdout_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b3-p2.stdout.txt",
+      "runner_stderr_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b3-p2.stderr.txt",
+      "curated_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\20261009T061057066Z-79f2fc2a-b3-p2",
+      "curation_exit_code": 0,
+      "status": "PASSED"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b3-p3",
+      "stage": "measurement",
+      "side": "candidate",
+      "role": "measurement",
+      "block": 3,
+      "position": 3,
+      "workspace_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander",
+      "run_id": "20261009T062949Z-38092-4b2465260e194a7a95c7a90131c489ed",
+      "process_exit_code": 0,
+      "summary_exit_code": 0,
+      "summary_schema": "red-salamander.run-all-tests.v1",
+      "summary_path": "D:\\RedSalamander.Perf\\runs\\20261009T062949Z-38092-4b2465260e194a7a95c7a90131c489ed\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "summary_sha256": "e63cb662dd619c36ac5a15eb6b9335fe93fc2b7619f6c1069447289a07c415d3",
+      "case_filter": "viewer_space_perf_",
+      "cases": [
+        {
+          "name": "viewer_space_perf_small_progressive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5049,
+          "attempt": 1
+        },
+        {
+          "name": "viewer_space_perf_large_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 43015,
+          "attempt": 1
+        }
+      ],
+      "case_statuses_valid": true,
+      "build_receipt_id": "039e7389819621e3195ffeb57013b76c98cd1c3b4050cd42645235ea3ef043e5",
+      "build_receipt_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\.build\\x64\\Release\\build-receipt.json",
+      "build_receipt_sha256": "0d2bf1cfe3935ce4f9a7a6f13ca9f5776a33f2a02e63a1ad037ef22729c4ace5",
+      "workspace_snapshot_id": "17c73d11118294b1ce91d97c62a1d5cb36dd4652a9111c477fdcc1c9a24833e8",
+      "workspace_snapshot_sha256": "8f391cf314cd17d7591ddfe13f5eec070038f60b3b4201285a469f3a97e45704",
+      "runner_stdout_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b3-p3.stdout.txt",
+      "runner_stderr_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b3-p3.stderr.txt",
+      "curated_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\20261009T061057066Z-79f2fc2a-b3-p3",
+      "curation_exit_code": 0,
+      "status": "PASSED"
+    },
+    {
+      "label": "20261009T061057066Z-79f2fc2a-b3-p4",
+      "stage": "measurement",
+      "side": "baseline",
+      "role": "measurement",
+      "block": 3,
+      "position": 4,
+      "workspace_root": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander",
+      "run_id": "20261009T063118Z-4080-afbcc11e81c74051acd9cb7e29e20865",
+      "process_exit_code": 0,
+      "summary_exit_code": 0,
+      "summary_schema": "red-salamander.run-all-tests.v1",
+      "summary_path": "D:\\RedSalamander.Perf\\runs\\20261009T063118Z-4080-afbcc11e81c74051acd9cb7e29e20865\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "summary_sha256": "9cd66631714d4fea7ea4962ec71f9e12f7429fda490f073a28442ae24a636fc3",
+      "case_filter": "viewer_space_perf_",
+      "cases": [
+        {
+          "name": "viewer_space_perf_small_progressive",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 5050,
+          "attempt": 1
+        },
+        {
+          "name": "viewer_space_perf_large_optin",
+          "status": "passed",
+          "reason": "",
+          "duration_ms": 46428,
+          "attempt": 1
+        }
+      ],
+      "case_statuses_valid": true,
+      "build_receipt_id": "a56ada4920ea0ef1b69baaafd373e274e40177f0740d9ed5ff4ab694fe94e3b2",
+      "build_receipt_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-baseline\\RedSalamander\\.build\\x64\\Release\\build-receipt.json",
+      "build_receipt_sha256": "27ca5eee0fa64c6070aafb5ac1c94a75da1d6a00acd798644e68e8492bad72e1",
+      "workspace_snapshot_id": "e67a99083439ec38f6b54df71a50ac578fdf03339fca21310d69a90c89ef3091",
+      "workspace_snapshot_sha256": "6958fed175068a76730b32c425610a90de20e543e150a1d1fd2f64f5fa8c1ab7",
+      "runner_stdout_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b3-p4.stdout.txt",
+      "runner_stderr_path": "D:\\RedSalamander.Perf\\evidence\\viewer-space-apprelease-20261009T061057066Z-79f2fc2a\\runner-logs\\20261009T061057066Z-79f2fc2a-b3-p4.stderr.txt",
+      "curated_path": "C:\\Users\\PVB\\.codex\\worktrees\\viewer-space-explorer-analyst\\RedSalamander\\Specs\\TestRuns\\7d3a1247382a\\Viewers\\20261009T061057066Z-79f2fc2a-b3-p4",
+      "curation_exit_code": 0,
+      "status": "PASSED"
+    }
+  ],
+  "finished_utc": "2026-10-09T06:32:50.4979850Z"
+}

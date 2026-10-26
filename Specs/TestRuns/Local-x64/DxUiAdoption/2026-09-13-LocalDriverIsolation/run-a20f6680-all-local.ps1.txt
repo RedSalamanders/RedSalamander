@@ -1,0 +1,4 @@
+$ErrorActionPreference='Stop'
+& 'Z:/RedSalamander.Perf/runs/I19-work/scratch/build-a20f6680-final-arm64.ps1' *> 'Z:/RedSalamander.Perf/evidence/I19-20260909/a20f6680-ARM64-driver.log'
+Write-Output 'All three corrected ARM64 builds passed; starting the x64 build/package/Full sequence.'
+& 'Z:/RedSalamander.Perf/runs/I19-work/scratch/run-a20f6680-final-x64.ps1'

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <filesystem>
 #include <string_view>
@@ -21,10 +22,7 @@ enum class ModuleUnloadMode : uint8_t
 
 inline constexpr std::wstring_view kDeferredUnloadError = L"Plugin unload is deferred until the plugin reports it can unload.";
 
-[[nodiscard]] bool UnloadModule(wil::unique_hmodule& module,
-                                ModuleUnloadMode mode,
-                                const std::filesystem::path& path,
-                                std::wstring_view pluginKind) noexcept;
+[[nodiscard]] bool UnloadModule(wil::unique_hmodule& module, ModuleUnloadMode mode, const std::filesystem::path& path, std::wstring_view pluginKind) noexcept;
 
 [[nodiscard]] bool PathsEqualNoCase(const std::filesystem::path& left, const std::filesystem::path& right) noexcept;
 
@@ -69,19 +67,47 @@ template <typename Entry> [[nodiscard]] bool IsPathDeferred(const std::vector<En
     return false;
 }
 
-template <typename Entry, typename UnloadEntry>
-void UnloadAll(std::vector<Entry>& entries,
-               std::vector<Entry>& deferredEntries,
-               ModuleUnloadMode mode,
-               UnloadEntry&& unloadEntry) noexcept
+template <typename Entry> void RetainDeferredAliases(const std::vector<const Entry*>& unloadedEntries, std::vector<Entry>& deferredEntries)
 {
+    // Unload results are per owned module reference, but reload exclusion is per
+    // DLL path. Keep every known logical alias until the final owner is gone.
+    // These are owned metadata copies, never extra module pins or DLL pointers.
+    for (const Entry* entry : unloadedEntries)
+    {
+        if (! IsPathDeferred(deferredEntries, entry->path))
+        {
+            continue;
+        }
+
+        // Rediscovery supplies the same immutable identities in its placeholders.
+        // Do not accumulate another copy on every refresh while the DLL is busy.
+        const bool alreadyRetained = std::any_of(deferredEntries.begin(), deferredEntries.end(), [&](const Entry& retained) {
+            return retained.id == entry->id && retained.factoryPluginId == entry->factoryPluginId && PathsEqualNoCase(retained.path, entry->path);
+        });
+        if (! alreadyRetained)
+        {
+            deferredEntries.push_back(MakeDeferredPlaceholder(*entry));
+        }
+    }
+}
+
+template <typename Entry, typename UnloadEntry>
+void UnloadAll(std::vector<Entry>& entries, std::vector<Entry>& deferredEntries, ModuleUnloadMode mode, UnloadEntry&& unloadEntry) noexcept
+{
+    std::vector<const Entry*> unloadedEntries;
+    unloadedEntries.reserve(entries.size());
     for (auto it = entries.rbegin(); it != entries.rend(); ++it)
     {
         if (! unloadEntry(*it, mode))
         {
             deferredEntries.push_back(std::move(*it));
         }
+        else
+        {
+            unloadedEntries.push_back(&*it);
+        }
     }
+    RetainDeferredAliases(unloadedEntries, deferredEntries);
 }
 
 template <typename Entry, typename UnloadEntry>
@@ -94,13 +120,20 @@ void SweepDeferred(std::vector<Entry>& deferredEntries, ModuleUnloadMode mode, U
 
     std::vector<Entry> stillDeferred;
     stillDeferred.reserve(deferredEntries.size());
+    std::vector<const Entry*> unloadedEntries;
+    unloadedEntries.reserve(deferredEntries.size());
     for (Entry& entry : deferredEntries)
     {
         if (! unloadEntry(entry, mode))
         {
             stillDeferred.push_back(std::move(entry));
         }
+        else
+        {
+            unloadedEntries.push_back(&entry);
+        }
     }
+    RetainDeferredAliases(unloadedEntries, stillDeferred);
     deferredEntries = std::move(stillDeferred);
 }
 } // namespace PluginModuleLifecycle

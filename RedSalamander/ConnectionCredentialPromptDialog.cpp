@@ -1,4 +1,5 @@
 #include "Framework.h"
+#include "WindowActivation.h"
 
 #include "ConnectionCredentialPromptDialog.h"
 
@@ -376,7 +377,7 @@ HRESULT ConnectionCredentialPromptWindow::ShowModal(std::wstring& userNameOut, s
     static_cast<void>(Common::WindowSizing::CenterExistingWindowOnOwner(_hWnd.get(), _ownerWindow));
     ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
     UpdateWindow(_hWnd.get());
-    SetForegroundWindow(_hWnd.get());
+    Common::RequestForegroundWindow(_hWnd.get());
 
     MSG msg{};
     while (! _done)

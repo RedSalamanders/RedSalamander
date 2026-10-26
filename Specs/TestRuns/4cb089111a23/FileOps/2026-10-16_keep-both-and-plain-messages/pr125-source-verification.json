@@ -1,0 +1,149 @@
+{
+  "reviewed_utc": "2026-10-17T10:24:10.4879397Z",
+  "purpose": "Historical archive source comparison only; no exact receipt reuse or combined-tree qualification",
+  "candidate": "fe8bd298986aa701a45069b0fb88445370cf7043",
+  "tested_base": "a48e7d7880cb37ea6898d462ae188a6213a5f3f8",
+  "reconstructed_tree": "df615af551fa41647d936209e6b97733fd296fd0",
+  "snapshot_id": "dc4a5a6d62557c40a9fc3faf68e2f470655082b2703d80b6d5f898107f73c906",
+  "source_diff_sha256": "806c96713fd9df4a72bcd6dd33eaa2e238b551632faa5f56f87b8f657a88f01e",
+  "candidate_differences": [
+    "RedSalamander/FolderView.Interaction.cpp",
+    "RedSalamander/SelfTest/Commands/Commands.Tests.Navigation.cpp",
+    "Specs/UI/UI_FolderView.md"
+  ],
+  "recorded_changed_files": [
+    {
+      "path": ".gitattributes",
+      "recorded_sha256": "1a766d1d961fc88ff985ac5ef16e7e49670eefb9b0ed06a58024ea2d4feaef35",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.Popup.cpp",
+      "recorded_sha256": "fe03465dfd743c7f3d86c62a03a257944116499e8569c097668a9f5f25edeffa",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.State.Diagnostics.cpp",
+      "recorded_sha256": "30cdfc18a3e341a47a423bf4cd3625a6fbcb93680f0137cdcf7d62f76b0904a7",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.State.cpp",
+      "recorded_sha256": "562f183e2301c4d6a451fd1fc4ea6caac748198fd3796b48d83c272180069913",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperations.cpp",
+      "recorded_sha256": "92b7583be1c7dc17bdadda35ce4ac288b467cb68b6b7da61c1e7f594fdd5852f",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/FolderWindow.FileOperationsInternal.h",
+      "recorded_sha256": "b1c33bb46faeef70f68c0e892510500fe6ae871db9378e959fa75543232d32a4",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/Lang/cs-CZ/RedSalamander-cs-CZ.rc",
+      "recorded_sha256": "6a645ba7d1a74bfeef3947e2b68a98bc756ea874d97c6f46c9852c79addfcccc",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/Lang/fr-FR/RedSalamander-fr-FR.rc",
+      "recorded_sha256": "cb82f5e4e755682e4cfe7c6155d7e36dffbd2d3d213ecc1fc3c179beacd375e7",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/Lang/ja-JP/RedSalamander-ja-JP.rc",
+      "recorded_sha256": "25854f58ced5cc408c43134b793df5ab5383740f4eda9886d4b05efa472100d9",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/Lang/sk-SK/RedSalamander-sk-SK.rc",
+      "recorded_sha256": "fa9de8eb65e3176d8faeec7106f5d76102d12e7cba4dcfb6003a4ab386faed89",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/RedSalamander.rc",
+      "recorded_sha256": "a8db5ea9740724d5690baf6a83a153769b7b74e30d43499c52aa63c688d844b8",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/Resource.h",
+      "recorded_sha256": "cba19f51a9e086081f4d39824c96502f60ba1d3a6dbd40262a9cde7b3bfd1f1b",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.AclDeniedChild.cpp",
+      "recorded_sha256": "84a40395b1780518cc6aa644dbb9d6ac7fc852ca130e562ed32b31f3c861bac9",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.IssuesProjection.cpp",
+      "recorded_sha256": "cac0de5c14573ba1dac83bf8f215ae429c2542ade8f4e0db3d3f64b329c32719",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.ItemResultReducer.cpp",
+      "recorded_sha256": "6ee736d93be30c18466aa237e5eee603748e0e33e39d4e064a540791516c817f",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Phases07_09.cpp",
+      "recorded_sha256": "dba02e8db14539d6b9717261ad3bfd2c7cd76f98b648f1d277b96af0980c2819",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.Runner.cpp",
+      "recorded_sha256": "dc111c6074b9745589a1777d8144d095cf4c160779a541ed14ad04242ede5839",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.SameObject.cpp",
+      "recorded_sha256": "3e413d94e304c6bcb5bed1dbc8cf15251e37eee8f3c4bd79d7deb153c62fdd81",
+      "matched": true
+    },
+    {
+      "path": "RedSalamander/SelfTest/FileOperations/FolderWindow.FileOperations.Tests.VisualGallerySurfaces.cpp",
+      "recorded_sha256": "26a774af9ce4dcf56827c8dc3530deac09beb550c64bcbb4896e018a375f7bc0",
+      "matched": true
+    },
+    {
+      "path": "Specs/Core/Core_SharedHelpers.md",
+      "recorded_sha256": "47e22cf9204bfd627ef06fe02dbac43ad4d697409e834058ca06b67c78a3ecff",
+      "matched": true
+    },
+    {
+      "path": "Specs/FileSystem/FileSystem_FileOperations.md",
+      "recorded_sha256": "77da9a137ee3c2a3218ddf43704259bc15e46bb2a2e44f1b61d00c375bf3c1cf",
+      "matched": true
+    },
+    {
+      "path": "Specs/Testing/Testing_SelfTests.md",
+      "recorded_sha256": "308b57448465de47450c24fdade7b39234f76a942155d0e1f94221bf551d968a",
+      "matched": true
+    },
+    {
+      "path": "Specs/UI/UI_FileOperationsPopup.md",
+      "recorded_sha256": "a49863f050cb61bf779a4d2e5c2907d1be34c54ca1e54064263b56540a8216bb",
+      "matched": true
+    }
+  ],
+  "closing_metric_bindings": [
+    {
+      "run": "closeout-safety-debug",
+      "raw_sha256": "ca439288e72d70fcf282f275b1897035172fdc52dc7a2146aa5c0402e363a98d",
+      "raw_bytes": 10439761,
+      "raw_rows": 26538,
+      "selected_rows": 97,
+      "ordered_subsequence_verified": true
+    },
+    {
+      "run": "closeout-conflicts-debug",
+      "raw_sha256": "4a7d57923a662a8fc438610b94bf4140f6f17b8917e449bfbe403522e5a7d2ad",
+      "raw_bytes": 22129896,
+      "raw_rows": 56476,
+      "selected_rows": 174,
+      "ordered_subsequence_verified": true
+    }
+  ]
+}

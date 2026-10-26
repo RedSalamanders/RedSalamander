@@ -1,0 +1,17 @@
+CommandsSelfTest: begin
+CommandsSelfTest: begin
+CommandsSelfTest: begin
+CommandsSelfTest: PASS
+CommandsSelfTest: isolated execution order count=3 repeat=1 shuffleSeed=none
+Case: cmd_pane_fileops_conflict_metadata_uses_single_provider_roundtrip
+Case returned: cmd_pane_fileops_conflict_metadata_uses_single_provider_roundtrip ok=yes failed=no skipped=no
+Case: cmd_pane_fileops_conflict_prompt_metadata_and_actions
+Case returned: cmd_pane_fileops_conflict_prompt_metadata_and_actions ok=yes failed=no skipped=no
+Case: cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot
+Case returned: cmd_pane_fileops_conflict_close_hides_escape_cancels_snapshot ok=yes failed=no skipped=no
+CommandsSelfTest: PASS
+CommandsSelfTest: PASS
+CommandsSelfTest: begin
+CommandsSelfTest: PASS
+
+

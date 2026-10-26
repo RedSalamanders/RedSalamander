@@ -1,0 +1,43 @@
+{
+  "production_rank_and_comparator_section_byte_identical": true,
+  "section_utf8_sha256": "498214B38734C211600B32FF308AA02B0E2ABFECC5ED30675FE97B930D2D5D85",
+  "protected_inputs": [
+    {
+      "path": "Common/NaturalSort.h",
+      "sha256": "46BBFEB89E08027F5E2A07689547B5765E7DE9A0C60523A7FD314C13C13BAE52",
+      "equal": true
+    },
+    {
+      "path": "RedSalamander/FolderViewSortPolicy.h",
+      "sha256": "318F6FE32C6848803A9421522C009587A3BA0730FA9610CD29EA7CE7F97BA2C5",
+      "equal": true
+    },
+    {
+      "path": "Directory.Build.props",
+      "sha256": "1C6EC004C5AFDB0A5333AC736958A752425CE3CA6A31CA5881317A0468EF7F98",
+      "equal": true
+    },
+    {
+      "path": "Directory.Build.targets",
+      "sha256": "3247A8B1B42C02F1EC77288B49C43FDBE2C53F7E65040B22FE7148403F1F77F5",
+      "equal": true
+    },
+    {
+      "path": "RedSalamander/RedSalamander.vcxproj",
+      "sha256": "C7CA6FE209888B22262C05ADB55C22BE26613A0737CDA0145ACE771433B7C89C",
+      "equal": true
+    },
+    {
+      "path": "RedSalamander/SelfTest/Commands/Commands.Tests.ViewCommands.cpp",
+      "sha256": "6168ACF8825DCF7989459E93187D61B022D97CC55EF2F2EAF926D79D10442613",
+      "equal": true
+    }
+  ],
+  "note": "Compared frozen pre-change Release source with the built candidate source before the isolated checkout receives the candidate. Whole-source snapshots and output digests are retained in each build receipt.",
+  "final_v2_recheck": {
+    "verified_utc": "2026-10-20T13:35:48.0320689Z",
+    "protected_files_sha256_equal": true,
+    "rank_preparation_and_comparator_equal_with_lf_normalization": true,
+    "section_sha256": "536B0D595D006FFA045DEC50F6F68C94C95761DC60C1DD5C5A56F5F0CC496BA6"
+  }
+}

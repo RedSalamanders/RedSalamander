@@ -1,0 +1,74 @@
+[
+  {
+    "profile": "ASan Debug",
+    "attempt": 1,
+    "nativeResults": "E:\\RedSalamander.Perf\\runs\\20261026T075628Z-37228-63ddc7967c7548b3ba4fe5f17739e9c2\\artifacts\\selftest\\last_run\\compare\\results.json",
+    "metricRows": 1,
+    "durationUs": 95699466,
+    "detail": "enumeration=76369116;projection=1358;retirement=19328992;complete=true",
+    "entries": 4169462,
+    "parents": 413399,
+    "peakPrivateBytes": 3199959040.0,
+    "metricsFileBytes": 5611
+  },
+  {
+    "profile": "ASan Debug",
+    "attempt": 2,
+    "nativeResults": "E:\\RedSalamander.Perf\\runs\\20261026T080000Z-26876-15d6efa8d53a4ec597ca80df42054386\\artifacts\\selftest\\last_run\\compare\\results.json",
+    "metricRows": 1,
+    "durationUs": 98027650,
+    "detail": "enumeration=79803015;projection=1653;retirement=18222982;complete=true",
+    "entries": 4169511,
+    "parents": 413417,
+    "peakPrivateBytes": 3199954944.0,
+    "metricsFileBytes": 5609
+  },
+  {
+    "profile": "ASan Debug",
+    "attempt": 3,
+    "nativeResults": "E:\\RedSalamander.Perf\\runs\\20261026T080141Z-93864-768a25fa4ccb4f5eb81ad6931afa0f09\\artifacts\\selftest\\last_run\\compare\\results.json",
+    "metricRows": 1,
+    "durationUs": 95204072,
+    "detail": "enumeration=76968465;projection=1476;retirement=18234131;complete=true",
+    "entries": 4169557,
+    "parents": 413435,
+    "peakPrivateBytes": 3199733760.0,
+    "metricsFileBytes": 5594
+  },
+  {
+    "profile": "Release",
+    "attempt": 1,
+    "nativeResults": "E:\\RedSalamander.Perf\\runs\\20261026T080320Z-91020-ef445430ec364f27a277659617828962\\artifacts\\selftest\\last_run\\compare\\results.json",
+    "metricRows": 1,
+    "durationUs": 8881990,
+    "detail": "enumeration=8107560;projection=57;retirement=774373;complete=true",
+    "entries": 4169603,
+    "parents": 413453,
+    "peakPrivateBytes": 844038144.0,
+    "metricsFileBytes": 5526
+  },
+  {
+    "profile": "Release",
+    "attempt": 2,
+    "nativeResults": "E:\\RedSalamander.Perf\\runs\\20261026T080332Z-82324-35a122a1319241d6b59ee29d90c57c28\\artifacts\\selftest\\last_run\\compare\\results.json",
+    "metricRows": 1,
+    "durationUs": 8791645,
+    "detail": "enumeration=8083169;projection=44;retirement=708432;complete=true",
+    "entries": 4169649,
+    "parents": 413471,
+    "peakPrivateBytes": 847822848.0,
+    "metricsFileBytes": 5541
+  },
+  {
+    "profile": "Release",
+    "attempt": 3,
+    "nativeResults": "E:\\RedSalamander.Perf\\runs\\20261026T080342Z-8372-11dba1151b9f40b1964c86d56767f5a9\\artifacts\\selftest\\last_run\\compare\\results.json",
+    "metricRows": 1,
+    "durationUs": 8877969,
+    "detail": "enumeration=8265487;projection=60;retirement=612422;complete=true",
+    "entries": 4169695,
+    "parents": 413489,
+    "peakPrivateBytes": 831844352.0,
+    "metricsFileBytes": 5541
+  }
+]

@@ -10,7 +10,7 @@
     Target platform: x64 or ARM64 (default: x64)
 .PARAMETER ProjectName
     Specific project to build. If not specified, builds the entire solution.
-    Examples: "RedSalamander", "RedSalamanderMonitor", "Common"
+    Examples: "RedSalamander", "Common"
 .PARAMETER Clean
     Perform a clean build
 .PARAMETER Rebuild
@@ -26,7 +26,8 @@
     Required for local official release builds. In CI, GITHUB_RUN_NUMBER is used automatically.
 .PARAMETER OfficialRelease
     Stamp binaries as an official release build (no local beta Debug/Release suffix in displayed versions).
-    Official release mode requires -BuildNumber or a CI environment with GITHUB_RUN_NUMBER.
+    Official release mode requires -BuildNumber or a CI environment with GITHUB_RUN_NUMBER, and a
+    test-disabled build: -Configuration Release without RSBuildEnableTests=true.
 .PARAMETER MonitorDiagnostics
     Deprecated. Diagnostics are enabled at runtime with --etw and perf JSONL with --perf.
 .EXAMPLE
@@ -36,8 +37,8 @@
     .\build.ps1 -Configuration Release
     Builds entire solution in Release configuration
 .EXAMPLE
-    .\build.ps1 -ProjectName RedSalamanderMonitor
-    Builds only RedSalamanderMonitor project
+    .\build.ps1 -ProjectName Common
+    Builds only Common project
 .EXAMPLE
     .\build.ps1 -Configuration Release -Clean
     Clean build of entire solution in Release configuration
@@ -104,6 +105,8 @@ $MSBuildInvocationModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modul
 $ProcessStreamingModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Build\ProcessStreaming.psm1"
 $SanitizedEnvironmentModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Build\SanitizedEnvironment.psm1"
 $ArtifactOperationLockModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Build\ArtifactOperationLock.psm1"
+$VcpkgInstallSafetyModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Build\VcpkgInstallSafety.psm1"
+$ReleaseArtifactPolicyModule = Join-Path -Path $PSScriptRoot -ChildPath "Tools\Modules\Packaging\ReleaseArtifactPolicy.psm1"
 if (-not (Test-Path $BuildProjectSelectionModule)) {
     Write-Error "Build project selection helper not found: $BuildProjectSelectionModule"
     exit 1
@@ -128,6 +131,14 @@ if (-not (Test-Path $ArtifactOperationLockModule)) {
     Write-Error "Artifact operation lock helper not found: $ArtifactOperationLockModule"
     exit 1
 }
+if (-not (Test-Path $VcpkgInstallSafetyModule)) {
+    Write-Error "vcpkg install safety helper not found: $VcpkgInstallSafetyModule"
+    exit 1
+}
+if (-not (Test-Path $ReleaseArtifactPolicyModule)) {
+    Write-Error "Release artifact policy helper not found: $ReleaseArtifactPolicyModule"
+    exit 1
+}
 
 Import-Module $BuildProjectSelectionModule -Force -ErrorAction Stop
 Import-Module $BuildEvidenceModule -Force -ErrorAction Stop
@@ -135,6 +146,8 @@ Import-Module $MSBuildInvocationModule -Force -ErrorAction Stop
 Import-Module $SanitizedEnvironmentModule -Force -ErrorAction Stop
 Import-Module $ProcessStreamingModule -Force -ErrorAction Stop
 Import-Module $ArtifactOperationLockModule -Force -ErrorAction Stop
+Import-Module $VcpkgInstallSafetyModule -Force -ErrorAction Stop
+Import-Module $ReleaseArtifactPolicyModule -Force -ErrorAction Stop
 
 function Test-InteractiveTerminal {
     try {
@@ -234,6 +247,17 @@ if ($Msix -or $Msi -or $Zip) {
 
 if ($GenerateWingetManifest -and $Configuration -ne "Release") {
     Write-Error "Winget manifest generation requires -Configuration Release."
+    exit 1
+}
+
+# A test-enabled (ENABLE_TESTS) build is never distributable, so nothing that packages or stamps
+# an official release may build test-enabled: neither by override nor by the non-Release default
+# that the effective tests setting below applies.
+$requestedDistributableTests = [Environment]::GetEnvironmentVariable('RSBuildEnableTests', 'Process')
+if (($Msix -or $Msi -or $Zip -or $GenerateWingetManifest -or $OfficialRelease) -and
+    ($requestedDistributableTests -ieq 'true' -or
+     ([string]::IsNullOrWhiteSpace($requestedDistributableTests) -and $Configuration -ne 'Release'))) {
+    Write-Error "Packaging and -OfficialRelease require a test-disabled build (Release, RSBuildEnableTests not 'true'); a test-enabled build is never distributable."
     exit 1
 }
 
@@ -589,6 +613,44 @@ function Resolve-UapTargetPlatformVersion {
     return $selected
 }
 
+# Script-scope state is initialized before use: Run-AllTests and Test-Changes invoke this script under Set-StrictMode -Version Latest.
+$script:vcpkgOverlayTripletRefreshed = $false
+
+function Update-RSBuildVcpkgOverlayTriplet {
+    # MSBuild's manifest install runs whenever vcpkg.json is newer than its stamp, and Directory.Build.props passes it the overlay
+    # triplet vcpkg-install.ps1 writes. Refresh that file here the same way (same installation, its default MSVC toolset, same
+    # path), so neither installer falls back to vcpkg's newest toolset. Once per build, inside the platform dependency lock.
+    if ($script:vcpkgOverlayTripletRefreshed) {
+        return
+    }
+    $script:vcpkgOverlayTripletRefreshed = $true
+    if ($env:VcpkgManifestInstall -eq 'false') {
+        # The caller (CI) installs with the governed installer first and disables MSBuild's install.
+        return
+    }
+
+    $triplet = if ($Platform -eq 'ARM64') { 'arm64-windows' } else { 'x64-windows' }
+    $visualStudioInstallation = Get-RSVcpkgVisualStudioInstallation
+    # The vcpkg root MSBuild's integration installs with: an explicit VcpkgRoot, else the installation's bundled vcpkg. Their
+    # x64-windows and arm64-windows triplets match the pinned tool's byte for byte, so both installers write the same file.
+    $stockTriplet = @($env:VcpkgRoot, (Join-Path $visualStudioInstallation 'VC\vcpkg')) |
+        Where-Object { -not [string]::IsNullOrWhiteSpace($_) } |
+        ForEach-Object { Join-Path $_ "triplets\$triplet.cmake" } |
+        Where-Object { Test-Path -LiteralPath $_ -PathType Leaf } |
+        Select-Object -First 1
+    if (-not $stockTriplet) {
+        # No vcpkg MSBuild integration to install with; an existing overlay from vcpkg-install.ps1 stays as it is.
+        return
+    }
+
+    $msvcToolset = Get-RSVcpkgDefaultToolset -Installation $visualStudioInstallation
+    $overlayDirectory = Resolve-RSVcpkgSafeChildPath -Root $SolutionDir -Child ".build\vcpkg-triplets\$($Platform.ToLowerInvariant())" -Description "vcpkg triplet overlay directory"
+    $overlay = Update-RSVcpkgOverlayTriplet -StockTripletPath $stockTriplet -Toolset $msvcToolset -OutputDirectory $overlayDirectory
+    if ($overlay.Changed) {
+        Write-Host "vcpkg overlay triplet $($overlay.Path) written: MSVC $($msvcToolset.MajorMinor) of $visualStudioInstallation" -ForegroundColor Cyan
+    }
+}
+
 function Invoke-MSBuild {
     param(
         [Parameter(Mandatory = $true)]
@@ -647,6 +709,7 @@ function Invoke-MSBuild {
         Assert-RSNoResidualArtifactToolProcesses `
             -RepoRoot $SolutionDir `
             -Scope $sharedDependencyScope
+        Update-RSBuildVcpkgOverlayTriplet
 
         $logPath = New-ProcessLogPath -Prefix 'msbuild'
         $script:LastProcessLogPath = $logPath
@@ -860,7 +923,7 @@ if ($OfficialRelease) {
     $buildParams += "/p:RSVersionOfficialRelease=true"
 }
 if ($MonitorDiagnostics) {
-    Write-Warning "-MonitorDiagnostics is deprecated; launch RedSalamander or RedSalamanderMonitor with --etw instead."
+    Write-Warning "-MonitorDiagnostics is deprecated; launch RedSalamander with --etw instead; RedMonitor is independently installed."
 }
 
 $cleanParams = $null
@@ -887,7 +950,7 @@ if ($Clean) {
         $cleanParams += "/p:RSVersionOfficialRelease=true"
     }
     if ($MonitorDiagnostics) {
-        Write-Warning "-MonitorDiagnostics is deprecated; launch RedSalamander or RedSalamanderMonitor with --etw instead."
+        Write-Warning "-MonitorDiagnostics is deprecated; launch RedSalamander with --etw instead; RedMonitor is independently installed."
     }
 }
 
@@ -960,7 +1023,6 @@ function Assert-BuildOutputProcessNotRunning {
 }
 
     Assert-BuildOutputProcessNotRunning -ProcessName "RedSalamander.exe" -ExpectedExePath (Join-Path -Path $buildOutputDir -ChildPath "RedSalamander.exe")
-    Assert-BuildOutputProcessNotRunning -ProcessName "RedSalamanderMonitor.exe" -ExpectedExePath (Join-Path -Path $buildOutputDir -ChildPath "RedSalamanderMonitor.exe")
 
     $buildStartedUtc = [datetime]::UtcNow
     Suspend-RSBuildReceipt -BuildOutputDir $buildOutputDir
@@ -1026,6 +1088,9 @@ function Assert-BuildOutputProcessNotRunning {
     $packageEvidenceBefore = @{}
     $appPackagesEvidenceRoot = Join-Path -Path $SolutionDir -ChildPath '.build\AppPackages'
     if ($Msix -or $Msi -or $Zip -or $GenerateWingetManifest) {
+        $appPackagesEvidenceRoot = Resolve-RSGuardedRepositoryPath `
+            -RepoRoot $SolutionDir -GuardedRelativeRoot '.build\AppPackages' `
+            -Path $appPackagesEvidenceRoot
         if (Test-Path -LiteralPath $appPackagesEvidenceRoot -PathType Container) {
             foreach ($file in @(Get-ChildItem -LiteralPath $appPackagesEvidenceRoot -File -Recurse)) {
                 $packageEvidenceBefore[$file.FullName] = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
@@ -1116,6 +1181,7 @@ function Assert-BuildOutputProcessNotRunning {
             "/p:TargetPlatformVersion=$targetPlatformVersion"
             "/p:SolutionDir=$SolutionDirWithSlash"
             "/p:RSAppxManifestPath=$stagedMsixManifest"
+            "/p:RSBuildEnableTests=false"
             "/p:AppxPackageSigningEnabled=false"
             "/p:GenerateAppInstallerFile=false"
             "/p:AppxBundle=Never"
@@ -1134,6 +1200,19 @@ function Assert-BuildOutputProcessNotRunning {
             Write-Host "Packaging time: $($msixStopwatch.Elapsed.ToString('mm\:ss'))" -ForegroundColor Red
             Write-Host "========================================" -ForegroundColor Red
             exit $LASTEXITCODE
+        }
+
+        # The package also takes plugin and runtime binaries straight from the compiled profile;
+        # inspect what was packaged while the packaging lease is held and remove a rejected package.
+        # Re-check the whole repository chain for links right before anything can be removed.
+        $appPackagesEvidenceRoot = Resolve-RSGuardedRepositoryPath `
+            -RepoRoot $SolutionDir -GuardedRelativeRoot '.build\AppPackages' `
+            -Path $appPackagesEvidenceRoot
+        foreach ($producedMsix in @(Get-ChildItem -LiteralPath $appPackagesEvidenceRoot -Filter *.msix -File -Recurse)) {
+            $producedDigest = (Get-FileHash -LiteralPath $producedMsix.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
+            if (-not $packageEvidenceBefore.ContainsKey($producedMsix.FullName) -or $packageEvidenceBefore[$producedMsix.FullName] -ne $producedDigest) {
+                Assert-RSProducedMsixHasNoTestSurface -LiteralPath $producedMsix.FullName -AppPackagesRoot $appPackagesEvidenceRoot
+            }
         }
 
         $msixStopwatch.Stop()
@@ -1298,9 +1377,14 @@ function Assert-BuildOutputProcessNotRunning {
         if (-not (Test-Path -LiteralPath $appPackagesEvidenceRoot -PathType Container)) {
             throw "Requested packaging produced no AppPackages directory: $appPackagesEvidenceRoot"
         }
+        # The packaging lease is released here: check only, never delete. The in-lease check
+        # already removed any rejected MSIX this run produced.
         foreach ($file in @(Get-ChildItem -LiteralPath $appPackagesEvidenceRoot -File -Recurse | Sort-Object FullName)) {
             $currentDigest = (Get-FileHash -LiteralPath $file.FullName -Algorithm SHA256).Hash.ToLowerInvariant()
             if (-not $packageEvidenceBefore.ContainsKey($file.FullName) -or $packageEvidenceBefore[$file.FullName] -ne $currentDigest) {
+                if ($file.Extension -ieq '.msix' -or $file.Extension -ieq '.zip') {
+                    Assert-RSShippingPackageHasNoTestSurface -LiteralPath $file.FullName
+                }
                 $packageArtifact = New-RSBuildArtifactRecord -RepoRoot $SolutionDir -LiteralPath $file.FullName
                 $packageArtifacts += $packageArtifact
                 $summaryArtifacts += $packageArtifact

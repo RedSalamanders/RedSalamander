@@ -1,0 +1,1 @@
+{"canonicalization":"rs-canonical-json-v1","counts":{"failed":0,"passed":1,"skipped":0,"total":1},"entry_id":"tooling.vcpkg-merge-synthetic","kind":"PowerShellScript","reason_codes":[],"schema":"red-salamander.validation-terminal-result.v1","status":"PASSED","terminal_result_digest":"27871965b39ca0fa7d7b1f30668b6bd8c5ac7fd8e1dfd963d2c43b2e1a174d89"}

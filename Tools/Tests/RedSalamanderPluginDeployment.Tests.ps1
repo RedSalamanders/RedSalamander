@@ -8,11 +8,12 @@ $buildScript = Join-Path $repoRoot 'build.ps1'
 $solutionPath = Join-Path $repoRoot 'RedSalamander.sln'
 $script:outputDir = $null
 $script:pluginDir = $null
-$script:monitorExe = $null
+$script:monitorClientLicense = $null
 $script:searchServiceExe = $null
 $buildLogDir = Join-Path $repoRoot '.build\logs'
 $processStreamingModule = Join-Path $repoRoot 'Tools\Modules\Build\ProcessStreaming.psm1'
 $artifactOperationLockModule = Join-Path $repoRoot 'Tools\Modules\Build\ArtifactOperationLock.psm1'
+$testInvocationModule = Join-Path $repoRoot 'Tools\Modules\Testing\TestInvocation.psm1'
 
 function Get-RSSolutionProjects {
     $projects = @()
@@ -90,7 +91,7 @@ function Invoke-RSTargetedBuildForDeploymentTest {
             -WorkingDirectory $repoRoot `
             -LogPath $stdoutLog `
             -ErrorLogPath $stderrLog `
-            -AdditionalEnvironment @{ RSBuildEnableTests = 'true' } `
+            -AdditionalEnvironment (Get-RSBuildEnvironmentOverrides -Suite Full) `
             -TimeoutMilliseconds (15 * 60 * 1000) `
             -OutputDrainTimeoutMilliseconds 5000 `
             -DelegateArtifactOperation `
@@ -124,7 +125,7 @@ Describe 'RedSalamander targeted plugin deployment' -Tag RequiresBuildToolchain 
         }
         $script:outputDir = Join-Path $repoRoot ('.build\{0}\{1}' -f $selectedPlatform, $selectedConfiguration)
         $script:pluginDir = Join-Path $outputDir 'Plugins'
-        $script:monitorExe = Join-Path $outputDir 'RedSalamanderMonitor.exe'
+        $script:monitorClientLicense = Join-Path $outputDir 'RedMonitor-LICENSE.txt'
         $script:searchServiceExe = Join-Path $outputDir 'RedSalamanderSearchService.exe'
 
         if (-not (Test-Path -LiteralPath $artifactOperationLockModule)) {
@@ -137,6 +138,7 @@ Describe 'RedSalamander targeted plugin deployment' -Tag RequiresBuildToolchain 
             throw "Process streaming helper not found: $processStreamingModule"
         }
         Import-Module $processStreamingModule -Force -ErrorAction Stop
+        Import-Module $testInvocationModule -Global -ErrorAction Stop
 
         $script:deploymentArtifactOperationScope = @{
             kind = 'build'
@@ -171,12 +173,12 @@ Describe 'RedSalamander targeted plugin deployment' -Tag RequiresBuildToolchain 
         $script:deploymentArtifactOperationScope = $null
     }
 
-    It 'repopulates bundled sibling binaries when build.ps1 targets RedSalamander' {
+    It 'repopulates bundled sibling binaries and the client notice when build.ps1 targets RedSalamander' {
         if (Test-Path $pluginDir) {
             Remove-Item -LiteralPath $pluginDir -Recurse -Force
         }
 
-        foreach ($path in @($monitorExe, $searchServiceExe)) {
+        foreach ($path in @($monitorClientLicense, $searchServiceExe)) {
             if (Test-Path $path) {
                 Remove-Item -LiteralPath $path -Force
             }
@@ -186,7 +188,13 @@ Describe 'RedSalamander targeted plugin deployment' -Tag RequiresBuildToolchain 
 
         Invoke-RSTargetedBuildForDeploymentTest -Platform $selectedPlatform -Configuration $selectedConfiguration
 
-        foreach ($path in @($monitorExe, $searchServiceExe)) {
+        # Prove the nested writer retained Full's receipt-bound compiler policy,
+        # rather than silently switching the profile back to compiler PDBs.
+        $targetedReceipt = Get-Content -LiteralPath (Join-Path $outputDir 'build-receipt.json') -Raw | ConvertFrom-Json
+        ($targetedReceipt.build_arguments -contains 'compiler-debug-information=embedded') | Should Be $true
+        $targetedReceipt.tests_enabled | Should Be $true
+
+        foreach ($path in @($monitorClientLicense, $searchServiceExe)) {
             (Test-Path $path) | Should Be $true
         }
 

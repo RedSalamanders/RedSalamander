@@ -20,11 +20,13 @@
 #include "TerminalHostSupport.h"
 #include "ViewerPluginManager.h"
 #include "Win32CallbackHelpers.h"
+#include "WindowActivation.h"
 #include "WindowMessages.h"
 #include "WindowSizing.h"
 #include <DxUi/DxUi.h>
 #ifdef ENABLE_TESTS
-#include "SelfTestCommon.h"
+#include "Common.Tests.Runner.h"
+#include "Common.Tests.WindowActivationGuard.h"
 #endif
 #include "UiMetrics.h"
 #include "UnicodeClipboard.h"
@@ -1173,7 +1175,7 @@ public:
         static_cast<void>(_dxHost.PrimeForShow());
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
-        SetForegroundWindow(_hWnd.get());
+        Common::RequestForegroundWindow(_hWnd.get());
 
         MSG msg{};
         while (! _done)
@@ -1955,6 +1957,8 @@ struct DirectMutationArtifactGuard final
     wil::com_ptr<IFileSystem> fileSystem;
     std::wstring pluginId;
     std::wstring instanceContext;
+    // I35 R8.10: the pane the command came from; its touch prompt covers that pane.
+    std::optional<FolderWindow::Pane> pane;
     FileOperationArtifacts::TouchGuardReceipt receipt;
 };
 
@@ -1965,7 +1969,8 @@ struct DirectMutationArtifactGuard final
     {
         return E_INVALIDARG;
     }
-    return guard->owner->ConfirmExternalArtifactTouchForProvider(guard->fileSystem.get(), guard->pluginId, guard->instanceContext, paths, &guard->receipt);
+    return guard->owner->ConfirmExternalArtifactTouchForProvider(
+        guard->fileSystem.get(), guard->pluginId, guard->instanceContext, paths, &guard->receipt, guard->pane);
 }
 
 [[nodiscard]] HRESULT RevalidateDirectMutationArtifactGuard(const std::span<const std::filesystem::path> paths, void* const cookie) noexcept
@@ -3475,7 +3480,7 @@ public:
         static_cast<void>(_dxHost.PrimeForShow());
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
-        SetForegroundWindow(_hWnd.get());
+        Common::RequestForegroundWindow(_hWnd.get());
 
         MSG msg{};
         while (! _done)
@@ -4968,15 +4973,15 @@ public:
         static_cast<void>(_dxHost.PrimeForShow());
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
-        SetForegroundWindow(_hWnd.get());
+        Common::RequestForegroundWindow(_hWnd.get());
 
-        const DxUi::ModalLoopResult loopResult = DxUi::RunDxUiModalLoop(_hWnd.get(),
-                                                                            DxUi::ModalLoopOptions{
-                                                                                .diagnosticName = L"ArchivePackPrompt",
-                                                                                .shouldContinue = ShouldContinueModalLoop,
-                                                                                .context        = this,
-                                                                                .onQuit         = OnModalLoopQuit,
-                                                                            });
+        const DxUi::ModalLoopResult loopResult = DxUi::RunModalLoop(_hWnd.get(),
+                                                                    DxUi::ModalLoopOptions{
+                                                                        .diagnosticName = L"ArchivePackPrompt",
+                                                                        .shouldContinue = ShouldContinueModalLoop,
+                                                                        .context        = this,
+                                                                        .onQuit         = OnModalLoopQuit,
+                                                                    });
         if (loopResult == DxUi::ModalLoopResult::GetMessageFailed)
         {
             return std::nullopt;
@@ -5633,15 +5638,15 @@ public:
         static_cast<void>(_dxHost.PrimeForShow());
         ShowWindow(_hWnd.get(), SW_SHOWNORMAL);
         UpdateWindow(_hWnd.get());
-        SetForegroundWindow(_hWnd.get());
+        Common::RequestForegroundWindow(_hWnd.get());
 
-        const DxUi::ModalLoopResult loopResult = DxUi::RunDxUiModalLoop(_hWnd.get(),
-                                                                            DxUi::ModalLoopOptions{
-                                                                                .diagnosticName = L"ArchiveUnpackPrompt",
-                                                                                .shouldContinue = ShouldContinueModalLoop,
-                                                                                .context        = this,
-                                                                                .onQuit         = OnModalLoopQuit,
-                                                                            });
+        const DxUi::ModalLoopResult loopResult = DxUi::RunModalLoop(_hWnd.get(),
+                                                                    DxUi::ModalLoopOptions{
+                                                                        .diagnosticName = L"ArchiveUnpackPrompt",
+                                                                        .shouldContinue = ShouldContinueModalLoop,
+                                                                        .context        = this,
+                                                                        .onQuit         = OnModalLoopQuit,
+                                                                    });
         if (loopResult == DxUi::ModalLoopResult::GetMessageFailed)
         {
             return std::nullopt;
@@ -9272,7 +9277,7 @@ HRESULT FolderWindowFileSystemInternal::DebugResolveInitialCreateDirectoryNameFo
 
 LRESULT FolderWindow::OnMakeFileListTaskUpdate(LPARAM lp) noexcept
 {
-    auto payload = TakeMessagePayload<MakeFileListTaskPayload>(lp);
+    auto payload = TakeMessagePayload<MakeFileListTaskPayload>(_hWnd.get(), WndMsg::kMakeFileListTaskUpdate, lp);
     if (! payload)
     {
         return 0;
@@ -9302,7 +9307,7 @@ void FolderWindow::RequestMakeFileListCancellation(const Pane pane) noexcept
 
 LRESULT FolderWindow::OnMakeFileListCompleted(LPARAM lp) noexcept
 {
-    auto payload = TakeMessagePayload<MakeFileListCompletedPayload>(lp);
+    auto payload = TakeMessagePayload<MakeFileListCompletedPayload>(_hWnd.get(), WndMsg::kMakeFileListCompleted, lp);
     if (! payload)
     {
         return 0;
@@ -9390,7 +9395,7 @@ LRESULT FolderWindow::OnMakeFileListCompleted(LPARAM lp) noexcept
 
 LRESULT FolderWindow::OnChangeAttributesTaskUpdate(LPARAM lp) noexcept
 {
-    auto payload = TakeMessagePayload<ChangeAttributesTaskPayload>(lp);
+    auto payload = TakeMessagePayload<ChangeAttributesTaskPayload>(_hWnd.get(), WndMsg::kChangeAttributesTaskUpdate, lp);
     if (! payload)
     {
         return 0;
@@ -9401,7 +9406,7 @@ LRESULT FolderWindow::OnChangeAttributesTaskUpdate(LPARAM lp) noexcept
 
 LRESULT FolderWindow::OnChangeAttributesCompleted(LPARAM lp) noexcept
 {
-    auto payload = TakeMessagePayload<ChangeAttributesCompletedPayload>(lp);
+    auto payload = TakeMessagePayload<ChangeAttributesCompletedPayload>(_hWnd.get(), WndMsg::kChangeAttributesCompleted, lp);
     if (! payload)
     {
         return 0;
@@ -9426,10 +9431,10 @@ LRESULT FolderWindow::OnChangeAttributesCompleted(LPARAM lp) noexcept
     return 0;
 }
 
-struct FolderWindow::OpenedFilesDialogState final : DxUi::IDxGridModel, DxUi::IDxGridDelegate
+struct FolderWindow::OpenedFilesDialogState final : DxUi::IGridModel, DxUi::IGridDelegate
 {
-    using DxUi::IDxGridDelegate::OnGridRowActivated;
-    using DxUi::IDxGridDelegate::OnGridSelectionChanged;
+    using DxUi::IGridDelegate::OnGridRowActivated;
+    using DxUi::IGridDelegate::OnGridSelectionChanged;
 
     OpenedFilesDialogState()                                         = default;
     OpenedFilesDialogState(const OpenedFilesDialogState&)            = delete;
@@ -10361,6 +10366,26 @@ bool DebugCancelChangeAttributesOptionsPrompt() noexcept
     const HWND hwnd    = GetChangeAttributesOptionsPromptHandle();
     const UINT message = GetChangeAttributesOptionsPromptDebugMessage();
     return PostDxUiPromptCloseDebugCommand(hwnd, message, static_cast<WPARAM>(ChangeAttributesOptionsPromptDebugCommand::Cancel));
+}
+
+bool DebugShowDocumentationUtilityOptions(HWND owner, const AppTheme& theme, DocumentationUtilityOptions kind) noexcept
+{
+    if (! owner || GetWindowThreadProcessId(owner, nullptr) != GetCurrentThreadId() ||
+        ! RedSalamander::TestSupport::ScopedWindowActivationBlocker::IsActiveForCurrentThread())
+        return false;
+    const std::filesystem::path folder(L"C:\\Demo\\Workspace");
+    switch (kind)
+    {
+        case DocumentationUtilityOptions::FileList: return ! PromptForMakeFileListOptions(owner, theme, MakeFileListSettings{}).has_value();
+        case DocumentationUtilityOptions::Pack: return ! PromptForArchivePackOptions(owner, theme, folder, {folder / L"project-plan.txt"}).has_value();
+        case DocumentationUtilityOptions::Unpack: return ! PromptForArchiveUnpackOptions(owner, theme, folder, folder / L"workshop.zip").has_value();
+        case DocumentationUtilityOptions::CreateDirectory:
+            return ! PromptForCreateDirectoryName(owner, folder.wstring(), L"Approved Reports", theme).has_value();
+        case DocumentationUtilityOptions::NewFile:
+            // Display-only input must not probe a real filesystem target during name validation.
+            return ! PromptForEditNewFile(owner, {}, folder.wstring(), nullptr, L"DEMO-PC", theme, L"review-summary.txt").has_value();
+    }
+    return false;
 }
 
 HWND GetMakeFileListOptionsPromptHandle() noexcept
@@ -11557,6 +11582,7 @@ bool FolderWindow::DebugGetSharedDirectoriesDialogSnapshot(SharedDirectoriesDebu
     }
 
     const HWND dialog                  = _sharedDirectoriesDialog->hwnd.get();
+    out.window                         = dialog;
     out.visible                        = IsWindowVisible(dialog) != FALSE;
     out.usesDxUiHost                   = _sharedDirectoriesDialog->dxHost.GetRoot() != nullptr;
     out.visibleChildWindowCount        = CountVisibleChildWindowsLocal(dialog);
@@ -11868,7 +11894,9 @@ void ShowArtifactTouchGuardFailure(FolderWindow& window, const FolderWindow::Pan
     {
         title = LoadStringResource(nullptr, IDS_CAPTION_ERROR);
     }
-    std::wstring message = FormatStringResource(nullptr, IDS_FMT_FILEOPS_ARTIFACT_TOUCH_BLOCKED, pathCount);
+    // A blocked request was already explained by its prompt (kFileOperationRefusedAlreadyReported);
+    // this alert reports only a guard that could not run, so it names no blocked items.
+    std::wstring message = FormatStringResource(nullptr, IDS_FMT_FILEOPS_ARTIFACT_TOUCH_FAILED, static_cast<unsigned long>(pathCount));
     if (message.empty())
     {
         message = title;
@@ -12563,6 +12591,12 @@ void FolderWindow::CommandPack(Pane pane)
         deleteRequest.flags                       = static_cast<FileSystemFlags>(FILESYSTEM_FLAG_RECURSIVE);
         deleteRequest.archiveDeleteAfterConfirmed = true;
         const HRESULT deleteHr                    = StartFileOperationFromFolderView(pane, std::move(deleteRequest));
+        if (deleteHr == kFileOperationRefusedForPendingExit)
+        {
+            // The pane already says why the cleanup Delete was not started.
+            RefreshFolderViewIfPathMatches(state.folderView, result.archivePath.parent_path());
+            return;
+        }
         if (FAILED(deleteHr))
         {
             ShowArchiveOverlay(
@@ -12786,6 +12820,12 @@ void FolderWindow::CommandUnpack(Pane pane)
         deleteRequest.flags                       = FILESYSTEM_FLAG_NONE;
         deleteRequest.archiveDeleteAfterConfirmed = true;
         const HRESULT deleteHr                    = StartFileOperationFromFolderView(pane, std::move(deleteRequest));
+        if (deleteHr == kFileOperationRefusedForPendingExit)
+        {
+            // The pane already says why the cleanup Delete was not started.
+            RefreshFolderViewIfPathMatches(state.folderView, result.destinationPath);
+            return;
+        }
         if (FAILED(deleteHr))
         {
             ShowArchiveOverlay(
@@ -13104,7 +13144,7 @@ void FolderWindow::CommandListOpenedFiles(Pane pane)
         _openedFilesDialog->ApplyTheme();
         RefreshOpenedFilesDialogRows();
         ShowWindow(_openedFilesDialog->hwnd.get(), SW_SHOWNORMAL);
-        SetForegroundWindow(_openedFilesDialog->hwnd.get());
+        Common::RequestForegroundWindow(_openedFilesDialog->hwnd.get());
         perf.SetValue0(static_cast<uint64_t>(_openedFilesDialog->rows.size()));
         return;
     }
@@ -13173,7 +13213,7 @@ void FolderWindow::CommandListOpenedFiles(Pane pane)
     static_cast<void>(_openedFilesDialog->dxHost.PrimeForShow());
     ShowWindow(dialog, SW_SHOWNORMAL);
     UpdateWindow(dialog);
-    SetForegroundWindow(dialog);
+    Common::RequestForegroundWindow(dialog);
 }
 
 std::vector<FolderWindow::SharedDirectoryRow> FolderWindow::CollectSharedDirectoryRows(HRESULT& outHr) const noexcept
@@ -13415,7 +13455,7 @@ void FolderWindow::CommandSharedDirectories(Pane pane)
         _sharedDirectoriesDialog->ApplyTheme();
         RefreshSharedDirectoriesDialogRows();
         ShowWindow(_sharedDirectoriesDialog->hwnd.get(), SW_SHOWNORMAL);
-        SetForegroundWindow(_sharedDirectoriesDialog->hwnd.get());
+        Common::RequestForegroundWindow(_sharedDirectoriesDialog->hwnd.get());
         perf.SetValue0(static_cast<uint64_t>(_sharedDirectoriesDialog->rows.size()));
         perf.SetHr(_sharedDirectoriesDialog->lastError);
         return;
@@ -13488,7 +13528,7 @@ void FolderWindow::CommandSharedDirectories(Pane pane)
     static_cast<void>(_sharedDirectoriesDialog->dxHost.PrimeForShow());
     ShowWindow(dialog, SW_SHOWNORMAL);
     UpdateWindow(dialog);
-    SetForegroundWindow(dialog);
+    Common::RequestForegroundWindow(dialog);
 }
 
 void FolderWindow::CommandSelectionRestore(Pane pane)
@@ -13744,7 +13784,7 @@ void FolderWindow::CommandChangeAttributes(Pane pane)
         const HRESULT artifactTouchHr = ConfirmExternalArtifactTouch(pane, paths, &artifactTouchReceipt);
         if (artifactTouchHr != S_OK)
         {
-            if (FAILED(artifactTouchHr))
+            if (FAILED(artifactTouchHr) && artifactTouchHr != kFileOperationRefusedAlreadyReported)
             {
                 ShowArtifactTouchGuardFailure(*this, pane, paths.size(), artifactTouchHr);
             }
@@ -13842,13 +13882,16 @@ void FolderWindow::CommandChangeAttributes(Pane pane)
                 .fileSystem      = fileSystem,
                 .pluginId        = pluginId,
                 .instanceContext = instanceContext,
+                .pane            = pane,
             };
             if (SUCCEEDED(operationHr) && ! workItems.empty())
             {
                 hr = PrepareDirectMutationArtifactGuard(workItems, &artifactGuard);
                 if (hr != S_OK)
                 {
-                    operationHr = hr == S_FALSE ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : hr;
+                    // Declining, or closing a blocked prompt that already explained the refusal, is a
+                    // cancellation of this request, never a reported failure.
+                    operationHr = hr == S_FALSE || hr == FolderWindow::kFileOperationRefusedAlreadyReported ? HRESULT_FROM_WIN32(ERROR_CANCELLED) : hr;
                     if (operationHr != HRESULT_FROM_WIN32(ERROR_CANCELLED) && operationHr != E_ABORT)
                     {
                         RecordChangeAttributesFailure(report, operationHr);
@@ -13915,6 +13958,7 @@ void FolderWindow::CommandChangeAttributes(Pane pane)
         .fileSystem      = state.fileSystem,
         .pluginId        = state.pluginId,
         .instanceContext = state.instanceContext,
+        .pane            = pane,
         .receipt         = std::move(artifactTouchReceipt),
     };
     for (const std::filesystem::path& path : paths)
@@ -13966,7 +14010,7 @@ void FolderWindow::CommandChangeCase(Pane pane)
     SetActivePane(pane);
     PaneState& state = pane == Pane::Left ? _leftPane : _rightPane;
 
-    if (! state.fileSystem)
+    if (! state.fileSystem || RefuseFileOperationForPendingExit(pane, FILESYSTEM_RENAME))
     {
         return;
     }

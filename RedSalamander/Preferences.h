@@ -183,6 +183,8 @@ enum class PreferencesFileOperationsDebugFocusTarget : uint8_t
     BandwidthPresetCombo,
     CustomBandwidthEdit,
     AutoDismissSuccessToggle,
+    ShowInformationalNotesToggle,
+    MirrorDecisionsInPaneToggle,
     BridgeBufferEdit,
 };
 

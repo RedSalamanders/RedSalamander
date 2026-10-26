@@ -1,0 +1,30 @@
+{
+    "run_started_utc": "2026-07-03T13:27:36.693Z",
+    "duration_ms": 1031,
+    "fail_fast": false,
+    "timeout_scale": 2.0,
+    "case_filter": "cmd_pane_navigationView_menu_region_keyboard_activation_opens_menu",
+    "suites": [
+        {
+            "suite": "Commands",
+            "artifact_root": "C:\\Users\\eric\\AppData\\Local\\RedSalamander\\SelfTest\\last_run\\commands",
+            "duration_ms": 508,
+            "passed": 1,
+            "failed": 0,
+            "skipped": 0,
+            "fail_fast": false,
+            "timeout_scale": 2.0,
+            "case_filter": "cmd_pane_navigationView_menu_region_keyboard_activation_opens_menu",
+            "cases": [
+                {
+                    "name": "cmd_pane_navigationView_menu_region_keyboard_activation_opens_menu",
+                    "status": "passed",
+                    "duration_ms": 502
+                }
+            ]
+        }
+    ],
+    "passed": 1,
+    "failed": 0,
+    "skipped": 0
+}

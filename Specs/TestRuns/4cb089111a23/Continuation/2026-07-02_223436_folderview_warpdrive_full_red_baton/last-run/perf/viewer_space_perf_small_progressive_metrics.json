@@ -1,0 +1,33 @@
+{
+  "scenario": "viewer_space_perf_small_progressive",
+  "fixture": {
+    "top_directories": 20,
+    "nested_directories_per_top": 5,
+    "files_per_nested_directory": 100,
+    "expected_files": 10000
+  },
+  "renderer_mode": 2,
+  "scan_state": 3,
+  "real_directory_count": 121,
+  "file_candidate_count": 10000,
+  "synthetic_count": 0,
+  "pending_queue_count": 0,
+  "pending_queue_bytes": 0,
+  "draw_item_count": 20,
+  "visible_tile_count": 20,
+  "culled_tile_count": 0,
+  "last_paint_us": 1544,
+  "last_layout_us": 87,
+  "last_drain_us": 196,
+  "last_working_set_bytes": 954486784,
+  "metric_presence": [
+    {"metric":"viewer.space.render.paint_us","count":8},
+    {"metric":"viewer.space.layout.rebuild_us","count":5},
+    {"metric":"viewer.space.queue.posted_count","count":968},
+    {"metric":"viewer.space.queue.drain_us","count":8},
+    {"metric":"viewer.space.scan.total_us","count":1},
+    {"metric":"viewer.space.scan.files","count":1},
+    {"metric":"viewer.space.scan.folders","count":1},
+    {"metric":"viewer.space.scan.bytes","count":1}
+  ]
+}
