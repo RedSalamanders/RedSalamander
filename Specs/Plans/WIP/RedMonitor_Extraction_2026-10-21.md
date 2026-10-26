@@ -612,3 +612,11 @@ tooling, but actual WGC captures returned E_INVALIDARG. These remain failed rece
 The next candidate prioritizes the completed producer's queued tail, expresses
 the small fixture cap in DIPs, and adds exact capture/handle/child diagnostics.
 No test deadline, memory, handle or pixel predicate is relaxed.
+
+Public b5ea0d679 then passed both ASan builds, all eight selected standalone
+native controls and all 18 original-regression observations, with zero selected
+skips. Both public Debug builds passed; hosted x64 still rejected every WGC
+window item before pixel validation. The [focused evidence and failed CI log](../../TestRuns/4cb089111a23/Validation/2026-10-26_192709_PublicFocusedClosure/README.md)
+remain distinct. The capture helper now explicitly initializes Windows Runtime,
+preserves the caller's STA/MTA and balances cleanup after releasing capture
+objects. Current capture qualification and public migration remain open.

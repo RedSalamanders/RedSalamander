@@ -1,0 +1,56 @@
+{
+  "source": "b5ea0d679dd1fe7d4d418ee7e8d8cb49a7cb7d26",
+  "ownerPid": 45168,
+  "scope": "focused diagnostic only; never Full qualification",
+  "observerScriptSha256": "D6A20393D7E83D3DF64647341DF63DE8F5D4A7E74F163D46F5FCB04F6D3E93A0",
+  "label": "public-b5ea0d679-commands",
+  "suite": "Commands",
+  "configuration": "ASan Debug",
+  "filter": "theme_cycle_overlay_retention,cmd_fileops_move_breadcrumb_durable_lifecycle,cmd_pane_fileops_conflict_two_pending_task_identity,cmd_viewer_space_close_does_not_wait_for_retired_model_disposal,cmd_viewer_space_renderer_retirement_is_bounded,cmd_viewer_space_dense_files_exposes_more_than_legacy_topk",
+  "companionCases": [],
+  "repeat": 2,
+  "runId": "20261026T192412Z-45168-6b50e32d870c4e448cc2a1254d81ea3a",
+  "root": "E:\\RedSalamander.Perf",
+  "buildReceipt": "c6c00f817bc333e522a10f0d53bc05777cbd8c8ecb50583ca9fa43d5ba2ff11f",
+  "sourceSnapshot": "5ab2a604e257560f58345ba4df7eac23e942220a7fa15d6a4ea401251b1463f2",
+  "artifacts": [
+    {
+      "path": "E:\\RedSalamander.Perf\\repository-migration-20261024\\public-verification-582d644be\\.build\\x64\\ASan Debug\\RedSalamander.exe",
+      "sha256": "F7EE5870C8FFF5110F26A11879DE598F8CE49F6FF924635A3F4289EB34EEF148"
+    },
+    {
+      "path": "E:\\RedSalamander.Perf\\repository-migration-20261024\\public-verification-582d644be\\.build\\x64\\ASan Debug\\RedSalamanderSearchService.exe",
+      "sha256": "EDD10AC61316BFEED6DF44F4F6B9DF04402748A14CD3FEBEB442936FD4EF61C5"
+    },
+    {
+      "path": "E:\\RedSalamander.Perf\\repository-migration-20261024\\public-verification-582d644be\\.build\\x64\\ASan Debug\\Common.dll",
+      "sha256": "8C32E60ECAF75740C2C3D776F5B45757AAAAFF26A19493ABB839172A1480D5C7"
+    },
+    {
+      "path": "E:\\RedSalamander.Perf\\repository-migration-20261024\\public-verification-582d644be\\.build\\x64\\ASan Debug\\Plugins\\ViewerSpace.dll",
+      "sha256": "83D3F074D3A96F4E8972F636B92755BF9D1DF3ED2A499387CA3105A948D156C4"
+    }
+  ],
+  "desktopOperationSourceSha256": "F96309169EB717FC69D1EACF77228F3BAE66FC87ED7EA0FD6767122190C6D0D5",
+  "startedUtc": "2026-10-26T19:24:13.0122660Z",
+  "outcome": "focused_pass_only",
+  "log": "E:\\RedSalamander.Perf\\runs\\20261026T192412Z-45168-6b50e32d870c4e448cc2a1254d81ea3a\\artifacts\\residual-observer\\native-output.txt",
+  "errorLog": "E:\\RedSalamander.Perf\\runs\\20261026T192412Z-45168-6b50e32d870c4e448cc2a1254d81ea3a\\artifacts\\residual-observer\\native-error.txt",
+  "requestedMetricsPath": "E:\\RedSalamander.Perf\\runs\\20261026T192412Z-45168-6b50e32d870c4e448cc2a1254d81ea3a\\artifacts\\residual-observer\\residual-perf.jsonl",
+  "exitCode": 0,
+  "finishedUtc": "2026-10-26T19:26:03.4777147Z",
+  "arguments": [
+    "--commands-selftest",
+    "--selftest-case=theme_cycle_overlay_retention,cmd_fileops_move_breadcrumb_durable_lifecycle,cmd_pane_fileops_conflict_two_pending_task_identity,cmd_viewer_space_close_does_not_wait_for_retired_model_disposal,cmd_viewer_space_renderer_retirement_is_bounded,cmd_viewer_space_dense_files_exposes_more_than_legacy_topk",
+    "--selftest-repeat=2"
+  ],
+  "nativeResults": "E:\\RedSalamander.Perf\\runs\\20261026T192412Z-45168-6b50e32d870c4e448cc2a1254d81ea3a\\artifacts\\selftest\\last_run\\commands\\results.json",
+  "nativeResultsSha256": "BDBF597FB1E93AADAA4007148371F857AC025DE24CD1BD8C2B40859168646627",
+  "nativePassed": 12,
+  "nativeFailed": 0,
+  "nativeSkipped": 0,
+  "exactCaseCounts": true,
+  "metricsPaths": [
+    "E:\\RedSalamander.Perf\\runs\\20261026T192412Z-45168-6b50e32d870c4e448cc2a1254d81ea3a\\artifacts\\selftest\\last_run\\perf\\perf_metrics.jsonl"
+  ]
+}

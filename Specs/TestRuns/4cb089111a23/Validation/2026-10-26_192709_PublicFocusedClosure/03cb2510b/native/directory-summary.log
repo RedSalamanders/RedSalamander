@@ -1,0 +1,208 @@
+[PASS] Viewer harness acquires its isolated browser profile
+[INFO] Viewer harness WebView2 profile: E:\RedSalamander.Perf\runs\20261026T183746Z-100860-ca58820611d9496bb7e9cc6272d3713e\scratch\viewer-pe\webview2-44644-304038750
+[PASS] ViewerSpace protocol test executable path resolves
+[PASS] ViewerSpace protocol test locates ViewerSpace.dll
+[PASS] ViewerSpace protocol test loads the plugin
+[PASS] ViewerSpace protocol test resolves the plugin factory
+[PASS] summary valid copy-budget-one scenario creates ViewerSpace
+[PASS] summary valid copy-budget-one scenario exposes configuration
+[PASS] summary valid copy-budget-one scenario accepts bounded scan configuration
+[PASS] summary valid copy-budget-one scenario opens
+[PASS] summary valid copy-budget-one scenario creates its viewer window
+[PASS] ViewerSpace holds root Done while budgeted child-reference copy remains staged
+[PASS] summary valid copy-budget-one scenario reaches a quiescent terminal state. fault=(none) value=(none) expectedState=3 actualState=3 rootBytes=4656 scannedFiles=96 retainedFiles=96 effectiveFileBudget=7669 accepted=116 rejected=0 cappedFiles=0 retainedChildren=116 traversedDirectories=1 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=222336 summaryStageBytes=0 summaryChunkMaxBytes=64640 summaryCommitted=1 summaryRejected=0 modelValidationError=0 scratchCurrent=0 scratchPeak=72960 scratchRejected=0 activePathCurrent=0 activePathPeak=32 activePathRejected=0 stagingCurrent=0 stagingPeak=481272 stagingRejected=0
+[PASS] summary protocol commits all files and exact byte/folder totals once
+[PASS] summary chunks and pending queue stay within the byte budgets
+[PASS] summary valid copy-budget-one scenario consumes each queued update exactly once, including summary-blocked children (posted=77, coalesced=1, drained=76)
+[PASS] scan reports distinct provider-buffer, validation-scratch, and aggregate-path peaks
+[PASS] root Done resumes only after all prior children and summary files commit
+[PASS] summary valid copy-budget-one scenario closes
+[PASS] summary valid copy-budget-one scenario destroys its window
+[PASS] gated publication fixture creates its provider synchronization events
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario creates ViewerSpace
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario exposes configuration
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario accepts bounded scan configuration
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario opens
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario creates its viewer window
+[PASS] gated publication fixture captures its pre-scan layout baseline
+[PASS] first nested read is held after the root provider response
+[PASS] root data starts a sliced layout while the first nested provider read is gated
+[PASS] new child updates queue within the byte cap while the multi-turn layout builder is active
+[PASS] second nested read holds the scan while the first child has raised its root-directory ancestor
+[PASS] multi-turn map is presented with the first directory ancestor positive before Done
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario reaches a quiescent terminal state. fault=(none) value=(none) expectedState=3 actualState=3 rootBytes=7488 scannedFiles=1152 retainedFiles=1152 effectiveFileBudget=7669 accepted=1250 rejected=0 cappedFiles=0 retainedChildren=1250 traversedDirectories=99 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=672208 summaryStageBytes=0 summaryChunkMaxBytes=4832 summaryCommitted=99 summaryRejected=0 modelValidationError=0 scratchCurrent=0 scratchPeak=71680 scratchRejected=0 activePathCurrent=0 activePathPeak=6316 activePathRejected=0 stagingCurrent=0 stagingPeak=121088 stagingRejected=0
+[PASS] gated first-positive scan priority remains generation-local and capped at 16 jobs
+[PASS] gated scan settles the first root directory to its exact subtree byte total
+[PASS] gated ancestor tile presents its exact settled 78-byte subtree after the second child finishes
+[PASS] summary protocol commits all files and exact byte/folder totals once
+[PASS] summary chunks and pending queue stay within the byte budgets
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario consumes each queued update exactly once, including summary-blocked children (posted=1090, coalesced=282, drained=808)
+[PASS] scan reports distinct provider-buffer, validation-scratch, and aggregate-path peaks
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario retains exact directory/traversal/child totals (dirs=99, traversed=99, children=1250, retainedChildren=1250)
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario closes
+[PASS] 96-directory continuously arriving nested-ancestor publication scenario destroys its window
+[PASS] gated publication callbacks and worker filesystem references drain after close
+[PASS] 200k files across 20k directories production-cap compatibility creates ViewerSpace
+[PASS] 200k files across 20k directories production-cap compatibility exposes configuration
+[PASS] 200k files across 20k directories production-cap compatibility accepts bounded scan configuration
+[PASS] 200k files across 20k directories production-cap compatibility opens
+[PASS] 200k files across 20k directories production-cap compatibility creates its viewer window
+[INFO] 200k compatibility progress: files=12030 pending=8468 bytes=8263696 drained=28550 layoutActive=false layoutTurns=85 analysisActive=false summaryCommitted=1204
+[INFO] 200k compatibility progress: files=67920 pending=8423 bytes=8225664 drained=68230 layoutActive=false layoutTurns=85 analysisActive=false summaryCommitted=6792
+[INFO] 200k compatibility progress: files=122720 pending=8414 bytes=8213664 drained=107142 layoutActive=false layoutTurns=85 analysisActive=false summaryCommitted=12273
+[INFO] 200k compatibility progress: files=178430 pending=8459 bytes=8256096 drained=146694 layoutActive=false layoutTurns=85 analysisActive=false summaryCommitted=17844
+[INFO] 200k compatibility progress: files=194300 pending=4055 bytes=3958016 drained=157958 layoutActive=false layoutTurns=122 analysisActive=true summaryCommitted=19430
+[INFO] 200k compatibility progress: files=194840 pending=3671 bytes=3583520 drained=158342 layoutActive=false layoutTurns=184 analysisActive=true summaryCommitted=19484
+[INFO] 200k compatibility progress: files=195200 pending=3415 bytes=3333856 drained=158598 layoutActive=false layoutTurns=224 analysisActive=true summaryCommitted=19520
+[INFO] 200k compatibility progress: files=195740 pending=3031 bytes=2959360 drained=158982 layoutActive=false layoutTurns=285 analysisActive=true summaryCommitted=19574
+[INFO] 200k compatibility progress: files=196100 pending=2775 bytes=2705280 drained=159238 layoutActive=false layoutTurns=326 analysisActive=true summaryCommitted=19610
+[INFO] 200k compatibility progress: files=196460 pending=2519 bytes=2455616 drained=159494 layoutActive=false layoutTurns=367 analysisActive=true summaryCommitted=19646
+[INFO] 200k compatibility progress: files=197000 pending=2135 bytes=2081120 drained=159878 layoutActive=false layoutTurns=434 analysisActive=true summaryCommitted=19701
+[INFO] 200k compatibility progress: files=197360 pending=1879 bytes=1831456 drained=160134 layoutActive=false layoutTurns=477 analysisActive=true summaryCommitted=19737
+[INFO] 200k compatibility progress: files=197900 pending=1495 bytes=1456960 drained=160518 layoutActive=true layoutTurns=528 analysisActive=true summaryCommitted=19791
+[INFO] 200k compatibility progress: files=198260 pending=1239 bytes=1207296 drained=160774 layoutActive=false layoutTurns=578 analysisActive=true summaryCommitted=19827
+[INFO] 200k compatibility progress: files=198620 pending=983 bytes=957632 drained=161030 layoutActive=false layoutTurns=618 analysisActive=true summaryCommitted=19863
+[INFO] 200k compatibility progress: files=199160 pending=599 bytes=583136 drained=161414 layoutActive=true layoutTurns=669 analysisActive=true summaryCommitted=19917
+[INFO] 200k compatibility progress: files=199520 pending=343 bytes=333472 drained=161670 layoutActive=false layoutTurns=722 analysisActive=true summaryCommitted=19953
+[FAIL] 200k files across 20k directories production-cap compatibility reaches a quiescent terminal state. fault=(none) value=(none) expectedState=3 actualState=2 rootBytes=199900 scannedFiles=199890 retainedFiles=199880 effectiveFileBudget=7669 accepted=0 rejected=0 cappedFiles=0 retainedChildren=0 traversedDirectories=0 pendingQueueCount=87 pendingQueueBytes=83792 pendingQueuePeakBytes=8388544 summaryStageBytes=0 summaryChunkMaxBytes=4768 summaryCommitted=19989 summaryRejected=0 modelValidationError=0 scratchCurrent=0 scratchPeak=1345536 scratchRejected=0 activePathCurrent=0 activePathPeak=1360032 activePathRejected=0 stagingCurrent=0 stagingPeak=11586560 stagingRejected=0
+[FAIL] summary protocol commits all files and exact byte/folder totals once
+[PASS] summary chunks and pending queue stay within the byte budgets
+[FAIL] 200k files across 20k directories production-cap compatibility consumes each queued update exactly once, including summary-blocked children (posted=220013, coalesced=58000, drained=161926)
+[PASS] scan reports distinct provider-buffer, validation-scratch, and aggregate-path peaks
+[FAIL] 200k files across 20k directories production-cap compatibility retains exact directory/traversal/child totals (dirs=20001, traversed=0, children=219880, retainedChildren=0)
+[PASS] scale fixture preserves the specified production resource ceilings
+[FAIL] 200k/20k synthetic tree completes under unchanged production directory/file/reference/arena/name/provider limits
+[PASS] 200k/20k synthetic tree stays within independent queue/chunk/scratch/path/staging budgets
+[PASS] 200k files across 20k directories production-cap compatibility closes
+[PASS] 200k files across 20k directories production-cap compatibility destroys its window
+[PASS] 100k flat directory adaptive top-K staging scenario creates ViewerSpace
+[PASS] 100k flat directory adaptive top-K staging scenario exposes configuration
+[PASS] 100k flat directory adaptive top-K staging scenario accepts bounded scan configuration
+[PASS] 100k flat directory adaptive top-K staging scenario opens
+[PASS] 100k flat directory adaptive top-K staging scenario creates its viewer window
+[PASS] 100k flat directory adaptive top-K staging scenario reaches a quiescent terminal state. fault=(none) value=(none) expectedState=3 actualState=3 rootBytes=5000050000 scannedFiles=100000 retainedFiles=7669 effectiveFileBudget=7669 accepted=100000 rejected=0 cappedFiles=92331 retainedChildren=7669 traversedDirectories=1 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=781632 summaryStageBytes=0 summaryChunkMaxBytes=6496 summaryCommitted=1 summaryRejected=0 modelValidationError=0 scratchCurrent=0 scratchPeak=6465536 scratchRejected=0 activePathCurrent=0 activePathPeak=32 activePathRejected=0 stagingCurrent=0 stagingPeak=4453348 stagingRejected=0
+[PASS] summary protocol commits all files and exact byte/folder totals once
+[PASS] summary chunks and pending queue stay within the byte budgets
+[PASS] 100k flat directory adaptive top-K staging scenario consumes each queued update exactly once, including summary-blocked children (posted=401, coalesced=214, drained=187)
+[PASS] scan reports distinct provider-buffer, validation-scratch, and aggregate-path peaks
+[PASS] 100k flat directory adaptive top-K staging scenario closes
+[PASS] 100k flat directory adaptive top-K staging scenario destroys its window
+[PASS] summary stage cancellation scenario creates ViewerSpace
+[PASS] summary stage cancellation scenario exposes configuration
+[PASS] summary stage cancellation scenario accepts bounded scan configuration
+[PASS] summary stage cancellation scenario opens
+[PASS] summary stage cancellation scenario creates its viewer window
+[PASS] ViewerSpace holds root Done while budgeted child-reference copy remains staged
+[PASS] ViewerSpace cancellation fixture reaches a live deferred summary stage
+[PASS] summary stage cancellation scenario cancels with a staged summary
+[PASS] summary stage cancellation scenario destroys its window after staged cancellation
+[PASS] summary missing End scenario creates ViewerSpace
+[PASS] summary missing End scenario exposes configuration
+[PASS] summary missing End scenario accepts bounded scan configuration
+[PASS] summary missing End scenario opens
+[PASS] summary missing End scenario creates its viewer window
+[PASS] summary missing End scenario reaches a quiescent terminal state. fault=REDSALAMANDER_VIEWERSPACE_TEST_SUMMARY_MISSING_END value=1 expectedState=4 actualState=4 rootBytes=4656 scannedFiles=96 retainedFiles=0 effectiveFileBudget=7669 accepted=96 rejected=0 cappedFiles=0 retainedChildren=96 traversedDirectories=1 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=200160 summaryStageBytes=0 summaryChunkMaxBytes=64640 summaryCommitted=0 summaryRejected=1 modelValidationError=0 scratchCurrent=0 scratchPeak=71680 scratchRejected=0 activePathCurrent=0 activePathPeak=32 activePathRejected=0 stagingCurrent=0 stagingPeak=470472 stagingRejected=0
+[PASS] malformed summary traffic is rejected without publishing partial file records
+[PASS] summary missing End scenario closes
+[PASS] summary missing End scenario destroys its window
+[PASS] summary duplicate chunk scenario creates ViewerSpace
+[PASS] summary duplicate chunk scenario exposes configuration
+[PASS] summary duplicate chunk scenario accepts bounded scan configuration
+[PASS] summary duplicate chunk scenario opens
+[PASS] summary duplicate chunk scenario creates its viewer window
+[PASS] summary duplicate chunk scenario reaches a quiescent terminal state. fault=REDSALAMANDER_VIEWERSPACE_TEST_SUMMARY_DUPLICATE_CHUNK value=1 expectedState=4 actualState=4 rootBytes=4656 scannedFiles=96 retainedFiles=0 effectiveFileBudget=7669 accepted=96 rejected=0 cappedFiles=0 retainedChildren=96 traversedDirectories=1 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=263168 summaryStageBytes=0 summaryChunkMaxBytes=64640 summaryCommitted=0 summaryRejected=1 modelValidationError=0 scratchCurrent=0 scratchPeak=71680 scratchRejected=0 activePathCurrent=0 activePathPeak=32 activePathRejected=0 stagingCurrent=0 stagingPeak=470472 stagingRejected=0
+[PASS] malformed summary traffic is rejected without publishing partial file records
+[PASS] summary duplicate chunk scenario closes
+[PASS] summary duplicate chunk scenario destroys its window
+[PASS] summary out-of-order chunk scenario creates ViewerSpace
+[PASS] summary out-of-order chunk scenario exposes configuration
+[PASS] summary out-of-order chunk scenario accepts bounded scan configuration
+[PASS] summary out-of-order chunk scenario opens
+[PASS] summary out-of-order chunk scenario creates its viewer window
+[PASS] summary out-of-order chunk scenario reaches a quiescent terminal state. fault=REDSALAMANDER_VIEWERSPACE_TEST_SUMMARY_OUT_OF_ORDER value=1 expectedState=4 actualState=4 rootBytes=4656 scannedFiles=96 retainedFiles=0 effectiveFileBudget=7669 accepted=96 rejected=0 cappedFiles=0 retainedChildren=96 traversedDirectories=1 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=200512 summaryStageBytes=0 summaryChunkMaxBytes=0 summaryCommitted=0 summaryRejected=1 modelValidationError=0 scratchCurrent=0 scratchPeak=71680 scratchRejected=0 activePathCurrent=0 activePathPeak=32 activePathRejected=0 stagingCurrent=0 stagingPeak=470472 stagingRejected=0
+[PASS] malformed summary traffic is rejected without publishing partial file records
+[PASS] summary out-of-order chunk scenario closes
+[PASS] summary out-of-order chunk scenario destroys its window
+[PASS] aggregate validation scratch cap scenario creates ViewerSpace
+[PASS] aggregate validation scratch cap scenario exposes configuration
+[PASS] aggregate validation scratch cap scenario accepts bounded scan configuration
+[PASS] aggregate validation scratch cap scenario opens
+[PASS] aggregate validation scratch cap scenario creates its viewer window
+[PASS] aggregate validation scratch cap scenario reaches a quiescent terminal state. fault=(none) value=(none) expectedState=4 actualState=4 rootBytes=0 scannedFiles=0 retainedFiles=0 effectiveFileBudget=7669 accepted=0 rejected=1 cappedFiles=0 retainedChildren=0 traversedDirectories=1 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=2816 summaryStageBytes=0 summaryChunkMaxBytes=0 summaryCommitted=0 summaryRejected=0 modelValidationError=20 scratchCurrent=0 scratchPeak=0 scratchRejected=1 activePathCurrent=0 activePathPeak=32 activePathRejected=0 stagingCurrent=0 stagingPeak=0 stagingRejected=0
+[PASS] aggregate validation scratch admission fails closed before allocating listing scratch
+[PASS] aggregate validation scratch cap scenario closes
+[PASS] aggregate validation scratch cap scenario destroys its window
+[PASS] aggregate active path cap scenario creates ViewerSpace
+[PASS] aggregate active path cap scenario exposes configuration
+[PASS] aggregate active path cap scenario accepts bounded scan configuration
+[PASS] aggregate active path cap scenario opens
+[PASS] aggregate active path cap scenario creates its viewer window
+[PASS] aggregate active path cap scenario reaches a quiescent terminal state. fault=(none) value=(none) expectedState=4 actualState=4 rootBytes=4656 scannedFiles=96 retainedFiles=0 effectiveFileBudget=7669 accepted=116 rejected=1 cappedFiles=0 retainedChildren=0 traversedDirectories=1 pendingQueueCount=0 pendingQueueBytes=0 pendingQueuePeakBytes=2464 summaryStageBytes=0 summaryChunkMaxBytes=0 summaryCommitted=0 summaryRejected=0 modelValidationError=20 scratchCurrent=0 scratchPeak=72960 scratchRejected=0 activePathCurrent=0 activePathPeak=32 activePathRejected=1 stagingCurrent=0 stagingPeak=481272 stagingRejected=0
+[PASS] aggregate active-path admission rejects before allocating paths beyond the test cap
+[PASS] aggregate active path cap scenario closes
+[PASS] aggregate active path cap scenario destroys its window
+[PASS] cross-generation budget test creates delayed provider gate
+[PASS] cross-generation budget test creates ViewerSpace
+[PASS] cross-generation budget test exposes configuration
+[PASS] cross-generation budget test starts gated scan
+[PASS] first generation holds its path lease inside delayed provider read
+[PASS] first generation exposes its live aggregate path reservation
+[PASS] in-flight screenshot uses the authorized artifact sandbox
+[PASS] in-flight ViewerSpace screenshot saved: E:\RedSalamander.Perf\runs\20261026T183746Z-100860-ca58820611d9496bb7e9cc6272d3713e\artifacts\viewer-pe\viewer-space-inflight-304233687\viewer-space-inflight-scan.png (hr=0x00000000)
+[PASS] in-flight screenshot writes scan and DPI provenance beside the PNG
+[PASS] second generation rebuilds while first provider call remains blocked
+[PASS] new generation cannot reset or over-admit the retired generation's live path lease
+[PASS] delayed first provider call retires after release
+[PASS] retired generation releases its shared path lease exactly once
+[PASS] third generation rebuilds after the old lease retires
+[PASS] rebuild can reserve the path after the retired generation exits
+[PASS] cross-generation budget test closes its owned window
+[PASS] cross-generation scratch test creates ViewerSpace
+[PASS] cross-generation scratch test starts the first generation
+[PASS] cross-generation scratch test creates its window
+[PASS] initial empty scan prepares the scratch-pause test window
+[PASS] cross-generation scratch test arms the after-admission gate
+[PASS] cross-generation scratch test starts the gated listing
+[PASS] producer pauses immediately after validation scratch admission
+[PASS] paused generation retains its provider buffer while validating
+[PASS] cross-generation scratch test starts a rebuild
+[PASS] rebuild remains within the aggregate scratch cap while the retired generation owns its reservation
+[PASS] new generation proceeds after the prior scratch lease releases and the aggregate peak stays bounded
+[PASS] cross-generation scratch test closes its owned window
+[PASS] worker-staging rejection test creates ViewerSpace
+[PASS] worker-staging rejection test opens the long-name fixture
+[PASS] worker-staging rejection test creates its viewer window
+[PASS] tiny worker-staging budget rejects before retaining names or publishing a partial listing
+[PASS] worker-staging rejection test closes its owned window
+[PASS] worker-staging test creates its initial-read barrier
+[PASS] worker-staging pause events are created
+[PASS] cross-generation worker-staging test creates ViewerSpace
+[PASS] cross-generation worker-staging test opens the long-name fixture
+[PASS] cross-generation worker-staging test holds the initial root read before arming the pause
+[PASS] cross-generation worker-staging test arms the post-copy pause
+[PASS] initial blocked root read exits before the worker-staging generation starts
+[PASS] worker-staging test starts its first synthetic listing after the pause is armed
+[PASS] first worker holds the copied-name staging reservation at the deterministic pause
+[PASS] paused worker-staging generation retains its provider buffer
+[PASS] replacement generation starts while the first generation retains worker staging
+[PASS] replacement reaches the worker-staging admission while the prior generation retains its lease
+[PASS] replacement waits without rejection, over-admission, or partial listing while the retired worker owns its lease
+[PASS] replacement completes after the held worker releases and its aggregate peak stays within budget
+[PASS] next generation retries after the replacement completes and its staging lease drains
+[PASS] worker-staging capacity is reusable after retirement and its aggregate peak stays within the test budget
+[PASS] cross-generation worker-staging test closes its owned window
+ViewerPETests failed.
+[PASS] Viewer harness acquires its isolated browser profile
+[INFO] Viewer harness WebView2 profile: E:\RedSalamander.Perf\runs\20261026T183746Z-100860-ca58820611d9496bb7e9cc6272d3713e\scratch\viewer-pe\webview2-24580-304038718
+[PASS] TestViewerSpaceDirectorySummaryProtocol harness path resolves
+[PASS] TestViewerSpaceDirectorySummaryProtocol fresh harness kill-on-close job object is created
+[PASS] TestViewerSpaceDirectorySummaryProtocol fresh harness kill-on-close job object is configured
+[PASS] TestViewerSpaceDirectorySummaryProtocol fresh harness process launches
+[PASS] TestViewerSpaceDirectorySummaryProtocol fresh harness process joins the kill-on-close job
+[PASS] TestViewerSpaceDirectorySummaryProtocol fresh harness process resumes
+[PASS] TestViewerSpaceDirectorySummaryProtocol fresh harness process exits before timeout
+[PASS] TestViewerSpaceDirectorySummaryProtocol fresh harness process reports an exit code
+[FAIL] TestViewerSpaceDirectorySummaryProtocol fresh harness run passes
+[PASS] TestViewerSpaceDirectorySummaryProtocol owned job has no active processes before desktop restoration
+[PASS] Viewer parent selection matches a registered case in the requested activation class
+ViewerPETests failed.

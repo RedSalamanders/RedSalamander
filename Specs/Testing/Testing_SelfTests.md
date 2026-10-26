@@ -2053,6 +2053,10 @@ and writes PNG through WIC. Its owned capture/readback device uses WARP; it stil
 application-composed HWND and does not change the application's rendering device. It rejects foreign, hidden or minimized windows and output paths outside
 the marked test sandbox. Frame readiness is event-driven and bounded. Missing capture support is a
 failure, never permission to substitute a desktop screenshot or a partial renderer layer.
+The helper MUST initialize and balance Windows Runtime use in the calling thread's existing
+STA/MTA; COM-only initialization does not meet that API precondition. Capture objects and
+event registrations MUST be released before the matching runtime cleanup. Failure diagnostics
+record the API stage and the process's session, window station and desktop.
 
 ViewerSpace lifecycle fixtures fit their 1200 by 720 DIP target to the current monitor work area.
 The analysis-visibility, exact lifecycle state, no-activation and complete-layer pixel witnesses remain mandatory.

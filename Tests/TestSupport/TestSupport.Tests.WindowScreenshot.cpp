@@ -6,6 +6,7 @@
 #include <d3d11.h>
 #include <dwmapi.h>
 #include <dxgi1_2.h>
+#include <roapi.h>
 #include <wil/com.h>
 #include <wil/resource.h>
 #include <wincodec.h>
@@ -17,6 +18,7 @@
 #pragma warning(pop)
 
 #include <algorithm>
+#include <array>
 #include <cstdio>
 #include <cstdlib>
 #include <cwchar>
@@ -45,6 +47,24 @@ HRESULT RedSalamander::TestSupport::SaveWindowScreenshot(HWND window, const std:
                       static_cast<unsigned long long>(reinterpret_cast<uintptr_t>(window)),
                       GetDpiForWindow(window),
                       probes.size());
+        DWORD session = 0u;
+        static_cast<void>(ProcessIdToSessionId(GetCurrentProcessId(), &session));
+        std::array<wchar_t, 128> station{};
+        std::array<wchar_t, 128> desktop{};
+        DWORD required = 0u;
+        static_cast<void>(GetUserObjectInformationW(GetProcessWindowStation(), UOI_NAME, station.data(), static_cast<DWORD>(sizeof(station)), &required));
+        static_cast<void>(
+            GetUserObjectInformationW(GetThreadDesktop(GetCurrentThreadId()), UOI_NAME, desktop.data(), static_cast<DWORD>(sizeof(desktop)), &required));
+        DWORD cloaked = 0u;
+        static_cast<void>(DwmGetWindowAttribute(window, DWMWA_CLOAKED, &cloaked, sizeof(cloaked)));
+        std::fwprintf(stderr,
+                      L"[INFO] WGC process context: session=%lu station=%ls desktop=%ls visible=%d iconic=%d cloaked=%lu\n",
+                      session,
+                      station.data(),
+                      desktop.data(),
+                      IsWindowVisible(window),
+                      IsIconic(window),
+                      cloaked);
         return result;
     };
     for (auto& probe : probes)
@@ -67,6 +87,17 @@ HRESULT RedSalamander::TestSupport::SaveWindowScreenshot(HWND window, const std:
     // them to a failed capture; it never substitutes a desktop image or a partial layer.
     try
     {
+        // COM initialization alone does not initialize the Windows Runtime.
+        // Preserve an existing STA/MTA and balance this call after every WGC
+        // object, event revoker and session has been released.
+        APTTYPE apartment          = APTTYPE_CURRENT;
+        APTTYPEQUALIFIER qualifier = APTTYPEQUALIFIER_NONE;
+        const HRESULT apartmentHr  = CoGetApartmentType(&apartment, &qualifier);
+        const RO_INIT_TYPE runtimeType =
+            SUCCEEDED(apartmentHr) && (apartment == APTTYPE_STA || apartment == APTTYPE_MAINSTA) ? RO_INIT_SINGLETHREADED : RO_INIT_MULTITHREADED;
+        stage = L"Windows Runtime apartment";
+        winrt::check_hresult(RoInitialize(runtimeType));
+        [[maybe_unused]] const wil::unique_rouninitialize_call uninitializeRuntime;
         namespace Capture  = winrt::Windows::Graphics::Capture;
         namespace Direct3D = winrt::Windows::Graphics::DirectX::Direct3D11;
         if (! Capture::GraphicsCaptureSession::IsSupported())
