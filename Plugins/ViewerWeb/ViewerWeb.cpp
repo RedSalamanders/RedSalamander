@@ -4183,16 +4183,6 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
         return S_FALSE;
     }
 
-    std::wstring userDataFolder;
-    if (! g_sharedEnvironment.environment && ! g_sharedEnvironment.createInProgress)
-    {
-        const HRESULT folderHr = GetWebView2UserDataFolder(userDataFolder);
-        if (FAILED(folderHr))
-        {
-            return folderHr;
-        }
-    }
-
     _webViewInitInProgress = true;
     AddRef();
     const uint64_t sharedEnvironmentGeneration = BeginSharedEnvironmentUse();
@@ -4208,6 +4198,16 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
     {
         g_sharedEnvironment.pendingConsumers.push_back({this, hwnd});
         return S_FALSE;
+    }
+
+    // Keep the original lifetime guard across profile/shell resolution.
+    std::wstring userDataFolder;
+    const HRESULT folderHr = GetWebView2UserDataFolder(userDataFolder);
+    if (FAILED(folderHr))
+    {
+        _webViewInitInProgress = false;
+        Release();
+        return folderHr;
     }
 
     // First caller — create the shared environment.
