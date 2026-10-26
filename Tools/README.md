@@ -46,6 +46,9 @@ invalidates coverage even when `ci.yml` is unchanged. Recompute the reviewed man
 after execution-policy changes; missing or unresolved local dependencies retain local work.
 
 The machine-readable source of truth is [`tool-inventory.json`](tool-inventory.json).
+Ghostty lock rejection retains field-specific schema diagnostics when PowerShell's `Test-Json`
+returns false without nested error records. The fallback uses the shipped schema engine with
+reference fetching disabled and cannot admit a rejected lock.
 Artifact action upgrades also update `ReleaseWorkflowPolicy.Tests.ps1` pin
 assertions and verify build, release, nightly, and qualification consumers together.
 The exact-byte historical Gate0 workflow is excluded from Dependabot updates. Its older artifact

@@ -1,0 +1,1636 @@
+{
+  "publicPredecessor": "d36cb3b7f66c8bb61ae05bf788ed70b97ada213d",
+  "failedCiRun": 40358566877,
+  "nativeBuildsPassed": [
+    "x64 Debug",
+    "ARM64 Debug"
+  ],
+  "suitePrFailed": true,
+  "localNativeBaselineSource": "582d644be5e6147acb0b8a8aae05511b75f64d17",
+  "localBaselineDoesNotPromoteFailedCi": true,
+  "files": [
+    {
+      "file": "pr142-x64-d36cb3b7-job.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7.log",
+      "sha256": "CB863C084155B04445A77B0E935648D09C23333296A68C068AE4A4BBD7C59D68",
+      "bytes": 984096
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/run-all-tests-results-v1.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\run-all-tests-results-v1.json",
+      "sha256": "B29F603339F35633CBBE2D7A4CA6D8BE6DA439B507BED2A64F2271E8A6885829",
+      "bytes": 239075
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/run-all-tests-results.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "sha256": "BF43F7EABCE46B319BC26EF343B24D24F867B687340EA0C50665B37A28CA33C1",
+      "bytes": 9228
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/viewer-pe/documentation/scenarios.tsv",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\viewer-pe\\documentation\\scenarios.tsv",
+      "sha256": "F1438590C4C6EF59742E94C7C989541B99D5DBA7ED8CD6F977227FA85BA4EAC0",
+      "bytes": 293
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/viewer-pe/viewer-space-inflight-2805562/viewer-space-inflight-scan.provenance.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\viewer-pe\\viewer-space-inflight-2805562\\viewer-space-inflight-scan.provenance.txt",
+      "sha256": "AD6F6954134AFB7DD12B665DECC0AF47990EA57CB90904AC9A4EF15E492CCFF0",
+      "bytes": 240
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.plugin-contract/evidence/131f3ab79a74e7366d19aa30575c9c321867f002bfe947f0857467ca4ae814ed.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.plugin-contract\\evidence\\131f3ab79a74e7366d19aa30575c9c321867f002bfe947f0857467ca4ae814ed.json",
+      "sha256": "D60B5464297D99B78306449DFAB118A4B74359B256B547AD3C5D4E98349FFB0E",
+      "bytes": 21580
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.plugin-contract/results/PluginContractTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.plugin-contract\\results\\PluginContractTests.output.log",
+      "sha256": "AABD7A36D4ED74BF9CFFAAF0CA80EE98E7D5FE90FA43FB0DB6A0E1C2DE938705",
+      "bytes": 197647
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.plugin-contract/terminal-results/a92186103be3368b899cba76e2c223f9114416d35d7187fabb0af91b6eb0042e.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.plugin-contract\\terminal-results\\a92186103be3368b899cba76e2c223f9114416d35d7187fabb0af91b6eb0042e.json",
+      "sha256": "75E382DCC0432BF8A6A7F23CA367BDFDB1D5113D048CFF507EA8086C85937873",
+      "bytes": 382
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/tooling.pester/evidence/9ae93eb0e15383e1a63cc1cb3f6740c2d6905d15dc4ffc5c58e5d006245098ce.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\tooling.pester\\evidence\\9ae93eb0e15383e1a63cc1cb3f6740c2d6905d15dc4ffc5c58e5d006245098ce.json",
+      "sha256": "E6506FC6C98D33FC9AF791A1ACE2460933ECAEEE9E8E20E4325BDC9722C48322",
+      "bytes": 21389
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/tooling.pester/terminal-results/1dc6b80293e6d77bb5a2e33969ed439744c1c491d75a7959f9f0ea8dfb870432.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\tooling.pester\\terminal-results\\1dc6b80293e6d77bb5a2e33969ed439744c1c491d75a7959f9f0ea8dfb870432.json",
+      "sha256": "C5C416A1A7912BC5865520C0239578898FC2F8CE10EE232D541EBACCDE19429C",
+      "bytes": 392
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/viewer-pe.noninteractive/evidence/662a091f3c56db38fa19e360471c061d5cd7e6b6050f45f7213303980a35530c.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\viewer-pe.noninteractive\\evidence\\662a091f3c56db38fa19e360471c061d5cd7e6b6050f45f7213303980a35530c.json",
+      "sha256": "F5806BA60821922F33B0405F3167362705D4B707C08BF8C411963B17E4404208",
+      "bytes": 21586
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/viewer-pe.noninteractive/results/ViewerPETests.Noninteractive.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\viewer-pe.noninteractive\\results\\ViewerPETests.Noninteractive.output.log",
+      "sha256": "852CE944860CBB744BB83D45ECA06EDEDBEF47CB33B55163A0B6F9383865E23A",
+      "bytes": 204723
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/viewer-pe.noninteractive/terminal-results/d4a684dc49d02a7cf0eb3ee84f5dc3cc9d54d8b8e2860fb0e8e20b7954da20a0.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\viewer-pe.noninteractive\\terminal-results\\d4a684dc49d02a7cf0eb3ee84f5dc3cc9d54d8b8e2860fb0e8e20b7954da20a0.json",
+      "sha256": "AB82E494F95967EC0E4FAAE1A64BFF48D6581C1900CC65CF53B0F213C43A379D",
+      "bytes": 380
+    },
+    {
+      "file": "pr142-arm64-d36cb3b7-job.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7.log",
+      "sha256": "75F7E32841B640A6732EF653FEBE63D72249660D2FFC08427629F521136390B8",
+      "bytes": 1018916
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/run-all-tests-results-v1.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\run-all-tests-results-v1.json",
+      "sha256": "6672C18AAB95F696B39ADEE7FB9DDCD6507EA12391D4A68FCA587DB3E2183715",
+      "bytes": 238805
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/run-all-tests-results.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\run-all-tests-results.json",
+      "sha256": "E47DB1765AD2BBF2CFD49A67245508F4714D8A79D8D1A56A83986B20ABC7B024",
+      "bytes": 9353
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/viewer-pe/documentation/scenarios.tsv",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\viewer-pe\\documentation\\scenarios.tsv",
+      "sha256": "F1438590C4C6EF59742E94C7C989541B99D5DBA7ED8CD6F977227FA85BA4EAC0",
+      "bytes": 293
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/viewer-pe/viewer-space-inflight-3618078/viewer-space-inflight-scan.provenance.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\viewer-pe\\viewer-space-inflight-3618078\\viewer-space-inflight-scan.provenance.txt",
+      "sha256": "32EC4EA1BE3EADF3DD16202960BB0062D8438EA2789F1D31738E5B370B7E142E",
+      "bytes": 242
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.plugin-contract/evidence/d8395768e905542bc7bd83294736dc2f3988d891e699eaa9fb6d6375c5282183.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.plugin-contract\\evidence\\d8395768e905542bc7bd83294736dc2f3988d891e699eaa9fb6d6375c5282183.json",
+      "sha256": "47E2D27CEFAD64C2D8F4B1F58F158188AF44C326401A7454FA3080B866280C4F",
+      "bytes": 21592
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.plugin-contract/results/PluginContractTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.plugin-contract\\results\\PluginContractTests.output.log",
+      "sha256": "781A8EDD25CADBEF72D188C294B787B9E895E81DB6538E50D43ECB6A6205EE0A",
+      "bytes": 197648
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.plugin-contract/terminal-results/ff500477519044648df06e162efd19813b0bcc2b86dacb41220205a404dc4675.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.plugin-contract\\terminal-results\\ff500477519044648df06e162efd19813b0bcc2b86dacb41220205a404dc4675.json",
+      "sha256": "BA9AA4FA826794F7C5549BFD27C5207E77A69FD977475445C24F53D797E40136",
+      "bytes": 343
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/tooling.pester/evidence/db883a2852fe8dc03f1c0b168f51d32e1cf15eb45d55a081bcefd724746395ab.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\tooling.pester\\evidence\\db883a2852fe8dc03f1c0b168f51d32e1cf15eb45d55a081bcefd724746395ab.json",
+      "sha256": "85F7424D251B8369152A6B64457527AF71482CC240B29D6E25524B9CA2532521",
+      "bytes": 21389
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/tooling.pester/terminal-results/e3e6e6a58f130edd9b5eafcb02b8990300d052c8e00409b8f64c8eef261f5371.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\tooling.pester\\terminal-results\\e3e6e6a58f130edd9b5eafcb02b8990300d052c8e00409b8f64c8eef261f5371.json",
+      "sha256": "71FC216D8756A26AE360C015F3268BDE9B3313A84EA3A68B85146CCFB305A3BB",
+      "bytes": 392
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/viewer-pe.noninteractive/evidence/5056a2c65db474d4fa1560d0f53d8c402453c84c03671841f71029d5d8867618.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\viewer-pe.noninteractive\\evidence\\5056a2c65db474d4fa1560d0f53d8c402453c84c03671841f71029d5d8867618.json",
+      "sha256": "AE90BDF601B0716BEED78BFD91E2FFD66611824E0CF4875252768153F0E2AFB6",
+      "bytes": 21586
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/viewer-pe.noninteractive/results/ViewerPETests.Noninteractive.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\viewer-pe.noninteractive\\results\\ViewerPETests.Noninteractive.output.log",
+      "sha256": "EAD8CFFFB33CB5DFD4889F1F11D8B859522D497C8ED5BC2AE66ADEFE5DF5A706",
+      "bytes": 204706
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/viewer-pe.noninteractive/terminal-results/d4a684dc49d02a7cf0eb3ee84f5dc3cc9d54d8b8e2860fb0e8e20b7954da20a0.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\viewer-pe.noninteractive\\terminal-results\\d4a684dc49d02a7cf0eb3ee84f5dc3cc9d54d8b8e2860fb0e8e20b7954da20a0.json",
+      "sha256": "AB82E494F95967EC0E4FAAE1A64BFF48D6581C1900CC65CF53B0F213C43A379D",
+      "bytes": 380
+    },
+    {
+      "file": "public-ci-native-baseline.json.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\public-ci-native-baseline.json",
+      "sha256": "6232C608B7D90B0BBC6B255471687BCB7D9DBBC02ABECAD2584F241EB23AD66D",
+      "bytes": 3178
+    },
+    {
+      "file": "public-ci-native-baseline-singlecpu.json.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\public-ci-native-baseline-singlecpu.json",
+      "sha256": "D28389B8D91AFD084C82068F021E2BECB43BD2E78227C4E851884F90A8BC8A5A",
+      "bytes": 769
+    },
+    {
+      "file": "Invoke-PublicCiNativeBaseline.ps1.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\Invoke-PublicCiNativeBaseline.ps1",
+      "sha256": "1D4E4E075FF8E8A73B81616B1645823C8B93323B30C516EACDEF4B5D07942DD2",
+      "bytes": 4257
+    },
+    {
+      "file": "Invoke-OwnSingleCpuViewer.ps1.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\Invoke-OwnSingleCpuViewer.ps1",
+      "sha256": "E9E23F10ADFCF91E8C05863312A8040CE8143B77D6E5ED2BF99D4CEFF0802F9D",
+      "bytes": 736
+    }
+  ],
+  "externalOnly": [
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/CrashHandlingTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\CrashHandlingTests.output.log",
+      "sha256": "BE9424679E96712FF11B7874E6AE2CF8C2658D8392404B1C4924D563DE803FF2",
+      "bytes": 1718
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/entry-fingerprints.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\entry-fingerprints.json",
+      "sha256": "2F2ACE7D0454135A55D6491B05E897E388C9021FB1B86A392C8422A269628646",
+      "bytes": 13939
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/FileSystemCurlTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\FileSystemCurlTests.output.log",
+      "sha256": "CC85669BA3041B35B1573FD08112FDBD462D036B58ED69A9243BDF27F3473900",
+      "bytes": 29
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/LocalizationTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\LocalizationTests.output.log",
+      "sha256": "07C3B184725869A594F017686418F3601137EFE177BE804D2BD4FA4ECBD18AB2",
+      "bytes": 5064
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/PerformanceTests2.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\PerformanceTests2.output.log",
+      "sha256": "9687E593E5DBABEEE98F339BE5F391E7E4705C5155291FB99CB1FB9152A014EA",
+      "bytes": 1285
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/PluginContractTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\PluginContractTests.output.log",
+      "sha256": "AABD7A36D4ED74BF9CFFAAF0CA80EE98E7D5FE90FA43FB0DB6A0E1C2DE938705",
+      "bytes": 197647
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/ProductUiTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\ProductUiTests.output.log",
+      "sha256": "06F35D04E072FE70F97A1BC9EA71FF6C1AB01CC86CD50815056A277D7D70C409",
+      "bytes": 2106
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/RedConfigureTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\RedConfigureTests.output.log",
+      "sha256": "C3E9BF8C33EE996CA3BCD0AC632353BD0DE2006FAC3D03BA923F8CDCED090FAD",
+      "bytes": 5202
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/run-all-tests-case-history.jsonl",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\run-all-tests-case-history.jsonl",
+      "sha256": "47321B677CA55B1C0153F89520B60E769FA3627AF4AB3BDAE474DFE4A8626716",
+      "bytes": 420932
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/run-all-tests-dashboard.md",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\run-all-tests-dashboard.md",
+      "sha256": "3ECEFD039C8FD2157C11E31DB372BD0349D3DB448CE7D321DD5786908EE58FD3",
+      "bytes": 4085
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/SettingsSchemaTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\SettingsSchemaTests.output.log",
+      "sha256": "85ABB5963C6C57C2D8BFB45B368EAAA12CA8A967F15C951471E05063C2DA1132",
+      "bytes": 11394
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/validation-plan-decision.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\validation-plan-decision.json",
+      "sha256": "D10DD1D778DF7CD3FEE0DBA1CB775B56CEE366B6EDDD41FF1B502006F5E6C40D",
+      "bytes": 4185
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/validation-plan.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\validation-plan.json",
+      "sha256": "19600A23C8306DE3F86C42EFC93BB2CD21545EA9BE49D7EB495DF47E3AD46378",
+      "bytes": 14259
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/ViewerPETests.Noninteractive.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\ViewerPETests.Noninteractive.output.log",
+      "sha256": "852CE944860CBB744BB83D45ECA06EDEDBEF47CB33B55163A0B6F9383865E23A",
+      "bytes": 204723
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/ViewerSqliteTests.Noninteractive.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\ViewerSqliteTests.Noninteractive.output.log",
+      "sha256": "353AE06E05D04B8D35AA6D4B390F4B797FA0C958F3F52FCB1ABA0B269C2294E3",
+      "bytes": 30098
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/workspace-after-perf.performance-tests2.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\workspace-after-perf.performance-tests2.json",
+      "sha256": "5097240EA58FE314D8456C45E76BC4FE444A0CE1271308D6C0122CFB56BB8226",
+      "bytes": 709
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/workspace-after-standalone.crash-handling.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\workspace-after-standalone.crash-handling.json",
+      "sha256": "B0BAD31E2BB00D26FA8CDFD4B1EDFF8989A8CCA3711C5FC7424B3EE0003CE1A9",
+      "bytes": 709
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/workspace-after-standalone.filesystem-curl.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\workspace-after-standalone.filesystem-curl.json",
+      "sha256": "5A60C476D980369563B317D66739CEF83C2A57BBD84408CD8253A46D7957995D",
+      "bytes": 709
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/workspace-after-standalone.localization.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\workspace-after-standalone.localization.json",
+      "sha256": "AFC6D9D914D1454C0C4716A99B7852438E5EB55BC5DF36AD1EFD097C286CE7F1",
+      "bytes": 709
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/workspace-after-standalone.plugin-contract.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\workspace-after-standalone.plugin-contract.json",
+      "sha256": "0E9D5EA1397FA329A2046F92A40E17555CD17731FB7C73020DEAF60DDF6A0581",
+      "bytes": 709
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/workspace-after-standalone.product-ui.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\workspace-after-standalone.product-ui.json",
+      "sha256": "A24FB9BBF5449A4D382B21710C3670A4C2AF4E4FCAC317D8BCA2300E0B4914A7",
+      "bytes": 709
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/workspace-after-standalone.red-configure.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\workspace-after-standalone.red-configure.json",
+      "sha256": "CAE0203483E6F361204ABD9CD115C3D8A8E14733300893FED2C46242AB42466D",
+      "bytes": 709
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/workspace-after-standalone.settings-schema.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\workspace-after-standalone.settings-schema.json",
+      "sha256": "AA4E7AB48AE55A6D0BBCF873339CC7F3C41A33DA76FA85B50B7D2A47EA3F7AC5",
+      "bytes": 709
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/workspace-after-tooling.pester.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\workspace-after-tooling.pester.json",
+      "sha256": "9F0A0D42DFFFE35B285DF28A92955E6D6CB4CB9E4CBDBEC697103FE35CB81461",
+      "bytes": 709
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/workspace-after-tooling.vcpkg-merge-synthetic.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\workspace-after-tooling.vcpkg-merge-synthetic.json",
+      "sha256": "6CAD27017BB79291612C9B2E608734EBF50ADE1544D580E173C1D5690156CE4E",
+      "bytes": 709
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/workspace-after-viewer-pe.noninteractive.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\workspace-after-viewer-pe.noninteractive.json",
+      "sha256": "9F65CC61DA2A646CB34A7839B61E2A2C7B9EA85C1860EC73BFE1BD8E63C6ED8E",
+      "bytes": 709
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/workspace-after-viewer-sqlite.noninteractive.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\workspace-after-viewer-sqlite.noninteractive.json",
+      "sha256": "9A86E799DD699D01D0B1219A142C7B7818B901D218D15708BC977051F659A183",
+      "bytes": 709
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/workspace-final.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\workspace-final.json",
+      "sha256": "7D9587A79E54F4DCA8FC4E56A39673064C7022799126A45167ED39EB963AE131",
+      "bytes": 709
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/artifacts/selftest/last_run/workspace-initial.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\artifacts\\selftest\\last_run\\workspace-initial.json",
+      "sha256": "DBC1F5E0577330B654FB0E48AB776DB3AE6061FAA486E1E4330DCDFDEB1B550C",
+      "bytes": 709
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T170238Z-2136-0b2b9a2b7427476ebd873cfbe31fba83/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T170238Z-2136-0b2b9a2b7427476ebd873cfbe31fba83\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T170238Z-2136-0b2b9a2b7427476ebd873cfbe31fba83/évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx1/évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx2/évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx3/évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx4/évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx5/évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx6/évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx7/witness.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T170238Z-2136-0b2b9a2b7427476ebd873cfbe31fba83\\évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx1\\évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx2\\évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx3\\évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx4\\évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx5\\évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx6\\évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx7\\witness.txt",
+      "sha256": "A41ABEC527B7D836F663ADA13B9C83EBB91817AED3D165D7853C6C988A78A279",
+      "bytes": 18
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T170238Z-2136-47013a367f4c4a96a999c7b92dbad4b4/existing.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T170238Z-2136-47013a367f4c4a96a999c7b92dbad4b4\\existing.txt",
+      "sha256": "6CA7EA2FEEFC88ECB5ED6356ED963F47DC9137F82526FDD25D618EA626D0803F",
+      "bytes": 4
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T170238Z-2136-56d020bdbe694b109f86dd0c3912fb6e/relative.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T170238Z-2136-56d020bdbe694b109f86dd0c3912fb6e\\relative.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T170238Z-2136-56d020bdbe694b109f86dd0c3912fb6e/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T170238Z-2136-56d020bdbe694b109f86dd0c3912fb6e\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T170238Z-2136-70997e4c97d147219761d67133615a26/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T170238Z-2136-70997e4c97d147219761d67133615a26\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T170238Z-2136-9d0bf504dd364cada4a37411d80ffff2/shared.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T170238Z-2136-9d0bf504dd364cada4a37411d80ffff2\\shared.txt",
+      "sha256": "9CE9072EC22C926E7643EA013DE6129E100E16EA49D0CBD8BA0FBFE6217C17C6",
+      "bytes": 34
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T170238Z-2136-9d0bf504dd364cada4a37411d80ffff2/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T170238Z-2136-9d0bf504dd364cada4a37411d80ffff2\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T170239Z-2136-85591e6b1ef14b34bfeb3e905373ecae/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T170239Z-2136-85591e6b1ef14b34bfeb3e905373ecae\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T170239Z-2136-af74320b5c5a4c4e942104d76f503ef6/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T170239Z-2136-af74320b5c5a4c4e942104d76f503ef6\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/20261026T170240Z-2136-84d7bb4b360047acbe8322b3229fa905/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T170240Z-2136-84d7bb4b360047acbe8322b3229fa905\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "x64-artifact/evidence/completed-runs/adhoc-6164/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\completed-runs\\adhoc-6164\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\complete.json",
+      "sha256": "270D73D0A1169F07048F12DAAA2B19A55D9F7734F342A50B4668201C6249EA3E",
+      "bytes": 397
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\intent.json",
+      "sha256": "768FB7F904F067965AE18D34BF93573A32EF15713DD04406A64E72263679892B",
+      "bytes": 2759858
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170238Z-2136-0b2b9a2b7427476ebd873cfbe31fba83/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170238Z-2136-0b2b9a2b7427476ebd873cfbe31fba83\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170238Z-2136-0b2b9a2b7427476ebd873cfbe31fba83/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170238Z-2136-0b2b9a2b7427476ebd873cfbe31fba83\\complete.json",
+      "sha256": "2A6507F7087C75B6899AC3C568DC1F579C1D621E18C53A4C6CEBECFA4CA66105",
+      "bytes": 397
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170238Z-2136-0b2b9a2b7427476ebd873cfbe31fba83/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170238Z-2136-0b2b9a2b7427476ebd873cfbe31fba83\\intent.json",
+      "sha256": "2ACD92A7C3ADBAA30FE9BE5332B34B50F6CF7EC5522FCA6E9A9FFA2014DD664C",
+      "bytes": 5689
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170238Z-2136-47013a367f4c4a96a999c7b92dbad4b4/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170238Z-2136-47013a367f4c4a96a999c7b92dbad4b4\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170238Z-2136-56d020bdbe694b109f86dd0c3912fb6e/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170238Z-2136-56d020bdbe694b109f86dd0c3912fb6e\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170238Z-2136-56d020bdbe694b109f86dd0c3912fb6e/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170238Z-2136-56d020bdbe694b109f86dd0c3912fb6e\\complete.json",
+      "sha256": "81625568C26387406E10E746DE9655D708A58997094B1FAAF76A617176E68A13",
+      "bytes": 397
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170238Z-2136-56d020bdbe694b109f86dd0c3912fb6e/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170238Z-2136-56d020bdbe694b109f86dd0c3912fb6e\\intent.json",
+      "sha256": "CECA99E99A177144B706512BFE22D4A448EE471E0406365C240EAA4F3C85F5E5",
+      "bytes": 1373
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170238Z-2136-70997e4c97d147219761d67133615a26/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170238Z-2136-70997e4c97d147219761d67133615a26\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170238Z-2136-70997e4c97d147219761d67133615a26/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170238Z-2136-70997e4c97d147219761d67133615a26\\complete.json",
+      "sha256": "9216D3DFB0F96620164AC637A82229FEBF341F712923A8AFBDCA5D5096FC1762",
+      "bytes": 397
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170238Z-2136-70997e4c97d147219761d67133615a26/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170238Z-2136-70997e4c97d147219761d67133615a26\\intent.json",
+      "sha256": "8193BC512FBB260C5A9208C0D9D494F228D5D86DDA4423A7C6FD743F4C0A9740",
+      "bytes": 1642
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170238Z-2136-9d0bf504dd364cada4a37411d80ffff2/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170238Z-2136-9d0bf504dd364cada4a37411d80ffff2\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170238Z-2136-9d0bf504dd364cada4a37411d80ffff2/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170238Z-2136-9d0bf504dd364cada4a37411d80ffff2\\complete.json",
+      "sha256": "6A01CD7697687F6EB9129A29319CD4AE5F26878C1996E0623AAB17F78C316A34",
+      "bytes": 397
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170238Z-2136-9d0bf504dd364cada4a37411d80ffff2/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170238Z-2136-9d0bf504dd364cada4a37411d80ffff2\\intent.json",
+      "sha256": "5AF8B8823C4193E9E96D8384A6C6830371A73DAFBD06F58FDC424D294317E3D1",
+      "bytes": 1522
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170238Z-2136-9d0bf504dd364cada4a37411d80ffff2/shared-payload.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170238Z-2136-9d0bf504dd364cada4a37411d80ffff2\\shared-payload.txt",
+      "sha256": "9CE9072EC22C926E7643EA013DE6129E100E16EA49D0CBD8BA0FBFE6217C17C6",
+      "bytes": 34
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170239Z-2136-08f82732a43a4786833a37b3959a23cc/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170239Z-2136-08f82732a43a4786833a37b3959a23cc\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170239Z-2136-5840cfda04254408a39c91fb7688e3af/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170239Z-2136-5840cfda04254408a39c91fb7688e3af\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170239Z-2136-78c19db64d774b3dbc5fa99f34ea64e9/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170239Z-2136-78c19db64d774b3dbc5fa99f34ea64e9\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170239Z-2136-78c19db64d774b3dbc5fa99f34ea64e9/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170239Z-2136-78c19db64d774b3dbc5fa99f34ea64e9\\intent.json",
+      "sha256": "6703D53D31898F05018C1DB448562CC8FEBBC1DD6AC0EDB268A6E86355C6FF58",
+      "bytes": 1153
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170239Z-2136-85591e6b1ef14b34bfeb3e905373ecae/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170239Z-2136-85591e6b1ef14b34bfeb3e905373ecae\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170239Z-2136-85591e6b1ef14b34bfeb3e905373ecae/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170239Z-2136-85591e6b1ef14b34bfeb3e905373ecae\\complete.json",
+      "sha256": "08A68BCE64FDF1DB3350691A09B7BA7A271C21BA46CBFA34A2E015599972D525",
+      "bytes": 397
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170239Z-2136-85591e6b1ef14b34bfeb3e905373ecae/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170239Z-2136-85591e6b1ef14b34bfeb3e905373ecae\\intent.json",
+      "sha256": "A82BF88CC02406DAB07C51733130106D17920C32C037022A9A53B320183F429E",
+      "bytes": 1153
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170239Z-2136-af74320b5c5a4c4e942104d76f503ef6/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170239Z-2136-af74320b5c5a4c4e942104d76f503ef6\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170239Z-2136-af74320b5c5a4c4e942104d76f503ef6/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170239Z-2136-af74320b5c5a4c4e942104d76f503ef6\\complete.json",
+      "sha256": "021E6FE12491EF005F69A8898B750BC9B69AE30C659DDD58E7D66927BEFD9355",
+      "bytes": 397
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170239Z-2136-af74320b5c5a4c4e942104d76f503ef6/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170239Z-2136-af74320b5c5a4c4e942104d76f503ef6\\intent.json",
+      "sha256": "1211924EB5CF0A01043F669056B9B6A936541F9C9D0C708804B78AE493B34D98",
+      "bytes": 1112
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170239Z-2136-db38719aaa3c46fc986bdae0cdf294aa/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170239Z-2136-db38719aaa3c46fc986bdae0cdf294aa\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170240Z-2136-39ac1685390b4041ab79af79a567ae80/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170240Z-2136-39ac1685390b4041ab79af79a567ae80\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170240Z-2136-84d7bb4b360047acbe8322b3229fa905/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170240Z-2136-84d7bb4b360047acbe8322b3229fa905\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170240Z-2136-84d7bb4b360047acbe8322b3229fa905/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170240Z-2136-84d7bb4b360047acbe8322b3229fa905\\complete.json",
+      "sha256": "F9F8316A760BF6127C43B626DB8D99B3B4C0E92737F48E4917FF108B39EF6BE4",
+      "bytes": 397
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/20261026T170240Z-2136-84d7bb4b360047acbe8322b3229fa905/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T170240Z-2136-84d7bb4b360047acbe8322b3229fa905\\intent.json",
+      "sha256": "4DAB9FD072840A2FAFB1E44563BF619F69008857928583019B73D4ADFA4044DC",
+      "bytes": 1153
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/50d6a3eee4214c258440973a9d2725e6/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\50d6a3eee4214c258440973a9d2725e6\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/adhoc-6164/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\adhoc-6164\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/adhoc-6164/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\adhoc-6164\\complete.json",
+      "sha256": "FF07E330083011A1B4CF0B8760ACA7C14BECE32A1098406FF141C0D5B1A58682",
+      "bytes": 309
+    },
+    {
+      "file": "x64-artifact/evidence/run-archive-records/adhoc-6164/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\run-archive-records\\adhoc-6164\\intent.json",
+      "sha256": "2396104164B7A4815AFC13CC0CDBCE80669EF4342B700B8F108BB12F4613FD11",
+      "bytes": 1023
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/run-state.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\run-state.json",
+      "sha256": "C13C23F7A382F5ED1EE42CCBD32E1D74CF04CFCDEDF94816386594855ADF8C7D",
+      "bytes": 4712
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/validation-plan.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\validation-plan.json",
+      "sha256": "19600A23C8306DE3F86C42EFC93BB2CD21545EA9BE49D7EB495DF47E3AD46378",
+      "bytes": 14259
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/decisions/d1ee1092b56508b524a299d12658c5e36d09df9cfd341b6c6a9710068c037a5f.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\decisions\\d1ee1092b56508b524a299d12658c5e36d09df9cfd341b6c6a9710068c037a5f.json",
+      "sha256": "D10DD1D778DF7CD3FEE0DBA1CB775B56CEE366B6EDDD41FF1B502006F5E6C40D",
+      "bytes": 4185
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/perf.performance-tests2/evidence/9519e9fb0b4d2624830fe26cbe7a843394514e804858222243a3329ebe0ad873.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\perf.performance-tests2\\evidence\\9519e9fb0b4d2624830fe26cbe7a843394514e804858222243a3329ebe0ad873.json",
+      "sha256": "1798C445E2B40CE88548F24246C71285150C5C95A565801CD48BA2A77856B93C",
+      "bytes": 21582
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/perf.performance-tests2/promotions/a176a5cecd193ff12e23ccbddb63d16ccf44f319cf57daa0336caadb4742d31d.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\perf.performance-tests2\\promotions\\a176a5cecd193ff12e23ccbddb63d16ccf44f319cf57daa0336caadb4742d31d.json",
+      "sha256": "18BBDE0983741298817BBEDE3CEB8CC4A79F79AE598CB1979A2475CE901146F9",
+      "bytes": 21635
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/perf.performance-tests2/results/PerformanceTests2.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\perf.performance-tests2\\results\\PerformanceTests2.output.log",
+      "sha256": "9687E593E5DBABEEE98F339BE5F391E7E4705C5155291FB99CB1FB9152A014EA",
+      "bytes": 1285
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/perf.performance-tests2/terminal-results/7f515f114b3f5fbb84153354ae60a5fc1dc28f7106d209429ffe21d765a7a61b.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\perf.performance-tests2\\terminal-results\\7f515f114b3f5fbb84153354ae60a5fc1dc28f7106d209429ffe21d765a7a61b.json",
+      "sha256": "F61D292549A41CE8601A4DA9BD878D3EB6FBD6884A2D3E77E507B00146DEF4FA",
+      "bytes": 341
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.crash-handling/evidence/425ea395cedb7f6b5947b45a54a985b3b897cb21945b45bee55b0f62bfa81df3.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.crash-handling\\evidence\\425ea395cedb7f6b5947b45a54a985b3b897cb21945b45bee55b0f62bfa81df3.json",
+      "sha256": "79F2FE8973BA7B2D633AEF3FB2B2AA0AFE11792FF935989790913ED05370B006",
+      "bytes": 21586
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.crash-handling/promotions/08af5bea27ccdc4f4aa097b173a4689ce581e616d83dffb628f50771f8e0b485.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.crash-handling\\promotions\\08af5bea27ccdc4f4aa097b173a4689ce581e616d83dffb628f50771f8e0b485.json",
+      "sha256": "3AF39BF149F7C76CDAC409E05538A274EF6A8D54E73BCDBB5694F14382F83299",
+      "bytes": 21640
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.crash-handling/results/CrashHandlingTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.crash-handling\\results\\CrashHandlingTests.output.log",
+      "sha256": "BE9424679E96712FF11B7874E6AE2CF8C2658D8392404B1C4924D563DE803FF2",
+      "bytes": 1718
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.crash-handling/terminal-results/364e3d5f583b331e252705897604b4fb5fe955d44052e0c31808d88f3714b77d.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.crash-handling\\terminal-results\\364e3d5f583b331e252705897604b4fb5fe955d44052e0c31808d88f3714b77d.json",
+      "sha256": "01659F621647996EA1CD05EF73237D24657F289626FDFC4D61F2FE3C350CC3C4",
+      "bytes": 342
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.filesystem-curl/evidence/f3aa2b7892c2d6ea09c5167438a7ef46e2c3a64e5efe769cb3b1ad37a5274962.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.filesystem-curl\\evidence\\f3aa2b7892c2d6ea09c5167438a7ef46e2c3a64e5efe769cb3b1ad37a5274962.json",
+      "sha256": "C1929DE41E7003B176AF6E0D7A802642D8EC3DCF705EFD061721C66504A96D03",
+      "bytes": 21587
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.filesystem-curl/promotions/52e37b9ec1a868de15cd66d3ff6011d199e05a8eb906e82686cf6072bdaa2d08.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.filesystem-curl\\promotions\\52e37b9ec1a868de15cd66d3ff6011d199e05a8eb906e82686cf6072bdaa2d08.json",
+      "sha256": "AE3D96F90CAAAACACEC2556BCB00608A1356821134DADB4B0B5D510E4B8E4D8C",
+      "bytes": 21641
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.filesystem-curl/results/FileSystemCurlTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.filesystem-curl\\results\\FileSystemCurlTests.output.log",
+      "sha256": "CC85669BA3041B35B1573FD08112FDBD462D036B58ED69A9243BDF27F3473900",
+      "bytes": 29
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.filesystem-curl/terminal-results/a03444f6357a94be2b5ce354c118dd283efeb9a826cf1cd52d2f7a275b55f2fa.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.filesystem-curl\\terminal-results\\a03444f6357a94be2b5ce354c118dd283efeb9a826cf1cd52d2f7a275b55f2fa.json",
+      "sha256": "F827C21165E2985D312EB931726CBCB28D561ADCB339100506A563F1575257A5",
+      "bytes": 343
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.localization/evidence/00fb15994d286b69d7b76514664a3667fc9d24f730d499496bb8d9a7433c703d.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.localization\\evidence\\00fb15994d286b69d7b76514664a3667fc9d24f730d499496bb8d9a7433c703d.json",
+      "sha256": "39EFB2A2ACD035F7E3FA87281B3131208CF6D5D197C9C422DA6ED15FCCC40138",
+      "bytes": 21581
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.localization/promotions/3cd0d5c0b6565d980c8df1315ec281bdbac4af0196f0e218b1b24e617acc6b97.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.localization\\promotions\\3cd0d5c0b6565d980c8df1315ec281bdbac4af0196f0e218b1b24e617acc6b97.json",
+      "sha256": "F819BE0F1D4DF081C7D89B3490FA61342F464D6832BF4D28E642B3D434A2B8B2",
+      "bytes": 21635
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.localization/results/LocalizationTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.localization\\results\\LocalizationTests.output.log",
+      "sha256": "07C3B184725869A594F017686418F3601137EFE177BE804D2BD4FA4ECBD18AB2",
+      "bytes": 5064
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.localization/terminal-results/48c7f64018076f76d7424ad5526507b9448f36544455a6ac5f57d34f58785dd7.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.localization\\terminal-results\\48c7f64018076f76d7424ad5526507b9448f36544455a6ac5f57d34f58785dd7.json",
+      "sha256": "3E557D13556F7737199FD2ADCD5C8D5CD76D7724BDE867D5B6F509599CE176EF",
+      "bytes": 340
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.product-ui/evidence/c7b8cba4f405a802074faf09dcceb94e430061c2a15dbc9cdfb710c6c987639a.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.product-ui\\evidence\\c7b8cba4f405a802074faf09dcceb94e430061c2a15dbc9cdfb710c6c987639a.json",
+      "sha256": "3C41D27181E0A935CE7AC2F35352747E49E0F54B4FF59EAF0F2B1F8FDD824188",
+      "bytes": 21574
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.product-ui/promotions/95d27613e96e0dbae032cefb2598eca18a8064f78c8b737550b211e81f0d9979.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.product-ui\\promotions\\95d27613e96e0dbae032cefb2598eca18a8064f78c8b737550b211e81f0d9979.json",
+      "sha256": "FE85F9CB2E942E7C4F0EA5AB28039E191D1428462F37BF32F9212856A0BB7F87",
+      "bytes": 21628
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.product-ui/results/ProductUiTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.product-ui\\results\\ProductUiTests.output.log",
+      "sha256": "06F35D04E072FE70F97A1BC9EA71FF6C1AB01CC86CD50815056A277D7D70C409",
+      "bytes": 2106
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.product-ui/terminal-results/f791b084caca88ae06d4f7e1e0d022f976ca1c1855481575ea25c3490bd6928e.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.product-ui\\terminal-results\\f791b084caca88ae06d4f7e1e0d022f976ca1c1855481575ea25c3490bd6928e.json",
+      "sha256": "CF0F00214DC4FAC828F24973BF849CA09010537350C16BDC22FD4712F1954C87",
+      "bytes": 338
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.red-configure/evidence/9edd2cb4d1d1e6f343535f9a004e105075b4d7f0412a72c5ccdb8144b298e8a2.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.red-configure\\evidence\\9edd2cb4d1d1e6f343535f9a004e105075b4d7f0412a72c5ccdb8144b298e8a2.json",
+      "sha256": "D0515F3302DC333BC85F2CF318C50BFE7384D5D7EA2A6B3FA7BE0311B223D50C",
+      "bytes": 21583
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.red-configure/promotions/78e412a1916c16523178b920728c096ca245bb96e83ee25aac7f194ecc300e84.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.red-configure\\promotions\\78e412a1916c16523178b920728c096ca245bb96e83ee25aac7f194ecc300e84.json",
+      "sha256": "E2A67ACF74F3A4028A9F5FEFAF17152CCF90F636A465428FFDDD90A4C2D7955D",
+      "bytes": 21637
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.red-configure/results/RedConfigureTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.red-configure\\results\\RedConfigureTests.output.log",
+      "sha256": "C3E9BF8C33EE996CA3BCD0AC632353BD0DE2006FAC3D03BA923F8CDCED090FAD",
+      "bytes": 5202
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.red-configure/terminal-results/9100cc0ae94c106ed5e94c8ecd8f4a84a1301f8f29e5a3d673f35b434a3d34fa.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.red-configure\\terminal-results\\9100cc0ae94c106ed5e94c8ecd8f4a84a1301f8f29e5a3d673f35b434a3d34fa.json",
+      "sha256": "D57091610469726CE6C5FA92EC10F80F7B9B1D72452BFB9B698F75289F35567D",
+      "bytes": 341
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.settings-schema/evidence/9a5b531c5afcff503aa383b45c7d189fabd345b87e0726134eff171d83565e4b.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.settings-schema\\evidence\\9a5b531c5afcff503aa383b45c7d189fabd345b87e0726134eff171d83565e4b.json",
+      "sha256": "F4A12F25ACA6221A6EF81582D6A7BB55630B33FF675FA2398EAC565E9C98966E",
+      "bytes": 21590
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.settings-schema/promotions/93ec59769437a1a9669a561c9be1d764645a0448fa9c89654f8acf44830a7ca9.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.settings-schema\\promotions\\93ec59769437a1a9669a561c9be1d764645a0448fa9c89654f8acf44830a7ca9.json",
+      "sha256": "987456C4EA64F20EF39FCA3A3391B93154D74B9FC716B8ECC6A70E10F6E05BFD",
+      "bytes": 21644
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.settings-schema/results/SettingsSchemaTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.settings-schema\\results\\SettingsSchemaTests.output.log",
+      "sha256": "85ABB5963C6C57C2D8BFB45B368EAAA12CA8A967F15C951471E05063C2DA1132",
+      "bytes": 11394
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/standalone.settings-schema/terminal-results/fd7f357fb28f84de29b8be93f9868cf5a2f493ad50a2e1ce25cf2c65c91e02bb.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\standalone.settings-schema\\terminal-results\\fd7f357fb28f84de29b8be93f9868cf5a2f493ad50a2e1ce25cf2c65c91e02bb.json",
+      "sha256": "52EA9B00BBC96D77B780E70541484DC796388187211967969EFF164BA2569BBB",
+      "bytes": 343
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/tooling.vcpkg-merge-synthetic/evidence/9df4228b4cd95f0551f0aad15f845e05820e76526675e4995db8d284c813c0bc.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\tooling.vcpkg-merge-synthetic\\evidence\\9df4228b4cd95f0551f0aad15f845e05820e76526675e4995db8d284c813c0bc.json",
+      "sha256": "16D975B9FE1CAD5773EA8510554A25937CA8CCA35B0C209E8FBD271F355AE7B5",
+      "bytes": 21414
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/tooling.vcpkg-merge-synthetic/promotions/1054da25bcbc7c0ad87b7aa00c9917a2a55bbd5abf0aed88b1b22f17bbf71841.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\tooling.vcpkg-merge-synthetic\\promotions\\1054da25bcbc7c0ad87b7aa00c9917a2a55bbd5abf0aed88b1b22f17bbf71841.json",
+      "sha256": "BB3E60A4F21A19B1BEAF5FEF6F18F110BDA08A47E566CBA3D85B45AA1AA751EE",
+      "bytes": 21468
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/tooling.vcpkg-merge-synthetic/terminal-results/27871965b39ca0fa7d7b1f30668b6bd8c5ac7fd8e1dfd963d2c43b2e1a174d89.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\tooling.vcpkg-merge-synthetic\\terminal-results\\27871965b39ca0fa7d7b1f30668b6bd8c5ac7fd8e1dfd963d2c43b2e1a174d89.json",
+      "sha256": "DE2DBAB562909A330FE99A978AFAC1D81A3F6B8BCFACD88EDFA2D348DD7D46E3",
+      "bytes": 352
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/viewer-sqlite.noninteractive/evidence/d3984e4cb0185c9b5561573399484007ad5279299bc9faf68fa6b00d6f1ef7b1.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\viewer-sqlite.noninteractive\\evidence\\d3984e4cb0185c9b5561573399484007ad5279299bc9faf68fa6b00d6f1ef7b1.json",
+      "sha256": "33BC97644BAB49F6AB8DC77FD796052403CB51AC24A40688FE2BCDF71BBF5723",
+      "bytes": 21608
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/viewer-sqlite.noninteractive/promotions/5886d7b1788aa167f72ed181ec08a39a91c382cbb9d28b83348600563e36b59a.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\viewer-sqlite.noninteractive\\promotions\\5886d7b1788aa167f72ed181ec08a39a91c382cbb9d28b83348600563e36b59a.json",
+      "sha256": "8AD57E1BB4934B39E3B51CBF07696E56E600AD90EBA5D6696A0615D5C9C33448",
+      "bytes": 21661
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/viewer-sqlite.noninteractive/results/ViewerSqliteTests.Noninteractive.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\viewer-sqlite.noninteractive\\results\\ViewerSqliteTests.Noninteractive.output.log",
+      "sha256": "353AE06E05D04B8D35AA6D4B390F4B797FA0C958F3F52FCB1ABA0B269C2294E3",
+      "bytes": 30098
+    },
+    {
+      "file": "x64-artifact/evidence/runs/20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858/entries/viewer-sqlite.noninteractive/terminal-results/ec7ce4e40efc9f83d002033ad30203ad9b6340a1bc6626c4e1767053d8f50856.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-x64-d36cb3b7-artifact\\evidence\\runs\\20261026T165237Z-2136-7ed74926a4304c75823fd3dcfc93a858\\entries\\viewer-sqlite.noninteractive\\terminal-results\\ec7ce4e40efc9f83d002033ad30203ad9b6340a1bc6626c4e1767053d8f50856.json",
+      "sha256": "6037DBDB15E6A6FE9FEBDBD5DCB8DD0114696EB51AE97A93C98826D579093B3F",
+      "bytes": 345
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/CrashHandlingTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\CrashHandlingTests.output.log",
+      "sha256": "BE9424679E96712FF11B7874E6AE2CF8C2658D8392404B1C4924D563DE803FF2",
+      "bytes": 1718
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/entry-fingerprints.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\entry-fingerprints.json",
+      "sha256": "6DE34E1A8D64508AA5B7C91E386E2A99455C0121631C27D77377275737C3DAEB",
+      "bytes": 13939
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/FileSystemCurlTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\FileSystemCurlTests.output.log",
+      "sha256": "CC85669BA3041B35B1573FD08112FDBD462D036B58ED69A9243BDF27F3473900",
+      "bytes": 29
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/LocalizationTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\LocalizationTests.output.log",
+      "sha256": "07C3B184725869A594F017686418F3601137EFE177BE804D2BD4FA4ECBD18AB2",
+      "bytes": 5064
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/PerformanceTests2.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\PerformanceTests2.output.log",
+      "sha256": "0CE89C015F3952A21F55435000BFC10BF2F703B06A7DC987A532473E25A40715",
+      "bytes": 5748
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/PluginContractTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\PluginContractTests.output.log",
+      "sha256": "781A8EDD25CADBEF72D188C294B787B9E895E81DB6538E50D43ECB6A6205EE0A",
+      "bytes": 197648
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/ProductUiTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\ProductUiTests.output.log",
+      "sha256": "56DBD3A509A7D49C8FBFE081955746FDF41C6769799854BBB94D03787ABAED6C",
+      "bytes": 2106
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/RedConfigureTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\RedConfigureTests.output.log",
+      "sha256": "D0BE167DA4084A4D9CDEA4D50D24302D38FBB922D4199117A45C00627DD64380",
+      "bytes": 5202
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/run-all-tests-case-history.jsonl",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\run-all-tests-case-history.jsonl",
+      "sha256": "AEBE16388A3EEFBCD5558FD63570BA071CD47A2B8E252294AAE1AD2CA97E9D84",
+      "bytes": 420934
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/run-all-tests-dashboard.md",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\run-all-tests-dashboard.md",
+      "sha256": "658556C889925AD2F18EBD53C585F1A564168E805897C509F0C159742B452732",
+      "bytes": 4240
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/SettingsSchemaTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\SettingsSchemaTests.output.log",
+      "sha256": "C2E5A3150BD17619F5402F1E1E3EB77D3C6F411CF32F632FDA13F66BEAFAABC5",
+      "bytes": 11394
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/validation-plan-decision.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\validation-plan-decision.json",
+      "sha256": "97B8F6AD95FF916AD7CC71E6A7B8B7E1FC94B288581F141FFB5F5A3231A167AA",
+      "bytes": 4185
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/validation-plan.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\validation-plan.json",
+      "sha256": "94CD85E1955ED8260077EC66487901FA5271038A2FAA86B5CFC19D2389B92701",
+      "bytes": 14299
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/ViewerPETests.Noninteractive.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\ViewerPETests.Noninteractive.output.log",
+      "sha256": "EAD8CFFFB33CB5DFD4889F1F11D8B859522D497C8ED5BC2AE66ADEFE5DF5A706",
+      "bytes": 204706
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/ViewerSqliteTests.Noninteractive.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\ViewerSqliteTests.Noninteractive.output.log",
+      "sha256": "353AE06E05D04B8D35AA6D4B390F4B797FA0C958F3F52FCB1ABA0B269C2294E3",
+      "bytes": 30098
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/workspace-after-perf.performance-tests2.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\workspace-after-perf.performance-tests2.json",
+      "sha256": "BB1BC12E5603DD98F484A68C696B48378563305B03956852D8C2F56ACCC55A93",
+      "bytes": 710
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/workspace-after-standalone.crash-handling.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\workspace-after-standalone.crash-handling.json",
+      "sha256": "582834EAB8E4E93CEC0EC64A6389A55B9592D915927531D5434B29B2E6C68B73",
+      "bytes": 710
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/workspace-after-standalone.filesystem-curl.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\workspace-after-standalone.filesystem-curl.json",
+      "sha256": "3667AE63396AE5060CF9C8A98B118D812F9E4BAF129B1FE54468CC255E3F9C88",
+      "bytes": 710
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/workspace-after-standalone.localization.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\workspace-after-standalone.localization.json",
+      "sha256": "CE15797AD2BE401225F8D98CEBA680C178E75E6E8695B5B5708BD802C7F0676D",
+      "bytes": 710
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/workspace-after-standalone.plugin-contract.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\workspace-after-standalone.plugin-contract.json",
+      "sha256": "06DDEE31E51A28296F54C5579FC8CE1D4BC35F2C531A4D271BF9BF21587ED7D3",
+      "bytes": 710
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/workspace-after-standalone.product-ui.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\workspace-after-standalone.product-ui.json",
+      "sha256": "D47A678E6356B1A7D0E8ADAB4F9B39ACF8FB5B4E46B8127670A46219CE7181FB",
+      "bytes": 710
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/workspace-after-standalone.red-configure.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\workspace-after-standalone.red-configure.json",
+      "sha256": "9D06CBD0803F7F52FF66A07533634BA2AC5A25C9B494F316C1B74DD20F095E0C",
+      "bytes": 710
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/workspace-after-standalone.settings-schema.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\workspace-after-standalone.settings-schema.json",
+      "sha256": "7BE9B48A6EC899649F2A58AB12165BC91C41BC176C9918829C82A2129ED9A256",
+      "bytes": 710
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/workspace-after-tooling.pester.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\workspace-after-tooling.pester.json",
+      "sha256": "BA92013D67C6DFC8ED7740C45D5BFA8CB0C41834CE6C37A32132D3C509B7D2F9",
+      "bytes": 710
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/workspace-after-tooling.vcpkg-merge-synthetic.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\workspace-after-tooling.vcpkg-merge-synthetic.json",
+      "sha256": "548E1C7CD26B61CA26C7DF2C6EE999E5FD3CAA6ADCEB1C48CFAE3D66E7022487",
+      "bytes": 710
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/workspace-after-viewer-pe.noninteractive.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\workspace-after-viewer-pe.noninteractive.json",
+      "sha256": "504F80964A112D7E7C30BDBF2BDA19349028340A4A83A245131F8E785D480903",
+      "bytes": 710
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/workspace-after-viewer-sqlite.noninteractive.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\workspace-after-viewer-sqlite.noninteractive.json",
+      "sha256": "90C044D81B4E0B436C387A48536143158D4C6C5EC8897495E3D72B675DC1BE14",
+      "bytes": 710
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/workspace-final.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\workspace-final.json",
+      "sha256": "A2C4280D762076F87FBF3DBE6F26D64AEDDF6746A8F61EB661287C5B8FD104E8",
+      "bytes": 710
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/selftest/last_run/workspace-initial.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\selftest\\last_run\\workspace-initial.json",
+      "sha256": "67F94A0348A8CC20D7FA7106715BE0CCFA4154BEA7C0C02E3650522E779AB520",
+      "bytes": 710
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/viewer-pe/documentation/viewer-imgraw.png",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\viewer-pe\\documentation\\viewer-imgraw.png",
+      "sha256": "7C05BC4CD49BB63394447E9238D9483D6F04ECEC84C1D11731D14E17C9531DE2",
+      "bytes": 19207
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/viewer-pe/documentation/viewer-json.png",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\viewer-pe\\documentation\\viewer-json.png",
+      "sha256": "31A057ABD68FDAF456B2F842145D46BE4E6E9909BAA51E8691333FF135B8DB99",
+      "bytes": 19570
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/viewer-pe/documentation/viewer-markdown.png",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\viewer-pe\\documentation\\viewer-markdown.png",
+      "sha256": "7BA2610410F174BF3CC608C21717B8DFB0A356B34183951E13EFB5E5174CCCE1",
+      "bytes": 39116
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/viewer-pe/documentation/viewer-pe.png",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\viewer-pe\\documentation\\viewer-pe.png",
+      "sha256": "024A799FE41B9EDC688385913A671C4E38CF24F3A66163291FD16DA1D675461B",
+      "bytes": 53520
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/viewer-pe/documentation/viewer-text-hex.png",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\viewer-pe\\documentation\\viewer-text-hex.png",
+      "sha256": "D0E5E34994FC11D42811808431B535C53626CA61DD349CF7B68F5DA000F99E8E",
+      "bytes": 73565
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/viewer-pe/documentation/viewer-text.png",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\viewer-pe\\documentation\\viewer-text.png",
+      "sha256": "706EE94915D6B5F06574DEC97AE5F00033BB1D91DB49F4D3A672727EEF84E570",
+      "bytes": 27848
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/viewer-pe/documentation/viewer-vlc-unavailable.png",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\viewer-pe\\documentation\\viewer-vlc-unavailable.png",
+      "sha256": "645846B82297A10CA7E2F4D3C41F455DEC7018D80AB0BD3FEFFA18B05FF8332A",
+      "bytes": 22272
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/viewer-pe/documentation/viewer-web.png",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\viewer-pe\\documentation\\viewer-web.png",
+      "sha256": "1D38662FB84FFD3BB48CD7054FB915E405BD4946386B070AA65DBB6FE794DDAA",
+      "bytes": 42722
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/artifacts/viewer-pe/viewer-space-inflight-3618078/viewer-space-inflight-scan.png",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\artifacts\\viewer-pe\\viewer-space-inflight-3618078\\viewer-space-inflight-scan.png",
+      "sha256": "862A340BCC8315D71F1726B72CB5B14F7448CC3534DDD3AB323505B9FAC9AC73",
+      "bytes": 40300
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T171205Z-5796-46bac54313f04effac181bf9a501d910/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T171205Z-5796-46bac54313f04effac181bf9a501d910\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T171205Z-5796-46bac54313f04effac181bf9a501d910/évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx1/évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx2/évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx3/évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx4/évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx5/évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx6/évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx7/witness.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T171205Z-5796-46bac54313f04effac181bf9a501d910\\évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx1\\évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx2\\évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx3\\évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx4\\évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx5\\évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx6\\évidence-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx7\\witness.txt",
+      "sha256": "A41ABEC527B7D836F663ADA13B9C83EBB91817AED3D165D7853C6C988A78A279",
+      "bytes": 18
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T171205Z-5796-536bd355e9014a489e131524c5376700/shared.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T171205Z-5796-536bd355e9014a489e131524c5376700\\shared.txt",
+      "sha256": "9CE9072EC22C926E7643EA013DE6129E100E16EA49D0CBD8BA0FBFE6217C17C6",
+      "bytes": 34
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T171205Z-5796-536bd355e9014a489e131524c5376700/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T171205Z-5796-536bd355e9014a489e131524c5376700\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T171205Z-5796-75ffbaa1605549779d03641d5a9e413a/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T171205Z-5796-75ffbaa1605549779d03641d5a9e413a\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T171205Z-5796-cdecaa39356042cb86449e3e1bd4d01d/existing.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T171205Z-5796-cdecaa39356042cb86449e3e1bd4d01d\\existing.txt",
+      "sha256": "6CA7EA2FEEFC88ECB5ED6356ED963F47DC9137F82526FDD25D618EA626D0803F",
+      "bytes": 4
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T171205Z-5796-ef78c0e27cb74587a30097df732d83ac/relative.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T171205Z-5796-ef78c0e27cb74587a30097df732d83ac\\relative.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T171205Z-5796-ef78c0e27cb74587a30097df732d83ac/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T171205Z-5796-ef78c0e27cb74587a30097df732d83ac\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T171206Z-5796-0b5ad4426e8d485eae06b3dae086b066/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T171206Z-5796-0b5ad4426e8d485eae06b3dae086b066\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T171206Z-5796-697ca3b03a0f4fe78eb71f70e968b6c2/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T171206Z-5796-697ca3b03a0f4fe78eb71f70e968b6c2\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/20261026T171207Z-5796-55189520f8864d59a77c8fe4279f0cd6/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\20261026T171207Z-5796-55189520f8864d59a77c8fe4279f0cd6\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "arm64-artifact/evidence/completed-runs/adhoc-6040/unique.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\completed-runs\\adhoc-6040\\unique.txt",
+      "sha256": "E6426DB3E69ECAE1A2A01D5F0FC692AF27BD3AC991C3B09B973D766CA9365575",
+      "bytes": 37
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\complete.json",
+      "sha256": "D401546C7EAC6DE81C7CB7730B8EA8368B1CE5EDFBB354214A4B45DA1BD25D9D",
+      "bytes": 397
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\intent.json",
+      "sha256": "71653F153922440C8C1BE66D0FA194632189B7E6C337F71BD9115B8E7AEFD1AE",
+      "bytes": 2770393
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171205Z-5796-46bac54313f04effac181bf9a501d910/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171205Z-5796-46bac54313f04effac181bf9a501d910\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171205Z-5796-46bac54313f04effac181bf9a501d910/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171205Z-5796-46bac54313f04effac181bf9a501d910\\complete.json",
+      "sha256": "9EF066E1A1C3736C7E2927C48FDC81137B99112AC81C8F716660001F721F8668",
+      "bytes": 397
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171205Z-5796-46bac54313f04effac181bf9a501d910/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171205Z-5796-46bac54313f04effac181bf9a501d910\\intent.json",
+      "sha256": "4F371D29122A99FA644DA3E686364BC3756F083CDA2E4C8A493AD22BE3E17D34",
+      "bytes": 5565
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171205Z-5796-536bd355e9014a489e131524c5376700/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171205Z-5796-536bd355e9014a489e131524c5376700\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171205Z-5796-536bd355e9014a489e131524c5376700/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171205Z-5796-536bd355e9014a489e131524c5376700\\complete.json",
+      "sha256": "8F57101BD9FA4AA6BC80C698DFFCAFD64D368CA9B278AEBD19A38DB2B5598FBD",
+      "bytes": 397
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171205Z-5796-536bd355e9014a489e131524c5376700/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171205Z-5796-536bd355e9014a489e131524c5376700\\intent.json",
+      "sha256": "492C5872691B08689AA7EB635B22DCBCBCD3C8D4FCDCAE8974E28A25452FA1DF",
+      "bytes": 1538
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171205Z-5796-536bd355e9014a489e131524c5376700/shared-payload.txt",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171205Z-5796-536bd355e9014a489e131524c5376700\\shared-payload.txt",
+      "sha256": "9CE9072EC22C926E7643EA013DE6129E100E16EA49D0CBD8BA0FBFE6217C17C6",
+      "bytes": 34
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171205Z-5796-75ffbaa1605549779d03641d5a9e413a/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171205Z-5796-75ffbaa1605549779d03641d5a9e413a\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171205Z-5796-75ffbaa1605549779d03641d5a9e413a/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171205Z-5796-75ffbaa1605549779d03641d5a9e413a\\complete.json",
+      "sha256": "F9D154014D937E0270E74300F81B4CCC16FEED7A1EAD9858FA2763835E69CC46",
+      "bytes": 397
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171205Z-5796-75ffbaa1605549779d03641d5a9e413a/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171205Z-5796-75ffbaa1605549779d03641d5a9e413a\\intent.json",
+      "sha256": "F1967BD56F3687DA79ACE4E14737FFDE3610F3EBBE79FABA01A6ECC1E205B55B",
+      "bytes": 1620
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171205Z-5796-cdecaa39356042cb86449e3e1bd4d01d/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171205Z-5796-cdecaa39356042cb86449e3e1bd4d01d\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171205Z-5796-ef78c0e27cb74587a30097df732d83ac/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171205Z-5796-ef78c0e27cb74587a30097df732d83ac\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171205Z-5796-ef78c0e27cb74587a30097df732d83ac/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171205Z-5796-ef78c0e27cb74587a30097df732d83ac\\complete.json",
+      "sha256": "C45EDD165E70618C6338C4D338DF90EE4B0B7FBB81512742489307BE137E411D",
+      "bytes": 397
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171205Z-5796-ef78c0e27cb74587a30097df732d83ac/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171205Z-5796-ef78c0e27cb74587a30097df732d83ac\\intent.json",
+      "sha256": "C37C4B184836279E2F354972DC03DD7DAD08CA144948EFA81D2FEEDD82F9F707",
+      "bytes": 1371
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171206Z-5796-0b5ad4426e8d485eae06b3dae086b066/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171206Z-5796-0b5ad4426e8d485eae06b3dae086b066\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171206Z-5796-0b5ad4426e8d485eae06b3dae086b066/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171206Z-5796-0b5ad4426e8d485eae06b3dae086b066\\complete.json",
+      "sha256": "E22AAAE3C8B69C2DE8C5AE0AF4A7A2A1FAF8324F570C97A057BD836E9E2F66FD",
+      "bytes": 397
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171206Z-5796-0b5ad4426e8d485eae06b3dae086b066/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171206Z-5796-0b5ad4426e8d485eae06b3dae086b066\\intent.json",
+      "sha256": "9C39FF33F65B88F6560BFF1ED4D047F3B6A8C02533ACD1A98D6209DDA2F25AD6",
+      "bytes": 1110
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171206Z-5796-697ca3b03a0f4fe78eb71f70e968b6c2/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171206Z-5796-697ca3b03a0f4fe78eb71f70e968b6c2\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171206Z-5796-697ca3b03a0f4fe78eb71f70e968b6c2/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171206Z-5796-697ca3b03a0f4fe78eb71f70e968b6c2\\complete.json",
+      "sha256": "C33843EA7AE68C37DEDC3CA2C8F499C1E18495006E519535FB7CF251CA868917",
+      "bytes": 397
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171206Z-5796-697ca3b03a0f4fe78eb71f70e968b6c2/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171206Z-5796-697ca3b03a0f4fe78eb71f70e968b6c2\\intent.json",
+      "sha256": "976AABE66DFED12464303B2EFC47B40B148826BC9B0D7989AA190EC816B94BAC",
+      "bytes": 1151
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171206Z-5796-b105a5b7583348eba5be025051cc7e78/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171206Z-5796-b105a5b7583348eba5be025051cc7e78\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171206Z-5796-b105a5b7583348eba5be025051cc7e78/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171206Z-5796-b105a5b7583348eba5be025051cc7e78\\intent.json",
+      "sha256": "2E3DA1CD50B97C0A064620DDD22FA1748EF4235930784FD22BE6CF0CC6FBC832",
+      "bytes": 1151
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171207Z-5796-0fa8f9c2b5d04d069ba8ff0f67848269/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171207Z-5796-0fa8f9c2b5d04d069ba8ff0f67848269\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171207Z-5796-290dfa06bd324852a252a6b8cf60af67/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171207Z-5796-290dfa06bd324852a252a6b8cf60af67\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171207Z-5796-2c536efd23324271911afd453bfbfff8/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171207Z-5796-2c536efd23324271911afd453bfbfff8\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171207Z-5796-55189520f8864d59a77c8fe4279f0cd6/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171207Z-5796-55189520f8864d59a77c8fe4279f0cd6\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171207Z-5796-55189520f8864d59a77c8fe4279f0cd6/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171207Z-5796-55189520f8864d59a77c8fe4279f0cd6\\complete.json",
+      "sha256": "68034C8CABE4A87067D5626FF3D7E6813C861E0160B403D0E979FA09E5F5F79E",
+      "bytes": 397
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171207Z-5796-55189520f8864d59a77c8fe4279f0cd6/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171207Z-5796-55189520f8864d59a77c8fe4279f0cd6\\intent.json",
+      "sha256": "76AADAA33B6A22633C81AFED12CB4DD8BF43AEBC55AD0C4CD6F65DC1023DE2A7",
+      "bytes": 1151
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/20261026T171207Z-5796-c69697aa3df446a3a32a1fae8c7f79cb/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\20261026T171207Z-5796-c69697aa3df446a3a32a1fae8c7f79cb\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/adhoc-6040/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\adhoc-6040\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/adhoc-6040/complete.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\adhoc-6040\\complete.json",
+      "sha256": "CD7BB63004FF81CCA10298A74BF8A14766DFC394614ED6668DF8CEC386BD2D02",
+      "bytes": 309
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/adhoc-6040/intent.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\adhoc-6040\\intent.json",
+      "sha256": "E735ED1726E238A661CA39A795D43D4919791658D7692CA20A1B60A5371CF4AC",
+      "bytes": 1021
+    },
+    {
+      "file": "arm64-artifact/evidence/run-archive-records/be714a34a0ae41029c8eaa63ff08a90b/archive.lock",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\run-archive-records\\be714a34a0ae41029c8eaa63ff08a90b\\archive.lock",
+      "sha256": "E3B0C44298FC1C149AFBF4C8996FB92427AE41E4649B934CA495991B7852B855",
+      "bytes": 0
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/run-state.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\run-state.json",
+      "sha256": "EC1D0A7A45FC164AAA49F0BA1392D3C75EFC66FF3E99483A3C278D3B90788F66",
+      "bytes": 4776
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/validation-plan.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\validation-plan.json",
+      "sha256": "94CD85E1955ED8260077EC66487901FA5271038A2FAA86B5CFC19D2389B92701",
+      "bytes": 14299
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/decisions/0c60a9780f8c332e765a1188bc081acfed27f796876eedbd54b81bd0c7254ead.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\decisions\\0c60a9780f8c332e765a1188bc081acfed27f796876eedbd54b81bd0c7254ead.json",
+      "sha256": "97B8F6AD95FF916AD7CC71E6A7B8B7E1FC94B288581F141FFB5F5A3231A167AA",
+      "bytes": 4185
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/perf.performance-tests2/evidence/6decbb146c006381d83dc4508a2891c1158ba61c57a6b59b4698b6c05da08302.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\perf.performance-tests2\\evidence\\6decbb146c006381d83dc4508a2891c1158ba61c57a6b59b4698b6c05da08302.json",
+      "sha256": "58B24905DD38063D6BE92B1621832427BFDE76EBCDC64F664E0A90DA5C120B49",
+      "bytes": 21582
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/perf.performance-tests2/promotions/f0dd373b67426d7c3f4c0d19b4f7a7d5008f14e5f18b80b73796afcbb0bc7621.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\perf.performance-tests2\\promotions\\f0dd373b67426d7c3f4c0d19b4f7a7d5008f14e5f18b80b73796afcbb0bc7621.json",
+      "sha256": "8A1936370B8BD8A0A64C382033406C4204C27C014380A101AB9849F0E7256B00",
+      "bytes": 21635
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/perf.performance-tests2/results/PerformanceTests2.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\perf.performance-tests2\\results\\PerformanceTests2.output.log",
+      "sha256": "0CE89C015F3952A21F55435000BFC10BF2F703B06A7DC987A532473E25A40715",
+      "bytes": 5748
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/perf.performance-tests2/terminal-results/7f515f114b3f5fbb84153354ae60a5fc1dc28f7106d209429ffe21d765a7a61b.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\perf.performance-tests2\\terminal-results\\7f515f114b3f5fbb84153354ae60a5fc1dc28f7106d209429ffe21d765a7a61b.json",
+      "sha256": "F61D292549A41CE8601A4DA9BD878D3EB6FBD6884A2D3E77E507B00146DEF4FA",
+      "bytes": 341
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.crash-handling/evidence/6d22716b24a40920c0fbf497342d4215c3fc33dba10d42f37093a002885bc5f9.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.crash-handling\\evidence\\6d22716b24a40920c0fbf497342d4215c3fc33dba10d42f37093a002885bc5f9.json",
+      "sha256": "148DBCC46D005DDA8FD927AB536CE6DE524CE04FFE2FF402478566B284535198",
+      "bytes": 21587
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.crash-handling/promotions/9272af3bd837fd064559ed7caa29ce9721cb7e9fd38a0a6a2fdc815ea5ec69db.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.crash-handling\\promotions\\9272af3bd837fd064559ed7caa29ce9721cb7e9fd38a0a6a2fdc815ea5ec69db.json",
+      "sha256": "2072B852DBF902CADBB9B065670CE8BC5279813BCCCCCD269AD41852759597DF",
+      "bytes": 21640
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.crash-handling/results/CrashHandlingTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.crash-handling\\results\\CrashHandlingTests.output.log",
+      "sha256": "BE9424679E96712FF11B7874E6AE2CF8C2658D8392404B1C4924D563DE803FF2",
+      "bytes": 1718
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.crash-handling/terminal-results/364e3d5f583b331e252705897604b4fb5fe955d44052e0c31808d88f3714b77d.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.crash-handling\\terminal-results\\364e3d5f583b331e252705897604b4fb5fe955d44052e0c31808d88f3714b77d.json",
+      "sha256": "01659F621647996EA1CD05EF73237D24657F289626FDFC4D61F2FE3C350CC3C4",
+      "bytes": 342
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.filesystem-curl/evidence/238ae157da6194d8c297db10b1e1e72fd5c4004b1979d7f51e6cd79f25bbbd4f.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.filesystem-curl\\evidence\\238ae157da6194d8c297db10b1e1e72fd5c4004b1979d7f51e6cd79f25bbbd4f.json",
+      "sha256": "87FD64CC7062D7E58AAF9E869507322E33C101E5ACA2D03E8400486E82581357",
+      "bytes": 21588
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.filesystem-curl/promotions/84763fa85164fb1885110bbffe2808d3fe031b914a8cd5994c2b13eaf2bafa2c.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.filesystem-curl\\promotions\\84763fa85164fb1885110bbffe2808d3fe031b914a8cd5994c2b13eaf2bafa2c.json",
+      "sha256": "A1F341D0F4030EEC8D33817C078AF87741A70CD88C2D89C7178493627B96D65D",
+      "bytes": 21641
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.filesystem-curl/results/FileSystemCurlTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.filesystem-curl\\results\\FileSystemCurlTests.output.log",
+      "sha256": "CC85669BA3041B35B1573FD08112FDBD462D036B58ED69A9243BDF27F3473900",
+      "bytes": 29
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.filesystem-curl/terminal-results/a03444f6357a94be2b5ce354c118dd283efeb9a826cf1cd52d2f7a275b55f2fa.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.filesystem-curl\\terminal-results\\a03444f6357a94be2b5ce354c118dd283efeb9a826cf1cd52d2f7a275b55f2fa.json",
+      "sha256": "F827C21165E2985D312EB931726CBCB28D561ADCB339100506A563F1575257A5",
+      "bytes": 343
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.localization/evidence/9c482ea07ef44060bf81ae35306d2f54d965a5ceefffda8084e2a8e02fea0969.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.localization\\evidence\\9c482ea07ef44060bf81ae35306d2f54d965a5ceefffda8084e2a8e02fea0969.json",
+      "sha256": "C76527E4C5EB6900F103397DCCB24DB1330FCABC14AFAA8CFDE2C250F541604D",
+      "bytes": 21582
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.localization/promotions/0e3ae627b4580f744776c273de4041693df9b0c20fb4219c1e54f45b3e6d3f9c.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.localization\\promotions\\0e3ae627b4580f744776c273de4041693df9b0c20fb4219c1e54f45b3e6d3f9c.json",
+      "sha256": "61E26AFFD6BE75256961652CEE637CB86CB2AD7B51B9C21035944577A565AA22",
+      "bytes": 21635
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.localization/results/LocalizationTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.localization\\results\\LocalizationTests.output.log",
+      "sha256": "07C3B184725869A594F017686418F3601137EFE177BE804D2BD4FA4ECBD18AB2",
+      "bytes": 5064
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.localization/terminal-results/48c7f64018076f76d7424ad5526507b9448f36544455a6ac5f57d34f58785dd7.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.localization\\terminal-results\\48c7f64018076f76d7424ad5526507b9448f36544455a6ac5f57d34f58785dd7.json",
+      "sha256": "3E557D13556F7737199FD2ADCD5C8D5CD76D7724BDE867D5B6F509599CE176EF",
+      "bytes": 340
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.plugin-contract/promotions/1943e385c17e3dde3127a635de8bd555d5d50e487c53113bf1820d6b90e0cdb2.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.plugin-contract\\promotions\\1943e385c17e3dde3127a635de8bd555d5d50e487c53113bf1820d6b90e0cdb2.json",
+      "sha256": "4A3CD580960956539CDDF9792714C09DB5A3D5E4641A822D2FBD67F5D7439A72",
+      "bytes": 21645
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.product-ui/evidence/eab0e6c33695701166ed81e649022c6fd66bfb3347f6685cc0792cb8d52a7e6c.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.product-ui\\evidence\\eab0e6c33695701166ed81e649022c6fd66bfb3347f6685cc0792cb8d52a7e6c.json",
+      "sha256": "A6168B5A1885AD0EAEE97E2D314CB157771B447DB456124638040F38F59E6B57",
+      "bytes": 21575
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.product-ui/promotions/39169b50fa44ce021d868712341b303072a15bb4258de8bf853dbf21b168342b.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.product-ui\\promotions\\39169b50fa44ce021d868712341b303072a15bb4258de8bf853dbf21b168342b.json",
+      "sha256": "8F29CC791BF48D626E712F9C1B14AC4832F0CAEFC125A5B4111A11667A37C07B",
+      "bytes": 21628
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.product-ui/results/ProductUiTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.product-ui\\results\\ProductUiTests.output.log",
+      "sha256": "56DBD3A509A7D49C8FBFE081955746FDF41C6769799854BBB94D03787ABAED6C",
+      "bytes": 2106
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.product-ui/terminal-results/f791b084caca88ae06d4f7e1e0d022f976ca1c1855481575ea25c3490bd6928e.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.product-ui\\terminal-results\\f791b084caca88ae06d4f7e1e0d022f976ca1c1855481575ea25c3490bd6928e.json",
+      "sha256": "CF0F00214DC4FAC828F24973BF849CA09010537350C16BDC22FD4712F1954C87",
+      "bytes": 338
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.red-configure/evidence/b0a574c2be73ab72dea4b10dc18c94512aaea4167c2fea29b4b4bc0815ef4784.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.red-configure\\evidence\\b0a574c2be73ab72dea4b10dc18c94512aaea4167c2fea29b4b4bc0815ef4784.json",
+      "sha256": "E394E022110993B8F622158196BA4A0F625DD531694890004A7C658BF2B24CD5",
+      "bytes": 21584
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.red-configure/promotions/deb398438a130b7e8fc3c06139757d59e7589f6b053db1518cb9f8d1482807fa.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.red-configure\\promotions\\deb398438a130b7e8fc3c06139757d59e7589f6b053db1518cb9f8d1482807fa.json",
+      "sha256": "73D90F57489EC8A9496E37FEEB98A044C8D564132BD307E5D857A6BDCF091316",
+      "bytes": 21637
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.red-configure/results/RedConfigureTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.red-configure\\results\\RedConfigureTests.output.log",
+      "sha256": "D0BE167DA4084A4D9CDEA4D50D24302D38FBB922D4199117A45C00627DD64380",
+      "bytes": 5202
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.red-configure/terminal-results/9100cc0ae94c106ed5e94c8ecd8f4a84a1301f8f29e5a3d673f35b434a3d34fa.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.red-configure\\terminal-results\\9100cc0ae94c106ed5e94c8ecd8f4a84a1301f8f29e5a3d673f35b434a3d34fa.json",
+      "sha256": "D57091610469726CE6C5FA92EC10F80F7B9B1D72452BFB9B698F75289F35567D",
+      "bytes": 341
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.settings-schema/evidence/c55b7f4b4104d9a09285eb23fba9c2b777c21dbb7785bb6ccfa29002ae0174b4.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.settings-schema\\evidence\\c55b7f4b4104d9a09285eb23fba9c2b777c21dbb7785bb6ccfa29002ae0174b4.json",
+      "sha256": "1AB65D0FD0B26AFB6932F98927B1B52DE1CC072791018F8AD6813B45431B0015",
+      "bytes": 21591
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.settings-schema/promotions/041c72f95b7c045adc3a793992dfb4d4307999749496c1b3b9d9f3dbab6c839f.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.settings-schema\\promotions\\041c72f95b7c045adc3a793992dfb4d4307999749496c1b3b9d9f3dbab6c839f.json",
+      "sha256": "96AC9B86D8CC18D68AAC52EBF138D895B3FD4E774D0BB2BAA66C69707EA72951",
+      "bytes": 21644
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.settings-schema/results/SettingsSchemaTests.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.settings-schema\\results\\SettingsSchemaTests.output.log",
+      "sha256": "C2E5A3150BD17619F5402F1E1E3EB77D3C6F411CF32F632FDA13F66BEAFAABC5",
+      "bytes": 11394
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/standalone.settings-schema/terminal-results/fd7f357fb28f84de29b8be93f9868cf5a2f493ad50a2e1ce25cf2c65c91e02bb.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\standalone.settings-schema\\terminal-results\\fd7f357fb28f84de29b8be93f9868cf5a2f493ad50a2e1ce25cf2c65c91e02bb.json",
+      "sha256": "52EA9B00BBC96D77B780E70541484DC796388187211967969EFF164BA2569BBB",
+      "bytes": 343
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/tooling.vcpkg-merge-synthetic/evidence/bdd32cd24151d626ce3ed6a8335c1c6b05617f29b218ae7201f479afdf5258b6.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\tooling.vcpkg-merge-synthetic\\evidence\\bdd32cd24151d626ce3ed6a8335c1c6b05617f29b218ae7201f479afdf5258b6.json",
+      "sha256": "8BFA7A9143AA04D31B642984845E68D11514DB3A75FDE9978687C7C2A3282104",
+      "bytes": 21415
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/tooling.vcpkg-merge-synthetic/promotions/a5bf0170f1c6d14392c8d9ebb93f5b70b9976393bdaceae785ede86efc7b690f.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\tooling.vcpkg-merge-synthetic\\promotions\\a5bf0170f1c6d14392c8d9ebb93f5b70b9976393bdaceae785ede86efc7b690f.json",
+      "sha256": "A8D7332FBC12E07516E22F475A489594DFC3F5870FFB619FAE6EAB9A19765BFF",
+      "bytes": 21468
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/tooling.vcpkg-merge-synthetic/terminal-results/27871965b39ca0fa7d7b1f30668b6bd8c5ac7fd8e1dfd963d2c43b2e1a174d89.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\tooling.vcpkg-merge-synthetic\\terminal-results\\27871965b39ca0fa7d7b1f30668b6bd8c5ac7fd8e1dfd963d2c43b2e1a174d89.json",
+      "sha256": "DE2DBAB562909A330FE99A978AFAC1D81A3F6B8BCFACD88EDFA2D348DD7D46E3",
+      "bytes": 352
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/viewer-sqlite.noninteractive/evidence/a1b01e45dcecb2265e90b025217dd0295bd57df70e85f9d1d62a304160832303.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\viewer-sqlite.noninteractive\\evidence\\a1b01e45dcecb2265e90b025217dd0295bd57df70e85f9d1d62a304160832303.json",
+      "sha256": "83CA200456E96E344D0D8068B2A5CEDCA4AF7F339A86D0019D026F62ADC1F929",
+      "bytes": 21608
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/viewer-sqlite.noninteractive/promotions/bbdf59a02be39e727a939b61cffbd46c69ec8677d7fb842fa3f865a4a8436c39.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\viewer-sqlite.noninteractive\\promotions\\bbdf59a02be39e727a939b61cffbd46c69ec8677d7fb842fa3f865a4a8436c39.json",
+      "sha256": "FF5D72A39B31AC0F7C0118F5F0285A7E50E70B790C6E5B2CB14C88B8847FFD4E",
+      "bytes": 21661
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/viewer-sqlite.noninteractive/results/ViewerSqliteTests.Noninteractive.output.log",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\viewer-sqlite.noninteractive\\results\\ViewerSqliteTests.Noninteractive.output.log",
+      "sha256": "353AE06E05D04B8D35AA6D4B390F4B797FA0C958F3F52FCB1ABA0B269C2294E3",
+      "bytes": 30098
+    },
+    {
+      "file": "arm64-artifact/evidence/runs/20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2/entries/viewer-sqlite.noninteractive/terminal-results/ec7ce4e40efc9f83d002033ad30203ad9b6340a1bc6626c4e1767053d8f50856.json",
+      "source": "E:\\RedSalamander.Perf\\evidence\\redmonitor-merge-migration-20261024\\ci-40358566877-arm64-d36cb3b7-artifact\\evidence\\runs\\20261026T165739Z-5796-69b84738e04c43259785ae68d3bf3ba2\\entries\\viewer-sqlite.noninteractive\\terminal-results\\ec7ce4e40efc9f83d002033ad30203ad9b6340a1bc6626c4e1767053d8f50856.json",
+      "sha256": "6037DBDB15E6A6FE9FEBDBD5DCB8DD0114696EB51AE97A93C98826D579093B3F",
+      "bytes": 345
+    }
+  ],
+  "publicationScope": "Complete job logs, selected failed-entry receipts/results, and local baseline records. Full uploaded artifacts remain byte-verified in the approved local evidence directory; oversized archive intents and redundant transaction/history projections are not copied into Git."
+}

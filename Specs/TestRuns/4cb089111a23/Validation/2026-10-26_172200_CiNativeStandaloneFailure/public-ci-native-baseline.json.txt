@@ -1,0 +1,50 @@
+[
+  {
+    "case": "web-profile",
+    "head": "582d644be5e6147acb0b8a8aae05511b75f64d17",
+    "sourceSnapshot": "8ab7430db73e3b66815cd6c875130ffa3f50644bd9375635ac41d5f99c51fbd3",
+    "receipt": "0f116904e0aa9df16511858570136af0bfda78b9d589e26297da8b4f7f1013b4",
+    "exitCode": 0,
+    "startedUtc": "2026-10-26T17:27:52.9295850Z",
+    "finishedUtc": "2026-10-26T17:27:54.5871120Z",
+    "runId": "20261026T172752Z-75132-2ad16c7959ac4d68a2bc12c12fe5dce6",
+    "log": "E:\\RedSalamander.Perf\\runs\\20261026T172752Z-75132-2ad16c7959ac4d68a2bc12c12fe5dce6\\artifacts\\selftest\\last_run\\web-profile.log",
+    "errorLog": "E:\\RedSalamander.Perf\\runs\\20261026T172752Z-75132-2ad16c7959ac4d68a2bc12c12fe5dce6\\artifacts\\selftest\\last_run\\web-profile.stderr.log"
+  },
+  {
+    "case": "lifecycle-captures",
+    "head": "582d644be5e6147acb0b8a8aae05511b75f64d17",
+    "sourceSnapshot": "8ab7430db73e3b66815cd6c875130ffa3f50644bd9375635ac41d5f99c51fbd3",
+    "receipt": "0f116904e0aa9df16511858570136af0bfda78b9d589e26297da8b4f7f1013b4",
+    "exitCode": 0,
+    "startedUtc": "2026-10-26T17:27:54.7015685Z",
+    "finishedUtc": "2026-10-26T17:28:00.1804249Z",
+    "runId": "20261026T172754Z-75132-00ec8369203d4958b238fde7d925951e",
+    "log": "E:\\RedSalamander.Perf\\runs\\20261026T172754Z-75132-00ec8369203d4958b238fde7d925951e\\artifacts\\selftest\\last_run\\lifecycle-captures.log",
+    "errorLog": "E:\\RedSalamander.Perf\\runs\\20261026T172754Z-75132-00ec8369203d4958b238fde7d925951e\\artifacts\\selftest\\last_run\\lifecycle-captures.stderr.log"
+  },
+  {
+    "case": "directory-summary",
+    "head": "582d644be5e6147acb0b8a8aae05511b75f64d17",
+    "sourceSnapshot": "8ab7430db73e3b66815cd6c875130ffa3f50644bd9375635ac41d5f99c51fbd3",
+    "receipt": "0f116904e0aa9df16511858570136af0bfda78b9d589e26297da8b4f7f1013b4",
+    "exitCode": 0,
+    "startedUtc": "2026-10-26T17:28:00.3077768Z",
+    "finishedUtc": "2026-10-26T17:28:48.0373160Z",
+    "runId": "20261026T172800Z-75132-31f0cf9741044a8db87b89e024fe5899",
+    "log": "E:\\RedSalamander.Perf\\runs\\20261026T172800Z-75132-31f0cf9741044a8db87b89e024fe5899\\artifacts\\selftest\\last_run\\directory-summary.log",
+    "errorLog": "E:\\RedSalamander.Perf\\runs\\20261026T172800Z-75132-31f0cf9741044a8db87b89e024fe5899\\artifacts\\selftest\\last_run\\directory-summary.stderr.log"
+  },
+  {
+    "case": "s3-directory-transfer",
+    "head": "582d644be5e6147acb0b8a8aae05511b75f64d17",
+    "sourceSnapshot": "8ab7430db73e3b66815cd6c875130ffa3f50644bd9375635ac41d5f99c51fbd3",
+    "receipt": "0f116904e0aa9df16511858570136af0bfda78b9d589e26297da8b4f7f1013b4",
+    "exitCode": 0,
+    "startedUtc": "2026-10-26T17:28:48.1531260Z",
+    "finishedUtc": "2026-10-26T17:28:52.2388044Z",
+    "runId": "20261026T172848Z-75132-2ee357fc38ff45dbbdfdaa63db1f611f",
+    "log": "E:\\RedSalamander.Perf\\runs\\20261026T172848Z-75132-2ee357fc38ff45dbbdfdaa63db1f611f\\artifacts\\selftest\\last_run\\s3-directory-transfer.log",
+    "errorLog": "E:\\RedSalamander.Perf\\runs\\20261026T172848Z-75132-2ee357fc38ff45dbbdfdaa63db1f611f\\artifacts\\selftest\\last_run\\s3-directory-transfer.stderr.log"
+  }
+]

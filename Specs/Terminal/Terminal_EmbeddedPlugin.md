@@ -988,6 +988,10 @@ only the untracked candidate descriptor with the candidate patch path, digest,
 ordered concerns, and derived input digest. The tracked Product overlay and
 canonical lock remain unchanged until the reviewed admission phase.
 
+Lock validation must reject a false `Test-Json` result even when the cmdlet emits no error records.
+Field-specific diagnostics then use its shipped JsonSchema.NET engine with reference fetching disabled;
+diagnostic reevaluation cannot turn schema rejection into admission. Hash, path, export and dependency rules remain unchanged.
+
 The production boundary is `generated-raw-sha256-v1`. Before C++ compilation,
 the builder writes
 `include/red_salamander/terminal_runtime_identity.generated.h` beside the

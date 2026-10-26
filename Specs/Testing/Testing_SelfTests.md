@@ -2049,9 +2049,15 @@ rates and receipts establish rendering coverage, not engine correctness or perfo
 
 The canonical capture helper is `Tests/TestSupport/TestSupport.Tests.WindowScreenshot.h`. It captures the complete
 process-owned HWND, including DirectComposition and window chrome, through Windows Graphics Capture
-and writes PNG through WIC. It rejects foreign, hidden or minimized windows and output paths outside
+and writes PNG through WIC. Its owned capture/readback device uses WARP; it still observes the actual
+application-composed HWND and does not change the application's rendering device. It rejects foreign, hidden or minimized windows and output paths outside
 the marked test sandbox. Frame readiness is event-driven and bounded. Missing capture support is a
 failure, never permission to substitute a desktop screenshot or a partial renderer layer.
+
+ViewerSpace lifecycle fixtures fit their 1200 by 720 DIP target to the current monitor work area.
+The analysis-visibility, exact lifecycle state, no-activation and complete-layer pixel witnesses remain mandatory.
+`REDSALAMANDER_VIEWER_LIFECYCLE_TEST_SMALL_WORKAREA=1` restricts only the owned fixture to a 1024 by 680
+pixel subset of the actual work area for a deterministic small-desktop control; it never changes display settings.
 
 Known layered fixtures SHOULD supply `WindowScreenshotColorProbe` witnesses for their distinct
 render layers. Probe rectangles use client pixels mapped against the captured extended-frame bounds;

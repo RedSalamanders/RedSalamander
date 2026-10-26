@@ -2999,7 +2999,7 @@
       "kind": "module",
       "visibility": "internal",
       "lifecycle": "active",
-      "purpose": "Validate Ghostty locks and execute contained Product or isolated candidate restore, complete dependency/notice closure, build, inspection, identity, and publication lifecycles.",
+      "purpose": "Validate Ghostty locks with field-specific rejection diagnostics even when Test-Json omits nested errors; execute contained Product or isolated candidate restore, complete dependency/notice closure, build, inspection, identity, and publication lifecycles.",
       "usage": "Import through Build-GhosttyTerminalRuntime.ps1; Product mode selects the canonical lock, while candidate mode requires explicit contained lock and output paths with no fallback.",
       "usedBy": [
         "Tools/Build-GhosttyTerminalRuntime.ps1",
@@ -3010,6 +3010,7 @@
       ],
       "prerequisites": [
         "Canonical Ghostty schema and selected lock",
+        "PowerShell-shipped JsonSchema.NET for network-disabled diagnostic fallback after schema rejection",
         "Terminal archive, PE, text, import, and export helpers",
         "Sanitized contained-process helper",
         "Canonical JSON identity helper"

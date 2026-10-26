@@ -589,3 +589,17 @@ uses RUNNER_TEMP. Discovery now validates actual VS18+ binary version, invariant
 MSBuild.exe identity and standard host layout; compiler-family requirements remain
 strict. A relocated real binary and wrong-layout/wrong-binary/missing controls cover
 the repair. No C++ source changed; updated native CI remains required.
+
+The next public CI run completed both native Debug builds but failed Suite PR
+standalone checks; the [complete failure packet](../../TestRuns/4cb089111a23/Validation/2026-10-26_172200_CiNativeStandaloneFailure/README.md)
+retains both architectures' logs and uploaded artifacts. Two search cases were
+absent from discovery, the schema cmdlet omitted nested rejection diagnostics,
+and an ARM64 binary-identity fixture assumed an x64 file layout. Native failures
+also require hosted capture, viewport, profile and large-tree queue diagnostics.
+The unchanged ordinary-host native controls passed, including the 200k-file
+case and its single-CPU diagnostic run; those results do not clear hosted failures.
+The candidate keeps existing assertions and limits, uses WARP only for owned
+WGC capture/readback, fits its lifecycle fixture to the real work area, and
+observes UI-published state inside the existing provider-entry deadline.
+Current-source ASan builds/affected checks and public PR/main CI remain open.
+Full runtime reruns remain omitted under the accepted scope. I47 stays WIP.

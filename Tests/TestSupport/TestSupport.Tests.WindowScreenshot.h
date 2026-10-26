@@ -30,6 +30,8 @@ struct WindowScreenshotColorProbe final
 // Captures only a window owned by the calling test process, including DirectComposition
 // and non-client chrome. Does not activate, move, or send input to the window. The caller
 // supplies an already-authorized test-sandbox path and a visible, non-minimized fixture.
+// The capture/readback device uses WARP, independently of the application's renderer,
+// so a hardware adapter is not a precondition for observing the actual composed HWND.
 // Optional probes reject missing render layers with ERROR_INVALID_DATA after saving the
 // diagnostic PNG. Rejected frames request a non-activating repaint while capture is active,
 // with at most three event-driven frame attempts. A successful encoder alone cannot establish

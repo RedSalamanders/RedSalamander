@@ -820,7 +820,7 @@ Describe 'Pinned build-tool and CI identity' {
 }
 
 Describe 'Workflow-selected MSBuild identity' {
-    It 'accepts a relocated VS18 MSBuild and rejects wrong layouts and non-MSBuild executables' {
+    It 'accepts a relocated VS18 MSBuild and rejects wrong layouts and non-MSBuild binaries' {
         $tokens = $null
         $errors = $null
         $ast = [Management.Automation.Language.Parser]::ParseFile((Join-Path $repoRoot 'build.ps1'),[ref]$tokens,[ref]$errors)
@@ -850,8 +850,23 @@ Describe 'Workflow-selected MSBuild identity' {
             $env:MSBUILD_EXE_PATH = $wrongLayout
             Assert-RSThrowsMatching { & $find } 'not a Visual Studio 2026 executable'
             # Keep valid version metadata but use a different binary identity.
-            $other = Join-Path (Split-Path $real) 'MSBuildTaskHost.exe'
-            (Test-Path -LiteralPath $other) | Should Be $true
+            # Native ARM64 installs can keep task hosts/managed assemblies in the
+            # parent Bin directory. Require a real VS18 counterexample there too.
+            $otherCandidates = @(
+                foreach ($folder in @((Split-Path $real), (Split-Path (Split-Path $real)))) {
+                    foreach ($name in @('MSBuildTaskHost.exe', 'Microsoft.Build.dll')) {
+                        $candidate = Join-Path $folder $name
+                        if (Test-Path -LiteralPath $candidate -PathType Leaf) {
+                            $identity = (Get-Item -LiteralPath $candidate).VersionInfo
+                            if ($identity.FileMajorPart -ge 18 -and $identity.OriginalFilename -ine 'MSBuild.exe') { $candidate }
+                        }
+                    }
+                }
+            )
+            $otherCandidates.Count | Should BeGreaterThan 0
+            $other = $otherCandidates[0]
+            (Get-Item -LiteralPath $other).VersionInfo.FileMajorPart | Should BeGreaterThan 17
+            (Get-Item -LiteralPath $other).VersionInfo.OriginalFilename | Should Not Be 'MSBuild.exe'
             Copy-Item -LiteralPath $other -Destination $fixture -Force
             $env:MSBUILD_EXE_PATH = $fixture
             Assert-RSThrowsMatching { & $find } 'not a Visual Studio 2026 executable'

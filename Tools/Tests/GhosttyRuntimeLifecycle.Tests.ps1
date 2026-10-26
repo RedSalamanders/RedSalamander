@@ -52,6 +52,52 @@ function Assert-RSGhosttyBuildPlanRejected {
     $message | Should Match $ExpectedMessage
 }
 
+Describe 'Ghostty nested schema diagnostics' {
+    It 'preserves field-specific rejection when Test-Json emits no nested errors' {
+        [void](Microsoft.PowerShell.Utility\Test-Json -Json '{}' -Schema '{"type":"object"}')
+        $globalFetchBefore = [Json.Schema.SchemaRegistry]::Global.Fetch
+        Mock Test-Json { $false } -ModuleName GhosttyRuntimeLifecycle
+        Assert-RSInvalidGhosttyRuntimeLock -ExpectedMessage 'upstream\.archive\.sha256' -Mutate {
+            param($lock)
+            $lock.upstream.archive.sha256 = $lock.upstream.archive.sha256.ToUpperInvariant()
+        }
+        Assert-RSInvalidGhosttyRuntimeLock -ExpectedMessage 'abi\.exports' -Mutate {
+            param($lock)
+            $lock.abi.exports = @($lock.abi.exports) + $lock.abi.exports[-1]
+            $lock.abi.exportCount = @($lock.abi.exports).Count
+        }
+        Assert-RSInvalidGhosttyRuntimeLock -ExpectedMessage 'overlay\.path' -Mutate {
+            param($lock)
+            $lock.overlay.path = '../escape.patch'
+        }
+        Assert-MockCalled Test-Json -ModuleName GhosttyRuntimeLifecycle -Times 3 -Exactly -Scope It
+        [object]::ReferenceEquals($globalFetchBefore, [Json.Schema.SchemaRegistry]::Global.Fetch) | Should Be $true
+    }
+
+    It 'never admits a declined document when diagnostic reevaluation finds no errors' {
+        [void](Microsoft.PowerShell.Utility\Test-Json -Json '{}' -Schema '{"type":"object"}')
+        Mock Test-Json { $false } -ModuleName GhosttyRuntimeLifecycle
+        Assert-RSInvalidGhosttyRuntimeLock -ExpectedMessage 'schema validation failed' -Mutate { param($lock) }
+        Assert-MockCalled Test-Json -ModuleName GhosttyRuntimeLifecycle -Times 1 -Exactly -Scope It
+    }
+
+    It 'refuses external reference fetching during diagnostic reevaluation' {
+        [void](Microsoft.PowerShell.Utility\Test-Json -Json '{}' -Schema '{"type":"object"}')
+        Mock Test-Json { $false } -ModuleName GhosttyRuntimeLifecycle
+        $externalSchema = Join-Path $TestDrive 'external-schema.json'
+        '{"$ref":"https://example.invalid/blocked-schema"}' | Set-Content -LiteralPath $externalSchema -Encoding utf8NoBOM
+        $message = ''
+        try {
+            [void](Read-RSGhosttyRuntimeLock -LiteralPath $lockPath -SchemaPath $externalSchema -RepoRoot $repoRoot)
+        }
+        catch {
+            $message = $_.Exception.Message
+        }
+        $message | Should Match 'reference fetching is disabled'
+        Assert-MockCalled Test-Json -ModuleName GhosttyRuntimeLifecycle -Times 1 -Exactly -Scope It
+    }
+}
+
 Describe 'Ghostty active product runtime lock' {
     It 'keeps native ARM64 qualification evidence closed and machine-verifiable' {
         $nativeSchemaPath = Join-Path $repoRoot 'Specs\Terminal\GhosttyRuntimeNativeQualification.schema.json'

@@ -121,6 +121,8 @@ constexpr std::wstring_view kCompareCaseNames[] = {
     L"local_search_name_and_content_and_semantics",
     L"local_search_invalid_query_rejected",
     L"local_index_core_progress_counters_are_batched",
+    L"local_index_core_ntfs_seed_scratch_owns_storage",
+    L"local_index_core_usn_seed_arena_preserves_unicode_records",
     L"local_index_core_snapshot_reload",
     L"local_index_fileops_artifacts_remain_visible",
     L"local_index_core_query_honors_cancel_check",

@@ -61,16 +61,8 @@ HRESULT RedSalamander::TestSupport::SaveWindowScreenshot(HWND window, const std:
         }
         wil::com_ptr<ID3D11Device> device;
         wil::com_ptr<ID3D11DeviceContext> context;
-        winrt::check_hresult(D3D11CreateDevice(nullptr,
-                                               D3D_DRIVER_TYPE_HARDWARE,
-                                               nullptr,
-                                               D3D11_CREATE_DEVICE_BGRA_SUPPORT,
-                                               nullptr,
-                                               0u,
-                                               D3D11_SDK_VERSION,
-                                               device.put(),
-                                               nullptr,
-                                               context.put()));
+        winrt::check_hresult(D3D11CreateDevice(
+            nullptr, D3D_DRIVER_TYPE_WARP, nullptr, D3D11_CREATE_DEVICE_BGRA_SUPPORT, nullptr, 0u, D3D11_SDK_VERSION, device.put(), nullptr, context.put()));
         const auto dxgiDevice = device.query<IDXGIDevice>();
         wil::com_ptr<IInspectable> inspectable;
         winrt::check_hresult(CreateDirect3D11DeviceFromDXGIDevice(dxgiDevice.get(), inspectable.put()));

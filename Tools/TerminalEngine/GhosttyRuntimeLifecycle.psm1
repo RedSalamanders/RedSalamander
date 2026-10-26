@@ -240,6 +240,28 @@ function Assert-RSGhosttyRuntimeLockSemantics {
     }
 }
 
+function Get-RSGhosttyRuntimeLockSchemaFailureDetails {
+    param([string]$Json, [string]$SchemaPath)
+
+    # PowerShell 7.6.7 can return false without emitting nested schema errors.
+    # Recover diagnostics with the cmdlet's shipped engine; this cannot admit a
+    # rejected document. Disable fetching so diagnostics cannot resolve remote refs.
+    $schema = [Json.Schema.JsonSchema]::FromText((Get-Content -LiteralPath $SchemaPath -Raw -ErrorAction Stop))
+    $options = [Json.Schema.EvaluationOptions]::new()
+    $options.OutputFormat = [Json.Schema.OutputFormat]::List
+    $options.SchemaRegistry.Fetch = { param($uri) throw 'Schema diagnostic reference fetching is disabled.' }
+    $result = $schema.Evaluate([System.Text.Json.Nodes.JsonNode]::Parse($Json), $options)
+    $messages = @(
+        @($result) + @($result.Details) |
+            Where-Object { $null -ne $_ -and $_.HasErrors } |
+            ForEach-Object {
+                $field = $_.InstanceLocation.ToString().TrimStart('/').Replace('/', '.')
+                foreach ($message in $_.Errors.Values) { "'$field': $message" }
+            } | Select-Object -Unique
+    )
+    return $messages -join '; '
+}
+
 function Read-RSGhosttyRuntimeLock {
     [CmdletBinding()]
     param(
@@ -263,6 +285,9 @@ function Read-RSGhosttyRuntimeLock {
     $schemaValid = Test-Json -Json $raw -SchemaFile $SchemaPath -ErrorVariable +schemaErrors -ErrorAction SilentlyContinue
     if (-not $schemaValid) {
         $details = @($schemaErrors | ForEach-Object { $_.Exception.Message }) -join '; '
+        if ([string]::IsNullOrWhiteSpace($details)) {
+            $details = Get-RSGhosttyRuntimeLockSchemaFailureDetails -Json $raw -SchemaPath $SchemaPath
+        }
         $details = [regex]::Replace(
             $details,
             "'/(?<pointer>[^']+)'",
