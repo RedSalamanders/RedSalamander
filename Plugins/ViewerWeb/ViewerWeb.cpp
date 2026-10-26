@@ -4200,18 +4200,17 @@ HRESULT ViewerWeb::EnsureWebView2(HWND hwnd) noexcept
         return S_FALSE;
     }
 
-    // Keep the original lifetime guard across profile/shell resolution.
+    // Keep the original lifetime and shared-creation guards across profile/shell resolution.
+    g_sharedEnvironment.createInProgress = true;
     std::wstring userDataFolder;
     const HRESULT folderHr = GetWebView2UserDataFolder(userDataFolder);
     if (FAILED(folderHr))
     {
         _webViewInitInProgress = false;
+        ResetSharedEnvironmentImpl();
         Release();
         return folderHr;
     }
-
-    // First caller — create the shared environment.
-    g_sharedEnvironment.createInProgress = true;
 
     auto callback = MakeComCallback<ICoreWebView2CreateCoreWebView2EnvironmentCompletedHandler, HRESULT, ICoreWebView2Environment*>(
         [this, hwnd, sharedEnvironmentGeneration](HRESULT result, ICoreWebView2Environment* environment) -> HRESULT
